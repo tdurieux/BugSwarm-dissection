@@ -210,7 +210,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 
 		function downloadPatches() {
 			for (var bench of $scope.benchmarks) {
-				$http.get("data/"+bench.toLowerCase() + ".json.gz").then(function (response) {
+				$http.get("https://static.durieux.me/"+bench.toLowerCase() + ".json").then(function (response) {
 					var bugs = response.data
 		
 					for (var key in bugs){
