@@ -1,0 +1,97 @@
+diff --git a/java-frontend/src/test/java/org/sonar/java/SonarComponentsTest.java b/java-frontend/src/test/java/org/sonar/java/SonarComponentsTest.java
+index fd001c9d40..514b9aeca2 100644
+--- a/java-frontend/src/test/java/org/sonar/java/SonarComponentsTest.java
++++ b/java-frontend/src/test/java/org/sonar/java/SonarComponentsTest.java
+@@ -46,6 +46,7 @@
+ import org.sonar.api.batch.sensor.SensorContext;
+ import org.sonar.api.batch.sensor.highlighting.NewHighlighting;
+ import org.sonar.api.batch.sensor.internal.SensorContextTester;
++import org.sonar.api.batch.sensor.measure.Measure;
+ import org.sonar.api.batch.sensor.symbol.NewSymbolTable;
+ import org.sonar.api.internal.SonarRuntimeImpl;
+ import org.sonar.api.issue.Issuable;
+@@ -405,6 +406,13 @@ public void sonarcloud_feedback_metric_should_not_exceed_roughly_200ko() {
+     File file = new File("src/test/files/ParseError.java");
+     SensorContextTester sensorContext = SensorContextTester.create(file.getParentFile().getAbsoluteFile());
+     sensorContext.settings().setProperty(SonarComponents.COLLECT_ANALYSIS_ERRORS_KEY, true);
++    Measure<String> feedback = analysisWithAnError(sensorContext);
++    Collection<AnalysisError> analysisErrorsDeserialized = new Gson().fromJson(feedback.value(), new TypeToken<Collection<AnalysisError>>(){}.getType());
++    assertThat(analysisErrorsDeserialized.size()).isBetween(35, 45);
++    assertThat(analysisErrorsDeserialized.iterator().next().getKind()).isEqualTo(AnalysisError.Kind.PARSE_ERROR);
++  }
++
++  private Measure<String> analysisWithAnError(SensorContextTester sensorContext) {
+     SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null);
+     sonarComponents.setSensorContext(sensorContext);
+ 
+@@ -421,9 +429,28 @@ public void sonarcloud_feedback_metric_should_not_exceed_roughly_200ko() {
+ 
+     sonarComponents.saveAnalysisErrors();
+ 
+-    String feedback = sensorContext.<String>measure("projectKey", "sonarjava_feedback").value();
+-    Collection<AnalysisError> analysisErrorsDeserialized = new Gson().fromJson(feedback, new TypeToken<Collection<AnalysisError>>(){}.getType());
+-    assertThat(analysisErrorsDeserialized.size()).isBetween(35, 45);
+-    assertThat(analysisErrorsDeserialized.iterator().next().getKind()).isEqualTo(AnalysisError.Kind.PARSE_ERROR);
++    return sensorContext.measure("projectKey", "sonarjava_feedback");
++  }
++
++  @Test
++  public void feedback_should_not_be_sent_in_sonarLintContext_or_when_collecting_is_disabled_or_when_no_errors() {
++    File file = new File("src/test/files/ParseError.java");
++    SensorContextTester sensorContext = SensorContextTester.create(file.getParentFile().getAbsoluteFile());
++    Measure<String> feedback = analysisWithAnError(sensorContext);
++    assertThat(feedback).isNull();
++
++    sensorContext = SensorContextTester.create(file.getParentFile().getAbsoluteFile());
++    sensorContext.settings().setProperty(SonarComponents.COLLECT_ANALYSIS_ERRORS_KEY, true);
++    sensorContext.setRuntime(SonarRuntimeImpl.forSonarLint(Version.create(6, 7)));
++    feedback = analysisWithAnError(sensorContext);
++    assertThat(feedback).isNull();
++
++    //analysis with no error
++    sensorContext = SensorContextTester.create(file.getParentFile().getAbsoluteFile());
++    SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null);
++    sonarComponents.setSensorContext(sensorContext);
++    sonarComponents.saveAnalysisErrors();
++    assertThat(sensorContext.measure("projectKey", "sonarjava_feedback")).isNull();
++
+   }
+ }
+diff --git a/sonar-java-plugin/src/test/java/org/sonar/plugins/java/JavaMetricDefinitionTest.java b/sonar-java-plugin/src/test/java/org/sonar/plugins/java/JavaMetricDefinitionTest.java
+new file mode 100644
+index 0000000000..3b604dc3ef
+--- /dev/null
++++ b/sonar-java-plugin/src/test/java/org/sonar/plugins/java/JavaMetricDefinitionTest.java
+@@ -0,0 +1,32 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.plugins.java;
++
++import org.junit.Test;
++
++import static org.assertj.core.api.Assertions.assertThat;
++
++public class JavaMetricDefinitionTest {
++
++  @Test
++  public void metrics_defined() {
++    assertThat(new JavaMetricDefinition().getMetrics()).hasSize(1);
++  }
++}

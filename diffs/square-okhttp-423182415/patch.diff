@@ -1,0 +1,215 @@
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
+index f85cd96ca..758af0a9e 100644
+--- a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
+@@ -88,6 +88,7 @@
+ import static okhttp3.mockwebserver.SocketPolicy.FAIL_HANDSHAKE;
+ import static okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE;
+ import static okhttp3.mockwebserver.SocketPolicy.RESET_STREAM_AT_START;
++import static okhttp3.mockwebserver.SocketPolicy.SHUTDOWN_SERVER_AFTER_RESPONSE;
+ import static okhttp3.mockwebserver.SocketPolicy.SHUTDOWN_INPUT_AT_END;
+ import static okhttp3.mockwebserver.SocketPolicy.SHUTDOWN_OUTPUT_AT_END;
+ import static okhttp3.mockwebserver.SocketPolicy.STALL_SOCKET_AT_START;
+@@ -589,6 +590,8 @@ private boolean processOneRequest(Socket socket, BufferedSource source, Buffered
+           socket.shutdownInput();
+         } else if (response.getSocketPolicy() == SHUTDOWN_OUTPUT_AT_END) {
+           socket.shutdownOutput();
++        } else if (response.getSocketPolicy() == SHUTDOWN_SERVER_AFTER_RESPONSE) {
++          shutdown();
+         }
+ 
+         sequenceNumber++;
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/RecordedRequest.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/RecordedRequest.java
+index b922cc429..ec97f4b7d 100644
+--- a/mockwebserver/src/main/java/okhttp3/mockwebserver/RecordedRequest.java
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/RecordedRequest.java
+@@ -63,11 +63,11 @@ public RecordedRequest(String requestLine, Headers headers, List<Integer> chunkS
+       int methodEnd = requestLine.indexOf(' ');
+       int pathEnd = requestLine.indexOf(' ', methodEnd + 1);
+       this.method = requestLine.substring(0, methodEnd);
+-      if (this.method.equals("CONNECT")) {
+-        this.path = "/";
+-      } else {
+-        this.path = requestLine.substring(methodEnd + 1, pathEnd);
++      String path = requestLine.substring(methodEnd + 1, pathEnd);
++      if (!path.startsWith("/")) {
++        path = "/";
+       }
++      this.path = path;
+ 
+       String scheme = socket instanceof SSLSocket ? "https" : "http";
+       InetAddress inetAddress = socket.getInetAddress();
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/SocketPolicy.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/SocketPolicy.java
+index e92da7657..beeb2c9a6 100644
+--- a/mockwebserver/src/main/java/okhttp3/mockwebserver/SocketPolicy.java
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/SocketPolicy.java
+@@ -31,6 +31,11 @@
+  */
+ public enum SocketPolicy {
+ 
++  /**
++   * Shutdown {@link MockWebServer} after writing response.
++   */
++  SHUTDOWN_SERVER_AFTER_RESPONSE,
++
+   /**
+    * Keep the socket open after the response. This is the default HTTP/1.1 behavior.
+    */
+diff --git a/mockwebserver/src/test/java/okhttp3/mockwebserver/MockWebServerTest.java b/mockwebserver/src/test/java/okhttp3/mockwebserver/MockWebServerTest.java
+index cb4577b4f..eb41f4fbc 100644
+--- a/mockwebserver/src/test/java/okhttp3/mockwebserver/MockWebServerTest.java
++++ b/mockwebserver/src/test/java/okhttp3/mockwebserver/MockWebServerTest.java
+@@ -452,6 +452,24 @@
+     assertEquals("foo bar", requestUrl.queryParameter("key"));
+   }
+ 
++  @Test public void shutdownServerAfterRequest() throws Exception {
++    server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.SHUTDOWN_SERVER_AFTER_RESPONSE));
++
++    URL url = server.url("/").url();
++
++    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
++    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
++
++    HttpURLConnection refusedConnection = (HttpURLConnection) url.openConnection();
++
++    try {
++      refusedConnection.getResponseCode();
++      fail("Second connection should be refused");
++    } catch (ConnectException e ) {
++      assertTrue(e.getMessage().contains("refused"));
++    }
++  }
++
+   @Test public void http100Continue() throws Exception {
+     server.enqueue(new MockResponse().setBody("response"));
+ 
+diff --git a/okhttp-dnsoverhttps/src/test/java/okhttp3/dnsoverhttps/DohProviders.java b/okhttp-dnsoverhttps/src/test/java/okhttp3/dnsoverhttps/DohProviders.java
+index 4df3a5c54..301eee57c 100644
+--- a/okhttp-dnsoverhttps/src/test/java/okhttp3/dnsoverhttps/DohProviders.java
++++ b/okhttp-dnsoverhttps/src/test/java/okhttp3/dnsoverhttps/DohProviders.java
+@@ -106,8 +106,8 @@ static DnsOverHttps buildCryptoSx(OkHttpClient bootstrapClient) {
+     if (!workingOnly) {
+       //result.add(buildCleanBrowsing(client)); // timeouts
+       result.add(buildCryptoSx(client)); // 521 - server down
+-      result.add(buildChantra(client)); // 400
+     }
++    result.add(buildChantra(client));
+ 
+     return result;
+   }
+diff --git a/okhttp-tests/src/test/java/okhttp3/OkHttpClientTest.java b/okhttp-tests/src/test/java/okhttp3/OkHttpClientTest.java
+index ebffe84f6..18a252bd6 100644
+--- a/okhttp-tests/src/test/java/okhttp3/OkHttpClientTest.java
++++ b/okhttp-tests/src/test/java/okhttp3/OkHttpClientTest.java
+@@ -22,7 +22,10 @@
+ import java.net.ResponseCache;
+ import java.util.Arrays;
+ import java.util.concurrent.TimeUnit;
++import okhttp3.mockwebserver.MockResponse;
++import okhttp3.mockwebserver.MockWebServer;
+ import org.junit.After;
++import org.junit.Before;
+ import org.junit.Test;
+ 
+ import static okhttp3.TestUtil.defaultClient;
+@@ -35,8 +38,14 @@
+   private static final ProxySelector DEFAULT_PROXY_SELECTOR = ProxySelector.getDefault();
+   private static final CookieHandler DEFAULT_COOKIE_HANDLER = CookieManager.getDefault();
+   private static final ResponseCache DEFAULT_RESPONSE_CACHE = ResponseCache.getDefault();
++  private final MockWebServer server = new MockWebServer();
++
++  @Before public void setUp() throws Exception {
++    server.start();
++  }
+ 
+   @After public void tearDown() throws Exception {
++    server.shutdown();
+     ProxySelector.setDefault(DEFAULT_PROXY_SELECTOR);
+     CookieManager.setDefault(DEFAULT_COOKIE_HANDLER);
+     ResponseCache.setDefault(DEFAULT_RESPONSE_CACHE);
+@@ -199,4 +208,17 @@
+     assertEquals(1, okHttpClient.protocols().size());
+     assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, okHttpClient.protocols().get(0));
+   }
++
++  @Test public void nullDefaultProxySelector() throws Exception {
++    server.enqueue(new MockResponse().setBody("abc"));
++
++    ProxySelector.setDefault(null);
++
++    OkHttpClient client = defaultClient().newBuilder()
++        .build();
++
++    Request request = new Request.Builder().url(server.url("/")).build();
++    Response response = client.newCall(request).execute();
++    assertEquals("abc", response.body().string());
++  }
+ }
+diff --git a/okhttp/src/main/java/okhttp3/OkHttpClient.java b/okhttp/src/main/java/okhttp3/OkHttpClient.java
+index afb388a74..2c678e23f 100644
+--- a/okhttp/src/main/java/okhttp3/OkHttpClient.java
++++ b/okhttp/src/main/java/okhttp3/OkHttpClient.java
+@@ -36,6 +36,7 @@
+ import okhttp3.internal.Internal;
+ import okhttp3.internal.Util;
+ import okhttp3.internal.cache.InternalCache;
++import okhttp3.internal.proxy.NullProxySelector;
+ import okhttp3.internal.connection.RealConnection;
+ import okhttp3.internal.connection.RouteDatabase;
+ import okhttp3.internal.connection.StreamAllocation;
+@@ -460,6 +461,9 @@ public Builder() {
+       connectionSpecs = DEFAULT_CONNECTION_SPECS;
+       eventListenerFactory = EventListener.factory(EventListener.NONE);
+       proxySelector = ProxySelector.getDefault();
++      if (proxySelector == null) {
++        proxySelector = new NullProxySelector();
++      }
+       cookieJar = CookieJar.NO_COOKIES;
+       socketFactory = SocketFactory.getDefault();
+       hostnameVerifier = OkHostnameVerifier.INSTANCE;
+diff --git a/okhttp/src/main/java/okhttp3/internal/proxy/NullProxySelector.java b/okhttp/src/main/java/okhttp3/internal/proxy/NullProxySelector.java
+new file mode 100644
+index 000000000..d18b6335f
+--- /dev/null
++++ b/okhttp/src/main/java/okhttp3/internal/proxy/NullProxySelector.java
+@@ -0,0 +1,39 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.internal.proxy;
++
++import java.io.IOException;
++import java.net.Proxy;
++import java.net.ProxySelector;
++import java.net.SocketAddress;
++import java.net.URI;
++import java.util.Collections;
++import java.util.List;
++
++/**
++ * A proxy selector that always returns the {@link Proxy#NO_PROXY}.
++ */
++public class NullProxySelector extends ProxySelector {
++  @Override public List<Proxy> select(URI uri) {
++    if (uri == null) {
++      throw new IllegalArgumentException("uri must not be null");
++    }
++    return Collections.singletonList(Proxy.NO_PROXY);
++  }
++
++  @Override public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
++  }
++}

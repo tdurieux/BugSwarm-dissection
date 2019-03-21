@@ -1,0 +1,175 @@
+diff --git a/nflow-jetty/src/main/java/com/nitorcreations/nflow/jetty/config/NflowJettyConfiguration.java b/nflow-jetty/src/main/java/com/nitorcreations/nflow/jetty/config/NflowJettyConfiguration.java
+index 5ac4ac8a..6435c156 100644
+--- a/nflow-jetty/src/main/java/com/nitorcreations/nflow/jetty/config/NflowJettyConfiguration.java
++++ b/nflow-jetty/src/main/java/com/nitorcreations/nflow/jetty/config/NflowJettyConfiguration.java
+@@ -2,9 +2,13 @@
+ 
+ import static com.nitorcreations.nflow.rest.config.RestConfiguration.REST_OBJECT_MAPPER;
+ import static java.util.Arrays.asList;
++import static java.util.concurrent.TimeUnit.SECONDS;
+ 
++import java.lang.management.ManagementFactory;
+ import java.util.Arrays;
++import java.util.concurrent.TimeUnit;
+ 
++import javax.annotation.PostConstruct;
+ import javax.inject.Inject;
+ import javax.inject.Named;
+ import javax.sql.DataSource;
+@@ -12,6 +16,10 @@
+ import javax.ws.rs.core.Application;
+ import javax.ws.rs.ext.RuntimeDelegate;
+ 
++import com.codahale.metrics.MetricRegistry;
++import com.codahale.metrics.health.HealthCheckRegistry;
++import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
++import com.codahale.metrics.jvm.*;
+ import org.apache.cxf.bus.spring.SpringBus;
+ import org.apache.cxf.endpoint.Server;
+ import org.apache.cxf.feature.LoggingFeature;
+@@ -119,4 +127,29 @@ public JaxRsApiApplication jaxRsApiApplication() {
+   public PlatformTransactionManager transactionManager(@NFlow DataSource nflowDataSource)  {
+     return new DataSourceTransactionManager(nflowDataSource);
+   }
++
++  @Bean
++  public MetricRegistry metricRegistry() {
++    return new MetricRegistry();
++  }
++
++  @Bean
++  public HealthCheckRegistry healthCheckRegistry() {
++    return new HealthCheckRegistry();
++  }
++
++  @PostConstruct
++  public void registerHealthChecks() {
++    healthCheckRegistry().register("thread-deadlocks", new ThreadDeadlockHealthCheck());
++  }
++
++  @PostConstruct
++  public void registerMetrics() {
++    metricRegistry().register("memory-usage", new MemoryUsageGaugeSet());
++    metricRegistry().register("buffer-pools", new BufferPoolMetricSet( ManagementFactory.getPlatformMBeanServer()));
++    metricRegistry().register("garbage-collector", new GarbageCollectorMetricSet());
++    metricRegistry().register("class-loading", new ClassLoadingGaugeSet());
++    metricRegistry().register("file-descriptor-ratio", new FileDescriptorRatioGauge());
++    metricRegistry().register("thread-states", new CachedThreadStatesGaugeSet(ManagementFactory.getThreadMXBean(), new ThreadDeadlockDetector(), 60, SECONDS));
++  }
+ }
+diff --git a/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheck.java b/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheck.java
+index cca04be0..cbaff52d 100644
+--- a/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheck.java
++++ b/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheck.java
+@@ -20,7 +20,7 @@ protected Result check() throws Exception {
+       statisticsService.queryStatistics();
+       return HealthCheck.Result.healthy("Connection to nFlow database is OK.");
+     } catch(Exception e) {
+-      return HealthCheck.Result.unhealthy("Failed to connect nFlow database", e);
++      return HealthCheck.Result.unhealthy(e);
+     }
+   }
+ }
+diff --git a/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/NflowMetricsContext.java b/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/NflowMetricsContext.java
+index 850fd2f6..b4a01f01 100644
+--- a/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/NflowMetricsContext.java
++++ b/nflow-metrics/src/main/java/com/nitorcreations/nflow/metrics/NflowMetricsContext.java
+@@ -27,15 +27,11 @@
+   @Inject
+   private StatisticsService statisticsService;
+ 
+-  @Bean
+-  public MetricRegistry metricRegistry() {
+-    return new MetricRegistry();
+-  }
++  @Inject
++  private MetricRegistry metricRegistry;
+ 
+-  @Bean
+-  public HealthCheckRegistry healthCheckRegistry() {
+-    return new HealthCheckRegistry();
+-  }
++  @Inject
++  private HealthCheckRegistry healthCheckRegistry;
+ 
+   @Bean
+   public DatabaseConnectionHealthCheck databaseConnectionHealthCheck() {
+@@ -44,21 +40,20 @@ public DatabaseConnectionHealthCheck databaseConnectionHealthCheck() {
+ 
+   @PostConstruct
+   public void registerHealthChecks() {
+-    healthCheckRegistry().register("nflow-database-connection", databaseConnectionHealthCheck());
+-    healthCheckRegistry().register("thread-deadlocks", new ThreadDeadlockHealthCheck());
++    healthCheckRegistry.register("nflow-database-connection", databaseConnectionHealthCheck());
+   }
+ 
+   @Bean
+   public MetricsWorkflowExecutorListener metricsWorkflowExecutorListener(ExecutorDao executors) {
+     logger.info("Enabling MetricsWorkflowExecutorListener");
+-    return new MetricsWorkflowExecutorListener(metricRegistry(), executors);
++    return new MetricsWorkflowExecutorListener(metricRegistry, executors);
+   }
+ 
+   @Profile("jmx")
+   @Bean(destroyMethod="stop")
+   public JmxReporter jmxMetricsReporter() {
+     logger.info("Enabling Metrics JmxReporter");
+-    JmxReporter jmxMetricsReporter = JmxReporter.forRegistry(metricRegistry()).inDomain("nflow.metrics").build();
++    JmxReporter jmxMetricsReporter = JmxReporter.forRegistry(metricRegistry).inDomain("nflow.metrics").build();
+     jmxMetricsReporter.start();
+     return jmxMetricsReporter;
+   }
+diff --git a/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheckTest.java b/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheckTest.java
+index c17564af..9fab2170 100644
+--- a/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheckTest.java
++++ b/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/DatabaseConnectionHealthCheckTest.java
+@@ -31,7 +31,7 @@ public void whenNotConnectingToDatabaseHealthCheckReturnsUnhealthly() throws Exc
+     when(statisticsService.queryStatistics()).thenThrow(exception);
+ 
+     HealthCheck.Result result = check.check();
+-    assertEquals(exception, result.getError());
+     assertEquals(false, result.isHealthy());
++    assertEquals(exception, result.getError());
+   }
+ }
+diff --git a/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/MetricsWorkflowExecutorListenerTest.java b/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/MetricsWorkflowExecutorListenerTest.java
+index 53441b59..7868ef55 100644
+--- a/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/MetricsWorkflowExecutorListenerTest.java
++++ b/nflow-metrics/src/test/java/com/nitorcreations/nflow/metrics/MetricsWorkflowExecutorListenerTest.java
+@@ -6,6 +6,9 @@
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.when;
+ 
++import com.codahale.metrics.health.HealthCheckRegistry;
++import com.nitorcreations.nflow.engine.internal.dao.StatisticsDao;
++import com.nitorcreations.nflow.engine.service.StatisticsService;
+ import org.joda.time.DateTime;
+ import org.junit.Before;
+ import org.junit.Test;
+@@ -93,6 +96,26 @@ public void afterFailure() {
+   @Configuration
+   @Import(NflowMetricsContext.class)
+   public static class Config {
++    @Bean
++    public MetricRegistry metricRegistry() {
++      return new MetricRegistry();
++    }
++
++    @Bean
++    public HealthCheckRegistry healthCheckRegistry() {
++      return new HealthCheckRegistry();
++    }
++
++    @Bean
++    public StatisticsService statisticsService() {
++      return mock(StatisticsService.class);
++    }
++
++    @Bean
++    public StatisticsDao statisticsDao() {
++      return mock(StatisticsDao.class);
++    }
++
+     @Bean
+     public ExecutorDao executorDao() {
+       ExecutorDao dao = mock(ExecutorDao.class);

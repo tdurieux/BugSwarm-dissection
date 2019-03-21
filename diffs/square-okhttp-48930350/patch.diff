@@ -1,0 +1,120 @@
+diff --git a/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java b/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
+index 5fdb2fcae..3c91fb585 100644
+--- a/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
++++ b/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
+@@ -77,7 +77,6 @@
+ import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.assertNull;
+-import static org.junit.Assert.assertSame;
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+@@ -628,7 +627,7 @@ private void testRequestMethod(String requestMethod, boolean expectCached) throw
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+     assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+-    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
++    assertNull(conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
+index d422143a1..af0f50675 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
+@@ -23,20 +23,6 @@
+ import com.squareup.okhttp.mockwebserver.MockWebServer;
+ import com.squareup.okhttp.mockwebserver.RecordedRequest;
+ import com.squareup.okhttp.mockwebserver.rule.MockWebServerRule;
+-import okio.Buffer;
+-import okio.BufferedSink;
+-import okio.BufferedSource;
+-import okio.GzipSink;
+-import okio.Okio;
+-import org.junit.After;
+-import org.junit.Before;
+-import org.junit.Rule;
+-import org.junit.Test;
+-import org.junit.rules.TemporaryFolder;
+-
+-import javax.net.ssl.HostnameVerifier;
+-import javax.net.ssl.SSLContext;
+-import javax.net.ssl.SSLSession;
+ import java.io.File;
+ import java.io.IOException;
+ import java.net.CookieHandler;
+@@ -59,6 +45,19 @@
+ import java.util.TimeZone;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicReference;
++import javax.net.ssl.HostnameVerifier;
++import javax.net.ssl.SSLContext;
++import javax.net.ssl.SSLSession;
++import okio.Buffer;
++import okio.BufferedSink;
++import okio.BufferedSource;
++import okio.GzipSink;
++import okio.Okio;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TemporaryFolder;
+ 
+ import static com.squareup.okhttp.mockwebserver.SocketPolicy.DISCONNECT_AT_END;
+ import static org.junit.Assert.assertEquals;
+@@ -819,6 +818,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+     assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+   }
+ 
++  /** If both If-Modified-Since and If-None-Match conditions apply, send only If-None-Match. */
+   @Test public void etagAndExpirationDateInThePast() throws Exception {
+     String lastModifiedDate = formatDate(-2, TimeUnit.HOURS);
+     RecordedRequest conditionalRequest = assertConditionallyCached(new MockResponse()
+@@ -826,7 +826,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+     assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+-    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
++    assertNull(conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+diff --git a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
+index c46fd0716..db0ed8fa6 100644
+--- a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
++++ b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
+@@ -717,7 +717,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+     assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+-    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
++    assertNull(conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
+index 7af04aacf..a5b60a91b 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
+@@ -223,16 +223,14 @@ private CacheStrategy getCandidate() {
+ 
+       Request.Builder conditionalRequestBuilder = request.newBuilder();
+ 
+-      if (lastModified != null) {
++      if (etag != null) {
++        conditionalRequestBuilder.header("If-None-Match", etag);
++      } else if (lastModified != null) {
+         conditionalRequestBuilder.header("If-Modified-Since", lastModifiedString);
+       } else if (servedDate != null) {
+         conditionalRequestBuilder.header("If-Modified-Since", servedDateString);
+       }
+ 
+-      if (etag != null) {
+-        conditionalRequestBuilder.header("If-None-Match", etag);
+-      }
+-
+       Request conditionalRequest = conditionalRequestBuilder.build();
+       return hasConditions(conditionalRequest)
+           ? new CacheStrategy(conditionalRequest, cacheResponse)

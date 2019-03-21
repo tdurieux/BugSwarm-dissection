@@ -1,0 +1,650 @@
+diff --git a/java-checks/pom.xml b/java-checks/pom.xml
+index 8e75a005fe..78ef6fba8f 100644
+--- a/java-checks/pom.xml
++++ b/java-checks/pom.xml
+@@ -197,11 +197,21 @@
+                   <artifactId>spring-security-crypto</artifactId>
+                   <version>5.0.6.RELEASE</version>
+                 </artifactItem>
++                <artifactItem>
++                  <groupId>org.springframework</groupId>
++                  <artifactId>spring-tx</artifactId>
++                  <version>5.0.6.RELEASE</version>
++                </artifactItem>
+                 <artifactItem>
+                   <groupId>org.springframework.security</groupId>
+                   <artifactId>spring-security-core</artifactId>
+                   <version>4.2.6.RELEASE</version>
+                 </artifactItem>
++                <artifactItem>
++                  <groupId>javax.transaction</groupId>
++                  <artifactId>javax.transaction-api</artifactId>
++                  <version>1.2</version>
++                </artifactItem>
+                 <artifactItem>
+                   <groupId>org.apache.shiro</groupId>
+                   <artifactId>shiro-web</artifactId>
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+index 79a44802fa..cc419be0fc 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+@@ -70,6 +70,7 @@
+ import org.sonar.java.checks.spring.SpringComponentWithWrongScopeCheck;
+ import org.sonar.java.checks.spring.SpringComposedRequestMappingCheck;
+ import org.sonar.java.checks.spring.SpringConfigurationWithAutowiredFieldsCheck;
++import org.sonar.java.checks.spring.SpringIncompatibleTransactionalCheck;
+ import org.sonar.java.checks.spring.SpringRequestMappingMethodCheck;
+ import org.sonar.java.checks.spring.SpringScanDefaultPackageCheck;
+ import org.sonar.java.checks.spring.SpringSecurityDebugModeCheck;
+@@ -535,6 +536,7 @@ private CheckList() {
+       .add(SpringAutoConfigurationCheck.class)
+       .add(SpringComponentWithNonAutowiredMembersCheck.class)
+       .add(SpringConfigurationWithAutowiredFieldsCheck.class)
++      .add(SpringIncompatibleTransactionalCheck.class)
+       .add(SpringComponentWithWrongScopeCheck.class)
+       .add(SpringComposedRequestMappingCheck.class)
+       .add(SpringRequestMappingMethodCheck.class)
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheck.java b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheck.java
+new file mode 100644
+index 0000000000..ff20e2cb04
+--- /dev/null
++++ b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheck.java
+@@ -0,0 +1,196 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.spring;
++
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Objects;
++import java.util.Optional;
++import java.util.Set;
++import javax.annotation.CheckForNull;
++import javax.annotation.Nullable;
++import org.sonar.check.Rule;
++import org.sonar.java.model.ExpressionUtils;
++import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
++import org.sonar.plugins.java.api.JavaFileScannerContext;
++import org.sonar.plugins.java.api.semantic.Symbol;
++import org.sonar.plugins.java.api.semantic.SymbolMetadata.AnnotationValue;
++import org.sonar.plugins.java.api.tree.BaseTreeVisitor;
++import org.sonar.plugins.java.api.tree.BlockTree;
++import org.sonar.plugins.java.api.tree.ClassTree;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
++import org.sonar.plugins.java.api.tree.IdentifierTree;
++import org.sonar.plugins.java.api.tree.MemberSelectExpressionTree;
++import org.sonar.plugins.java.api.tree.MethodInvocationTree;
++import org.sonar.plugins.java.api.tree.MethodTree;
++import org.sonar.plugins.java.api.tree.Tree;
++
++@Rule(key = "S2229")
++public class SpringIncompatibleTransactionalCheck extends IssuableSubscriptionVisitor {
++
++  private static final String SPRING_TRANSACTIONAL_ANNOTATION = "org.springframework.transaction.annotation.Transactional";
++  private static final String JAVAX_TRANSACTIONAL_ANNOTATION = "javax.transaction.Transactional";
++
++  private static final String MANDATORY = "MANDATORY";
++  private static final String NESTED = "NESTED";
++  private static final String NEVER = "NEVER";
++  private static final String NOT_SUPPORTED = "NOT_SUPPORTED";
++  private static final String REQUIRED = "REQUIRED";
++  private static final String REQUIRES_NEW = "REQUIRES_NEW";
++  private static final String SUPPORTS = "SUPPORTS";
++
++  private static final Map<String, Set<String>> INCOMPATIBLE_PROPAGATION_MAP = buildIncompatiblePropagationMap();
++
++  private static Map<String, Set<String>> buildIncompatiblePropagationMap() {
++    Map<String, Set<String>> map = new HashMap<>();
++    map.put(null, new HashSet<>(Arrays.asList(MANDATORY, NESTED, REQUIRED, REQUIRES_NEW)));
++    map.put(MANDATORY, new HashSet<>(Arrays.asList(NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW)));
++    map.put(NESTED, new HashSet<>(Arrays.asList(NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW)));
++    map.put(NEVER, new HashSet<>(Arrays.asList(MANDATORY, NESTED, REQUIRED, REQUIRES_NEW)));
++    map.put(NOT_SUPPORTED, new HashSet<>(Arrays.asList(MANDATORY, NESTED, REQUIRED, REQUIRES_NEW)));
++    map.put(REQUIRED, new HashSet<>(Arrays.asList(NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW)));
++    map.put(REQUIRES_NEW, new HashSet<>(Arrays.asList(NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW)));
++    map.put(SUPPORTS, new HashSet<>(Arrays.asList(MANDATORY, NESTED, NEVER, NOT_SUPPORTED, REQUIRED, REQUIRES_NEW)));
++    return map;
++  }
++
++  @Override
++  public List<Tree.Kind> nodesToVisit() {
++    return Collections.singletonList(Tree.Kind.CLASS);
++  }
++
++  @Override
++  public void visitNode(Tree tree) {
++    if (!hasSemantic()) {
++      return;
++    }
++    ClassTree classTree = (ClassTree) tree;
++    if (!hasMethodsAnnotatedWithTransactional(classTree)) {
++      return;
++    }
++    Map<Symbol, String> methodsPropagationMap = collectMethodsPropagation(classTree);
++    if (hasSameValues(methodsPropagationMap)) {
++      return;
++    }
++    methodsPropagationMap
++      .forEach((symbol, propagation) -> checkMethodInvocation((MethodTree) symbol.declaration(), propagation, methodsPropagationMap));
++  }
++
++  private void checkMethodInvocation(MethodTree method, @Nullable String callerPropagation, Map<Symbol, String> methodsPropagationMap) {
++    BlockTree methodBody = method.block();
++    if (methodBody == null) {
++      return;
++    }
++    methodBody.accept(new BaseTreeVisitor() {
++      @Override
++      public void visitMethodInvocation(MethodInvocationTree methodInvocation) {
++        super.visitMethodInvocation(methodInvocation);
++        Symbol calleeMethodSymbol = methodInvocation.symbol();
++        if (methodsPropagationMap.containsKey(calleeMethodSymbol) && methodInvocationOnThisInstance(methodInvocation)) {
++          String calleePropagation = methodsPropagationMap.get(calleeMethodSymbol);
++          checkIncompatiblePropagation(methodInvocation, callerPropagation, calleeMethodSymbol, calleePropagation);
++        }
++      }
++    });
++  }
++
++  private static boolean methodInvocationOnThisInstance(MethodInvocationTree methodInvocation) {
++    ExpressionTree expression = methodInvocation.methodSelect();
++    if (expression.is(Tree.Kind.MEMBER_SELECT)) {
++      expression = ((MemberSelectExpressionTree) expression).expression();
++      return expression.is(Tree.Kind.IDENTIFIER) && ((IdentifierTree) expression).name().equals("this");
++    }
++    return expression.is(Tree.Kind.IDENTIFIER);
++  }
++
++  private void checkIncompatiblePropagation(MethodInvocationTree methodInvocation, @Nullable String callerPropagation, Symbol calleeMethodSymbol, String calleePropagation) {
++    Set<String> incompatiblePropagation = INCOMPATIBLE_PROPAGATION_MAP.getOrDefault(callerPropagation, Collections.emptySet());
++    if (incompatiblePropagation.contains(calleePropagation)) {
++      String message = "\"" + calleeMethodSymbol.name() + "'s\" @Transactional requirement is incompatible with the one for this method.";
++      List<JavaFileScannerContext.Location> secondaryLocations = Collections.singletonList(
++        new JavaFileScannerContext.Location("", ((MethodTree) calleeMethodSymbol.declaration()).simpleName()));
++      reportIssue(ExpressionUtils.methodName(methodInvocation), message, secondaryLocations, null);
++    }
++  }
++
++  private static Map<Symbol, String> collectMethodsPropagation(ClassTree classTree) {
++    Map<Symbol, String> methodPropagationMap = new HashMap<>();
++    String classPropagation = getPropagation(classTree.symbol(), null);
++    for (Tree member : classTree.members()) {
++      if (member.is(Tree.Kind.METHOD)) {
++        MethodTree method = (MethodTree) member;
++        methodPropagationMap.put(method.symbol(), getPropagation(method.symbol(), classPropagation));
++      }
++    }
++    return methodPropagationMap;
++  }
++
++  private static boolean hasSameValues(Map<Symbol, String> methodsPropagationMap) {
++    if (methodsPropagationMap.size() < 2) {
++      return true;
++    }
++    String firstValue = methodsPropagationMap.values().iterator().next();
++    return methodsPropagationMap.values().stream().allMatch(value -> Objects.equals(value, firstValue));
++  }
++
++  private static boolean hasMethodsAnnotatedWithTransactional(ClassTree classTree) {
++    return classTree.symbol().memberSymbols().stream()
++      .map(Symbol::metadata)
++      .anyMatch(metadata -> metadata.isAnnotatedWith(SPRING_TRANSACTIONAL_ANNOTATION) ||
++        metadata.isAnnotatedWith(JAVAX_TRANSACTIONAL_ANNOTATION));
++  }
++
++  @CheckForNull
++  private static String getPropagation(Symbol symbol, @Nullable String inheritedPropagation) {
++    String defaultValue = inheritedPropagation != null ? inheritedPropagation : REQUIRED;
++    List<AnnotationValue> values = symbol.metadata().valuesForAnnotation(SPRING_TRANSACTIONAL_ANNOTATION);
++    if (values != null) {
++      return getAnnotationAttributeAsString(values, "propagation", defaultValue);
++    } else {
++      values = symbol.metadata().valuesForAnnotation(JAVAX_TRANSACTIONAL_ANNOTATION);
++      if (values != null) {
++        return getAnnotationAttributeAsString(values, "value", defaultValue);
++      } else {
++        return null;
++      }
++    }
++  }
++
++  private static String getAnnotationAttributeAsString(List<AnnotationValue> values, String attributeName, String defaultValue) {
++    Optional<Object> propagation = values.stream()
++      .filter(annotationValue -> annotationValue.name().equals(attributeName))
++      .map(AnnotationValue::value)
++      .findFirst();
++    if (!propagation.isPresent()) {
++      return defaultValue;
++    }
++    if (propagation.get() instanceof MemberSelectExpressionTree) {
++      return ((MemberSelectExpressionTree) propagation.get()).identifier().name();
++    } else if (propagation.get() instanceof IdentifierTree) {
++      return ((IdentifierTree) propagation.get()).name();
++    }
++    return defaultValue;
++  }
++
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.html
+new file mode 100644
+index 0000000000..d7a2316da5
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.html
+@@ -0,0 +1,59 @@
++<p>When using Spring proxies, calling a method in the same class (e.g. <code>this.aMethod()</code>) with an incompatible <code>@Transactional</code>
++requirement will result in runtime exceptions because Spring only "sees" the caller and makes no provisions for properly invoking the callee. </p>
++<p>Therefore, certain calls should never be made within the same class:</p>
++<table>
++  <tbody>
++    <tr>
++      <th>From</th>
++      <th>To</th>
++    </tr>
++    <tr>
++      <td> non-<code>@Transactional</code> </td>
++      <td> MANDATORY, NESTED, REQUIRED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> MANDATORY </td>
++      <td> NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> NESTED </td>
++      <td> NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> NEVER </td>
++      <td> MANDATORY, NESTED, REQUIRED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> NOT_SUPPORTED </td>
++      <td> MANDATORY, NESTED, REQUIRED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> REQUIRED or <code>@Transactional</code> </td>
++      <td> NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> REQUIRES_NEW </td>
++      <td> NESTED, NEVER, NOT_SUPPORTED, REQUIRES_NEW </td>
++    </tr>
++    <tr>
++      <td> SUPPORTS </td>
++      <td> MANDATORY, NESTED, NEVER, NOT_SUPPORTED, REQUIRED, REQUIRES_NEW </td>
++    </tr>
++  </tbody>
++</table>
++<h2>Noncompliant Code Example</h2>
++<pre>
++
++@Override
++public void doTheThing() {
++  // ...
++  actuallyDoTheThing();  // Noncompliant
++}
++
++@Override
++@Transactional
++public void actuallyDoTheThing() {
++  // ...
++}
++</pre>
++
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.json
+new file mode 100644
+index 0000000000..f9e0016251
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2229_java.json
+@@ -0,0 +1,16 @@
++{
++  "title": "Methods should not call same-class methods with incompatible \"@Transactional\" values",
++  "type": "BUG",
++  "status": "ready",
++  "remediation": {
++    "func": "Constant\/Issue",
++    "constantCost": "20min"
++  },
++  "tags": [
++    "spring"
++  ],
++  "defaultSeverity": "Blocker",
++  "ruleSpecification": "RSPEC-2229",
++  "sqKey": "S2229",
++  "scope": "Main"
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+index 53da947249..1607d3a10a 100644
+--- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+@@ -185,6 +185,7 @@
+     "S2222",
+     "S2225",
+     "S2226",
++    "S2229",
+     "S2230",
+     "S2232",
+     "S2234",
+diff --git a/java-checks/src/test/files/checks/spring/SpringIncompatibleTransactionalCheck.java b/java-checks/src/test/files/checks/spring/SpringIncompatibleTransactionalCheck.java
+new file mode 100644
+index 0000000000..3628aca3c0
+--- /dev/null
++++ b/java-checks/src/test/files/checks/spring/SpringIncompatibleTransactionalCheck.java
+@@ -0,0 +1,245 @@
++package files.checks.spring;
++
++import javax.transaction.Transactional.TxType;
++import org.springframework.transaction.annotation.Propagation;
++import org.springframework.transaction.annotation.Transactional;
++
++import static javax.transaction.Transactional.TxType.REQUIRED;
++
++public class CheckMessage {
++
++  CheckMessage other;
++
++  @Transactional
++  public void springTransactionalDefault() {
++  }
++
++  public void nonTransactional() {
++    springTransactionalDefault();     // Noncompliant [[sc=5;ec=31;secondary=14]] {{"springTransactionalDefault's" @Transactional requirement is incompatible with the one for this method.}}
++
++    other.springTransactionalDefault();
++    getOther().springTransactionalDefault();
++    this.springTransactionalDefault();  // Noncompliant
++
++    equals(other);
++    this.equals(other);
++  }
++
++  CheckMessage getOther() {
++    return other;
++  }
++
++}
++
++public class IncompatibilityMatrix {
++
++  public void nonTransactional() {
++    nonTransactional();
++    transactional();    // Noncompliant
++    mandatory();        // Noncompliant
++    nested();           // Noncompliant
++    never();
++    notSupported();
++    required();         // Noncompliant
++    requiresNew();      // Noncompliant
++    supports();
++  }
++
++  @Transactional
++  public void transactional() {
++    nonTransactional();
++    transactional();
++    mandatory();
++    nested();       // Noncompliant
++    never();        // Noncompliant
++    notSupported(); // Noncompliant
++    required();
++    requiresNew();  // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.MANDATORY)
++  public void mandatory() {
++    nonTransactional();
++    transactional();
++    mandatory();
++    nested();       // Noncompliant
++    never();        // Noncompliant
++    notSupported(); // Noncompliant
++    required();
++    requiresNew();  // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.NESTED)
++  public void nested() {
++    nonTransactional();
++    transactional();
++    mandatory();
++    nested();       // Noncompliant
++    never();        // Noncompliant
++    notSupported(); // Noncompliant
++    required();
++    requiresNew();  // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.NEVER)
++  public void never() {
++    nonTransactional();
++    transactional(); // Noncompliant
++    mandatory();     // Noncompliant
++    nested();        // Noncompliant
++    never();
++    notSupported();
++    required();      // Noncompliant
++    requiresNew();   // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.NOT_SUPPORTED)
++  public void notSupported() {
++    nonTransactional();
++    transactional(); // Noncompliant
++    mandatory();     // Noncompliant
++    nested();        // Noncompliant
++    never();
++    notSupported();
++    required();      // Noncompliant
++    requiresNew();   // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void required() {
++    nonTransactional();
++    transactional();
++    mandatory();
++    nested();       // Noncompliant
++    never();        // Noncompliant
++    notSupported(); // Noncompliant
++    required();
++    requiresNew();  // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.REQUIRES_NEW)
++  public void requiresNew() {
++    nonTransactional();
++    transactional();
++    mandatory();
++    nested();       // Noncompliant
++    never();        // Noncompliant
++    notSupported(); // Noncompliant
++    required();
++    requiresNew();  // Noncompliant
++    supports();
++  }
++
++  @Transactional(propagation = Propagation.SUPPORTS)
++  public void supports() {
++    nonTransactional();
++    transactional(); // Noncompliant
++    mandatory();     // Noncompliant
++    nested();        // Noncompliant
++    never();         // Noncompliant
++    notSupported();  // Noncompliant
++    required();      // Noncompliant
++    requiresNew();   // Noncompliant
++    supports();
++  }
++
++}
++
++public class SupportJavaxTransactional {
++
++  public void nonTransactional() {
++    javaxTransactionalDefault();      // Noncompliant
++    javaxTransactionalRequired();     // Noncompliant
++    javaxTransactionalNotSupported();
++    javaxTransactionalNever();
++  }
++
++  @javax.transaction.Transactional
++  public void javaxTransactionalDefault() {
++  }
++
++  @javax.transaction.Transactional(value = REQUIRED)
++  public void javaxTransactionalRequired() {
++  }
++
++  @javax.transaction.Transactional(TxType.NOT_SUPPORTED)
++  public void javaxTransactionalNotSupported() {
++  }
++
++  @javax.transaction.Transactional(value = TxType.NEVER)
++  public void javaxTransactionalNever() {
++  }
++
++}
++
++@Transactional(propagation = Propagation.NOT_SUPPORTED)
++public class ClassInheritance {
++
++  public void nonTransactional() {
++    transactional();
++  }
++
++  @Transactional // inherits NOT_SUPPORTED
++  public void transactional() {
++  }
++
++}
++
++public class ClassWithoutTransactionnal {
++
++  public void method() {
++  }
++
++}
++
++public class ClassWithOneTransactionnal {
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void methodA() {
++  }
++
++}
++
++public class ClassWithSameTransactionnal {
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void methodA() {
++    methodB();
++  }
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void methodB() {
++  }
++
++}
++
++public abstract class AbstractClass {
++
++  @Transactional(propagation = Propagation.REQUIRES_NEW)
++  public abstract void methodA();
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void methodB() {
++    methodA(); // Noncompliant
++  }
++
++}
++
++public class InvalidPropagation {
++
++  @Transactional(propagation = null)
++  public void methodA() {
++    methodB();
++  }
++
++  @Transactional(propagation = Propagation.REQUIRED)
++  public void methodB() {
++  }
++
++}
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheckTest.java
+new file mode 100644
+index 0000000000..cb72be4c5d
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringIncompatibleTransactionalCheckTest.java
+@@ -0,0 +1,33 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.spring;
++
++import org.junit.Test;
++import org.sonar.java.checks.verifier.JavaCheckVerifier;
++
++public class SpringIncompatibleTransactionalCheckTest {
++
++  @Test
++  public void test() {
++    JavaCheckVerifier.verify("src/test/files/checks/spring/SpringIncompatibleTransactionalCheck.java", new SpringIncompatibleTransactionalCheck());
++    JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/spring/SpringIncompatibleTransactionalCheck.java", new SpringIncompatibleTransactionalCheck());
++  }
++
++}
+diff --git a/sonar-java-plugin/pom.xml b/sonar-java-plugin/pom.xml
+index 18433a76d1..6085d45af8 100644
+--- a/sonar-java-plugin/pom.xml
++++ b/sonar-java-plugin/pom.xml
+@@ -107,7 +107,7 @@
+             <configuration>
+               <rules>
+                 <requireFilesSize>
+-                  <maxsize>8230000</maxsize>
++                  <maxsize>8250000</maxsize>
+                   <minsize>4500000</minsize>
+                   <files>
+                     <file>${project.build.directory}/${project.build.finalName}.jar</file>

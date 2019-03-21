@@ -1,0 +1,1941 @@
+diff --git a/.travis.yml b/.travis.yml
+index 72da56b..fb9f281 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -17,10 +17,8 @@ env:
+ 
+   matrix:
+   - LINT_CHECK="1"
+-  - TESTS="1" ODOO_REPO="odoo/odoo" EXCLUDE="asynchronous_batch_mailings"
+-  - TESTS="1" ODOO_REPO="OCA/OCB"   EXCLUDE="asynchronous_batch_mailings"
+-  - TESTS="1" ODOO_REPO="odoo/odoo" INCLUDE="asynchronous_batch_mailings"
+-  - TESTS="1" ODOO_REPO="OCA/OCB"   INCLUDE="asynchronous_batch_mailings"
++  - TESTS="1" ODOO_REPO="odoo/odoo"
++  - TESTS="1" ODOO_REPO="OCA/OCB"
+ 
+ virtualenv:
+   system_site_packages: true
+diff --git a/oca_dependencies.txt b/oca_dependencies.txt
+index 8e5c6df..3ae3471 100644
+--- a/oca_dependencies.txt
++++ b/oca_dependencies.txt
+@@ -1,3 +1,4 @@
+ account-financial-reporting
+ connector
+ hr-timesheet
++server-tools
+diff --git a/setup/workflow_activity_action/odoo_addons/__init__.py b/setup/workflow_activity_action/odoo_addons/__init__.py
+new file mode 100644
+index 0000000..de40ea7
+--- /dev/null
++++ b/setup/workflow_activity_action/odoo_addons/__init__.py
+@@ -0,0 +1 @@
++__import__('pkg_resources').declare_namespace(__name__)
+diff --git a/setup/workflow_activity_action/odoo_addons/workflow_activity_action b/setup/workflow_activity_action/odoo_addons/workflow_activity_action
+new file mode 120000
+index 0000000..9563f37
+--- /dev/null
++++ b/setup/workflow_activity_action/odoo_addons/workflow_activity_action
+@@ -0,0 +1 @@
++../../../workflow_activity_action
+\ No newline at end of file
+diff --git a/setup/workflow_activity_action/setup.py b/setup/workflow_activity_action/setup.py
+new file mode 100644
+index 0000000..28c57bb
+--- /dev/null
++++ b/setup/workflow_activity_action/setup.py
+@@ -0,0 +1,6 @@
++import setuptools
++
++setuptools.setup(
++    setup_requires=['setuptools-odoo'],
++    odoo_addon=True,
++)
+diff --git a/setup/workflow_task/odoo_addons/__init__.py b/setup/workflow_task/odoo_addons/__init__.py
+new file mode 100644
+index 0000000..de40ea7
+--- /dev/null
++++ b/setup/workflow_task/odoo_addons/__init__.py
+@@ -0,0 +1 @@
++__import__('pkg_resources').declare_namespace(__name__)
+diff --git a/setup/workflow_task/odoo_addons/workflow_task b/setup/workflow_task/odoo_addons/workflow_task
+new file mode 120000
+index 0000000..cb37983
+--- /dev/null
++++ b/setup/workflow_task/odoo_addons/workflow_task
+@@ -0,0 +1 @@
++../../../workflow_task
+\ No newline at end of file
+diff --git a/setup/workflow_task/setup.py b/setup/workflow_task/setup.py
+new file mode 100644
+index 0000000..28c57bb
+--- /dev/null
++++ b/setup/workflow_task/setup.py
+@@ -0,0 +1,6 @@
++import setuptools
++
++setuptools.setup(
++    setup_requires=['setuptools-odoo'],
++    odoo_addon=True,
++)
+diff --git a/workflow_activity_action/README.rst b/workflow_activity_action/README.rst
+new file mode 100644
+index 0000000..54c1030
+--- /dev/null
++++ b/workflow_activity_action/README.rst
+@@ -0,0 +1,88 @@
++.. image:: https://img.shields.io/badge/licence-AGPL--3-blue.svg
++    :target: http://www.gnu.org/licenses/agpl-3.0-standalone.html
++    :alt: License: AGPL-3
++
++========================
++Workflow activity action
++========================
++
++This module adds the concept of actions directly on the activities of an object.
++
++It is now possible to define a list of actions on workflow activities.
++Currently, these actions are configured as Odoo server action.
++
++Once defined actions on activities, it is possible to use these ones directly on the object associated with the activity.
++technically, it is necessary to make an inheritance of an abstract model and to add a field in the view of the object concerned.
++
++You can define two types of security rules for the actions of management.
++
++1) It is possible to define a security group list on the activity. For a user to perform an action on that activity, it must be defined in at least one group.
++2) In addition to the first level, it is possible to define a list of activity record rule. The evaluation process of these security rules is similar to the ir.rule model.
++
++Once the rules are evaluated, the actions are performed by super user (with base_suspend_security module)
++
++Usage
++=====
++
++Here is an example implementation on account.invoice model.
++
++* A python class ::
++
++	from openerp import fields, models
++
++
++	class AccountInvoice(models.Model)
++	    _name = 'account.invoice'
++	    _inherit = ['accont.invoice', 'workflow.action.model']
++
++* An XML view ::
++
++	<record model="ir.ui.view" id="invoice_form">
++	    <field name="name">account.invoice.form</field>
++	    <field name="model">account.invoice</field>
++	    <field name="inherit_id" ref="account.invoice_form" />
++	     <field name="arch" type="xml">
++		<xpath expr="//header" position="attributes">
++		    <attribute name="invisible">1</attribute>
++		</xpath>
++		<xpath expr="//header" position="after">
++		    <header>
++		        <field name="activity_action_ids" widget="many2many_action_buttons" />
++		        <field name="state" widget="statusbar"/>
++		    </header>
++		</xpath>
++	    </field>
++	</record>
++
++* Configuration of activities:
++
++	.. figure:: static/description/workflow_activity_action_1.png
++	   :alt: Configuration of activities
++
++* Add a server action on activity
++
++	.. figure:: static/description/workflow_activity_action_2.png
++	   :alt: Add a server action on activity
++
++* Using actions directly on the object:
++
++	.. figure:: static/description/workflow_activity_action_3.png
++	   :alt: Using actions directly on the object
++
++Credits
++=======
++
++Contributors
++------------
++
++* Stéphane Bidoul <stephane.bidoul@acsone.eu>
++* Adrien Peiffer <adrien.peiffer@acsone.eu>
++
++Maintainer
++----------
++
++.. image:: https://www.acsone.eu/logo.png
++   :alt: ACSONE SA/NV
++   :target: http://www.acsone.eu
++
++This module is maintained by ACSONE SA/NV.
+diff --git a/workflow_activity_action/__init__.py b/workflow_activity_action/__init__.py
+new file mode 100644
+index 0000000..a0fdc10
+--- /dev/null
++++ b/workflow_activity_action/__init__.py
+@@ -0,0 +1,2 @@
++# -*- coding: utf-8 -*-
++from . import models
+diff --git a/workflow_activity_action/__openerp__.py b/workflow_activity_action/__openerp__.py
+new file mode 100644
+index 0000000..747318e
+--- /dev/null
++++ b/workflow_activity_action/__openerp__.py
+@@ -0,0 +1,48 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_activity_action,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_activity_action is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_activity_action is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_activity_action.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++{
++    'name': "Workflow activity action",
++
++    'summary': """
++        Manage object action from its activities""",
++    'author': 'ACSONE SA/NV',
++    'website': "http://acsone.eu",
++    'category': 'Technical Settings',
++    'version': '9.0.1.0.0',
++    'license': 'AGPL-3',
++    'depends': [
++        'base',
++        'base_suspend_security',
++    ],
++    'data': [
++        'security/ir.model.access.csv',
++        'views/wkf_activity.xml',
++        'views/workflow_activity_action.xml',
++        'views/activity_record_rule_view.xml',
++    ],
++    'qweb': [
++        'static/src/xml/base.xml',
++    ],
++}
+diff --git a/workflow_activity_action/models/__init__.py b/workflow_activity_action/models/__init__.py
+new file mode 100644
+index 0000000..cb0455a
+--- /dev/null
++++ b/workflow_activity_action/models/__init__.py
+@@ -0,0 +1,4 @@
++# -*- coding: utf-8 -*-
++from . import wkf_action_model
++from . import wkf_activity
++from . import activity_record_rule
+diff --git a/workflow_activity_action/models/activity_record_rule.py b/workflow_activity_action/models/activity_record_rule.py
+new file mode 100644
+index 0000000..673235f
+--- /dev/null
++++ b/workflow_activity_action/models/activity_record_rule.py
+@@ -0,0 +1,92 @@
++# -*- coding: utf-8 -*-
++# Copyright 2015 ACSONE SA/NV (<http://acsone.eu>)
++# License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
++
++import time
++
++from openerp import api, fields, models
++from openerp.tools import SUPERUSER_ID
++from openerp.addons.base_suspend_security.base_suspend_security import\
++    BaseSuspendSecurityUid
++from openerp.osv import expression
++
++
++class ActivityRecordRule(models.Model):
++    _inherit = 'ir.rule'
++    _name = 'activity.record.rule'
++
++    @api.model
++    def _eval_context(self):
++        """Returns a dictionary to use as evaluation context for
++           ir.rule domains."""
++        return {'user': self.env.user,
++                'time': time}
++
++    @api.multi
++    def _domain_force_get(self):
++        eval_context = self._eval_context()
++        for rule in self:
++            if rule.domain_force:
++                rule.domain = expression.normalize_domain(
++                    eval(rule.domain_force, eval_context))
++            else:
++                rule.domain = []
++
++    activity_id = fields.Many2one(comodel_name='workflow.activity',
++                                  string='Activity',
++                                  required=True)
++    model_id = fields.Many2one(required=False, readonly=True)
++    domain = fields.Binary(compute='_domain_force_get', string='Domain')
++
++    @api.model
++    def domain_get(self, model_name, activity_id):
++        dom = self._compute_activity_rule_domain(activity_id)
++        if dom:
++            # _where_calc is called as superuser. This means that rules can
++            # involve objects on which the real uid has no acces rights.
++            # This means also there is no implicit restriction (e.g. an object
++            # references another object the user can't see).
++            query = self.env[model_name].sudo()._where_calc(dom,
++                                                            active_test=False)
++            return query.where_clause, query.where_clause_params, query.tables
++        return [], [], ['"' + self.pool[model_name]._table + '"']
++
++    @api.model
++    def _compute_activity_rule_domain(self, activity_id):
++        if self._uid == SUPERUSER_ID or isinstance(self.env.uid,
++                                                   BaseSuspendSecurityUid):
++            return None
++        self._cr.execute("""SELECT r.id
++                FROM activity_record_rule r
++                WHERE r.active is True
++                AND r.activity_id = %s
++                AND (r.id IN (SELECT rule_group_id FROM rule_group_rel g_rel
++                JOIN res_groups_users_rel u_rel ON (g_rel.group_id = u_rel.gid)
++                WHERE u_rel.uid = %s) OR r.global)""", (activity_id,
++                                                        self._uid))
++        rule_ids = [x[0] for x in self._cr.fetchall()]
++        if rule_ids:
++            # browse user as super-admin root to avoid access errors!
++            user = self.env['res.users'].sudo().browse([self._uid])
++            global_domains = []                 # list of domains
++            group_domains = {}                  # map: group -> list of domains
++            for rule in self.sudo().browse(rule_ids):
++                # read 'domain' as UID to have the correct eval context for
++                # the rule.
++                rule_domain = rule.sudo(user=user.id)\
++                    .read(['domain'])[0]['domain']
++                dom = expression.normalize_domain(rule_domain)
++                for group in rule.groups:
++                    if group in user.groups_id:
++                        group_domains.setdefault(group, []).append(dom)
++                if not rule.groups:
++                    global_domains.append(dom)
++            # combine global domains and group domains
++            if group_domains:
++                group_domain = expression.OR(map(expression.OR,
++                                                 group_domains.values()))
++            else:
++                group_domain = []
++            domain = expression.AND(global_domains + [group_domain])
++            return domain
++        return []
+diff --git a/workflow_activity_action/models/wkf_action_model.py b/workflow_activity_action/models/wkf_action_model.py
+new file mode 100644
+index 0000000..22d8cd2
+--- /dev/null
++++ b/workflow_activity_action/models/wkf_action_model.py
+@@ -0,0 +1,51 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_activity_action,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_activity_action is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_activity_action is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_activity_action.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++
++from openerp import models, fields, api
++
++
++class WorkflowActionModel(models.AbstractModel):
++    _name = 'workflow.action.model'
++
++    activity_action_ids = fields.One2many(
++        comodel_name='workflow.activity.action',
++        compute='_get_action_ids', string="Action")
++
++    @api.multi
++    def _get_action_ids(self):
++        res_type = str(self._model)
++        for record in self:
++            if record.id:
++                workitem_ids = self.env['workflow.workitem']\
++                    .search([('inst_id.res_id', '=', record.id),
++                             ('inst_id.res_type', '=', res_type)])
++                actions_ids = self.env['workflow.activity.action']
++                activity_ids = workitem_ids.mapped('act_id')
++                for activity in activity_ids:
++                    if activity.use_action_object and\
++                            activity._check_action_security(res_type,
++                                                            record.id):
++                        actions_ids = actions_ids + activity.action_ids
++                self.activity_action_ids = actions_ids
+diff --git a/workflow_activity_action/models/wkf_activity.py b/workflow_activity_action/models/wkf_activity.py
+new file mode 100644
+index 0000000..5118a5f
+--- /dev/null
++++ b/workflow_activity_action/models/wkf_activity.py
+@@ -0,0 +1,149 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_task,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_task is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_task is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_task.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++
++from openerp import models, fields, api, exceptions, _
++from openerp.tools import SUPERUSER_ID
++from openerp.addons.base_suspend_security.base_suspend_security import\
++    BaseSuspendSecurityUid
++
++
++class WorkflowActivityAction(models.Model):
++    _name = 'workflow.activity.action'
++
++    activity_id = fields.Many2one(comodel_name='workflow.activity',
++                                  string='Activity',
++                                  required=True, ondelete='cascade')
++    name = fields.Char(required=True, translate=True)
++    action = fields.Many2one(comodel_name='ir.actions.server', required=True)
++
++    @api.multi
++    def do_action(self):
++        self.ensure_one()
++        res_id = self.env.context.get('res_id', False)
++        res_type = self.env.context.get('res_type', False)
++        assert res_id and res_type
++        self.activity_id.check_action_security(res_type, res_id)
++        self = self.suspend_security()
++        ctx = dict(self.env.context,
++                   active_model=res_type, active_ids=[res_id],
++                   active_id=res_id)
++        res = self.action.with_context(ctx).run()
++        return res
++
++
++class WorkflowActivity(models.Model):
++    _inherit = 'workflow.activity'
++
++    use_action_object = fields.Boolean(
++        string="Show actions on object",
++        help="""Si vrai et si les conditions de sécurité sont satisfaites,\
++                les actions peuvent être utilisés directement sur l'objet""")
++    action_ids = fields.One2many(comodel_name='workflow.activity.action',
++                                 inverse_name='activity_id',
++                                 string='Actions',
++                                 help="Actions that can be triggered with "
++                                      "buttons on the task form. This is "
++                                      "useful when the activity cannot be "
++                                      "completed through normal actions "
++                                      "on the underlying object.")
++    security_group_ids = fields.Many2many(
++        comodel_name='res.groups', relation='activity_groups_rel',
++        column1='activity_id', column2='group_id', string='Security Groups',
++        help="""Groupes de sécurité pouvant intéragir avec un objet dans\
++                cette activité que ce soit au niveau de la visibilité des\
++                tâches ou des actions""")
++    activity_rule_ids = fields.One2many(
++        comodel_name='activity.record.rule', inverse_name='activity_id',
++        string="Activity Record Rule",
++        help="""Règles de sécurité devant être satisfaites pour l'affichage\
++                et l'utilisation des actions""")
++
++    @api.multi
++    def check_action_security(self, res_type, res_id):
++        if not self._check_action_security(res_type, res_id):
++            raise exceptions.AccessError(
++                _("""The requested operation cannot be completed due to
++                     security restrictions.
++                     Please contact your system administrator."""))
++
++    @api.multi
++    def _check_action_security(self, res_type, res_id):
++        self.ensure_one()
++        if self._uid == SUPERUSER_ID or\
++                isinstance(self.env.uid, BaseSuspendSecurityUid):
++            return True
++        if self.security_group_ids.ids:
++            act = self.search(
++                [('security_group_ids.users', '=', self.env.user.id),
++                 ('id', '=', self.id)])
++            if not act.ids:
++                return False
++        obj = self.env[res_type].browse([res_id])
++        table = obj._table
++        res = False
++        if obj.is_transient():
++            self._cr.execute("""SELECT distinct create_uid
++                                FROM %s
++                                WHERE id IN %%s""" % (obj._table,
++                                                      (tuple(obj._ids),)))
++            uids = [x[0] for x in self._cr.fetchall()]
++            if len(uids) != 1 or uids[0] != SUPERUSER_ID or\
++                    not isinstance(self.env.uid, BaseSuspendSecurityUid):
++                res = False
++        else:
++            where_clause, where_params, tables =\
++                self.env['activity.record.rule'].domain_get(res_type, self.id)
++            if where_clause:
++                where_clause = ' and ' + ' and '.join(where_clause)
++                sub_ids = (obj.id,)
++                self._cr.execute(
++                    'SELECT ' + table + '.id FROM ' + ','.join(tables) +
++                    ' WHERE ' + table + '.id IN %s' + where_clause,
++                    [sub_ids] + where_params)
++                returned_ids = [x['id'] for x in self._cr.dictfetchall()]
++                res = self._check_record_rules_result_count(table, sub_ids,
++                                                            returned_ids)
++            else:
++                res = True
++        return res
++
++    @api.model
++    def _check_record_rules_result_count(self, res_type, sub_res_ids,
++                                         result_ids):
++        ids, result_ids = set(sub_res_ids), set(result_ids)
++        missing_ids = ids - result_ids
++        if missing_ids:
++            self._cr.execute(
++                'SELECT id FROM ' + res_type + ' WHERE id IN %s',
++                (tuple(missing_ids),))
++            forbidden_ids = [x[0] for x in self._cr.fetchall()]
++            if forbidden_ids:
++                if self._uid == SUPERUSER_ID or\
++                        isinstance(self.env.uid, BaseSuspendSecurityUid):
++                    return True
++                return False
++            else:
++                return True
++        return True
+diff --git a/workflow_activity_action/security/ir.model.access.csv b/workflow_activity_action/security/ir.model.access.csv
+new file mode 100644
+index 0000000..cf6251f
+--- /dev/null
++++ b/workflow_activity_action/security/ir.model.access.csv
+@@ -0,0 +1,5 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_workflow_activity_action_all,access_workflow_activity_action_all,model_workflow_activity_action,,1,0,0,0
++access_workflow_activity_action_group_system,access_workflow_activity_action_group_system,model_workflow_activity_action,base.group_system,1,1,1,1
++access_activity_record_rule_all,access_activity_record_rule_all,model_activity_record_rule,,1,0,0,0
++access_activity_record_rule_group_system,access_activity_record_rule_group_system,model_activity_record_rule,base.group_system,1,1,1,1
+\ No newline at end of file
+diff --git a/workflow_activity_action/static/description/workflow_activity_action_1.png b/workflow_activity_action/static/description/workflow_activity_action_1.png
+new file mode 100644
+index 0000000..162cefc
+Binary files /dev/null and b/workflow_activity_action/static/description/workflow_activity_action_1.png differ
+diff --git a/workflow_activity_action/static/description/workflow_activity_action_2.png b/workflow_activity_action/static/description/workflow_activity_action_2.png
+new file mode 100644
+index 0000000..3264ed0
+Binary files /dev/null and b/workflow_activity_action/static/description/workflow_activity_action_2.png differ
+diff --git a/workflow_activity_action/static/description/workflow_activity_action_3.png b/workflow_activity_action/static/description/workflow_activity_action_3.png
+new file mode 100644
+index 0000000..594c9d4
+Binary files /dev/null and b/workflow_activity_action/static/description/workflow_activity_action_3.png differ
+diff --git a/workflow_activity_action/static/src/js/view_form.js b/workflow_activity_action/static/src/js/view_form.js
+new file mode 100644
+index 0000000..9f36ed9
+--- /dev/null
++++ b/workflow_activity_action/static/src/js/view_form.js
+@@ -0,0 +1,84 @@
++odoo.define('workflow_activity_action', function (require) {
++"use strict";
++    
++    var common = require('web.form_common');
++    var utils = require('web.utils');
++    var core = require('web.core');
++    var Model = require('web.DataModel');
++    var session = require('web.session');
++    var form_relational = require('web.form_relational');
++    var data = require('web.data');
++    var QWeb = core.qweb;
++
++var FieldMany2ManyActionButtons = form_relational.AbstractManyField.extend(common.CompletionFieldMixin, common.ReinitializeFieldMixin, {
++    template: "FieldMany2ManyActionButtons",
++    button_template: "FieldMany2ManyActionButton",
++    init: function() {
++        this._super.apply(this, arguments);
++        common.CompletionFieldMixin.init.call(this);
++        this.set({"value": []});
++        this._display_orderer = new utils.DropMisordered();
++        this._drop_shown = false;
++    },
++    get_render_data: function(ids){
++        var self = this;
++        var dataset = new data.DataSetStatic(this, this.field.relation, self.build_context());
++        return dataset.name_get(ids);
++    },
++    render_button: function(data) {
++        var self = this;
++        var parent = this;
++        var buttons = QWeb.render(self.button_template, {elements: data})
++        self.$el.html(buttons);
++        var parent_data = data
++        $('button', self.$el).each(function(el) {
++            var parent_el = el
++            $(this).click(function(){
++                var parent_form = self.view
++                var button = this
++                $.when().then(function () {
++                    if (parent_form) {
++                        parent_form.save();
++                        var context = self.view.dataset.get_context().eval();
++                        context['res_type'] = self.view.model;
++                        context['res_id'] = self.view.datarecord.id;
++                        var model = new Model(self.field.relation);
++                        model.call("do_action", [parseInt(button.dataset.id)], {"context": context}).then(function(result) {
++                            if (result) {
++                                self.view.do_action(result);
++                            }
++                            self.view.recursive_save();
++                            self.view.recursive_reload();
++                        });
++                    } else {
++                        return $.when();
++                    }
++                });
++            });
++        });
++    },
++    render_value: function() {
++        var self = this;
++        var dataset = new data.DataSetStatic(this, this.field.relation, self.build_context());
++        var values = self.get("value");
++        var handle_names = function(data) {
++            if (self.isDestroyed())
++                return;
++            var indexed = {};
++            _.each(data, function(el) {
++                indexed[el[0]] = el;
++            });
++            data = _.map(values, function(el) { return indexed[el]; });
++            self.render_button(data);
++        }
++        if (! values || values.length > 0) {
++            return this._display_orderer.add(self.get_render_data(values)).done(handle_names);
++        } else {
++            handle_names([]);
++        }
++    },
++});
++
++core.form_widget_registry.add('many2many_action_buttons', FieldMany2ManyActionButtons)
++
++});
+diff --git a/workflow_activity_action/static/src/xml/base.xml b/workflow_activity_action/static/src/xml/base.xml
+new file mode 100644
+index 0000000..677a2bf
+--- /dev/null
++++ b/workflow_activity_action/static/src/xml/base.xml
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<templates id="template" xml:space="preserve">
++    <t t-name="FieldMany2ManyActionButtons">
++        <div style="display: inline;">
++        </div>
++    </t>
++    <t t-name="FieldMany2ManyActionButton">
++        <t t-set="i" t-value="0"/>
++        <t t-foreach="elements" t-as="el">
++            <button type="button" class="oe_button btn btn-sm" t-att-data-id="el[0]">
++                <t t-esc="el[1]"/>
++            </button>
++            <t t-set="i" t-value="i + 1"/>
++        </t>
++    </t>
++</templates>
+\ No newline at end of file
+diff --git a/workflow_activity_action/views/activity_record_rule_view.xml b/workflow_activity_action/views/activity_record_rule_view.xml
+new file mode 100644
+index 0000000..6f9db5e
+--- /dev/null
++++ b/workflow_activity_action/views/activity_record_rule_view.xml
+@@ -0,0 +1,52 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++        <record id="view_activity_rule_form" model="ir.ui.view">
++            <field name="model">activity.record.rule</field>
++            <field name="arch" type="xml">
++                <form string="Record rules">
++                  <sheet>
++                    <group>
++                        <group string="General">
++                            <field name="name"/>
++                            <field name="active"/>
++                        </group>
++                        <group col="4">
++                        </group>
++                    </group>
++                    <separator string="Rule Definition (Domain Filter)"/>
++                    <field name="domain_force" colspan="2" nolabel="1"/>
++                    <group string="Groups (no group = global)">
++                        <field name="global"/>
++                        <field name="groups" nolabel="1" colspan="4"/>
++                    </group>
++                    <group string="Interaction between rules">
++                        <label  colspan="2"
++                            string="Global rules (non group-specific) are restrictions, and cannot be bypassed. Group-local rules grant additional permissions, but are constrained within the bounds of global ones. The first group rules restrict further than global rules, but any additional group rule will add more permissions"/>
++                        <label colspan="2"
++                            string="Detailed algorithm:"/>
++                        <label colspan="2"
++                            string="1. Global rules are combined together with a logical AND operator, and with the result of the following steps"/>
++                        <label colspan="2"
++                            string="2. Group-specific rules are combined together with a logical OR operator"/>
++                        <label colspan="2"
++                            string="3. If user belongs to several groups, the results from step 2 are combined with logical OR operator"/>
++                        <label colspan="2"
++                            string="Example: GLOBAL_RULE_1 AND GLOBAL_RULE_2 AND ( (GROUP_A_RULE_1 OR GROUP_A_RULE_2) OR (GROUP_B_RULE_1 OR GROUP_B_RULE_2) )"/>
++                    </group>
++                   </sheet> 
++                </form>
++            </field>
++        </record>
++        <record id="view_rule_tree" model="ir.ui.view">
++            <field name="model">ir.rule</field>
++            <field name="arch" type="xml">
++                <tree string="Record rules">
++                    <field name="name"/>
++                    <field name="global"/>
++                    <field name="domain_force"/>
++                </tree>
++            </field>
++        </record>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_activity_action/views/wkf_activity.xml b/workflow_activity_action/views/wkf_activity.xml
+new file mode 100644
+index 0000000..570b946
+--- /dev/null
++++ b/workflow_activity_action/views/wkf_activity.xml
+@@ -0,0 +1,40 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++	    <record id="workflow_activity_form" model="ir.ui.view">
++            <field name="name">workflow.activity.form (workflow_activity_action)</field>
++            <field name="model">workflow.activity</field>
++            <field name="inherit_id" ref="base.view_workflow_activity_form"/>
++            <field name="arch" type="xml">
++                <xpath expr="//notebook" position="inside">
++                    <page name="security" string="Security">
++                        <group>
++                            <field name="security_group_ids" />
++                        </group>
++                        <group>
++                            <field name="activity_rule_ids"
++                            context="{'default_activity_id': id}">
++                                <tree>
++                                    <field name="name"/>
++                                    <field name="global"/>
++                                    <field name="domain_force"/>
++                                </tree>
++                            </field>
++                        </group>
++                    </page>
++                    <page name="actions" string="Actions">
++                        <group>
++                            <field name="use_action_object" />
++                            <field name="action_ids">
++                                <tree editable="bottom">
++                                    <field name="name" />
++                                    <field name="action" />
++                                </tree>
++                            </field>
++                        </group>
++                    </page>
++                </xpath>
++             </field>
++        </record>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_activity_action/views/workflow_activity_action.xml b/workflow_activity_action/views/workflow_activity_action.xml
+new file mode 100644
+index 0000000..065fe44
+--- /dev/null
++++ b/workflow_activity_action/views/workflow_activity_action.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++        <template id="assets_backend" name="workflow_activity_action" inherit_id="web.assets_backend">
++            <xpath expr="." position="inside">
++                <script type="text/javascript" src="/workflow_activity_action/static/src/js/view_form.js"></script>
++            </xpath>
++        </template>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_task/README.rst b/workflow_task/README.rst
+new file mode 100644
+index 0000000..f06d88b
+--- /dev/null
++++ b/workflow_task/README.rst
+@@ -0,0 +1,71 @@
++.. image:: https://img.shields.io/badge/licence-AGPL--3-blue.svg
++    :target: http://www.gnu.org/licenses/agpl-3.0-standalone.html
++    :alt: License: AGPL-3
++
++==============
++Workflow tasks
++==============
++
++This module automatically creates tasks when entering workflow activities.
++
++In addition to workflow_activity_acion module, this one allow you to create tasks when an object enters on an activity.
++
++Tasks must be configured on the activity concerned. It is possible to define a Deathline based on a date field and a critical delay during which the task is displayed in red.
++
++To access a task, a user must:
++
++1) be in a security group define in the Security page of the activity.
++2) Have access to the object
++
++Installation
++============
++
++To install this module, you need to:
++
++ * apply this patch on your Odoo 8.0 sources
++   https://github.com/acsone/odoo/tree/8.0-imp-workflow-ape
++
++Usage
++=====
++
++* You need to configure task parameters on activities:
++
++	.. figure:: static/description/workflow_task_1.png
++	   :alt: Task configuration
++
++* Tasks list view
++
++	.. figure:: static/description/workflow_task_2.png
++	   :alt: Task list view
++
++* Tasks form view
++
++	.. figure:: static/description/workflow_task_3.png
++	   :alt: Task form view
++
++
++
++Known issues / Roadmap
++======================
++
++Other (not urgent):
++ * how to decide to which user (groups) the task is assigned/assignable.
++ * delete tasks when deleting the underlying Odoo object / workflow
++
++Credits
++=======
++
++Contributors
++------------
++
++* Stéphane Bidoul <stephane.bidoul@acsone.eu>
++* Adrien Peiffer <adrien.peiffer@acsone.eu>
++
++Maintainer
++----------
++
++.. image:: https://www.acsone.eu/logo.png
++   :alt: ACSONE SA/NV
++   :target: http://www.acsone.eu
++
++This module is maintained by ACSONE SA/NV.
+diff --git a/workflow_task/__init__.py b/workflow_task/__init__.py
+new file mode 100644
+index 0000000..a0fdc10
+--- /dev/null
++++ b/workflow_task/__init__.py
+@@ -0,0 +1,2 @@
++# -*- coding: utf-8 -*-
++from . import models
+diff --git a/workflow_task/__openerp__.py b/workflow_task/__openerp__.py
+new file mode 100644
+index 0000000..8f9c293
+--- /dev/null
++++ b/workflow_task/__openerp__.py
+@@ -0,0 +1,49 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_task,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_task is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_task is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_task.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++{
++    'name': "Workflow tasks",
++
++    'summary': """
++        Automatically create tasks related to workflow activities""",
++
++    'author': 'ACSONE SA/NV',
++    'website': "http://acsone.eu",
++
++    'category': 'Technical Settings',
++    'version': '9.0.1.0.0',
++    'license': 'AGPL-3',
++    'depends': [
++        'base',
++        'mail',
++        'workflow_activity_action',
++    ],
++    'data': [
++        'security/ir.model.access.csv',
++        'security/workflow_task_security.xml',
++        'views/wkf_activity.xml',
++        'views/wkf_task_view.xml',
++        'views/workflow_task.xml',
++    ],
++}
+diff --git a/workflow_task/i18n/fr.po b/workflow_task/i18n/fr.po
+new file mode 100644
+index 0000000..0182e01
+--- /dev/null
++++ b/workflow_task/i18n/fr.po
+@@ -0,0 +1,292 @@
++# Translation of Odoo Server.
++# This file contains the translation of the following modules:
++#	* workflow_task
++#
++msgid ""
++msgstr ""
++"Project-Id-Version: Odoo Server 9.0e\n"
++"Report-Msgid-Bugs-To: \n"
++"POT-Creation-Date: 2016-07-25 15:56+0000\n"
++"PO-Revision-Date: 2016-07-25 15:56+0000\n"
++"Last-Translator: <>\n"
++"Language-Team: \n"
++"MIME-Version: 1.0\n"
++"Content-Type: text/plain; charset=UTF-8\n"
++"Content-Transfer-Encoding: \n"
++"Plural-Forms: \n"
++
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_wkf_activity_task_description
++#: help:workflow.activity,task_description:0
++msgid "A text to explain the user what he needs to do to accomplish the task."
++msgstr "A text to explain the user what he needs to do to accomplish the task."
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_activity_id
++#: field:workflow.task,activity_id:0
++msgid "Activity"
++msgstr "Activité"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_user_id
++#: field:workflow.task,user_id:0
++msgid "Assigned User"
++msgstr "Utilisateur assigné"
++
++#. module: workflow_task
++#: selection:workflow.task,state:0
++msgid "Closed"
++msgstr "Clôturée"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_date_closed
++#: field:workflow.task,date_closed:0
++msgid "Closed on"
++msgstr "Clôturée le"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_deadline_start_date
++#: field:workflow.activity,deadline_start_date:0
++msgid "Compute deadline from"
++msgstr "Calculer la date limite à partir de"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_task_create
++#: field:workflow.activity,task_create:0
++msgid "Create Task"
++msgstr "Créer une tâche"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_create_uid
++#: field:workflow.task,create_uid:0
++msgid "Created by"
++msgstr "Créé par"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_create_date
++#: field:workflow.task,create_date:0
++msgid "Created on"
++msgstr "Créé le"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_critical_delay
++#: field:workflow.activity,critical_delay:0
++msgid "Critical delay (days)"
++msgstr "Délais critique (jours)"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_date_critical
++#: field:workflow.task,date_critical:0
++msgid "Date critical"
++msgstr "Date crritique"
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_workflow_task_message_last_post
++#: help:workflow.task,message_last_post:0
++msgid "Date of the last message posted on the record."
++msgstr "Date du dernier message publié sur cet enregistrement"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_date_deadline
++#: field:workflow.task,date_deadline:0
++msgid "Deadline"
++msgstr "Date limite"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_task_deadline_days
++#: field:workflow.activity,task_deadline_days:0
++msgid "Deadline days"
++msgstr "Deadline days"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_description
++#: field:workflow.task,description:0
++msgid "Description"
++msgstr "Description"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_message_follower_ids
++#: field:workflow.task,message_follower_ids:0
++msgid "Followers"
++msgstr "Abonnés"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_id
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_res_id
++#: field:workflow.task,id:0
++#: field:workflow.task,res_id:0
++msgid "ID"
++msgstr "ID"
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_wkf_activity_task_create
++#: help:workflow.activity,task_create:0
++msgid "If checked, the workflow engine will create a task when entering this activity and close the task when exiting the activity."
++msgstr "If checked, the workflow engine will create a task when entering this activity and close the task when exiting the activity."
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_wkf_activity_deadline_start_date
++#: help:workflow.activity,deadline_start_date:0
++msgid "If empty, deadline will be computed\n"
++"                from the task creation date"
++msgstr "If empty, deadline will be computed\n"
++"                from the task creation date"
++
++#. module: workflow_task
++#: selection:workflow.task,state:0
++msgid "In progress"
++msgstr "En cours"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_message_last_post
++#: field:workflow.task,message_last_post:0
++msgid "Last Message Date"
++msgstr "Date du dernier message"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_write_uid
++#: field:workflow.task,write_uid:0
++msgid "Last Updated by"
++msgstr "Mis à jour par"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_write_date
++#: field:workflow.task,write_date:0
++msgid "Last Updated on"
++msgstr "Mis à jour le"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_message_ids
++#: field:workflow.task,message_ids:0
++msgid "Messages"
++msgstr "Messages"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_ref_object
++#: field:workflow.task,ref_object:0
++msgid "Objet"
++msgstr "Objet"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_res_type
++#: field:workflow.activity,res_type:0
++msgid "Resource Object"
++msgstr "Objet ressource"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_ref_object_name
++#: field:workflow.task,ref_object_name:0
++msgid "Related object"
++msgstr "Objet lié"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_pretty_res_type
++#: field:workflow.task,pretty_res_type:0
++msgid "Pretty Res Type"
++msgstr "Objet ressource"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_use_action_task
++#: field:workflow.activity,use_action_task:0
++msgid "Show actions on task"
++msgstr "Show actions on task"
++
++#. module: workflow_task
++#: code:addons/workflow_task/models/task.py:195
++#, python-format
++msgid "Sorry, you are not allowed to access this document."
++msgstr "Désolé, vous n'êtes pas autorisé à accéder à cet objet."
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_date_started
++#: field:workflow.task,date_started:0
++msgid "Started on"
++msgstr "Commencé le"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_state
++#: field:workflow.task,state:0
++msgid "State"
++msgstr "État"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_activity_task_description
++#: field:workflow.activity,task_description:0
++msgid "Task description"
++msgstr "Description de la tâche"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_wkf_workitem_task_ids
++#: model:ir.ui.menu,name:workflow_task.menu_main_workflow_task
++#: field:workflow.workitem,task_ids:0
++msgid "Tasks"
++msgstr "Tâches"
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_workflow_task_date_critical
++#: help:workflow.task,date_critical:0
++msgid "The created task will appear in red in the task tree view\n"
++"            after this date"
++msgstr "The created task will appear in red in the task tree view\n"
++"            after this date"
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_wkf_activity_critical_delay
++#: help:workflow.activity,critical_delay:0
++msgid "The created task will appear in red in the task tree view\n"
++"            in the number of days before the deadline."
++msgstr "The created task will appear in red in the task tree view\n"
++"            in the number of days before the deadline."
++
++#. module: workflow_task
++#: selection:workflow.task,state:0
++msgid "Todo"
++msgstr "Todo"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_res_type
++#: field:workflow.task,res_type:0
++msgid "Type"
++msgstr "Type"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_website_message_ids
++#: field:workflow.task,website_message_ids:0
++msgid "Website Messages"
++msgstr "Messages du site web"
++
++#. module: workflow_task
++#: model:ir.model.fields,help:workflow_task.field_workflow_task_website_message_ids
++#: help:workflow.task,website_message_ids:0
++msgid "Website communication history"
++msgstr "Historique de communication du site web"
++
++#. module: workflow_task
++#: model:ir.model,name:workflow_task.model_workflow_task
++msgid "Workflow Task"
++msgstr "Workflow Task"
++
++#. module: workflow_task
++#: model:ir.actions.act_window,name:workflow_task.open_workflow_task
++#: model:ir.ui.menu,name:workflow_task.menu_workflow_task
++msgid "Workflow Tasks"
++msgstr "Workflow Tasks"
++
++#. module: workflow_task
++#: model:ir.model.fields,field_description:workflow_task.field_workflow_task_workitem
++#: field:workflow.task,workitem:0
++msgid "Workitem"
++msgstr "Élément de travail "
++
++
++#. module: workflow_task
++#: model:ir.ui.view,arch_db:workflow_task.workflow_task_search
++msgid "Assigned to me"
++msgstr "Qui me sont assignées"
++
++#. module: workflow_task
++#: model:ir.ui.view,arch_db:workflow_task.workflow_task_search
++msgid "Not closed"
++msgstr "Non Clôturées"
++
+diff --git a/workflow_task/models/__init__.py b/workflow_task/models/__init__.py
+new file mode 100644
+index 0000000..08625b0
+--- /dev/null
++++ b/workflow_task/models/__init__.py
+@@ -0,0 +1,4 @@
++# -*- coding: utf-8 -*-
++from . import wkf_activity
++from . import task
++from . import wkf_workitem
+diff --git a/workflow_task/models/task.py b/workflow_task/models/task.py
+new file mode 100644
+index 0000000..df73760
+--- /dev/null
++++ b/workflow_task/models/task.py
+@@ -0,0 +1,280 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_task,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_task is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_task is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_task.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++
++from openerp import models, fields, api, exceptions, _
++from openerp.tools import SUPERUSER_ID
++import itertools
++
++
++class Task(models.Model):
++    _name = 'workflow.task'
++    _inherit = ['mail.thread']
++    _description = "Workflow Task"
++
++    @api.model
++    def _select_objects(self):
++        model_obj = self.env['ir.model']
++        models = model_obj.search([])
++        return [(r.model, r.name) for r in models] + [('', '')]
++
++    name = fields.Char(related='activity_id.name')
++    workitem = fields.Many2one(comodel_name='workflow.workitem')
++    activity_id = fields.Many2one(comodel_name='workflow.activity',
++                                  string='Activity', required=True)
++    description = fields.Text()
++    user_id = fields.Many2one(comodel_name='res.users',
++                              string='Assigned User',
++                              track_visibility='onchange')
++    state = fields.Selection([('new', 'Todo'),
++                              ('started', 'In progress'),
++                              ('closed', 'Closed')], default='new',
++                             track_visibility='onchange')
++    date_deadline = fields.Date(string="Deadline",
++                                track_visibility='onchange')
++    date_critical = fields.Date(
++        help="""The created task will appear in red in the task tree view
++            after this date""")
++    date_started = fields.Datetime(string="Started on",
++                                   track_visibility='onchange')
++    date_closed = fields.Datetime(string="Closed on",
++                                  track_visibility='onchange')
++    res_type = fields.Selection(selection=_select_objects, string='Type',
++                                required=True)
++    res_id = fields.Integer(string='ID', required=True)
++    ref_object = fields.Reference(string='Objet',
++                                  selection=_select_objects,
++                                  store=True, compute='_get_ref_object')
++    ref_object_name = fields.Char(search='_search_ref_object',
++                                  compute='_dummy_compute',
++                                  string="Related object")
++    action_ids = fields.One2many(comodel_name='workflow.activity.action',
++                                 compute='_get_action_ids')
++    pretty_res_type = fields.Char(compute='_get_pretty_res_type')
++
++    def fields_get(self, cr, user, allfields=None, context=None,
++                   write_access=True, attributes=None):
++        res = super(Task, self).fields_get(
++            cr, user, allfields, context, write_access, attributes)
++        # remove ref_object from searchable field into the advanced search
++        # since the field to use is ref_object_name
++        if 'ref_object' in res:
++            res['ref_object']['searchable'] = False
++        return res
++
++    @api.multi
++    @api.depends('res_type')
++    def _get_pretty_res_type(self):
++        for record in self:
++            model = self.env['ir.model']\
++                .search([('model', '=', record.res_type)])
++            record.pretty_res_type = model.name
++
++    def _search_ref_object(self, operator, value):
++        self._cr.execute("""SELECT distinct res_type FROM workflow_task""")
++        models = self._cr.fetchall()
++        all_task_ids = []
++        for model in models:
++            model = model[0]
++            self._cr.execute("""SELECT distinct res_id FROM workflow_task
++                WHERE res_type=%s""", (model,))
++            mids = [r[0] for r in self._cr.fetchall()]
++            ns_result = self.env[model].name_search(
++                name=value, operator=operator, args=[('id', 'in', mids)])
++            obj_ids = [r[0] for r in ns_result]
++            tids = self.search([('res_type', '=', model),
++                                ('res_id', 'in', obj_ids)])
++            all_task_ids.extend(tids._ids)
++        return [('id', 'in', all_task_ids)]
++
++    @api.depends('ref_object')
++    @api.multi
++    def _dummy_compute(self):
++        for record in self:
++            record.ref_object_name = record.ref_object
++
++    @api.multi
++    def _get_action_ids(self):
++        for record in self:
++            if record.activity_id.use_action_task and\
++                    record.activity_id._check_action_security(record.res_type,
++                                                              record.res_id):
++                record.action_ids = record.activity_id.action_ids
++
++    @api.multi
++    def start_task(self):
++        for record in self:
++            record.date_started = fields.Datetime.now()
++            record.state = 'started'
++            record.user_id = self.env.uid
++
++    @api.multi
++    def close_task(self):
++        for record in self:
++            record.date_closed = fields.Datetime.now()
++            record.state = 'closed'
++            record.user_id = False
++
++    @api.depends('res_type', 'res_id')
++    @api.one
++    def _get_ref_object(self):
++        if self.res_type and self.res_id:
++            self.ref_object = '%s,%s' % (self.res_type, str(self.res_id))
++
++    @api.model
++    def check_base_security(self, res_model, res_ids, mode):
++        ima = self.env['ir.model.access']
++        ima.check(res_model, mode)
++        self.pool[res_model].check_access_rule(self._cr, self._uid,
++                                               res_ids, mode,
++                                               context=self.env.context)
++
++    @api.multi
++    def _check_activity_security(self):
++        self._cr.execute(
++            """SELECT id, res_type, res_id, activity_id FROM workflow_task
++               WHERE id = ANY(%s)""", (list(self._ids),))
++        targets = self._cr.dictfetchall()
++        res = {}
++        for task_dict in targets:
++            if not self.pool['workflow.activity'].\
++                    _check_action_security(self._cr, self._uid,
++                                           [task_dict['activity_id']],
++                                           task_dict['res_type'],
++                                           task_dict['res_id']):
++                res[task_dict['id']] = False
++            else:
++                res[task_dict['id']] = True
++        return res
++
++    @api.multi
++    def check(self, mode, values=None):
++        """Restricts the access to a workflow task, according to
++           referred model.
++        """
++        res_ids = {}
++        if self._ids:
++            self._cr.execute(
++                """SELECT DISTINCT res_type, res_id FROM
++                   workflow_task WHERE id = ANY (%s)""", (list(self._ids),))
++            for rmod, rid in self._cr.fetchall():
++                res_ids.setdefault(rmod, set()).add(rid)
++        if values:
++            if values.get('res_type') and values.get('res_id'):
++                res_ids.setdefault(values['res_type'], set())\
++                    .add(values['res_id'])
++
++        for model, mids in res_ids.items():
++            existing_ids = self.pool[model].exists(self._cr, self._uid, mids)
++            self.check_base_security(model, existing_ids, mode)
++        if not self._uid == SUPERUSER_ID and\
++                not self.env['res.users'].has_group('base.group_user'):
++            raise exceptions.AccessError(
++                _("Sorry, you are not allowed to access this document."))
++
++    def _search(self, cr, uid, args, offset=0, limit=None, order=None,
++                context=None, count=False, access_rights_uid=None):
++        ids = super(Task, self)._search(cr, uid, args, offset=0,
++                                        limit=None, order=order,
++                                        context=context, count=False,
++                                        access_rights_uid=access_rights_uid)
++        if not ids:
++            if count:
++                return 0
++            return []
++        orig_ids = ids
++        ids = set(ids)
++        cr.execute(
++            """SELECT id, res_type, res_id FROM workflow_task
++               WHERE id = ANY(%s)""", (list(ids),))
++        targets = cr.dictfetchall()
++        model_tasks = {}
++        for target_dict in targets:
++            if not target_dict['res_type']:
++                continue
++            # model_tasks = { 'model': { 'res_id': [id1,id2] } }
++            model_tasks.setdefault(target_dict['res_type'], {})\
++                .setdefault(target_dict['res_id'] or 0, set())\
++                .add(target_dict['id'])
++
++        # To avoid multiple queries for each task found, checks are
++        # performed in batch as much as possible.
++        ima = self.pool.get('ir.model.access')
++        for model, targets in model_tasks.iteritems():
++            if model not in self.pool:
++                continue
++            if not ima.check(cr, uid, model, 'read', False):
++                # remove all corresponding task ids
++                for attach_id in itertools.chain(*targets.values()):
++                    ids.remove(attach_id)
++                continue  # skip ir.rule processing,these ones are out already
++
++            # filter ids according to what access rules permit
++            target_ids = targets.keys()
++            allowed_ids = [0] + self.pool[model].search(
++                cr, uid, [('id', 'in', target_ids)], context=context)
++            disallowed_ids = set(target_ids).difference(allowed_ids)
++            for res_id in disallowed_ids:
++                for attach_id in targets[res_id]:
++                    ids.remove(attach_id)
++#         activity_security = self._check_activity_security(cr, uid, ids,
++#                                                           context=context)
++#         for task_id, res in activity_security.iteritems():
++#             if not res:
++#                 ids.remove(task_id)
++        # sort result according to the original sort ordering
++        result = [id for id in orig_ids if id in ids]
++        ids = super(Task, self)._search(cr, uid, [('id', 'in', result)],
++                                        offset=offset, limit=limit,
++                                        order=order, context=context,
++                                        count=False,
++                                        access_rights_uid=access_rights_uid)
++        return len(ids) if count else list(ids)
++
++    @api.multi
++    def read(self, fields=None, load='_classic_read'):
++        self.check('read')
++        return super(Task, self).read(fields=fields, load=load)
++
++    @api.multi
++    def write(self, vals):
++        # If mode is write, it's impossible to start the task
++        self.check('read', values=vals)
++        return super(Task, self).write(vals)
++
++    @api.multi
++    def copy(self, default=None):
++        self.check('write')
++        return super(Task, self).copy(default=default)
++
++    @api.multi
++    def unlink(self):
++        self.check('unlink')
++        return super(Task, self).unlink()
++
++    @api.model
++    @api.returns('self', lambda value: value.id)
++    def create(self, values):
++        self.check('write', values=values)
++        return super(Task, self).create(values)
+diff --git a/workflow_task/models/wkf_activity.py b/workflow_task/models/wkf_activity.py
+new file mode 100644
+index 0000000..02a2fa8
+--- /dev/null
++++ b/workflow_task/models/wkf_activity.py
+@@ -0,0 +1,105 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_task,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_task is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_task is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_task.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++
++import datetime
++
++from openerp import models, fields, api
++
++
++class WorkflowActivity(models.Model):
++    _inherit = 'workflow.activity'
++
++    res_type = fields.Char(related='wkf_id.osv', store=True,
++                           readonly=True)
++    task_create = fields.Boolean(string='Create Task',
++                                 help="If checked, the workflow engine will "
++                                      "create a task when entering this "
++                                      "activity and close the task "
++                                      "when exiting the activity.")
++    task_description = fields.Text(help="A text to explain the user what "
++                                        "he needs to do to accomplish the "
++                                        "task.")
++    task_deadline_days = fields.Integer(string='Deadline days')
++    deadline_start_date = fields.Many2one(
++        comodel_name='ir.model.fields', string="Compute deadline from",
++        help="""If empty, deadline will be computed
++                from the task creation date""")
++    critical_delay = fields.Integer(
++        string="Critical delay (days)",
++        help="""The created task will appear in red in the task tree view
++            in the number of days before the deadline.""")
++    use_action_task = fields.Boolean(string="Show actions on task")
++
++    @api.multi
++    def _execute(self, workitem_id):
++        self.ensure_one()
++        res = super(WorkflowActivity, self)._execute(workitem_id)
++        if self.task_create:
++            self.create_task(workitem_id)
++        return res
++
++    @api.multi
++    def _prepare_task_vals(self, workitem_id):
++        self.ensure_one()
++        workitem = self.env['workflow.workitem'].browse([workitem_id])
++        res_type = workitem.inst_id.res_type
++        res_id = workitem.inst_id.res_id
++        obj = self.env[res_type].browse([res_id])
++        vals = {
++            'res_type': res_type,
++            'res_id': res_id,
++            'description': self.task_description,
++            'workitem': workitem_id,
++            'activity_id': self.id,
++        }
++        if self.deadline_start_date:
++            start_date = False
++            if self.deadline_start_date.id:
++                date = getattr(obj, self.deadline_start_date.name)
++                if date:
++                    start_date = fields.Date.from_string(date)
++            if not start_date:
++                start_date = datetime.date.today()
++            date_deadline = start_date + \
++                datetime.timedelta(days=self.task_deadline_days)
++            if self.critical_delay:
++                date_critical = date_deadline - \
++                    datetime.timedelta(days=self.critical_delay)
++            else:
++                date_critical = date_deadline
++            vals['date_critical'] = fields.Date.context_today(self,
++                                                              date_critical)
++            vals['date_deadline'] = fields.Date.context_today(self,
++                                                              date_deadline)
++        return vals
++
++    @api.multi
++    def create_task(self, workitem_id):
++        self.ensure_one()
++        task_obj = self.env['workflow.task']
++        vals = self._prepare_task_vals(workitem_id)
++        ctx = self.env.context.copy()
++        ctx['tracking_disable'] = True
++        task_obj.suspend_security().with_context(ctx).create(vals)
+diff --git a/workflow_task/models/wkf_workitem.py b/workflow_task/models/wkf_workitem.py
+new file mode 100644
+index 0000000..20e1ae4
+--- /dev/null
++++ b/workflow_task/models/wkf_workitem.py
+@@ -0,0 +1,40 @@
++# -*- coding: utf-8 -*-
++##############################################################################
++#
++#     This file is part of workflow_task,
++#     an Odoo module.
++#
++#     Copyright (c) 2015 ACSONE SA/NV (<http://acsone.eu>)
++#
++#     workflow_task is free software:
++#     you can redistribute it and/or modify it under the terms of the GNU
++#     Affero General Public License as published by the Free Software
++#     Foundation,either version 3 of the License, or (at your option) any
++#     later version.
++#
++#     workflow_task is distributed
++#     in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
++#     even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
++#     PURPOSE.  See the GNU Affero General Public License for more details.
++#
++#     You should have received a copy of the GNU Affero General Public License
++#     along with workflow_task.
++#     If not, see <http://www.gnu.org/licenses/>.
++#
++##############################################################################
++
++from openerp import models, fields, api
++
++
++class WorkflowWorkitem(models.Model):
++    _inherit = 'workflow.workitem'
++
++    task_ids = fields.One2many(comodel_name='workflow.task',
++                               inverse_name='workitem', string='Tasks')
++
++    @api.multi
++    def execute_delete(self):
++        for record in self:
++            record.task_ids.close_task()
++            record.task_ids.write({'workitem': False})
++        return super(WorkflowWorkitem, self).execute_delete()
+diff --git a/workflow_task/security/ir.model.access.csv b/workflow_task/security/ir.model.access.csv
+new file mode 100644
+index 0000000..d8d48f2
+--- /dev/null
++++ b/workflow_task/security/ir.model.access.csv
+@@ -0,0 +1,2 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_workflow_task_all,access_workflow_task_all,model_workflow_task,,1,1,1,0
+\ No newline at end of file
+diff --git a/workflow_task/security/workflow_task_security.xml b/workflow_task/security/workflow_task_security.xml
+new file mode 100644
+index 0000000..456798b
+--- /dev/null
++++ b/workflow_task/security/workflow_task_security.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++	    <record id="task_access_security" model="ir.rule">
++            <field name="name">Workflow Task Security Access</field>
++            <field name="model_id" ref="workflow_task.model_workflow_task"/>
++            <field name="perm_read" eval="True"/>
++            <field name="perm_write" eval="False"/>
++            <field name="perm_create" eval="False"/>
++            <field name="perm_unlink" eval="False"/>
++            <field name="domain_force">['|', ('activity_id.security_group_ids.users', '=', user.id), ('activity_id.security_group_ids', '=', False)]</field>
++        </record>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_task/static/description/workflow_task_1.png b/workflow_task/static/description/workflow_task_1.png
+new file mode 100644
+index 0000000..ea5a491
+Binary files /dev/null and b/workflow_task/static/description/workflow_task_1.png differ
+diff --git a/workflow_task/static/description/workflow_task_2.png b/workflow_task/static/description/workflow_task_2.png
+new file mode 100644
+index 0000000..47d52a3
+Binary files /dev/null and b/workflow_task/static/description/workflow_task_2.png differ
+diff --git a/workflow_task/static/description/workflow_task_3.png b/workflow_task/static/description/workflow_task_3.png
+new file mode 100644
+index 0000000..00c048d
+Binary files /dev/null and b/workflow_task/static/description/workflow_task_3.png differ
+diff --git a/workflow_task/static/src/js/kanban.js b/workflow_task/static/src/js/kanban.js
+new file mode 100644
+index 0000000..b23a0a5
+--- /dev/null
++++ b/workflow_task/static/src/js/kanban.js
+@@ -0,0 +1,30 @@
++odoo.define('workflow_task', function (require) {
++"use strict";
++    
++var common = require('web.form_common');
++var utils = require('web.utils');
++var core = require('web.core');
++var Model = require('web.DataModel');
++var session = require('web.session');
++var KanbanRecord = require('web_kanban.Record');
++
++var KanbanView = require('web_kanban.KanbanView');
++
++KanbanView.include({
++    reload_record: function (event) {
++        this._super(event);
++        var self = this;
++        if (self.x2m && self.x2m.dataset && self.x2m.dataset.ids.length > 0 && self.x2m.options.reload_on_button) {
++            var parent_form = self.x2m.view;
++            $.when().then(function () {
++                if (parent_form)
++                    return parent_form.save();
++                else
++                    return $.when();
++            }).done(function () {
++                self.x2m.view.reload();
++            });
++        }
++    },
++});
++});
+diff --git a/workflow_task/views/wkf_activity.xml b/workflow_task/views/wkf_activity.xml
+new file mode 100644
+index 0000000..c7d1885
+--- /dev/null
++++ b/workflow_task/views/wkf_activity.xml
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++	    <record id="workflow_activity_form" model="ir.ui.view">
++            <field name="name">workflow.activity.form (workflow_task)</field>
++            <field name="model">workflow.activity</field>
++            <field name="inherit_id" ref="workflow_activity_action.workflow_activity_form"/>
++            <field name="arch" type="xml">
++                <xpath expr="//page[@name='actions']" position="after">
++                    <page string="Tasks" name="tasks" >
++                        <group>
++                            <field name="task_create"/>
++                            <field name="use_action_task" attrs="{'invisible': [('task_create', '=', False)]}"/>
++                        </group>
++                        <group attrs="{'invisible': [('task_create', '=', False)]}">
++                            <field name="task_description"/>
++                            <field name="res_type" invisible="1"/>
++                            <field name="deadline_start_date" domain="[('model', '=', res_type), ('ttype', 'in', ['date', 'datetime'])]"/>
++                            <field name="task_deadline_days"/>
++                            <field name="critical_delay" attrs="{'invisible': [('task_deadline_days', '=', False)]}"/>
++                        </group>
++                    </page>
++                </xpath>
++             </field>
++        </record>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_task/views/wkf_task_view.xml b/workflow_task/views/wkf_task_view.xml
+new file mode 100644
+index 0000000..032dd80
+--- /dev/null
++++ b/workflow_task/views/wkf_task_view.xml
+@@ -0,0 +1,98 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++        <record id="workflow_task_form" model="ir.ui.view">
++            <field name="name">workflow.task.form</field>
++            <field name="model">workflow.task</field>
++            <field name="arch" type="xml">
++                <form>
++                    <header>
++                        <button name="start_task" string="Start Task" type="object" attrs="{'invisible': [('state', '!=', 'new')]}" class="oe_highlight" />
++                        <button name="close_task" string="Close Task" type="object" attrs="{'invisible': [('state', '!=', 'started')]}" class="oe_highlight" />
++                        <field name="state" widget="statusbar" />
++                    </header>
++                    <sheet>
++                        <group>
++                            <field name="user_id" />
++                            <field name="create_date" readonly="1" />
++                            <field name="date_deadline" />
++                            <field name="date_started" readonly="1" />
++                            <field name="date_closed" readonly="1" />
++                            <field name="res_type" invisible="1" />
++                            <field name="res_id" invisible="1" />
++                        </group>
++                        <group>
++                            <label for="ref_object" />
++                            <div>
++                                <field name="ref_object" class="oe_inline"/>
++                                <field name="action_ids" context="{'res_type': res_type, 'res_id': res_id}" widget="many2many_kanban" attrs="{'invisible': [('state', '!=', 'started')]}" options="{'reload_on_button': true}">
++                                    <kanban quick_create="false" create="0" delete="0" edit="0">
++                                        <field name="name"/>
++                                        <templates>
++                                            <t t-name="kanban-box">
++                                                    <a type="button">
++                                                        <button name="do_action" type="object">
++                                                            <span><field name="name"/></span>
++                                                        </button>
++                                                    </a>
++                                            </t>
++                                        </templates>
++                                    </kanban>
++                                </field>
++                            </div>
++                        </group>
++                        <group>
++                            <field name="description" readonly="1" />
++                        </group>
++                    </sheet>
++                    <div class="oe_chatter">
++                        <field name="message_follower_ids" widget="mail_followers"/>
++                        <field name="message_ids" widget="mail_thread"/>
++                    </div>
++                </form>
++             </field>
++        </record>
++
++        <record id="workflow_task_tree" model="ir.ui.view">
++            <field name="name">workflow.task.tree</field>
++            <field name="model">workflow.task</field>
++            <field name="arch" type="xml">
++                <tree create="0" colors="grey:state == 'closed';red:date_critical and date_critical &lt;= current_date;black:state == 'started';blue:state == 'new'">
++                    <field name="ref_object" />
++                    <field name="pretty_res_type" />
++                    <field name="name" />
++                    <field name="state" />
++                    <field name="date_deadline" />
++                    <field name="date_started" />
++                    <field name="date_closed" />
++                    <field name="user_id" />
++                    <field name="date_critical" invisible="1"/>
++                </tree>
++             </field>
++        </record>
++
++        <record id="workflow_task_search" model="ir.ui.view">
++            <field name="name">workflow.task.search</field>
++            <field name="model">workflow.task</field>
++            <field name="arch" type="xml">
++                <search>
++                    <field name="ref_object_name" />
++                    <filter string="Assigned to me" domain="[('user_id','=',uid)]" name="assigned_to_me"/>
++                    <separator orientation="vertical"/>
++                    <filter string="Not closed" domain="[('state','!=','closed')]" name="not_closed"/>
++                </search>
++             </field>
++        </record>
++
++       <record id="open_workflow_task" model="ir.actions.act_window">
++            <field name="name">Workflow Tasks</field>
++            <field name="res_model">workflow.task</field>
++            <field name="view_type">form</field>
++            <field name="view_mode">tree,form</field>
++            <field name="context">{'search_default_not_closed': 1}</field>
++        </record>
++
++        <menuitem id="menu_main_workflow_task" sequence="2" string="Tasks" name="Tasks" />
++        <menuitem id="menu_workflow_task" parent="menu_main_workflow_task" sequence="15" action="open_workflow_task"/>
++    </data>
++</openerp>
+\ No newline at end of file
+diff --git a/workflow_task/views/workflow_task.xml b/workflow_task/views/workflow_task.xml
+new file mode 100644
+index 0000000..63181f1
+--- /dev/null
++++ b/workflow_task/views/workflow_task.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<openerp>
++    <data>
++        <template id="assets_backend" name="workflow_task" inherit_id="web.assets_backend">
++            <xpath expr="." position="inside">
++                <script type="text/javascript" src="/workflow_task/static/src/js/kanban.js"></script>
++            </xpath>
++        </template>
++    </data>
++</openerp>
+\ No newline at end of file

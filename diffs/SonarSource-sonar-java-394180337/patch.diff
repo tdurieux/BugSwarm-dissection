@@ -1,0 +1,301 @@
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+index 97fc1eb972..28965099de 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+@@ -64,6 +64,7 @@
+ import org.sonar.java.checks.serialization.SerializableObjectInSessionCheck;
+ import org.sonar.java.checks.serialization.SerializableSuperConstructorCheck;
+ import org.sonar.java.checks.spring.RequestMappingMethodPublicCheck;
++import org.sonar.java.checks.spring.SpringAutoConfigurationCheck;
+ import org.sonar.java.checks.spring.SpringComponentWithNonAutowiredMembersCheck;
+ import org.sonar.java.checks.spring.SpringComponentWithWrongScopeCheck;
+ import org.sonar.java.checks.spring.SpringComposedRequestMappingCheck;
+@@ -530,6 +531,7 @@ private CheckList() {
+       .add(BooleanMethodNameCheck.class)
+       .add(StaticFieldUpdateInConstructorCheck.class)
+       .add(NestedTernaryOperatorsCheck.class)
++      .add(SpringAutoConfigurationCheck.class)
+       .add(SpringComponentWithNonAutowiredMembersCheck.class)
+       .add(SpringConfigurationWithAutowiredFieldsCheck.class)
+       .add(SpringComponentWithWrongScopeCheck.class)
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheck.java b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheck.java
+new file mode 100644
+index 0000000000..1619af6c4d
+--- /dev/null
++++ b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheck.java
+@@ -0,0 +1,77 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.spring;
++
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++import org.sonar.check.Rule;
++import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
++import org.sonar.plugins.java.api.tree.AnnotationTree;
++import org.sonar.plugins.java.api.tree.Arguments;
++import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
++import org.sonar.plugins.java.api.tree.ClassTree;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
++import org.sonar.plugins.java.api.tree.NewArrayTree;
++import org.sonar.plugins.java.api.tree.Tree;
++
++@Rule(key = "S4604")
++public class SpringAutoConfigurationCheck extends IssuableSubscriptionVisitor {
++
++  private static final List<String> ANNOTATIONS = Arrays.asList(
++    "org.springframework.boot.autoconfigure.SpringBootApplication",
++    "org.springframework.boot.autoconfigure.EnableAutoConfiguration");
++
++  private static final List<String> EXCLUDE_ELEMENTS = Arrays.asList("exclude", "excludeName");
++
++  @Override
++  public List<Tree.Kind> nodesToVisit() {
++    return Collections.singletonList(Tree.Kind.CLASS);
++  }
++
++  @Override
++  public void visitNode(Tree tree) {
++    if (!hasSemantic()) {
++      return;
++    }
++    ((ClassTree) tree).modifiers().annotations().stream()
++      .filter(SpringAutoConfigurationCheck::isAutoConfiguration)
++      .filter(annotation -> !hasExclude(annotation.arguments()))
++      .forEach(annotation -> reportIssue(annotation, "Exclude from the auto-configuration mechanism the beans you don't need."));
++  }
++
++  private static boolean isAutoConfiguration(AnnotationTree annotationTree) {
++    return ANNOTATIONS.stream().anyMatch(annotationTree.annotationType().symbolType()::is);
++  }
++
++  private static boolean hasExclude(Arguments arguments) {
++    return arguments.stream()
++      .filter(arg -> arg.is(Tree.Kind.ASSIGNMENT))
++      .map(arg -> (AssignmentExpressionTree) arg)
++      .anyMatch(SpringAutoConfigurationCheck::isExcludeElement);
++  }
++
++  private static boolean isExcludeElement(AssignmentExpressionTree assignment) {
++    ExpressionTree expression = assignment.expression();
++    boolean isExcludeElement = EXCLUDE_ELEMENTS.stream().anyMatch(assignment.variable().toString()::equals);
++    boolean arrayNotEmpty = expression.is(Tree.Kind.NEW_ARRAY) && !((NewArrayTree) expression).initializers().isEmpty();
++    return isExcludeElement && arrayNotEmpty;
++  }
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.html
+new file mode 100644
+index 0000000000..49beb3add8
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.html
+@@ -0,0 +1,58 @@
++<p>"@EnableAutoConfiguration" is a convenient feature to configure the Spring Application Context by attempting to guess the beans that you are likely
++to need. The drawback is that it may load and configure beans the application will never use and therefore consume more CPU and RAM than really
++required. <code>@EnableAutoConfiguration</code> should be configured to exclude all the beans not required by the application. Alternatively, use the
++<code>@Import</code> annotation instead of <code>@EnableAutoConfiguration</code>, to explicitly import the useful AutoConfiguration classes.</p>
++<p>This rule applies for <code>@SpringBootApplication</code> as well.</p>
++<h2>Noncompliant Code Example</h2>
++<pre>
++@SpringBootApplication
++public class MyApplication {
++...
++}
++</pre>
++<pre>
++@Configuration
++@EnableAutoConfiguration
++public class MyApplication {
++...
++}
++</pre>
++<h2>Compliant Solution</h2>
++<pre>
++@SpringBootApplication(exclude = {
++  MultipartAutoConfiguration.class,
++  JmxAutoConfiguration.class,
++})
++public class MyApplication {
++...
++}
++</pre>
++<pre>
++@Configuration
++@EnableAutoConfiguration(exclude = {
++  MultipartAutoConfiguration.class,
++  JmxAutoConfiguration.class,
++})
++public class MyApplication {
++...
++}
++</pre>
++<pre>
++@Configuration
++@Import({
++        DispatcherServletAutoConfiguration.class,
++        EmbeddedServletContainerAutoConfiguration.class,
++        ErrorMvcAutoConfiguration.class,
++        HttpEncodingAutoConfiguration.class,
++        HttpMessageConvertersAutoConfiguration.class,
++        JacksonAutoConfiguration.class,
++        ServerPropertiesAutoConfiguration.class,
++        PropertyPlaceholderAutoConfiguration.class,
++        ThymeleafAutoConfiguration.class,
++        WebMvcAutoConfiguration.class
++})
++public class MyApplication {
++...
++}
++</pre>
++
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.json
+new file mode 100644
+index 0000000000..f185f67174
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4604_java.json
+@@ -0,0 +1,17 @@
++{
++  "title": "\"@EnableAutoConfiguration\" should be fine-tuned",
++  "type": "CODE_SMELL",
++  "status": "ready",
++  "remediation": {
++    "func": "Constant\/Issue",
++    "constantCost": "30min"
++  },
++  "tags": [
++    "spring",
++    "performance"
++  ],
++  "defaultSeverity": "Major",
++  "ruleSpecification": "RSPEC-4604",
++  "sqKey": "S4604",
++  "scope": "Main"
++}
+diff --git a/java-checks/src/test/files/checks/spring/SpringAutoConfigurationCheck.java b/java-checks/src/test/files/checks/spring/SpringAutoConfigurationCheck.java
+new file mode 100644
+index 0000000000..3799c7d1f7
+--- /dev/null
++++ b/java-checks/src/test/files/checks/spring/SpringAutoConfigurationCheck.java
+@@ -0,0 +1,67 @@
++import org.springframework.context.annotation.Configuration;
++import org.springframework.context.annotation.Import;
++import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
++import org.springframework.boot.autoconfigure.SpringBootApplication;
++import org.springframework.boot.autoconfigure.web.MultipartAutoConfiguration;
++import org.springframework.boot.autoconfigure.web.HttpMessageConvertersAutoConfiguration;
++import org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration;
++import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
++import org.springframework.boot.autoconfigure.web.ServerPropertiesAutoConfiguration;
++import org.springframework.boot.autoconfigure.web.WebMvcAutoConfiguration;
++
++@SpringBootApplication // Noncompliant
++public class Foo1 {
++}
++
++@Configuration
++@EnableAutoConfiguration // Noncompliant
++public class Foo2 {
++}
++
++@Configuration
++@EnableAutoConfiguration(excludeName = {}) // Noncompliant
++public class Foo3 {
++}
++
++@SpringBootApplication(exclude = {}) // Noncompliant
++public class Foo4 {
++}
++
++@SpringBootApplication(exclude = {
++    MultipartAutoConfiguration.class,
++    JmxAutoConfiguration.class,
++})
++public class Bar1 {
++}
++
++@SpringBootApplication(excludeName = {
++    "org.springframework.boot.autoconfigure.web.MultipartAutoConfiguration"
++})
++public class Bar2 {
++}
++
++@Configuration
++@Import({
++    HttpMessageConvertersAutoConfiguration.class,
++    JacksonAutoConfiguration.class,
++    ServerPropertiesAutoConfiguration.class,
++    WebMvcAutoConfiguration.class
++})
++public class Bar3 {
++}
++
++@Configuration
++@EnableAutoConfiguration(exclude = {
++    MultipartAutoConfiguration.class,
++    JmxAutoConfiguration.class,
++})
++public class Bar4 {
++}
++
++@Configuration
++@EnableAutoConfiguration(excludeName = {
++    "org.springframework.boot.autoconfigure.web.MultipartAutoConfiguration"
++    "org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration"
++})
++public class Bar5 {
++}
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheckTest.java
+new file mode 100644
+index 0000000000..2dae626aa2
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringAutoConfigurationCheckTest.java
+@@ -0,0 +1,32 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.spring;
++
++import org.junit.Test;
++import org.sonar.java.checks.verifier.JavaCheckVerifier;
++
++
++public class SpringAutoConfigurationCheckTest {
++  @Test
++  public void test() {
++    JavaCheckVerifier.verify("src/test/files/checks/spring/SpringAutoConfigurationCheck.java", new SpringAutoConfigurationCheck());
++    JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/spring/SpringAutoConfigurationCheck.java", new SpringAutoConfigurationCheck());
++  }
++}

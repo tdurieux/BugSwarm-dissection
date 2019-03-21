@@ -1,0 +1,450 @@
+diff --git a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
+index 7d890132e8..e8850b1e4c 100644
+--- a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
++++ b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
+@@ -291,7 +291,7 @@ private static void install(AttachmentProvider attachmentProvider, String proces
+      *
+      * @return The Byte Buddy agent's {@link java.lang.instrument.Instrumentation} instance.
+      */
+-    @SuppressFBWarnings(value = "REC_CATCH_EXCEPTION", justification = "Legal state where reflection communicates errors by exception")
++    @SuppressFBWarnings(value = "REC_CATCH_EXCEPTION", justification = "Legal outcome where reflection communicates errors by throwing an exception")
+     private static Instrumentation doGetInstrumentation() {
+         try {
+             return (Instrumentation) ClassLoader.getSystemClassLoader()
+@@ -306,7 +306,7 @@ private static Instrumentation doGetInstrumentation() {
+     /**
+      * An attachment provider is responsible for making the Java attachment API available.
+      */
+-    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "No circularity, initialization is safe")
++    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "Safe initialization is implied")
+     public interface AttachmentProvider {
+ 
+         /**
+@@ -558,7 +558,7 @@ public String toString() {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED", justification = "Privilege should be provided by user")
++            @SuppressFBWarnings(value = "DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED", justification = "Privilege is explicit user responsibility")
+             public Accessor attempt() {
+                 File toolsJar = new File(System.getProperty(JAVA_HOME_PROPERTY).replace('\\', '/') + "/../" + toolsJarPath);
+                 try {
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
+index 8601c3ed2a..bf8a69c096 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
+@@ -460,19 +460,19 @@ protected OfMethod(Method method, int index) {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public MethodDescription.InDefinedShape getDeclaringMethod() {
+                 return new MethodDescription.ForLoadedMethod(executable);
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public TypeDescription.Generic getType() {
+                 return new TypeDescription.Generic.LazyProjection.OfMethodParameter(executable, index, executable.getParameterTypes());
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public AnnotationList getDeclaredAnnotations() {
+                 return new AnnotationList.ForLoadedAnnotations(executable.getParameterAnnotations()[index]);
+             }
+@@ -494,19 +494,19 @@ protected OfConstructor(Constructor<?> constructor, int index) {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public MethodDescription.InDefinedShape getDeclaringMethod() {
+                 return new MethodDescription.ForLoadedConstructor(executable);
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public TypeDescription.Generic getType() {
+                 return new TypeDescription.Generic.LazyProjection.OfConstructorParameter(executable, index, executable.getParameterTypes());
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by findbugs")
++            @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The implicit field type casting is not understood by Findbugs")
+             public AnnotationList getDeclaredAnnotations() {
+                 return new AnnotationList.ForLoadedAnnotations(executable.getParameterAnnotations()[index]);
+             }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
+index c37f8a0281..c3ab904967 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
+@@ -4155,7 +4155,7 @@ public int hashCode() {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Type check is performed by erasure instance")
++            @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Type check is performed by erasure implementation")
+             public boolean equals(Object other) {
+                 return asErasure().equals(other);
+             }
+@@ -4467,7 +4467,7 @@ public StackSize getStackSize() {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Type check is performed by erasure instance")
++            @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Type check is performed by erasure implementation")
+             public boolean equals(Object other) {
+                 if (getSort().isNonGeneric()) {
+                     return asErasure().equals(other);
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeList.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeList.java
+index 4bf29451d0..4038b95a2c 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeList.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeList.java
+@@ -28,7 +28,7 @@
+     /**
+      * Represents that a type list does not contain any values for ASM interoperability which is represented by {@code null}.
+      */
+-    @SuppressFBWarnings(value = {"MS_MUTABLE_ARRAY", "MS_OOI_PKGPROTECT"}, justification = "value is null and should be available to extensions")
++    @SuppressFBWarnings(value = {"MS_MUTABLE_ARRAY", "MS_OOI_PKGPROTECT"}, justification = "Value is null")
+     String[] NO_INTERFACES = null;
+ 
+     /**
+@@ -178,7 +178,7 @@ public int getStackSize() {
+     class Empty extends FilterableList.Empty<TypeDescription, TypeList> implements TypeList {
+ 
+         @Override
+-        @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Return value is always null")
++        @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Value is null")
+         public String[] toInternalNames() {
+             return NO_INTERFACES;
+         }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+index 246f0a73ab..3f52d47f48 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+@@ -120,7 +120,7 @@ public String toString() {
+              *
+              * @param binaryRepresentation The binary data to represent. The array must not be modified.
+              */
+-            @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The received value is never modified by contract")
++            @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The array is not to be modified by contract")
+             public Explicit(byte[] binaryRepresentation) {
+                 this.binaryRepresentation = binaryRepresentation;
+             }
+@@ -131,7 +131,7 @@ public boolean isResolved() {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Return value must never be modified by contract")
++            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "The array is not to be modified by contract")
+             public byte[] resolve() {
+                 return binaryRepresentation;
+             }
+@@ -1069,7 +1069,7 @@ public String toString() {
+             /**
+              * The binary representation of the looked-up class.
+              */
+-            @SuppressFBWarnings(value = "VO_VOLATILE_REFERENCE_TO_ARRAY", justification = "By contract, the referenced array is not to be modified")
++            @SuppressFBWarnings(value = "VO_VOLATILE_REFERENCE_TO_ARRAY", justification = "The array is not to be modified by contract")
+             private volatile byte[] binaryRepresentation;
+ 
+             /**
+@@ -1084,7 +1084,7 @@ protected ExtractionClassFileTransformer(ClassLoader classLoader, String typeNam
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"}, justification = "Return value is always null; received value is never modified")
++            @SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"}, justification = "The array is not to be modified by contract")
+             public byte[] transform(ClassLoader classLoader,
+                                     String internalName,
+                                     Class<?> redefinedType,
+@@ -1120,7 +1120,7 @@ private boolean isChild(ClassLoader classLoader) {
+              * @return The binary representation of the class file or {@code null} if no such class file could
+              * be located.
+              */
+-            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Return value must never be modified by contract")
++            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "The array is not to be modified by contract")
+             protected byte[] getBinaryRepresentation() {
+                 return binaryRepresentation;
+             }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
+index e60126d2a5..5d67c37cee 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
+@@ -4259,7 +4259,7 @@ public String toString() {
+          * @param loadedTypeInitializer The loaded type initializer of this dynamic type.
+          * @param auxiliaryTypes        The auxiliary type required for this dynamic type.
+          */
+-        @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The received value is never modified by contract")
++        @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The array is not to be modified by contract")
+         public Default(TypeDescription typeDescription,
+                        byte[] binaryRepresentation,
+                        LoadedTypeInitializer loadedTypeInitializer,
+@@ -4306,7 +4306,7 @@ public boolean hasAliveLoadedTypeInitializers() {
+         }
+ 
+         @Override
+-        @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Return value must never be modified")
++        @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "The array is not to be modified by contract")
+         public byte[] getBytes() {
+             return binaryRepresentation;
+         }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ByteArrayClassLoader.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ByteArrayClassLoader.java
+index 708d4d8f40..b565e60998 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ByteArrayClassLoader.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ByteArrayClassLoader.java
+@@ -1,5 +1,6 @@
+ package net.bytebuddy.dynamic.loading;
+ 
++import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+ import net.bytebuddy.description.type.TypeDescription;
+ 
+ import java.io.ByteArrayInputStream;
+@@ -47,19 +48,20 @@
+     /**
+      * A strategy for locating a package by name.
+      */
+-    private static final PackageLookupStrategy PACKAGE_LOOKUP_STRATEGY;
++    private static final PackageLookupStrategy PACKAGE_LOOKUP_STRATEGY = packageLookupStrategy();
+ 
+-    /*
++    /**
+      * Locates the best available package lookup strategy.
++     *
++     * @return A package lookup strategy for the current VM.
+      */
+-    static {
+-        PackageLookupStrategy packageLookupStrategy;
++    @SuppressFBWarnings(value = "REC_CATCH_EXCEPTION", justification = "Exception should not be rethrown but trigger a fallback")
++    private static PackageLookupStrategy packageLookupStrategy() {
+         try {
+-            packageLookupStrategy = new PackageLookupStrategy.ForJava9CapableVm(ClassLoader.class.getDeclaredMethod("getDefinedPackage", String.class));
+-        } catch (NoSuchMethodException ignored) {
+-            packageLookupStrategy = PackageLookupStrategy.ForLegacyVm.INSTANCE;
++            return new PackageLookupStrategy.ForJava9CapableVm(ClassLoader.class.getDeclaredMethod("getDefinedPackage", String.class));
++        } catch (Exception ignored) {
++            return PackageLookupStrategy.ForLegacyVm.INSTANCE;
+         }
+-        PACKAGE_LOOKUP_STRATEGY = packageLookupStrategy;
+     }
+ 
+     /**
+@@ -218,12 +220,12 @@ public static ClassLoader of(ClassLoader parent,
+ 
+     @Override
+     protected URL findResource(String name) {
+-        return persistenceHandler.url(name, typeDefinitions, accessControlContext);
++        return persistenceHandler.url(name, typeDefinitions);
+     }
+ 
+     @Override
+     protected Enumeration<URL> findResources(String name) {
+-        URL url = persistenceHandler.url(name, typeDefinitions, accessControlContext);
++        URL url = persistenceHandler.url(name, typeDefinitions);
+         return url == null
+                 ? EmptyEnumeration.INSTANCE
+                 : new SingletonEnumeration(url);
+@@ -354,7 +356,7 @@ public String toString() {
+             }
+ 
+             @Override
+-            protected URL url(String resourceName, Map<String, byte[]> typeDefinitions, AccessControlContext accessControlContext) {
++            protected URL url(String resourceName, Map<String, byte[]> typeDefinitions) {
+                 if (!resourceName.endsWith(CLASS_FILE_SUFFIX)) {
+                     return NO_URL;
+                 } else if (resourceName.startsWith("/")) {
+@@ -364,7 +366,7 @@ protected URL url(String resourceName, Map<String, byte[]> typeDefinitions, Acce
+                 byte[] binaryRepresentation = typeDefinitions.get(typeName);
+                 return binaryRepresentation == null
+                         ? NO_URL
+-                        : AccessController.doPrivileged(new UrlDefinitionAction(resourceName, binaryRepresentation), accessControlContext);
++                        : AccessController.doPrivileged(new UrlDefinitionAction(resourceName, binaryRepresentation));
+ 
+             }
+         },
+@@ -380,7 +382,7 @@ protected URL url(String resourceName, Map<String, byte[]> typeDefinitions, Acce
+             }
+ 
+             @Override
+-            protected URL url(String resourceName, Map<String, byte[]> typeDefinitions, AccessControlContext accessControlContext) {
++            protected URL url(String resourceName, Map<String, byte[]> typeDefinitions) {
+                 return NO_URL;
+             }
+         };
+@@ -425,12 +427,11 @@ public boolean isManifest() {
+         /**
+          * Returns a URL representing a class file.
+          *
+-         * @param resourceName         The name of the requested resource.
+-         * @param typeDefinitions      A mapping of byte arrays by their type names.
+-         * @param accessControlContext The access control context to be used for creating the URL.
++         * @param resourceName    The name of the requested resource.
++         * @param typeDefinitions A mapping of byte arrays by their type names.
+          * @return A URL representing the type definition or {@code null} if the requested resource does not represent a class file.
+          */
+-        protected abstract URL url(String resourceName, Map<String, byte[]> typeDefinitions, AccessControlContext accessControlContext);
++        protected abstract URL url(String resourceName, Map<String, byte[]> typeDefinitions);
+ 
+         @Override
+         public String toString() {
+@@ -681,7 +682,7 @@ public ChildFirst(ClassLoader parent,
+ 
+         @Override
+         public URL getResource(String name) {
+-            URL url = persistenceHandler.url(name, typeDefinitions, accessControlContext);
++            URL url = persistenceHandler.url(name, typeDefinitions);
+             // If a class resource is defined by this class loader but it is not defined in a manifest manner,
+             // the resource of the parent class loader should be shadowed by 'null'. Note that the delegation
+             // model causes a redundant query to the persistent handler but renders a correct result.
+@@ -692,7 +693,7 @@ public URL getResource(String name) {
+ 
+         @Override
+         public Enumeration<URL> getResources(String name) throws IOException {
+-            URL url = persistenceHandler.url(name, typeDefinitions, accessControlContext);
++            URL url = persistenceHandler.url(name, typeDefinitions);
+             return url == null
+                     ? super.getResources(name)
+                     : new PrependingEnumeration(url, super.getResources(name));
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassInjector.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassInjector.java
+index bdcb7c04d6..ae20021016 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassInjector.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassInjector.java
+@@ -429,7 +429,7 @@ public Package definePackage(ClassLoader classLoader,
+                 }
+ 
+                 @Override
+-                @SuppressFBWarnings(value = "DP_DO_INSIDE_DO_PRIVILEGED", justification = "Privileges should be provided by user")
++                @SuppressFBWarnings(value = "DP_DO_INSIDE_DO_PRIVILEGED", justification = "Privilege is explicit user responsibility")
+                 public Dispatcher initialize() {
+                     // This is safe even in a multi-threaded environment as all threads set the instances accessible before invoking any methods.
+                     // By always setting accessability, the security manager is always triggered if this operation was illegal.
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
+index 36c738d620..ff6aad6fa9 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
+@@ -447,7 +447,7 @@ protected ClassRedefinitionTransformer(Map<Class<?>, ClassDefinition> redefinedC
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Return value is always null")
++            @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Value is always null")
+             public byte[] transform(ClassLoader classLoader,
+                                     String internalTypeName,
+                                     Class<?> classBeingRedefined,
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/MultipleParentClassLoader.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/MultipleParentClassLoader.java
+index 57c3bb280f..9185bced1a 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/MultipleParentClassLoader.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/MultipleParentClassLoader.java
+@@ -412,6 +412,7 @@ public Builder filter(ElementMatcher<? super ClassLoader> matcher) {
+          *
+          * @return A suitable class loader.
+          */
++        @SuppressFBWarnings(value = "DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED", justification = "Privilege is explicit user responsibility")
+         public ClassLoader build() {
+             return classLoaders.size() == 1
+                     ? classLoaders.get(ONLY)
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/MethodGraph.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/MethodGraph.java
+index 4920d16bb9..a558106a34 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/MethodGraph.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/MethodGraph.java
+@@ -387,7 +387,7 @@ public String toString() {
+     /**
+      * A compiler to produce a {@link MethodGraph} from a given type.
+      */
+-    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "No circularity, initialization is safe")
++    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "Safe initialization is implied")
+     interface Compiler {
+ 
+         /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/AuxiliaryType.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/AuxiliaryType.java
+index d428969d7e..02bcecfc50 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/AuxiliaryType.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/AuxiliaryType.java
+@@ -26,8 +26,7 @@
+     /**
+      * The default type access of an auxiliary type. <b>This array must not be mutated</b>.
+      */
+-    @SuppressFBWarnings(value = {"MS_MUTABLE_ARRAY", "MS_OOI_PKGPROTECT"},
+-            justification = "Favor simplicity with current API in overall immutable library layout - value should be accessible to extensions")
++    @SuppressFBWarnings(value = {"MS_MUTABLE_ARRAY", "MS_OOI_PKGPROTECT"}, justification = "The array is not to be modified by contract")
+     ModifierContributor.ForType[] DEFAULT_TYPE_MODIFIER = {SyntheticState.SYNTHETIC};
+ 
+     /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/MethodDelegationBinder.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/MethodDelegationBinder.java
+index 201413d476..996b206e35 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/MethodDelegationBinder.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/MethodDelegationBinder.java
+@@ -599,7 +599,7 @@ public String toString() {
+      * Implementations of this interface are able to attempt the resolution of two successful bindings of a method
+      * to two different target methods in order to identify a dominating binding.
+      */
+-    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "No circularity, initialization is safe")
++    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "Safe initialization is implied")
+     interface AmbiguityResolver {
+ 
+         /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Pipe.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Pipe.java
+index d9668adece..07099b5c12 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Pipe.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Pipe.java
+@@ -358,7 +358,7 @@ public String toString() {
+              * {@link net.bytebuddy.implementation.bind.annotation.Pipe.Binder.Redirection}'s
+              * constructor.
+              */
+-            @SuppressFBWarnings(value = "SE_BAD_FIELD", justification = "Enumerations are not serialized by field")
++            @SuppressFBWarnings(value = "SE_BAD_FIELD", justification = "Fields of enumerations are never serialized")
+             protected enum ConstructorCall implements Implementation {
+ 
+                 /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/TargetMethodAnnotationDrivenBinder.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/TargetMethodAnnotationDrivenBinder.java
+index fbbe83fc64..984f0dd81e 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/TargetMethodAnnotationDrivenBinder.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/TargetMethodAnnotationDrivenBinder.java
+@@ -144,7 +144,7 @@ public String toString() {
+      *
+      * @param <T> The {@link java.lang.annotation.Annotation#annotationType()} handled by this parameter binder.
+      */
+-    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "No circularity, initialization is safe")
++    @SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "Safe initialization is implied")
+     public interface ParameterBinder<T extends Annotation> {
+ 
+         /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/assign/Assigner.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/assign/Assigner.java
+index 3bda8c6c5f..7de9f6adbf 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/assign/Assigner.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/assign/Assigner.java
+@@ -13,7 +13,7 @@
+  * An assigner is for example responsible for type casting, auto boxing or unboxing or for the widening of primitive
+  * types.
+  */
+-@SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "No circularity, initialization is safe")
++@SuppressFBWarnings(value = "IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION", justification = "Safe initialization is implied")
+ public interface Assigner {
+ 
+     /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/pool/TypePool.java b/byte-buddy-dep/src/main/java/net/bytebuddy/pool/TypePool.java
+index e683f7432d..2daeda0f7f 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/pool/TypePool.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/pool/TypePool.java
+@@ -7118,7 +7118,6 @@ public int getModifiers() {
+                  *                                          class was corrupt.
+                  * @param defaultValue                      The default value of this method or {@code null} if there is no
+                  */
+-                @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "To be removed once type annotations are in place")
+                 private LazyMethodDescription(String internalName,
+                                               int modifiers,
+                                               String methodDescriptor,
+@@ -7643,7 +7642,7 @@ protected TypeExtractor() {
+             }
+ 
+             @Override
+-            @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The received value is never modified")
++            @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "The array is not to be modified by contract")
+             public void visit(int classFileVersion,
+                               int modifiers,
+                               String internalName,

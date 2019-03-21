@@ -1,0 +1,1127 @@
+diff --git a/mockwebserver/src/main/java/okhttp3/internal/duplex/MwsDuplexAccess.java b/mockwebserver/src/main/java/okhttp3/internal/duplex/MwsDuplexAccess.java
+new file mode 100644
+index 000000000..d1eea0039
+--- /dev/null
++++ b/mockwebserver/src/main/java/okhttp3/internal/duplex/MwsDuplexAccess.java
+@@ -0,0 +1,29 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.internal.duplex;
++
++import okhttp3.mockwebserver.MockResponse;
++import okhttp3.mockwebserver.internal.duplex.DuplexResponseBody;
++
++/**
++ * Internal access to MockWebServer APIs. Don't use this, don't use internal, these APIs are not
++ * stable.
++ */
++public abstract class MwsDuplexAccess {
++  public static MwsDuplexAccess instance;
++
++  public abstract void setBody(MockResponse mockResponse, DuplexResponseBody duplexResponseBody);
++}
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockResponse.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockResponse.java
+index 36457229e..65231c895 100644
+--- a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockResponse.java
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockResponse.java
+@@ -22,6 +22,7 @@
+ import okhttp3.WebSocketListener;
+ import okhttp3.internal.Internal;
+ import okhttp3.internal.http2.Settings;
++import okhttp3.mockwebserver.internal.duplex.DuplexResponseBody;
+ import okio.Buffer;
+ 
+ /** A scripted response to be replayed by the mock web server. */
+@@ -49,6 +50,7 @@
+   private List<PushPromise> promises = new ArrayList<>();
+   private Settings settings;
+   private WebSocketListener webSocketListener;
++  private DuplexResponseBody duplexResponseBody;
+ 
+   /** Creates a new mock response with an empty body. */
+   public MockResponse() {
+@@ -155,6 +157,14 @@ public MockResponse removeHeader(String name) {
+     return this;
+   }
+ 
++  boolean isDuplex() {
++    return duplexResponseBody != null;
++  }
++
++  DuplexResponseBody getDuplexResponseBody() {
++    return duplexResponseBody;
++  }
++
+   /** Returns a copy of the raw HTTP payload. */
+   public Buffer getBody() {
+     return body != null ? body.clone() : null;
+@@ -171,6 +181,11 @@ public MockResponse setBody(String body) {
+     return setBody(new Buffer().writeUtf8(body));
+   }
+ 
++  MockResponse setBody(DuplexResponseBody duplexResponseBody) {
++    this.duplexResponseBody = duplexResponseBody;
++    return this;
++  }
++
+   /**
+    * Sets the response body to {@code body}, chunked every {@code maxChunkSize} bytes.
+    */
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
+index d2a532dd6..28a8963c4 100644
+--- a/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/MockWebServer.java
+@@ -59,6 +59,9 @@
+ import okhttp3.internal.Internal;
+ import okhttp3.internal.NamedRunnable;
+ import okhttp3.internal.Util;
++import okhttp3.internal.duplex.HeadersListener;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.internal.duplex.MwsDuplexAccess;
+ import okhttp3.internal.http.HttpMethod;
+ import okhttp3.internal.http2.ErrorCode;
+ import okhttp3.internal.http2.Header;
+@@ -68,6 +71,7 @@
+ import okhttp3.internal.platform.Platform;
+ import okhttp3.internal.ws.RealWebSocket;
+ import okhttp3.internal.ws.WebSocketProtocol;
++import okhttp3.mockwebserver.internal.duplex.DuplexResponseBody;
+ import okio.Buffer;
+ import okio.BufferedSink;
+ import okio.BufferedSource;
+@@ -101,6 +105,12 @@
+ public final class MockWebServer extends ExternalResource implements Closeable {
+   static {
+     Internal.initializeInstanceForTests();
++    MwsDuplexAccess.instance = new MwsDuplexAccess() {
++      @Override public void setBody(
++          MockResponse mockResponse, DuplexResponseBody duplexResponseBody) {
++        mockResponse.setBody(duplexResponseBody);
++      }
++    };
+   }
+ 
+   private static final int CLIENT_AUTH_NONE = 0;
+@@ -924,7 +934,7 @@ private Http2SocketHandler(Socket socket, Protocol protocol) {
+         socket.close();
+         return;
+       }
+-      writeResponse(stream, response);
++      writeResponse(stream, request, response);
+       if (logger.isLoggable(Level.INFO)) {
+         logger.info(MockWebServer.this + " received request: " + request
+             + " and responded: " + response + " protocol is " + protocol.toString());
+@@ -962,7 +972,9 @@ private RecordedRequest readRequest(Http2Stream stream) throws IOException {
+       Headers headers = httpHeaders.build();
+ 
+       MockResponse peek = dispatcher.peek();
+-      if (!readBody && peek.getSocketPolicy() == EXPECT_CONTINUE) {
++      if (peek.isDuplex()) {
++        readBody = false;
++      } else if (!readBody && peek.getSocketPolicy() == EXPECT_CONTINUE) {
+         stream.writeHeaders(Collections.singletonList(
+             new Header(Header.RESPONSE_STATUS, ByteString.encodeUtf8("100 Continue"))), true);
+         stream.getConnection().flush();
+@@ -984,7 +996,8 @@ private RecordedRequest readRequest(Http2Stream stream) throws IOException {
+           sequenceNumber.getAndIncrement(), socket);
+     }
+ 
+-    private void writeResponse(Http2Stream stream, MockResponse response) throws IOException {
++    private void writeResponse(final Http2Stream stream,
++        final RecordedRequest request, final MockResponse response) throws IOException {
+       Settings settings = response.getSettings();
+       if (settings != null) {
+         stream.getConnection().setSettings(settings);
+@@ -1008,20 +1021,46 @@ private void writeResponse(Http2Stream stream, MockResponse response) throws IOE
+       sleepIfDelayed(response.getHeadersDelay(TimeUnit.MILLISECONDS));
+ 
+       Buffer body = response.getBody();
+-      boolean closeStreamAfterHeaders = body != null || !response.getPushPromises().isEmpty();
+-      stream.writeHeaders(http2Headers, closeStreamAfterHeaders);
+-      pushPromises(stream, response.getPushPromises());
++      boolean hasResponseBody = body != null
++          || !response.getPushPromises().isEmpty()
++          || response.isDuplex();
++      stream.writeHeaders(http2Headers, hasResponseBody);
++      pushPromises(stream, request, response.getPushPromises());
+       if (body != null) {
+         BufferedSink sink = Okio.buffer(stream.getSink());
+         sleepIfDelayed(response.getBodyDelay(TimeUnit.MILLISECONDS));
+         throttledTransfer(response, socket, body, sink, body.size(), false);
+         sink.close();
+-      } else if (closeStreamAfterHeaders) {
++      } else if (response.isDuplex()) {
++        final BufferedSink sink = Okio.buffer(stream.getSink());
++        final BufferedSource source = Okio.buffer(stream.getSource());
++        final DuplexResponseBody duplexResponseBody = response.getDuplexResponseBody();
++        HeadersListener headersListener =
++            duplexResponseBody.onRequest(request, source, new HttpSink() {
++              @Override public BufferedSink sink() {
++                return sink;
++              }
++
++              @Override public void headers(Headers headers) throws IOException {
++                List<Header> headerList = new ArrayList<>(headers.size() / 2);
++                for (int i = 0, size = headers.size(); i < size; i++) {
++                  headerList.add(new Header(headers.name(i), headers.value(i)));
++                }
++                stream.writeHeaders(headerList, true);
++              }
++
++              @Override public void close() throws IOException {
++                sink.close();
++              }
++            });
++        stream.setHeadersListener(headersListener);
++      } else if (hasResponseBody) {
+         stream.close(ErrorCode.NO_ERROR);
+       }
+     }
+ 
+-    private void pushPromises(Http2Stream stream, List<PushPromise> promises) throws IOException {
++    private void pushPromises(Http2Stream stream, RecordedRequest request,
++        List<PushPromise> promises) throws IOException {
+       for (PushPromise pushPromise : promises) {
+         List<Header> pushedHeaders = new ArrayList<>();
+         pushedHeaders.add(new Header(Header.TARGET_AUTHORITY, url(pushPromise.path()).host()));
+@@ -1038,7 +1077,7 @@ private void pushPromises(Http2Stream stream, List<PushPromise> promises) throws
+         boolean hasBody = pushPromise.response().getBody() != null;
+         Http2Stream pushedStream =
+             stream.getConnection().pushStream(stream.getId(), pushedHeaders, hasBody);
+-        writeResponse(pushedStream, pushPromise.response());
++        writeResponse(pushedStream, request, pushPromise.response());
+       }
+     }
+   }
+diff --git a/mockwebserver/src/main/java/okhttp3/mockwebserver/internal/duplex/DuplexResponseBody.java b/mockwebserver/src/main/java/okhttp3/mockwebserver/internal/duplex/DuplexResponseBody.java
+new file mode 100644
+index 000000000..b903cd695
+--- /dev/null
++++ b/mockwebserver/src/main/java/okhttp3/mockwebserver/internal/duplex/DuplexResponseBody.java
+@@ -0,0 +1,29 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.mockwebserver.internal.duplex;
++
++import java.io.IOException;
++import okhttp3.internal.duplex.HeadersListener;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.mockwebserver.RecordedRequest;
++import okio.BufferedSource;
++
++public interface DuplexResponseBody {
++  HeadersListener onRequest(
++      RecordedRequest request,
++      BufferedSource requestBodySource,
++      HttpSink responseBodySink) throws IOException;
++}
+diff --git a/okhttp-tests/src/test/java/okhttp3/DuplexTest.java b/okhttp-tests/src/test/java/okhttp3/DuplexTest.java
+new file mode 100644
+index 000000000..b06514479
+--- /dev/null
++++ b/okhttp-tests/src/test/java/okhttp3/DuplexTest.java
+@@ -0,0 +1,187 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3;
++
++import java.io.IOException;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++import okhttp3.internal.RecordingHeadersListener;
++import okhttp3.internal.duplex.HeadersListener;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.internal.duplex.MwsDuplexAccess;
++import okhttp3.mockwebserver.MockResponse;
++import okhttp3.mockwebserver.MockWebServer;
++import okhttp3.mockwebserver.RecordedRequest;
++import okhttp3.mockwebserver.internal.duplex.DuplexResponseBody;
++import okhttp3.tls.HandshakeCertificates;
++import okio.BufferedSource;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TestRule;
++import org.junit.rules.Timeout;
++
++import static junit.framework.TestCase.assertTrue;
++import static okhttp3.TestUtil.defaultClient;
++import static okhttp3.tls.internal.TlsUtil.localhost;
++import static org.junit.Assert.assertEquals;
++
++public final class DuplexTest {
++  @Rule public final TestRule timeout = new Timeout(30_000, TimeUnit.MILLISECONDS);
++  @Rule public final MockWebServer server = new MockWebServer();
++
++  private HandshakeCertificates handshakeCertificates = localhost();
++  private OkHttpClient client = defaultClient();
++
++  @Test public void clientReadsHeadersDataHeadersData() throws IOException {
++    final LatchParty latchParty = new LatchParty();
++    MockResponse mockResponse = new MockResponse()
++        .clearHeaders()
++        .addHeader("h1", "v1")
++        .addHeader("h2", "v2");
++    MwsDuplexAccess.instance.setBody(mockResponse, new DuplexResponseBody() {
++      @Override public HeadersListener onRequest(RecordedRequest request,
++          BufferedSource requestBodySource, HttpSink responseBodySink) throws IOException {
++
++        latchParty.step(1);
++        responseBodySink.sink().writeUtf8("ok");
++        responseBodySink.sink().flush();
++        responseBodySink.headers(Headers.of("b", "banada"));
++
++        latchParty.step(3);
++        responseBodySink.sink().writeUtf8("http");
++        responseBodySink.sink().flush();
++
++        latchParty.step(5);
++        responseBodySink.headers(Headers.of("c", "cookie"));
++        responseBodySink.sink().close();
++
++        return null;
++      }
++    });
++    server.enqueue(mockResponse);
++    enableProtocol(Protocol.HTTP_2);
++
++    Call call = client.newCall(new Request.Builder()
++        .url(server.url("/"))
++        .duplex("POST")
++        .build());
++
++    Response response = call.execute();
++
++    RecordingHeadersListener headersListener = new RecordingHeadersListener();
++    response.headersListener(headersListener);
++
++    assertEquals(Headers.of("h1", "v1", "h2", "v2"), response.headers());
++
++    latchParty.step(2);
++    BufferedSource source = response.body().source();
++    assertEquals("ok", source.readUtf8(2));
++
++    latchParty.step(4);
++    assertEquals("http", source.readUtf8(4));
++    assertEquals(Headers.of("b", "banada"), headersListener.takeFirst());
++
++    latchParty.step(6);
++    assertTrue(source.exhausted());
++    assertEquals(Collections.singletonList(Headers.of("c", "cookie")), headersListener.takeAll());
++  }
++
++  @Test public void serverReadsHeadersDataHeadersData() throws IOException {
++    final RecordingHeadersListener serverHeadersListener = new RecordingHeadersListener();
++    final AtomicReference<BufferedSource> requestBodySourceRef = new AtomicReference<>();
++
++    MockResponse mockResponse = new MockResponse()
++        .clearHeaders()
++        .addHeader("h1", "v1")
++        .addHeader("h2", "v2");
++    MwsDuplexAccess.instance.setBody(mockResponse, new DuplexResponseBody() {
++      @Override public HeadersListener onRequest(RecordedRequest request,
++          BufferedSource requestBodySource, HttpSink responseBodySink) throws IOException {
++        responseBodySink.sink().close();
++
++        requestBodySourceRef.set(requestBodySource);
++        return serverHeadersListener;
++      }
++    });
++    server.enqueue(mockResponse);
++    enableProtocol(Protocol.HTTP_2);
++
++    Call call = client.newCall(new Request.Builder()
++        .url(server.url("/"))
++        .duplex("POST")
++        .build());
++
++    Response response = call.execute();
++    HttpSink httpSink = response.httpSink();
++    httpSink.sink().writeUtf8("hey\n");
++    httpSink.headers(Headers.of("a", "android"));
++    httpSink.sink().writeUtf8("whats going on\n");
++    httpSink.headers(Headers.of("b", "blackberry"));
++    httpSink.sink().close();
++
++    // check what the server received
++    BufferedSource requestBodySource = requestBodySourceRef.get();
++    assertEquals("hey", requestBodySource.readUtf8Line());
++    assertEquals("whats going on", requestBodySource.readUtf8Line());
++    assertTrue(requestBodySource.exhausted());
++    assertEquals(Arrays.asList(Headers.of("a", "android"), Headers.of("b", "blackberry")),
++        serverHeadersListener.takeAll());
++  }
++
++  // TODO(oldergod) write tests for headers discarded with 100 Continue
++
++  /**
++   * Tests that use this will fail unless boot classpath is set. Ex. {@code
++   * -Xbootclasspath/p:/tmp/alpn-boot-8.0.0.v20140317}
++   */
++  private void enableProtocol(Protocol protocol) {
++    enableTls();
++    client = client.newBuilder()
++        .protocols(Arrays.asList(protocol, Protocol.HTTP_1_1))
++        .build();
++    server.setProtocols(client.protocols());
++  }
++
++  private void enableTls() {
++    client = client.newBuilder()
++        .sslSocketFactory(
++            handshakeCertificates.sslSocketFactory(), handshakeCertificates.trustManager())
++        .hostnameVerifier(new RecordingHostnameVerifier())
++        .build();
++    server.useHttps(handshakeCertificates.sslSocketFactory(), false);
++  }
++
++  static final class LatchParty {
++    private int currentRound = 1;
++
++    synchronized void step(int round) {
++      try {
++        // Wait until I can be released.
++        while (currentRound != round) {
++          wait();
++        }
++
++        // Release the other thread.
++        currentRound++;
++        notifyAll();
++      } catch (InterruptedException e) {
++        throw new AssertionError();
++      }
++    }
++  }
++}
+diff --git a/okhttp-tests/src/test/java/okhttp3/internal/RecordingHeadersListener.java b/okhttp-tests/src/test/java/okhttp3/internal/RecordingHeadersListener.java
+new file mode 100644
+index 000000000..a4ab9635c
+--- /dev/null
++++ b/okhttp-tests/src/test/java/okhttp3/internal/RecordingHeadersListener.java
+@@ -0,0 +1,43 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.internal;
++
++import java.util.ArrayDeque;
++import java.util.ArrayList;
++import java.util.List;
++import javax.annotation.Nullable;
++import okhttp3.Headers;
++import okhttp3.internal.duplex.HeadersListener;
++
++public final class RecordingHeadersListener implements HeadersListener {
++  final ArrayDeque<Headers> receivedHeaders = new ArrayDeque<>();
++
++  @Override public void onHeaders(Headers headers) {
++    receivedHeaders.add(headers);
++  }
++
++  public @Nullable Headers takeFirst() {
++    return receivedHeaders.poll();
++  }
++
++  public List<Headers> takeAll() {
++    List<Headers> result = new ArrayList<>();
++    for (Headers headers; (headers = receivedHeaders.poll()) != null; ) {
++      result.add(headers);
++    }
++    return result;
++  }
++}
+diff --git a/okhttp-tests/src/test/java/okhttp3/internal/http2/Http2ConnectionTest.java b/okhttp-tests/src/test/java/okhttp3/internal/http2/Http2ConnectionTest.java
+index ea5b8ed60..4b7b585cc 100644
+--- a/okhttp-tests/src/test/java/okhttp3/internal/http2/Http2ConnectionTest.java
++++ b/okhttp-tests/src/test/java/okhttp3/internal/http2/Http2ConnectionTest.java
+@@ -18,7 +18,6 @@
+ import java.io.IOException;
+ import java.io.InterruptedIOException;
+ import java.net.Socket;
+-import java.util.ArrayDeque;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.List;
+@@ -26,6 +25,7 @@
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import okhttp3.Headers;
++import okhttp3.internal.RecordingHeadersListener;
+ import okhttp3.internal.Util;
+ import okhttp3.internal.http2.MockHttp2Peer.InFrame;
+ import okio.AsyncTimeout;
+@@ -542,22 +542,6 @@
+     assertTrue(Arrays.equals("c3po".getBytes("UTF-8"), requestData.data));
+   }
+ 
+-  static final class RecordingHeadersListener implements Header.Listener {
+-    final ArrayDeque<Headers> receivedHeaders = new ArrayDeque<>();
+-
+-    @Override public void onHeaders(Headers headers) {
+-      receivedHeaders.add(headers);
+-    }
+-
+-    public List<Headers> takeAll() {
+-      List<Headers> result = new ArrayList<>();
+-      for (Headers headers; (headers = receivedHeaders.poll()) != null; ) {
+-        result.add(headers);
+-      }
+-      return result;
+-    }
+-  }
+-
+   @Test public void clientReadsHeadersDataHeadersData() throws Exception {
+     peer.sendFrame().settings(new Settings());
+     peer.acceptFrame(); // ACK
+diff --git a/okhttp/src/main/java/okhttp3/OkHttpClient.java b/okhttp/src/main/java/okhttp3/OkHttpClient.java
+index c86d3b345..ada1aa960 100644
+--- a/okhttp/src/main/java/okhttp3/OkHttpClient.java
++++ b/okhttp/src/main/java/okhttp3/OkHttpClient.java
+@@ -41,6 +41,8 @@
+ import okhttp3.internal.connection.RealConnection;
+ import okhttp3.internal.connection.RouteDatabase;
+ import okhttp3.internal.connection.StreamAllocation;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.internal.http2.Http2Codec;
+ import okhttp3.internal.platform.Platform;
+ import okhttp3.internal.proxy.NullProxySelector;
+ import okhttp3.internal.tls.CertificateChainCleaner;
+@@ -195,6 +197,22 @@ public void apply(ConnectionSpec tlsConfiguration, SSLSocket sslSocket, boolean
+       @Override public Call newWebSocketCall(OkHttpClient client, Request originalRequest) {
+         return RealCall.newRealCall(client, originalRequest, true);
+       }
++
++      @Override public void setHttp2Codec(Response.Builder builder, Http2Codec http2Codec) {
++        builder.http2Codec(http2Codec);
++      }
++
++      @Override public void httpSink(Response.Builder responseBuilder, HttpSink httpSink) {
++        responseBuilder.httpSink(httpSink);
++      }
++
++      @Override public HttpSink httpSink(Response response) {
++        return response.httpSink();
++      }
++
++      @Override public boolean isDuplex(Request request) {
++        return request.isDuplex();
++      }
+     };
+   }
+ 
+diff --git a/okhttp/src/main/java/okhttp3/Request.java b/okhttp/src/main/java/okhttp3/Request.java
+index df0bebd02..e06a29c07 100644
+--- a/okhttp/src/main/java/okhttp3/Request.java
++++ b/okhttp/src/main/java/okhttp3/Request.java
+@@ -33,6 +33,7 @@
+   final String method;
+   final Headers headers;
+   final @Nullable RequestBody body;
++  final boolean duplex;
+   final Map<Class<?>, Object> tags;
+ 
+   private volatile @Nullable CacheControl cacheControl; // Lazily initialized.
+@@ -42,6 +43,7 @@
+     this.method = builder.method;
+     this.headers = builder.headers.build();
+     this.body = builder.body;
++    this.duplex = builder.duplex;
+     this.tags = Util.immutableMap(builder.tags);
+   }
+ 
+@@ -69,6 +71,10 @@ public Headers headers() {
+     return body;
+   }
+ 
++  boolean isDuplex() {
++    return duplex;
++  }
++
+   /**
+    * Returns the tag attached with {@code Object.class} as a key, or null if no tag is attached with
+    * that key.
+@@ -121,6 +127,7 @@ public boolean isHttps() {
+     String method;
+     Headers.Builder headers;
+     @Nullable RequestBody body;
++    boolean duplex;
+ 
+     /** A mutable map of tags, or an immutable empty map if we don't have any. */
+     Map<Class<?>, Object> tags = Collections.emptyMap();
+@@ -134,6 +141,7 @@ public Builder() {
+       this.url = request.url;
+       this.method = request.method;
+       this.body = request.body;
++      this.duplex = request.duplex;
+       this.tags = request.tags.isEmpty()
+           ? Collections.<Class<?>, Object>emptyMap()
+           : new LinkedHashMap<>(request.tags);
+@@ -259,6 +267,19 @@ public Builder method(String method, @Nullable RequestBody body) {
+       }
+       this.method = method;
+       this.body = body;
++      this.duplex = false;
++      return this;
++    }
++
++    Builder duplex(String method) {
++      if (method == null) throw new NullPointerException("method == null");
++      if (method.length() == 0) throw new IllegalArgumentException("method.length() == 0");
++      if (!HttpMethod.permitsRequestBody(method)) {
++        throw new IllegalArgumentException("method " + method + " must not have a request body.");
++      }
++      this.method = method;
++      this.body = null;
++      this.duplex = true;
+       return this;
+     }
+ 
+diff --git a/okhttp/src/main/java/okhttp3/Response.java b/okhttp/src/main/java/okhttp3/Response.java
+index c48c81484..48ce92cd6 100644
+--- a/okhttp/src/main/java/okhttp3/Response.java
++++ b/okhttp/src/main/java/okhttp3/Response.java
+@@ -20,7 +20,10 @@
+ import java.util.Collections;
+ import java.util.List;
+ import javax.annotation.Nullable;
++import okhttp3.internal.duplex.HeadersListener;
++import okhttp3.internal.duplex.HttpSink;
+ import okhttp3.internal.http.HttpHeaders;
++import okhttp3.internal.http2.Http2Codec;
+ import okio.Buffer;
+ import okio.BufferedSource;
+ 
+@@ -46,13 +49,15 @@
+   final int code;
+   final String message;
+   final @Nullable Handshake handshake;
+-  final Headers headers;
++  @Nullable Headers headers;
+   final @Nullable ResponseBody body;
+   final @Nullable Response networkResponse;
+   final @Nullable Response cacheResponse;
+   final @Nullable Response priorResponse;
+   final long sentRequestAtMillis;
+   final long receivedResponseAtMillis;
++  final HttpSink httpSink;
++  final @Nullable Http2Codec http2Codec;
+ 
+   private volatile @Nullable CacheControl cacheControl; // Lazily initialized.
+ 
+@@ -69,6 +74,8 @@
+     this.priorResponse = builder.priorResponse;
+     this.sentRequestAtMillis = builder.sentRequestAtMillis;
+     this.receivedResponseAtMillis = builder.receivedResponseAtMillis;
++    this.httpSink = builder.httpSink;
++    this.http2Codec = builder.http2Codec;
+   }
+ 
+   /**
+@@ -136,6 +143,14 @@ public Headers headers() {
+     return headers;
+   }
+ 
++  /**
++   * Should work for any trailers actually right?
++   */
++  synchronized void headersListener(HeadersListener listener) {
++    if (http2Codec == null) throw new IllegalStateException("http2Codec == null");
++    http2Codec.setHeadersListener(listener);
++  }
++
+   /**
+    * Peeks up to {@code byteCount} bytes from the response body and returns them as a new response
+    * body. If fewer than {@code byteCount} bytes are in the response body, the full response body is
+@@ -290,11 +305,15 @@ public long receivedResponseAtMillis() {
+         + '}';
+   }
+ 
++  HttpSink httpSink() {
++    return httpSink;
++  }
++
+   public static class Builder {
+     @Nullable Request request;
+     @Nullable Protocol protocol;
+     int code = -1;
+-    String message;
++    @Nullable String message;
+     @Nullable Handshake handshake;
+     Headers.Builder headers;
+     @Nullable ResponseBody body;
+@@ -303,6 +322,8 @@ public long receivedResponseAtMillis() {
+     @Nullable Response priorResponse;
+     long sentRequestAtMillis;
+     long receivedResponseAtMillis;
++    @Nullable HttpSink httpSink;
++    @Nullable Http2Codec http2Codec;
+ 
+     public Builder() {
+       headers = new Headers.Builder();
+@@ -321,6 +342,8 @@ public Builder() {
+       this.priorResponse = response.priorResponse;
+       this.sentRequestAtMillis = response.sentRequestAtMillis;
+       this.receivedResponseAtMillis = response.receivedResponseAtMillis;
++      this.httpSink = response.httpSink;
++      this.http2Codec = response.http2Codec;
+     }
+ 
+     public Builder request(Request request) {
+@@ -428,6 +451,16 @@ public Builder receivedResponseAtMillis(long receivedResponseAtMillis) {
+       return this;
+     }
+ 
++    Builder httpSink(@Nullable HttpSink httpSink) {
++      this.httpSink = httpSink;
++      return this;
++    }
++
++    Builder http2Codec(@Nullable Http2Codec http2Codec) {
++      this.http2Codec = http2Codec;
++      return this;
++    }
++
+     public Response build() {
+       if (request == null) throw new IllegalStateException("request == null");
+       if (protocol == null) throw new IllegalStateException("protocol == null");
+diff --git a/okhttp/src/main/java/okhttp3/internal/Internal.java b/okhttp/src/main/java/okhttp3/internal/Internal.java
+index 62fcfaa73..b3d8f8b0d 100644
+--- a/okhttp/src/main/java/okhttp3/internal/Internal.java
++++ b/okhttp/src/main/java/okhttp3/internal/Internal.java
+@@ -32,6 +32,8 @@
+ import okhttp3.internal.connection.RealConnection;
+ import okhttp3.internal.connection.RouteDatabase;
+ import okhttp3.internal.connection.StreamAllocation;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.internal.http2.Http2Codec;
+ 
+ /**
+  * Escalate internal APIs in {@code okhttp3} so they can be used from OkHttp's implementation
+@@ -78,4 +80,12 @@ public abstract void apply(ConnectionSpec tlsConfiguration, SSLSocket sslSocket,
+   public abstract @Nullable IOException timeoutExit(Call call, @Nullable IOException e);
+ 
+   public abstract Call newWebSocketCall(OkHttpClient client, Request request);
++
++  public abstract void setHttp2Codec(Response.Builder builder, Http2Codec http2Codec);
++
++  public abstract void httpSink(Response.Builder responseBuilder, HttpSink httpSink);
++
++  public abstract HttpSink httpSink(Response response);
++
++  public abstract boolean isDuplex(Request request);
+ }
+diff --git a/okhttp/src/main/java/okhttp3/internal/duplex/HeadersListener.java b/okhttp/src/main/java/okhttp3/internal/duplex/HeadersListener.java
+new file mode 100644
+index 000000000..4bb2b9ca3
+--- /dev/null
++++ b/okhttp/src/main/java/okhttp3/internal/duplex/HeadersListener.java
+@@ -0,0 +1,22 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.internal.duplex;
++
++import okhttp3.Headers;
++
++public interface HeadersListener {
++  void onHeaders(Headers headers);
++}
+diff --git a/okhttp/src/main/java/okhttp3/internal/duplex/HttpSink.java b/okhttp/src/main/java/okhttp3/internal/duplex/HttpSink.java
+new file mode 100644
+index 000000000..54b3cf425
+--- /dev/null
++++ b/okhttp/src/main/java/okhttp3/internal/duplex/HttpSink.java
+@@ -0,0 +1,31 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.internal.duplex;
++
++import java.io.Closeable;
++import java.io.IOException;
++import okhttp3.Headers;
++import okio.BufferedSink;
++
++/**
++ * A writable request or response that interleaves headers and data. Used for duplex!
++ *
++ * Currently only implemented for HTTP/2.
++ */
++public interface HttpSink extends Closeable {
++  BufferedSink sink();
++  void headers(Headers headers) throws IOException;
++}
+diff --git a/okhttp/src/main/java/okhttp3/internal/http/CallServerInterceptor.java b/okhttp/src/main/java/okhttp3/internal/http/CallServerInterceptor.java
+index 62531aa51..e99436bed 100644
+--- a/okhttp/src/main/java/okhttp3/internal/http/CallServerInterceptor.java
++++ b/okhttp/src/main/java/okhttp3/internal/http/CallServerInterceptor.java
+@@ -17,12 +17,19 @@
+ 
+ import java.io.IOException;
+ import java.net.ProtocolException;
++import java.util.ArrayList;
++import java.util.List;
++import okhttp3.Headers;
+ import okhttp3.Interceptor;
+ import okhttp3.Request;
+ import okhttp3.Response;
++import okhttp3.internal.Internal;
+ import okhttp3.internal.Util;
+ import okhttp3.internal.connection.RealConnection;
+ import okhttp3.internal.connection.StreamAllocation;
++import okhttp3.internal.duplex.HttpSink;
++import okhttp3.internal.http2.Header;
++import okhttp3.internal.http2.Http2Codec;
+ import okio.Buffer;
+ import okio.BufferedSink;
+ import okio.ForwardingSink;
+@@ -38,8 +45,8 @@ public CallServerInterceptor(boolean forWebSocket) {
+   }
+ 
+   @Override public Response intercept(Chain chain) throws IOException {
+-    RealInterceptorChain realChain = (RealInterceptorChain) chain;
+-    HttpCodec httpCodec = realChain.httpStream();
++    final RealInterceptorChain realChain = (RealInterceptorChain) chain;
++    final HttpCodec httpCodec = realChain.httpStream();
+     StreamAllocation streamAllocation = realChain.streamAllocation();
+     RealConnection connection = (RealConnection) realChain.connection();
+     Request request = realChain.request();
+@@ -50,8 +57,10 @@ public CallServerInterceptor(boolean forWebSocket) {
+     httpCodec.writeRequestHeaders(request);
+     realChain.eventListener().requestHeadersEnd(realChain.call(), request);
+ 
++    HttpSink httpSink = null;
+     Response.Builder responseBuilder = null;
+-    if (HttpMethod.permitsRequestBody(request.method()) && request.body() != null) {
++    if (HttpMethod.permitsRequestBody(request.method())
++        && (request.body() != null || Internal.instance.isDuplex(request))) {
+       // If there's a "Expect: 100-continue" header on the request, wait for a "HTTP/1.1 100
+       // Continue" response before transmitting the request body. If we don't get that, return
+       // what we did get (such as a 4xx response) without ever transmitting the request body.
+@@ -62,17 +71,43 @@ public CallServerInterceptor(boolean forWebSocket) {
+       }
+ 
+       if (responseBuilder == null) {
+-        // Write the request body if the "Expect: 100-continue" expectation was met.
+-        realChain.eventListener().requestBodyStart(realChain.call());
+-        long contentLength = request.body().contentLength();
+-        CountingSink requestBodyOut =
+-            new CountingSink(httpCodec.createRequestBody(request, contentLength));
+-        BufferedSink bufferedRequestBody = Okio.buffer(requestBodyOut);
+-
+-        request.body().writeTo(bufferedRequestBody);
+-        bufferedRequestBody.close();
+-        realChain.eventListener()
+-            .requestBodyEnd(realChain.call(), requestBodyOut.successfulCount);
++        if (Internal.instance.isDuplex(request)) {
++          // Prepare a duplex body so that the application can send a request body later.
++          final CountingSink requestBodyOut =
++              new CountingSink(httpCodec.createRequestBody(request, -1L));
++          final BufferedSink bufferedRequestBody = Okio.buffer(requestBodyOut);
++          httpSink = new HttpSink() {
++            @Override public BufferedSink sink() {
++              return bufferedRequestBody;
++            }
++
++            @Override public void headers(Headers headers) throws IOException {
++              List<Header> headerBlock = new ArrayList<>(headers.size() / 2);
++              for (int i = 0, size = headers.size(); i < size; i++) {
++                headerBlock.add(new Header(headers.name(i), headers.value(i)));
++              }
++              ((Http2Codec) httpCodec).writeRequestHeaders(headerBlock);
++            }
++
++            @Override public void close() throws IOException {
++              bufferedRequestBody.close();
++              realChain.eventListener()
++                  .requestBodyEnd(realChain.call(), requestBodyOut.successfulCount);
++            }
++          };
++        } else {
++          // Write the request body if the "Expect: 100-continue" expectation was met.
++          realChain.eventListener().requestBodyStart(realChain.call());
++          long contentLength = request.body().contentLength();
++          CountingSink requestBodyOut =
++              new CountingSink(httpCodec.createRequestBody(request, contentLength));
++          BufferedSink bufferedRequestBody = Okio.buffer(requestBodyOut);
++
++          request.body().writeTo(bufferedRequestBody);
++          bufferedRequestBody.close();
++          realChain.eventListener()
++              .requestBodyEnd(realChain.call(), requestBodyOut.successfulCount);
++        }
+       } else if (!connection.isMultiplexed()) {
+         // If the "Expect: 100-continue" expectation wasn't met, prevent the HTTP/1 connection
+         // from being reused. Otherwise we're still obligated to transmit the request body to
+@@ -81,19 +116,24 @@ public CallServerInterceptor(boolean forWebSocket) {
+       }
+     }
+ 
+-    httpCodec.finishRequest();
++    if (Internal.instance.isDuplex(request)) {
++      httpCodec.flushRequest();
++    } else {
++      httpCodec.finishRequest();
++    }
+ 
+     if (responseBuilder == null) {
+       realChain.eventListener().responseHeadersStart(realChain.call());
+       responseBuilder = httpCodec.readResponseHeaders(false);
+     }
+ 
+-    Response response = responseBuilder
++    responseBuilder
+         .request(request)
+         .handshake(streamAllocation.connection().handshake())
+         .sentRequestAtMillis(sentRequestMillis)
+-        .receivedResponseAtMillis(System.currentTimeMillis())
+-        .build();
++        .receivedResponseAtMillis(System.currentTimeMillis());
++    Internal.instance.httpSink(responseBuilder, httpSink);
++    Response response = responseBuilder.build();
+ 
+     int code = response.code();
+     if (code == 100) {
+@@ -101,16 +141,23 @@ public CallServerInterceptor(boolean forWebSocket) {
+       // try again to read the actual response
+       responseBuilder = httpCodec.readResponseHeaders(false);
+ 
+-      response = responseBuilder
+-              .request(request)
+-              .handshake(streamAllocation.connection().handshake())
+-              .sentRequestAtMillis(sentRequestMillis)
+-              .receivedResponseAtMillis(System.currentTimeMillis())
+-              .build();
++      responseBuilder
++          .request(request)
++          .handshake(streamAllocation.connection().handshake())
++          .sentRequestAtMillis(sentRequestMillis)
++          .receivedResponseAtMillis(System.currentTimeMillis());
++      Internal.instance.httpSink(responseBuilder, httpSink);
++      response = responseBuilder.build();
+ 
+       code = response.code();
+     }
+ 
++    if (Internal.instance.isDuplex(request)) {
++      Response.Builder builder = response.newBuilder();
++      Internal.instance.setHttp2Codec(builder, (Http2Codec) httpCodec);
++      response = builder.build();
++    }
++
+     realChain.eventListener()
+             .responseHeadersEnd(realChain.call(), response);
+ 
+diff --git a/okhttp/src/main/java/okhttp3/internal/http/RealInterceptorChain.java b/okhttp/src/main/java/okhttp3/internal/http/RealInterceptorChain.java
+index 52f988089..2631a5422 100644
+--- a/okhttp/src/main/java/okhttp3/internal/http/RealInterceptorChain.java
++++ b/okhttp/src/main/java/okhttp3/internal/http/RealInterceptorChain.java
+@@ -24,6 +24,7 @@
+ import okhttp3.Interceptor;
+ import okhttp3.Request;
+ import okhttp3.Response;
++import okhttp3.internal.Internal;
+ import okhttp3.internal.connection.RealConnection;
+ import okhttp3.internal.connection.StreamAllocation;
+ 
+@@ -162,6 +163,11 @@ public Response proceed(Request request, StreamAllocation streamAllocation, Http
+           "interceptor " + interceptor + " returned a response with no body");
+     }
+ 
++    if (Internal.instance.isDuplex(request) && Internal.instance.httpSink(response) == null) {
++      throw new IllegalStateException(
++          "interceptor " + interceptor + " returned a response with no httpSink");
++    }
++
+     return response;
+   }
+ }
+diff --git a/okhttp/src/main/java/okhttp3/internal/http2/Header.java b/okhttp/src/main/java/okhttp3/internal/http2/Header.java
+index 362570a2b..a306ac462 100644
+--- a/okhttp/src/main/java/okhttp3/internal/http2/Header.java
++++ b/okhttp/src/main/java/okhttp3/internal/http2/Header.java
+@@ -15,7 +15,6 @@
+  */
+ package okhttp3.internal.http2;
+ 
+-import okhttp3.Headers;
+ import okhttp3.internal.Util;
+ import okio.ByteString;
+ 
+@@ -77,9 +76,4 @@ public Header(ByteString name, ByteString value) {
+   @Override public String toString() {
+     return Util.format("%s: %s", name.utf8(), value.utf8());
+   }
+-
+-  // TODO(jwilson): move this to Headers?
+-  interface Listener {
+-    void onHeaders(Headers headers);
+-  }
+ }
+diff --git a/okhttp/src/main/java/okhttp3/internal/http2/Http2Codec.java b/okhttp/src/main/java/okhttp3/internal/http2/Http2Codec.java
+index 9a81d536f..83758f67f 100644
+--- a/okhttp/src/main/java/okhttp3/internal/http2/Http2Codec.java
++++ b/okhttp/src/main/java/okhttp3/internal/http2/Http2Codec.java
+@@ -31,6 +31,7 @@
+ import okhttp3.internal.Internal;
+ import okhttp3.internal.Util;
+ import okhttp3.internal.connection.StreamAllocation;
++import okhttp3.internal.duplex.HeadersListener;
+ import okhttp3.internal.http.HttpCodec;
+ import okhttp3.internal.http.HttpHeaders;
+ import okhttp3.internal.http.RealResponseBody;
+@@ -112,13 +113,24 @@ public Http2Codec(OkHttpClient client, Interceptor.Chain chain, StreamAllocation
+   @Override public void writeRequestHeaders(Request request) throws IOException {
+     if (stream != null) return;
+ 
+-    boolean hasRequestBody = request.body() != null;
++    boolean hasRequestBody = request.body() != null || Internal.instance.isDuplex(request);
+     List<Header> requestHeaders = http2HeadersList(request);
+     stream = connection.newStream(requestHeaders, hasRequestBody);
+     stream.readTimeout().timeout(chain.readTimeoutMillis(), TimeUnit.MILLISECONDS);
+     stream.writeTimeout().timeout(chain.writeTimeoutMillis(), TimeUnit.MILLISECONDS);
+   }
+ 
++  /** Write more headers for the request. */
++  public void writeRequestHeaders(List<Header> headers) throws IOException {
++    if (stream == null) throw new IllegalStateException("stream == null");
++    stream.writeHeaders(headers, true);
++  }
++
++  public void setHeadersListener(HeadersListener headersListener) {
++    if (stream == null) throw new IllegalStateException("stream == null");
++    stream.setHeadersListener(headersListener);
++  }
++
+   @Override public void flushRequest() throws IOException {
+     connection.flush();
+   }
+diff --git a/okhttp/src/main/java/okhttp3/internal/http2/Http2Stream.java b/okhttp/src/main/java/okhttp3/internal/http2/Http2Stream.java
+index c391b3895..c38483d7a 100644
+--- a/okhttp/src/main/java/okhttp3/internal/http2/Http2Stream.java
++++ b/okhttp/src/main/java/okhttp3/internal/http2/Http2Stream.java
+@@ -26,6 +26,7 @@
+ import javax.annotation.Nullable;
+ import okhttp3.Headers;
+ import okhttp3.internal.Util;
++import okhttp3.internal.duplex.HeadersListener;
+ import okio.AsyncTimeout;
+ import okio.Buffer;
+ import okio.BufferedSource;
+@@ -61,7 +62,7 @@
+    * read}.
+    */
+   private final Deque<Headers> headersQueue = new ArrayDeque<>();
+-  private Header.Listener headersListener;
++  private HeadersListener headersListener;
+ 
+   /** True if response headers have been sent or received. */
+   private boolean hasResponseHeaders;
+@@ -314,11 +315,8 @@ synchronized void receiveRstStream(ErrorCode errorCode) {
+     }
+   }
+ 
+-  public synchronized void setHeadersListener(Header.Listener headersListener) {
++  public synchronized void setHeadersListener(HeadersListener headersListener) {
+     this.headersListener = headersListener;
+-    if (!headersQueue.isEmpty() && headersListener != null) {
+-      notifyAll(); // We now have somewhere to deliver headers!
+-    }
+   }
+ 
+   /**
+@@ -354,7 +352,7 @@ public synchronized void setHeadersListener(Header.Listener headersListener) {
+ 
+       while (true) {
+         Headers headersToDeliver = null;
+-        Header.Listener headersListenerToNotify = null;
++        HeadersListener headersListenerToNotify = null;
+         long readBytesDelivered = -1;
+         ErrorCode errorCodeToDeliver = null;
+ 
+@@ -476,7 +474,7 @@ void receive(BufferedSource in, long byteCount) throws IOException {
+     @Override public void close() throws IOException {
+       long bytesDiscarded;
+       List<Headers> headersToDeliver = null;
+-      Header.Listener headersListenerToNotify = null;
++      HeadersListener headersListenerToNotify = null;
+       synchronized (Http2Stream.this) {
+         closed = true;
+         bytesDiscarded = readBuffer.size();

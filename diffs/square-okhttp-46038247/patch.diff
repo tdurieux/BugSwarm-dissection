@@ -1,0 +1,938 @@
+diff --git a/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/MockWebServer.java b/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/MockWebServer.java
+index 589e2979c..92b4ac138 100644
+--- a/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/MockWebServer.java
++++ b/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/MockWebServer.java
+@@ -618,7 +618,7 @@ private void handleWebSocketUpgrade(Socket socket, BufferedSource source, Buffer
+     // Adapt the request and response into our Request and Response domain model.
+     final Request fancyRequest = new Request.Builder()
+         .get().url(request.getPath())
+-        .headers(request.getNewHeaders())
++        .headers(request.getHeaders())
+         .build();
+     final Response fancyResponse = new Response.Builder()
+         .code(Integer.parseInt(response.getStatus().split(" ")[1]))
+diff --git a/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/RecordedRequest.java b/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/RecordedRequest.java
+index 2e67151a4..fb91846db 100644
+--- a/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/RecordedRequest.java
++++ b/mockwebserver/src/main/java/com/squareup/okhttp/mockwebserver/RecordedRequest.java
+@@ -20,7 +20,6 @@
+ import com.squareup.okhttp.internal.Internal;
+ import com.squareup.okhttp.Headers;
+ import java.net.Socket;
+-import java.util.ArrayList;
+ import java.util.List;
+ import javax.net.ssl.SSLSocket;
+ import okio.Buffer;
+@@ -73,33 +72,16 @@ public String getPath() {
+   }
+ 
+   /** Returns all headers. */
+-  public List<String> getHeaders() {
+-    int size = headers.size();
+-    List<String> headerList = new ArrayList<>(size);
+-    for (int i = 0; i < size; i++) {
+-      headerList.add(headers.name(i) + ": " + headers.value(i));
+-    }
+-    return headerList;
+-  }
+-
+-  Headers getNewHeaders() {
++  public Headers getHeaders() {
+     return headers;
+   }
+ 
+-  /**
+-   * Returns the first header named {@code name}, or null if no such header
+-   * exists.
+-   */
++  /** Returns the first header named {@code name}, or null if no such header exists. */
+   public String getHeader(String name) {
+     List<String> values = headers.values(name);
+     return values.isEmpty() ? null : values.get(0);
+   }
+ 
+-  /** Returns the headers named {@code name}. */
+-  public List<String> getHeaders(String name) {
+-    return headers.values(name);
+-  }
+-
+   /**
+    * Returns the sizes of the chunks of this request's body, or an empty list
+    * if the request's body was empty or unchunked.
+diff --git a/mockwebserver/src/test/java/com/squareup/okhttp/mockwebserver/MockWebServerTest.java b/mockwebserver/src/test/java/com/squareup/okhttp/mockwebserver/MockWebServerTest.java
+index 644128b73..76ba3267a 100644
+--- a/mockwebserver/src/test/java/com/squareup/okhttp/mockwebserver/MockWebServerTest.java
++++ b/mockwebserver/src/test/java/com/squareup/okhttp/mockwebserver/MockWebServerTest.java
+@@ -58,9 +58,10 @@
+     RecordedRequest request = new RecordedRequest(
+         requestLine, headers, chunkSizes, body.size(), body, 0, null);
+     assertEquals("s=square", request.getHeader("cookie"));
+-    assertEquals(Arrays.asList("s=square", "a=android"), request.getHeaders("cookie"));
++    assertEquals(Arrays.asList("s=square", "a=android"), request.getHeaders().values("cookie"));
+     assertEquals("left", request.getHeader("x-whitespace"));
+-    assertEquals(Arrays.asList("left", "right", "both"), request.getHeaders("x-whitespace"));
++    assertEquals(Arrays.asList("left", "right", "both"),
++        request.getHeaders().values("x-whitespace"));
+     assertEquals("ABC", request.getBody().readUtf8());
+   }
+ 
+@@ -108,7 +109,7 @@
+ 
+     RecordedRequest request = server.takeRequest();
+     assertEquals("GET / HTTP/1.1", request.getRequestLine());
+-    assertTrue(request.getHeaders().contains("Accept-Language: en-US"));
++    assertEquals("en-US", request.getHeader("Accept-Language"));
+   }
+ 
+   @Test public void redirect() throws Exception {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
+index 94df054c5..3ae9c3960 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
+@@ -562,8 +562,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(new MockResponse()
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Date: " + formatDate(-15, TimeUnit.SECONDS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void defaultExpirationDateFullyCachedForMoreThan24Hours() throws Exception {
+@@ -600,8 +599,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(new MockResponse()
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void expirationDateInThePastWithNoLastModifiedHeader() throws Exception {
+@@ -627,8 +625,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+         .addHeader("Date: " + formatDate(-120, TimeUnit.SECONDS))
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Cache-Control: max-age=60"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void maxAgeInThePastWithDateHeaderButNoLastModifiedHeader() throws Exception {
+@@ -809,7 +806,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+   @Test public void etag() throws Exception {
+     RecordedRequest conditionalRequest = assertConditionallyCached(new MockResponse()
+         .addHeader("ETag: v1"));
+-    assertTrue(conditionalRequest.getHeaders().contains("If-None-Match: v1"));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void etagAndExpirationDateInThePast() throws Exception {
+@@ -818,9 +815,8 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         .addHeader("ETag: v1")
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+@@ -841,8 +837,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+         .addHeader("Cache-Control: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void pragmaNoCache() throws Exception {
+@@ -856,8 +851,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         .addHeader("Last-Modified: " + lastModifiedDate)
+         .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+         .addHeader("Pragma: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void cacheControlNoStore() throws Exception {
+@@ -1224,9 +1218,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+     String ifModifiedSinceDate = formatDate(-24, TimeUnit.HOURS);
+     RecordedRequest request =
+         assertClientSuppliedCondition(response, "If-Modified-Since", ifModifiedSinceDate);
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + ifModifiedSinceDate));
+-    assertFalse(headers.contains("If-None-Match: v3"));
++    assertEquals(ifModifiedSinceDate, request.getHeader("If-Modified-Since"));
++    assertNull(request.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void clientSuppliedIfNoneMatchSinceWithCachedResult() throws Exception {
+@@ -1236,9 +1229,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+         .addHeader("Date: " + formatDate(-2, TimeUnit.MINUTES))
+         .addHeader("Cache-Control: max-age=0");
+     RecordedRequest request = assertClientSuppliedCondition(response, "If-None-Match", "v1");
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertFalse(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", request.getHeader("If-None-Match"));
++    assertNull(request.getHeader("If-Modified-Since"));
+   }
+ 
+   private RecordedRequest assertClientSuppliedCondition(MockResponse seed, String conditionName,
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+index 80edd4ddd..4dfa59457 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+@@ -489,7 +489,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+       assertEquals("Already Executed", e.getMessage());
+     }
+ 
+-    assertTrue(server.takeRequest().getHeaders().contains("User-Agent: SyncApiTest"));
++    assertEquals("SyncApiTest", server.takeRequest().getHeader("User-Agent"));
+   }
+ 
+   @Test public void illegalToExecuteTwice_Async() throws Exception {
+@@ -519,7 +519,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+       assertEquals("Already Executed", e.getMessage());
+     }
+ 
+-    assertTrue(server.takeRequest().getHeaders().contains("User-Agent: SyncApiTest"));
++    assertEquals("SyncApiTest", server.takeRequest().getHeader("User-Agent"));
+   }
+ 
+   @Test public void get_Async() throws Exception {
+@@ -538,7 +538,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+         .assertHeader("Content-Type", "text/plain")
+         .assertBody("abc");
+ 
+-    assertTrue(server.takeRequest().getHeaders().contains("User-Agent: AsyncApiTest"));
++    assertEquals("AsyncApiTest", server.takeRequest().getHeader("User-Agent"));
+   }
+ 
+   @Test public void exceptionThrownByOnResponseIsRedactedAndLogged() throws Exception {
+@@ -1223,12 +1223,14 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+     assertEquals("Page 2", response.body().string());
+ 
+     RecordedRequest request1 = server.takeRequest();
+-    assertContains(request1.getHeaders(),
+-        "Cookie: $Version=\"1\"; " + "c=\"cookie\";$Path=\"/\";$Domain=\"" + server.get()
+-            .getCookieDomain() + "\";$Port=\"" + portList + "\"");
++    assertEquals("$Version=\"1\"; c=\"cookie\";$Path=\"/\";$Domain=\""
++        + server.get().getCookieDomain()
++        + "\";$Port=\""
++        + portList
++        + "\"", request1.getHeader("Cookie"));
+ 
+     RecordedRequest request2 = server2.takeRequest();
+-    assertContainsNoneMatching(request2.getHeaders(), "Cookie.*");
++    assertNull(request2.getHeader("Cookie"));
+   }
+ 
+   @Test public void redirectsDoNotIncludeTooManyAuthHeaders() throws Exception {
+@@ -1246,7 +1248,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+     assertEquals("Page 2", response.body().string());
+ 
+     RecordedRequest redirectRequest = server2.takeRequest();
+-    assertContainsNoneMatching(redirectRequest.getHeaders(), "Authorization.*");
++    assertNull(redirectRequest.getHeader("Authorization"));
+     assertEquals("/b", redirectRequest.getPath());
+   }
+ 
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
+index 7ca661a94..070069d4f 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
+@@ -319,7 +319,7 @@ private void multipleInterceptors(List<Interceptor> interceptors) throws Excepti
+ 
+     RecordedRequest recordedRequest = server.takeRequest();
+     assertEquals(Arrays.asList("Android", "Bob"),
+-        recordedRequest.getHeaders("Request-Interceptor"));
++        recordedRequest.getHeaders().values("Request-Interceptor"));
+   }
+ 
+   @Test public void asyncApplicationInterceptors() throws Exception {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/CookiesTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/CookiesTest.java
+index f9648d7d6..d0fa1b242 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/CookiesTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/CookiesTest.java
+@@ -40,6 +40,7 @@
+ import static java.net.CookiePolicy.ACCEPT_ORIGINAL_SERVER;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNull;
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+@@ -204,10 +205,13 @@ public void testNetscapeResponse() throws Exception {
+     get(server, "/");
+     RecordedRequest request = server.takeRequest();
+ 
+-    List<String> receivedHeaders = request.getHeaders();
+-    assertContains(receivedHeaders, "Cookie: $Version=\"1\"; "
+-        + "a=\"android\";$Path=\"/\";$Domain=\"" + server.getCookieDomain() + "\"; "
+-        + "b=\"banana\";$Path=\"/\";$Domain=\"" + server.getCookieDomain() + "\"");
++    assertEquals("$Version=\"1\"; "
++            + "a=\"android\";$Path=\"/\";$Domain=\""
++            + server.getCookieDomain()
++            + "\"; "
++            + "b=\"banana\";$Path=\"/\";$Domain=\""
++            + server.getCookieDomain()
++            + "\"", request.getHeader("Cookie"));
+   }
+ 
+   @Test public void testRedirectsDoNotIncludeTooManyCookies() throws Exception {
+@@ -233,11 +237,14 @@ public void testNetscapeResponse() throws Exception {
+     get(redirectSource, "/");
+     RecordedRequest request = redirectSource.takeRequest();
+ 
+-    assertContains(request.getHeaders(), "Cookie: $Version=\"1\"; "
+-        + "c=\"cookie\";$Path=\"/\";$Domain=\"" + redirectSource.getCookieDomain()
+-        + "\";$Port=\"" + portList + "\"");
++    assertEquals("$Version=\"1\"; "
++            + "c=\"cookie\";$Path=\"/\";$Domain=\""
++            + redirectSource.getCookieDomain()
++            + "\";$Port=\""
++            + portList
++            + "\"", request.getHeader("Cookie"));
+ 
+-    for (String header : redirectTarget.takeRequest().getHeaders()) {
++    for (String header : redirectTarget.takeRequest().getHeaders().names()) {
+       if (header.startsWith("Cookie")) {
+         fail(header);
+       }
+@@ -300,8 +307,10 @@ public void testNetscapeResponse() throws Exception {
+     } catch (IllegalStateException expected) {
+     }
+ 
+-    assertContainsAll(request.getHeaders(), "Foo: foo", "Cookie: Bar=bar", "Cookie2: Baz=baz");
+-    assertFalse(request.getHeaders().contains("Quux: quux"));
++    assertEquals("foo", request.getHeader("Foo"));
++    assertEquals("Bar=bar", request.getHeader("Cookie"));
++    assertEquals("Baz=baz", request.getHeader("Cookie2"));
++    assertNull(request.getHeader("Quux"));
+   }
+ 
+   @Test public void testCookiesSentIgnoresCase() throws Exception {
+@@ -321,8 +330,9 @@ public void testNetscapeResponse() throws Exception {
+     get(server, "/");
+ 
+     RecordedRequest request = server.takeRequest();
+-    assertContainsAll(request.getHeaders(), "COOKIE: Bar=bar", "cooKIE2: Baz=baz");
+-    assertFalse(request.getHeaders().contains("Quux: quux"));
++    assertEquals("Bar=bar", request.getHeader("Cookie"));
++    assertEquals("Baz=baz", request.getHeader("Cookie2"));
++    assertNull(request.getHeader("Quux"));
+   }
+ 
+   private void assertContains(Collection<String> collection, String element) {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverHttp20Draft16Test.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverHttp20Draft16Test.java
+index d0583b595..7659110e9 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverHttp20Draft16Test.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverHttp20Draft16Test.java
+@@ -20,7 +20,6 @@
+ import com.squareup.okhttp.mockwebserver.MockResponse;
+ import com.squareup.okhttp.mockwebserver.PushPromise;
+ import com.squareup.okhttp.mockwebserver.RecordedRequest;
+-import java.util.Arrays;
+ import org.junit.Test;
+ 
+ import static org.junit.Assert.assertEquals;
+@@ -48,13 +47,12 @@ public HttpOverHttp20Draft16Test() {
+ 
+     RecordedRequest request = server.takeRequest();
+     assertEquals("GET /foo HTTP/1.1", request.getRequestLine());
+-    assertContains(request.getHeaders(), ":scheme: https");
+-    assertContains(request.getHeaders(),
+-        hostHeader + ": " + server.getHostName() + ":" + server.getPort());
++    assertEquals("https", request.getHeader(":scheme"));
++    assertEquals(server.getHostName() + ":" + server.getPort(), request.getHeader(hostHeader));
+ 
+     RecordedRequest pushedRequest = server.takeRequest();
+     assertEquals("GET /foo/bar HTTP/1.1", pushedRequest.getRequestLine());
+-    assertEquals(Arrays.asList("foo: bar"), pushedRequest.getHeaders());
++    assertEquals("bar", pushedRequest.getHeader("foo"));
+   }
+ 
+   @Test public void serverSendsPushPromise_HEAD() throws Exception {
+@@ -73,12 +71,11 @@ public HttpOverHttp20Draft16Test() {
+ 
+     RecordedRequest request = server.takeRequest();
+     assertEquals("GET /foo HTTP/1.1", request.getRequestLine());
+-    assertContains(request.getHeaders(), ":scheme: https");
+-    assertContains(request.getHeaders(),
+-        hostHeader + ": " + server.getHostName() + ":" + server.getPort());
++    assertEquals("https", request.getHeader(":scheme"));
++    assertEquals(server.getHostName() + ":" + server.getPort(), request.getHeader(hostHeader));
+ 
+     RecordedRequest pushedRequest = server.takeRequest();
+     assertEquals("HEAD /foo/bar HTTP/1.1", pushedRequest.getRequestLine());
+-    assertEquals(Arrays.asList("foo: bar"), pushedRequest.getHeaders());
++    assertEquals("bar", pushedRequest.getHeader("foo"));
+   }
+ }
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverSpdyTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverSpdyTest.java
+index 7b0cd3d1c..ab8f3c97c 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverSpdyTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/HttpOverSpdyTest.java
+@@ -34,7 +34,6 @@
+ import java.net.HttpURLConnection;
+ import java.net.URL;
+ import java.util.Arrays;
+-import java.util.Collection;
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Map;
+@@ -60,7 +59,6 @@
+ import static org.junit.Assert.assertArrayEquals;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNull;
+-import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+ /** Test how SPDY interacts with HTTP features. */
+@@ -111,9 +109,8 @@ protected HttpOverSpdyTest(Protocol protocol){
+ 
+     RecordedRequest request = server.takeRequest();
+     assertEquals("GET /foo HTTP/1.1", request.getRequestLine());
+-    assertContains(request.getHeaders(), ":scheme: https");
+-    assertContains(request.getHeaders(), hostHeader + ": "
+-        + server.getHostName() + ":" + server.getPort());
++    assertEquals("https", request.getHeader(":scheme"));
++    assertEquals(server.getHostName() + ":" + server.getPort(), request.getHeader(hostHeader));
+   }
+ 
+   @Test public void emptyResponse() throws IOException {
+@@ -231,11 +228,11 @@ protected HttpOverSpdyTest(Protocol protocol){
+     assertEquals("Successful auth!", readAscii(connection.getInputStream(), Integer.MAX_VALUE));
+ 
+     RecordedRequest denied = server.takeRequest();
+-    assertContainsNoneMatching(denied.getHeaders(), "authorization: Basic .*");
++    assertNull(denied.getHeader("Authorization"));
+     RecordedRequest accepted = server.takeRequest();
+     assertEquals("GET / HTTP/1.1", accepted.getRequestLine());
+-    assertContains(accepted.getHeaders(),
+-        "authorization: Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS);
++    assertEquals("Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS,
++        accepted.getHeader("Authorization"));
+   }
+ 
+   @Test public void redirect() throws Exception {
+@@ -396,9 +393,9 @@ protected HttpOverSpdyTest(Protocol protocol){
+ 
+     assertContent("B", client.open(url), Integer.MAX_VALUE);
+     RecordedRequest requestA = server.takeRequest();
+-    assertContainsNoneMatching(requestA.getHeaders(), "Cookie.*");
++    assertNull(requestA.getHeader("Cookie"));
+     RecordedRequest requestB = server.takeRequest();
+-    assertContains(requestB.getHeaders(), "cookie: c=oreo");
++    assertEquals("c=oreo", requestB.getHeader("Cookie"));
+   }
+ 
+   /** https://github.com/square/okhttp/issues/1191 */
+@@ -420,24 +417,12 @@ protected HttpOverSpdyTest(Protocol protocol){
+     assertEquals(0, server.takeRequest().getSequenceNumber());
+   }
+ 
+-  <T> void assertContains(Collection<T> collection, T value) {
+-    assertTrue(collection.toString(), collection.contains(value));
+-  }
+-
+   void assertContent(String expected, HttpURLConnection connection, int limit)
+       throws IOException {
+     connection.connect();
+     assertEquals(expected, readAscii(connection.getInputStream(), limit));
+   }
+ 
+-  private void assertContainsNoneMatching(List<String> headers, String pattern) {
+-    for (String header : headers) {
+-      if (header.matches(pattern)) {
+-        fail("Header " + header + " matches " + pattern);
+-      }
+-    }
+-  }
+-
+   private String readAscii(InputStream in, int count) throws IOException {
+     StringBuilder result = new StringBuilder();
+     for (int i = 0; i < count; i++) {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/URLConnectionTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/URLConnectionTest.java
+index 68eddef3a..330929b33 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/URLConnectionTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/http/URLConnectionTest.java
+@@ -180,12 +180,11 @@
+ 
+     connection.getResponseCode();
+     RecordedRequest request = server.takeRequest();
+-    assertContains(request.getHeaders(), "D: e");
+-    assertContains(request.getHeaders(), "D: f");
+-    assertContainsNoneMatching(request.getHeaders(), "NullValue.*");
+-    assertContainsNoneMatching(request.getHeaders(), "AnotherNullValue.*");
+-    assertContainsNoneMatching(request.getHeaders(), "G:.*");
+-    assertContainsNoneMatching(request.getHeaders(), "null:.*");
++    assertEquals(Arrays.asList("e", "f"), request.getHeaders().values("D"));
++    assertNull(request.getHeader("NullValue"));
++    assertNull(request.getHeader("AnotherNullValue"));
++    assertNull(request.getHeader("G"));
++    assertNull(request.getHeader("null"));
+ 
+     try {
+       connection.addRequestProperty("N", "o");
+@@ -687,7 +686,7 @@ private void testConnectViaProxy(ProxyConfig proxyConfig) throws Exception {
+ 
+     RecordedRequest request = server.get().takeRequest();
+     assertEquals("GET http://android.com/foo HTTP/1.1", request.getRequestLine());
+-    assertContains(request.getHeaders(), "Host: android.com");
++    assertEquals("android.com", request.getHeader("Host"));
+   }
+ 
+   @Test public void contentDisagreesWithContentLengthHeader() throws IOException {
+@@ -814,11 +813,11 @@ private void testConnectViaHttpProxyToHttps(ProxyConfig proxyConfig) throws Exce
+     RecordedRequest connect = server.takeRequest();
+     assertEquals("Connect line failure on proxy", "CONNECT android.com:443 HTTP/1.1",
+         connect.getRequestLine());
+-    assertContains(connect.getHeaders(), "Host: android.com");
++    assertEquals("android.com", connect.getHeader("Host"));
+ 
+     RecordedRequest get = server.takeRequest();
+     assertEquals("GET /foo HTTP/1.1", get.getRequestLine());
+-    assertContains(get.getHeaders(), "Host: android.com");
++    assertEquals("android.com", get.getHeader("Host"));
+     assertEquals(Arrays.asList("verify android.com"), hostnameVerifier.calls);
+   }
+ 
+@@ -848,7 +847,7 @@ private void testConnectViaHttpProxyToHttps(ProxyConfig proxyConfig) throws Exce
+ 
+     RecordedRequest connect = server.takeRequest();
+     assertEquals("CONNECT android.com:443 HTTP/1.1", connect.getRequestLine());
+-    assertContains(connect.getHeaders(), "Host: android.com");
++    assertEquals("android.com", connect.getHeader("Host"));
+   }
+ 
+   private void initResponseCache() throws IOException {
+@@ -878,14 +877,14 @@ private void initResponseCache() throws IOException {
+     assertContent("encrypted response from the origin server", connection);
+ 
+     RecordedRequest connect = server.takeRequest();
+-    assertContainsNoneMatching(connect.getHeaders(), "Private.*");
+-    assertContains(connect.getHeaders(), "Proxy-Authorization: bar");
+-    assertContains(connect.getHeaders(), "User-Agent: baz");
+-    assertContains(connect.getHeaders(), "Host: android.com");
+-    assertContains(connect.getHeaders(), "Proxy-Connection: Keep-Alive");
++    assertNull(connect.getHeader("Private"));
++    assertEquals("bar", connect.getHeader("Proxy-Authorization"));
++    assertEquals("baz", connect.getHeader("User-Agent"));
++    assertEquals("android.com", connect.getHeader("Host"));
++    assertEquals("Keep-Alive", connect.getHeader("Proxy-Connection"));
+ 
+     RecordedRequest get = server.takeRequest();
+-    assertContains(get.getHeaders(), "Private: Secret");
++    assertEquals("Secret", get.getHeader("Private"));
+     assertEquals(Arrays.asList("verify android.com"), hostnameVerifier.calls);
+   }
+ 
+@@ -908,16 +907,16 @@ private void initResponseCache() throws IOException {
+ 
+     RecordedRequest connect1 = server.takeRequest();
+     assertEquals("CONNECT android.com:443 HTTP/1.1", connect1.getRequestLine());
+-    assertContainsNoneMatching(connect1.getHeaders(), "Proxy\\-Authorization.*");
++    assertNull(connect1.getHeader("Proxy-Authorization"));
+ 
+     RecordedRequest connect2 = server.takeRequest();
+     assertEquals("CONNECT android.com:443 HTTP/1.1", connect2.getRequestLine());
+-    assertContains(connect2.getHeaders(),
+-        "Proxy-Authorization: Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS);
++    assertEquals("Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS,
++        connect2.getHeader("Proxy-Authorization"));
+ 
+     RecordedRequest get = server.takeRequest();
+     assertEquals("GET /foo HTTP/1.1", get.getRequestLine());
+-    assertContainsNoneMatching(get.getHeaders(), "Proxy\\-Authorization.*");
++    assertNull(get.getHeader("Proxy-Authorization"));
+   }
+ 
+   // Don't disconnect after building a tunnel with CONNECT
+@@ -1106,7 +1105,7 @@ private void testMarkAndReset(TransferKind transferKind) throws IOException {
+     assertEquals(-1, connection.getContentLength());
+ 
+     RecordedRequest request = server.takeRequest();
+-    assertContains(request.getHeaders(), "Accept-Encoding: gzip");
++    assertEquals("gzip", request.getHeader("Accept-Encoding"));
+   }
+ 
+   @Test public void clientConfiguredGzipContentEncoding() throws Exception {
+@@ -1122,7 +1121,7 @@ private void testMarkAndReset(TransferKind transferKind) throws IOException {
+     assertEquals(bodyBytes.size(), connection.getContentLength());
+ 
+     RecordedRequest request = server.takeRequest();
+-    assertContains(request.getHeaders(), "Accept-Encoding: gzip");
++    assertEquals("gzip", request.getHeader("Accept-Encoding"));
+   }
+ 
+   @Test public void gzipAndConnectionReuseWithFixedLength() throws Exception {
+@@ -1149,7 +1148,7 @@ private void testMarkAndReset(TransferKind transferKind) throws IOException {
+     assertEquals("ABCDE", readAscii(connection.getInputStream(), Integer.MAX_VALUE));
+ 
+     RecordedRequest request = server.takeRequest();
+-    assertContains(request.getHeaders(), "Accept-Encoding: custom");
++    assertEquals("custom", request.getHeader("Accept-Encoding"));
+   }
+ 
+   /**
+@@ -1329,7 +1328,7 @@ private void testAuthenticateWithStreamingPost(StreamingMode streamingMode) thro
+ 
+     // no authorization header for the request...
+     RecordedRequest request = server.takeRequest();
+-    assertContainsNoneMatching(request.getHeaders(), "Authorization: Basic .*");
++    assertNull(request.getHeader("Authorization"));
+     assertEquals("ABCD", request.getBody().readUtf8());
+   }
+ 
+@@ -1639,14 +1638,14 @@ private void testSecureStreamingPost(StreamingMode streamingMode) throws Excepti
+ 
+     // no authorization header for the first request...
+     RecordedRequest request = server.takeRequest();
+-    assertContainsNoneMatching(request.getHeaders(), "Authorization: Basic .*");
++    assertNull(request.getHeader("Authorization"));
+ 
+     // ...but the three requests that follow include an authorization header
+     for (int i = 0; i < 3; i++) {
+       request = server.takeRequest();
+       assertEquals("POST / HTTP/1.1", request.getRequestLine());
+-      assertContains(request.getHeaders(),
+-          "Authorization: Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS);
++      assertEquals("Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS,
++          request.getHeader("Authorization"));
+       assertEquals("ABCD", request.getBody().readUtf8());
+     }
+   }
+@@ -1668,14 +1667,14 @@ private void testSecureStreamingPost(StreamingMode streamingMode) throws Excepti
+ 
+     // no authorization header for the first request...
+     RecordedRequest request = server.takeRequest();
+-    assertContainsNoneMatching(request.getHeaders(), "Authorization: Basic .*");
++    assertNull(request.getHeader("Authorization"));
+ 
+     // ...but the three requests that follow requests include an authorization header
+     for (int i = 0; i < 3; i++) {
+       request = server.takeRequest();
+       assertEquals("GET / HTTP/1.1", request.getRequestLine());
+-      assertContains(request.getHeaders(),
+-          "Authorization: Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS);
++      assertEquals("Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS,
++          request.getHeader("Authorization"));
+     }
+   }
+ 
+@@ -1700,14 +1699,14 @@ private void testSecureStreamingPost(StreamingMode streamingMode) throws Excepti
+ 
+     // no authorization header for the first request...
+     RecordedRequest request = server.takeRequest();
+-    assertContainsNoneMatching(request.getHeaders(), "Authorization: Basic .*");
++    assertNull(request.getHeader("Authorization"));
+ 
+     // ...but the three requests that follow requests include an authorization header
+     for (int i = 0; i < 3; i++) {
+       request = server.takeRequest();
+       assertEquals("GET / HTTP/1.1", request.getRequestLine());
+-      assertContains(request.getHeaders(),
+-          "Authorization: Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS);
++      assertEquals("Basic " + RecordingAuthenticator.BASE_64_CREDENTIALS,
++          request.getHeader("Authorization"));
+     }
+   }
+ 
+@@ -1869,8 +1868,8 @@ private void redirectToAnotherOriginServer(boolean https) throws Exception {
+ 
+     String server1Host = server.get().getHostName() + ":" + server.getPort();
+     String server2Host = server2.get().getHostName() + ":" + server2.getPort();
+-    assertContains(server.takeRequest().getHeaders(), "Host: " + server1Host);
+-    assertContains(server2.takeRequest().getHeaders(), "Host: " + server2Host);
++    assertEquals(server1Host, server.takeRequest().getHeader("Host"));
++    assertEquals(server2Host, server2.takeRequest().getHeader("Host"));
+     assertEquals("Expected connection reuse", 1, server.takeRequest().getSequenceNumber());
+     assertEquals("Expected connection reuse", 1, server2.takeRequest().getSequenceNumber());
+   }
+@@ -1915,7 +1914,7 @@ private void redirectToAnotherOriginServer(boolean https) throws Exception {
+     assertContent("Page 2", client.open(server.getUrl("/a")));
+ 
+     RecordedRequest redirectRequest = server2.takeRequest();
+-    assertContainsNoneMatching(redirectRequest.getHeaders(), "Authorization.*");
++    assertNull(redirectRequest.getHeader("Authorization"));
+     assertEquals("/b", redirectRequest.getPath());
+   }
+ 
+@@ -1988,9 +1987,9 @@ private void testResponseRedirectedWithPost(int redirectCode, TransferKind trans
+ 
+     RecordedRequest page2 = server.takeRequest();
+     assertEquals("GET /page2 HTTP/1.1", page2.getRequestLine());
+-    assertContainsNoneMatching(page2.getHeaders(), "Content-Length.*");
+-    assertContainsNoneMatching(page2.getHeaders(), "Content-Type.*");
+-    assertContainsNoneMatching(page2.getHeaders(), "Transfer-Encoding.*");
++    assertNull(page2.getHeader("Content-Length"));
++    assertNull(page2.getHeader("Content-Type"));
++    assertNull(page2.getHeader("Transfer-Encoding"));
+   }
+ 
+   @Test public void response305UseProxy() throws Exception {
+@@ -2475,7 +2474,7 @@ private void testFlushAfterStreamTransmitted(TransferKind transferKind) throws I
+     out.close();
+     assertEquals("A", readAscii(connection.getInputStream(), Integer.MAX_VALUE));
+     RecordedRequest request = server.takeRequest();
+-    assertContains(request.getHeaders(), "Content-Length: 3");
++    assertEquals("3", request.getHeader("Content-Length"));
+   }
+ 
+   @Test public void getContentLengthConnects() throws Exception {
+@@ -2740,9 +2739,8 @@ private void reusedConnectionFailsWithPost(TransferKind transferKind, int reques
+     client.client().setAuthenticator(authenticator);
+     assertContent("A", client.open(server.getUrl("/private")));
+ 
+-    assertContainsNoneMatching(server.takeRequest().getHeaders(), "Authorization: .*");
+-    assertContains(server.takeRequest().getHeaders(),
+-        "Authorization: " + credential);
++    assertNull(server.takeRequest().getHeader("Authorization"));
++    assertEquals(credential, server.takeRequest().getHeader("Authorization"));
+ 
+     assertEquals(Proxy.NO_PROXY, authenticator.onlyProxy());
+     Response response = authenticator.onlyResponse();
+@@ -2761,8 +2759,8 @@ private void reusedConnectionFailsWithPost(TransferKind transferKind, int reques
+     client.client().setAuthenticator(authenticator);
+     assertContent("A", client.open(server.getUrl("/private")));
+ 
+-    assertContainsNoneMatching(server.takeRequest().getHeaders(), "Authorization: .*");
+-    assertContains(server.takeRequest().getHeaders(), "Authorization: oauthed abc123");
++    assertNull(server.takeRequest().getHeader("Authorization"));
++    assertEquals("oauthed abc123", server.takeRequest().getHeader("Authorization"));
+ 
+     Response response = authenticator.onlyResponse();
+     assertEquals("/private", response.request().url().getPath());
+@@ -3078,18 +3076,6 @@ private void assertContent(String expected, HttpURLConnection connection) throws
+     assertContent(expected, connection, Integer.MAX_VALUE);
+   }
+ 
+-  private void assertContains(List<String> headers, String header) {
+-    assertTrue(headers.toString(), headers.contains(header));
+-  }
+-
+-  private void assertContainsNoneMatching(List<String> headers, String pattern) {
+-    for (String header : headers) {
+-      if (header.matches(pattern)) {
+-        fail("Header " + header + " matches " + pattern);
+-      }
+-    }
+-  }
+-
+   private Set<String> newSet(String... elements) {
+     return new HashSet<String>(Arrays.asList(elements));
+   }
+diff --git a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
+index 513cd9d49..f64a3dc71 100644
+--- a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
++++ b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/UrlConnectionCacheTest.java
+@@ -484,8 +484,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Date: " + formatDate(-15, TimeUnit.SECONDS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void defaultExpirationDateFullyCachedForMoreThan24Hours() throws Exception {
+@@ -521,8 +520,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void expirationDateInThePastWithNoLastModifiedHeader() throws Exception {
+@@ -545,8 +543,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+         new MockResponse().addHeader("Date: " + formatDate(-120, TimeUnit.SECONDS))
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Cache-Control: max-age=60"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void maxAgeInThePastWithDateHeaderButNoLastModifiedHeader() throws Exception {
+@@ -701,7 +698,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+   @Test public void etag() throws Exception {
+     RecordedRequest conditionalRequest =
+         assertConditionallyCached(new MockResponse().addHeader("ETag: v1"));
+-    assertTrue(conditionalRequest.getHeaders().contains("If-None-Match: v1"));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void etagAndExpirationDateInThePast() throws Exception {
+@@ -710,9 +707,8 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         new MockResponse().addHeader("ETag: v1")
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+@@ -731,8 +727,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+             .addHeader("Cache-Control: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void pragmaNoCache() throws Exception {
+@@ -745,8 +740,7 @@ private void testMethodInvalidates(String requestMethod) throws Exception {
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+             .addHeader("Pragma: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void cacheControlNoStore() throws Exception {
+@@ -1009,9 +1003,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+     String ifModifiedSinceDate = formatDate(-24, TimeUnit.HOURS);
+     RecordedRequest request =
+         assertClientSuppliedCondition(response, "If-Modified-Since", ifModifiedSinceDate);
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + ifModifiedSinceDate));
+-    assertFalse(headers.contains("If-None-Match: v3"));
++    assertEquals(ifModifiedSinceDate, request.getHeader("If-Modified-Since"));
++    assertNull(request.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void clientSuppliedIfNoneMatchSinceWithCachedResult() throws Exception {
+@@ -1020,9 +1013,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+         .addHeader("Date: " + formatDate(-2, TimeUnit.MINUTES))
+         .addHeader("Cache-Control: max-age=0");
+     RecordedRequest request = assertClientSuppliedCondition(response, "If-None-Match", "v1");
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertFalse(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", request.getHeader("If-None-Match"));
++    assertNull(request.getHeader("If-Modified-Since"));
+   }
+ 
+   private RecordedRequest assertClientSuppliedCondition(MockResponse seed, String conditionName,
+diff --git a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
+index ba3200ada..3337b945f 100644
+--- a/okhttp-urlconnection/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
++++ b/okhttp-urlconnection/src/test/java/com/squareup/okhttp/internal/huc/ResponseCacheTest.java
+@@ -421,8 +421,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Date: " + formatDate(-15, TimeUnit.SECONDS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void defaultExpirationDateFullyCachedForMoreThan24Hours() throws Exception {
+@@ -458,8 +457,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+     RecordedRequest conditionalRequest = assertConditionallyCached(
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void expirationDateInThePastWithNoLastModifiedHeader() throws Exception {
+@@ -482,8 +480,7 @@ private void testClientPrematureDisconnect(TransferKind transferKind) throws IOE
+         new MockResponse().addHeader("Date: " + formatDate(-120, TimeUnit.SECONDS))
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Cache-Control: max-age=60"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void maxAgeInThePastWithDateHeaderButNoLastModifiedHeader() throws Exception {
+@@ -595,7 +592,7 @@ private void testRequestMethod(String requestMethod, boolean expectCached) throw
+   @Test public void etag() throws Exception {
+     RecordedRequest conditionalRequest =
+         assertConditionallyCached(new MockResponse().addHeader("ETag: v1"));
+-    assertTrue(conditionalRequest.getHeaders().contains("If-None-Match: v1"));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void etagAndExpirationDateInThePast() throws Exception {
+@@ -604,9 +601,8 @@ private void testRequestMethod(String requestMethod, boolean expectCached) throw
+         new MockResponse().addHeader("ETag: v1")
+             .addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(-1, TimeUnit.HOURS)));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", conditionalRequest.getHeader("If-None-Match"));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void etagAndExpirationDateInTheFuture() throws Exception {
+@@ -625,8 +621,7 @@ private void testRequestMethod(String requestMethod, boolean expectCached) throw
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+             .addHeader("Cache-Control: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void pragmaNoCache() throws Exception {
+@@ -639,8 +634,7 @@ private void testRequestMethod(String requestMethod, boolean expectCached) throw
+         new MockResponse().addHeader("Last-Modified: " + lastModifiedDate)
+             .addHeader("Expires: " + formatDate(1, TimeUnit.HOURS))
+             .addHeader("Pragma: no-cache"));
+-    List<String> headers = conditionalRequest.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals(lastModifiedDate, conditionalRequest.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void cacheControlNoStore() throws Exception {
+@@ -863,9 +857,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+     String ifModifiedSinceDate = formatDate(-24, TimeUnit.HOURS);
+     RecordedRequest request =
+         assertClientSuppliedCondition(response, "If-Modified-Since", ifModifiedSinceDate);
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-Modified-Since: " + ifModifiedSinceDate));
+-    assertFalse(headers.contains("If-None-Match: v3"));
++    assertEquals(ifModifiedSinceDate, request.getHeader("If-Modified-Since"));
++    assertNull(request.getHeader("If-None-Match"));
+   }
+ 
+   @Test public void clientSuppliedIfNoneMatchSinceWithCachedResult() throws Exception {
+@@ -874,9 +867,8 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+         .addHeader("Date: " + formatDate(-2, TimeUnit.MINUTES))
+         .addHeader("Cache-Control: max-age=0");
+     RecordedRequest request = assertClientSuppliedCondition(response, "If-None-Match", "v1");
+-    List<String> headers = request.getHeaders();
+-    assertTrue(headers.contains("If-None-Match: v1"));
+-    assertFalse(headers.contains("If-Modified-Since: " + lastModifiedDate));
++    assertEquals("v1", request.getHeader("If-None-Match"));
++    assertNull(request.getHeader("If-Modified-Since"));
+   }
+ 
+   private RecordedRequest assertClientSuppliedCondition(MockResponse seed, String conditionName,
+@@ -905,7 +897,7 @@ private RecordedRequest assertClientSuppliedCondition(MockResponse seed, String
+     connection.setIfModifiedSince(since.getTime());
+     assertEquals("A", readAscii(connection));
+     RecordedRequest request = server.takeRequest();
+-    assertTrue(request.getHeaders().contains("If-Modified-Since: " + HttpDate.format(since)));
++    assertEquals(HttpDate.format(since), request.getHeader("If-Modified-Since"));
+   }
+ 
+   @Test public void clientSuppliedConditionWithoutCachedResult() throws Exception {

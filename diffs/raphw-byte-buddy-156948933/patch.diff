@@ -1,0 +1,43 @@
+diff --git a/byte-buddy-gradle-plugin/build.gradle b/byte-buddy-gradle-plugin/build.gradle
+index 3c7b6665fd..22433d788c 100644
+--- a/byte-buddy-gradle-plugin/build.gradle
++++ b/byte-buddy-gradle-plugin/build.gradle
+@@ -23,9 +23,10 @@ dependencies {
+     def location = "../${artifact}/target/${artifact}-${version}.jar"
+     logger.info("Using ${artifact} as Byte Buddy dependency")
+     if (!new File(location).exists()) {
+-        throw new GradleException("Byte Buddy jar does not exist: $location");
++        compile files(location)
++    } else {
++        logger.info('Byte Buddy location does not exist, cannot only clean but not build project')
+     }
+-    compile files(location)
+     // When using the non-shaded dependency,
+     if (!Boolean.getBoolean('net.bytebuddy.misc.extras')) {
+         def asmVersion = new XmlSlurper().parse(file('../pom.xml')).properties.'version.asm'
+diff --git a/byte-buddy-gradle-plugin/pom.xml b/byte-buddy-gradle-plugin/pom.xml
+index 1dbd0e30b7..f0b07001a2 100644
+--- a/byte-buddy-gradle-plugin/pom.xml
++++ b/byte-buddy-gradle-plugin/pom.xml
+@@ -63,6 +63,21 @@
+                 <artifactId>gradle-maven-plugin</artifactId>
+                 <version>${version.plugin.gradlerun}</version>
+                 <executions>
++                    <execution>
++                        <id>gradle-clean</id>
++                        <phase>clean</phase>
++                        <goals>
++                            <goal>invoke</goal>
++                        </goals>
++                        <configuration>
++                            <tasks>
++                                <task>clean</task>
++                            </tasks>
++                            <args>
++                                <arg>--info</arg>
++                            </args>
++                        </configuration>
++                    </execution>
+                     <execution>
+                         <id>gradle-build</id>
+                         <phase>compile</phase>

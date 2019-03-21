@@ -1,0 +1,818 @@
+diff --git a/src/main/java/net/pms/dlna/DLNAMediaInfo.java b/src/main/java/net/pms/dlna/DLNAMediaInfo.java
+index 70df202b57..aadaa408f1 100644
+--- a/src/main/java/net/pms/dlna/DLNAMediaInfo.java
++++ b/src/main/java/net/pms/dlna/DLNAMediaInfo.java
+@@ -131,7 +131,7 @@
+ 	private String frameRateMode;
+ 
+ 	/**
+-	 * The frame rate mode as read from the parser
++	 * The frame rate mode as read from the parser.
+ 	 */
+ 	private String frameRateModeRaw;
+ 	private String frameRateOriginal;
+@@ -216,6 +216,12 @@ public boolean isExternalSubsParsed() {
+ 	private final Object h264_annexBLock = new Object();
+ 	private byte[] h264_annexB;
+ 
++	/**
++	 * @deprecated Use standard getter and setter to access this variable.
++	 */
++	@Deprecated
++	public String truncated;
++
+ 	/**
+ 	 * Not stored in database.
+ 	 */
+@@ -365,7 +371,7 @@ public boolean isImage() {
+ 	 * TODO: Now that FFmpeg is muxing without tsMuxeR, we should make a separate
+ 	 *       function for that, or even better, re-think this whole approach.
+ 	 *
+-	 * @param mediaRenderer The renderer we might mux to
++	 * @param mediaRenderer The renderer we might mux to.
+ 	 *
+ 	 * @return
+ 	 */
+@@ -375,7 +381,7 @@ public boolean isMuxable(RendererConfiguration mediaRenderer) {
+ 			muxable = true;
+ 		}
+ 
+-		// Check if the renderer supports the resolution of the video
++		// Check if the renderer supports the resolution of the video.
+ 		if (
+ 			(
+ 				mediaRenderer.isMaximumResolutionSpecified() &&
+@@ -392,7 +398,7 @@ public boolean isMuxable(RendererConfiguration mediaRenderer) {
+ 			muxable = false;
+ 		}
+ 
+-		// Temporary fix: MediaInfo support will take care of this in the future
++		// Temporary fix: MediaInfo support will take care of this in the future.
+ 		// For now, http://ps3mediaserver.org/forum/viewtopic.php?f=11&t=6361&start=0
+ 		// Bravia does not support AVC video at less than 288px high
+ 		if (mediaRenderer.isBRAVIA() && height < 288) {
+@@ -416,18 +422,18 @@ public boolean isMuxable(RendererConfiguration mediaRenderer) {
+ 	 * It is unlikely it will return false-positives but it will return
+ 	 * false-negatives.
+ 	 *
+-	 * @param filename the filename
+-	 * @param params the file properties
++	 * @param filename the filename.
++	 * @param params the file properties.
+ 	 *
+-	 * @return whether a file is a WEB-DL release
++	 * @return whether a file is a WEB-DL release.
+ 	 */
+ 	public boolean isWebDl(String filename, OutputParams params) {
+-		// Check the filename
++		// Check the filename.
+ 		if (filename.toLowerCase().replaceAll("\\-", "").contains("webdl")) {
+ 			return true;
+ 		}
+ 
+-		// Check the metadata
++		// Check the metadata.
+ 		if (
+ 			(
+ 				getFileTitleFromMetadata() != null &&
+@@ -522,7 +528,7 @@ private ProcessWrapperImpl getFFmpegThumbnail(InputFile media, boolean resume, R
+ 		/**
+ 		 * Note: The text output from FFmpeg is used by renderers that do
+ 		 * not use MediaInfo, so do not make any changes that remove or
+-		 * minimize the amount of text given by FFmpeg here
++		 * minimize the amount of text given by FFmpeg here.
+ 		 */
+ 		String args[] = new String[14];
+ 		args[0] = getFfmpegPath();
+@@ -1069,10 +1075,10 @@ public void parse(InputFile inputFile, Format ext, int type, boolean thumbOnly,
+ 	}
+ 
+ 	/**
+-	 * Parses media info from FFmpeg's stderr output
++	 * Parses media info from FFmpeg's stderr output.
+ 	 *
+-	 * @param lines The stderr output
+-	 * @param input The FFmpeg input (-i) argument used
++	 * @param lines The stderr output.
++	 * @param input The FFmpeg input (-i) argument used.
+ 	 */
+ 	public void parseFFmpegInfo(List<String> lines, String input) {
+ 		if (lines != null) {
+@@ -1361,7 +1367,7 @@ public boolean isH264() {
+ 	}
+ 
+ 	/**
+-	 * Disable LPCM transcoding for MP4 container with non-H264 video as workaround for MEncoder's A/V sync bug
++	 * Disable LPCM transcoding for MP4 container with non-H264 video as workaround for MEncoder's A/V sync bug.
+ 	 */
+ 	public boolean isValidForLPCMTranscoding() {
+ 		if (container != null) {
+@@ -1387,14 +1393,14 @@ public void setDuration(Double d) {
+ 	/**
+ 	 * This is the object {@link Double} and might return <code>null</code>.
+ 	 * To get <code>0</code> instead of <code>null</code>, use
+-	 * {@link #getDurationInSeconds()}
++	 * {@link #getDurationInSeconds()}.
+ 	 */
+ 	public Double getDuration() {
+ 		return durationSec;
+ 	}
+ 
+ 	/**
+-	 * @return 0 if nothing is specified, otherwise the duration
++	 * @return 0 if nothing is specified, otherwise the duration.
+ 	 */
+ 	public double getDurationInSeconds() {
+ 		return durationSec != null ? durationSec : 0;
+@@ -1593,16 +1599,16 @@ public void postParse(int type, InputFile f) {
+ 			secondaryFormatValid = false;
+ 		}
+ 
+-		// Check for external subs here
++		// Check for external subs here.
+ 		if (f.getFile() != null && type == Format.VIDEO && configuration.isAutoloadExternalSubtitles()) {
+ 			FileUtil.isSubtitlesExists(f.getFile(), this);
+ 		}
+ 	}
+ 
+ 	/**
+-	 * Checks whether the video has too many reference frames per pixels for the renderer
++	 * Checks whether the video has too many reference frames per pixels for the renderer.
+ 	 *
+-	 * TODO move to PlayerUtil
++	 * TODO move to PlayerUtil.
+ 	 */
+ 	public boolean isVideoWithinH264LevelLimits(InputFile f, RendererConfiguration mediaRenderer) {
+ 		synchronized (videoWithinH264LevelLimitsLock) {
+@@ -1729,6 +1735,9 @@ public String toString() {
+ 			result.append("Container: ").append(getContainer().toUpperCase(Locale.ROOT)).append(", ");
+ 		}
+ 		result.append("Size: ").append(getSize());
++		if (isNotBlank(getTruncated())) {
++			result.append(", Truncated: ").append(getTruncated());
++		}
+ 		if (isVideo()) {
+ 			result.append(", Video Bitrate: ").append(getBitrate());
+ 			result.append(", Video Tracks: ").append(getVideoTrackCount());
+@@ -1742,8 +1751,7 @@ public String toString() {
+ 				result.append(", Original Frame Rate: ").append(getFrameRateOriginal());
+ 			}
+ 			if (isNotBlank(getFrameRateMode())) {
+-				result.append(", Frame Rate Mode: ");
+-				result.append(getFrameRateModeRaw());
++				result.append(", Frame Rate Mode: ").append(getFrameRateMode());
+ 				if (isNotBlank(getFrameRateModeRaw())) {
+ 					result.append(" (").append(getFrameRateModeRaw()).append(")");
+ 				}
+@@ -2046,7 +2054,7 @@ protected DLNAMediaInfo clone() throws CloneNotSupportedException {
+ 	}
+ 
+ 	/**
+-	 * @return the bitrate
++	 * @return the bitrate.
+ 	 * @since 1.50.0
+ 	 */
+ 	public int getBitrate() {
+@@ -2054,7 +2062,7 @@ public int getBitrate() {
+ 	}
+ 
+ 	/**
+-	 * @param bitrate the bitrate to set
++	 * @param bitrate the bitrate to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setBitrate(int bitrate) {
+@@ -2062,7 +2070,7 @@ public void setBitrate(int bitrate) {
+ 	}
+ 
+ 	/**
+-	 * @return the width
++	 * @return the width.
+ 	 * @since 1.50.0
+ 	 */
+ 	public int getWidth() {
+@@ -2070,7 +2078,7 @@ public int getWidth() {
+ 	}
+ 
+ 	/**
+-	 * @param width the width to set
++	 * @param width the width to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setWidth(int width) {
+@@ -2078,7 +2086,7 @@ public void setWidth(int width) {
+ 	}
+ 
+ 	/**
+-	 * @return the height
++	 * @return the height.
+ 	 * @since 1.50.0
+ 	 */
+ 	public int getHeight() {
+@@ -2086,7 +2094,7 @@ public int getHeight() {
+ 	}
+ 
+ 	/**
+-	 * @param height the height to set
++	 * @param height the height to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setHeight(int height) {
+@@ -2094,7 +2102,7 @@ public void setHeight(int height) {
+ 	}
+ 
+ 	/**
+-	 * @return the size
++	 * @return the size.
+ 	 * @since 1.50.0
+ 	 */
+ 	public long getSize() {
+@@ -2102,7 +2110,7 @@ public long getSize() {
+ 	}
+ 
+ 	/**
+-	 * @param size the size to set
++	 * @param size the size to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setSize(long size) {
+@@ -2110,7 +2118,23 @@ public void setSize(long size) {
+ 	}
+ 
+ 	/**
+-	 * @return the codecV
++	 * @return the truncated status.
++	 * @since 6.6.1
++	 */
++	public String getTruncated() {
++		return truncated;
++	}
++
++	/**
++	 * @param truncated the truncated status to set.
++	 * @since 6.6.1
++	 */
++	public void setTruncated(String truncated) {
++		this.truncated = truncated;
++	}
++
++	/**
++	 * @return the codecV.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getCodecV() {
+@@ -2118,7 +2142,7 @@ public String getCodecV() {
+ 	}
+ 
+ 	/**
+-	 * @param codecV the codecV to set
++	 * @param codecV the codecV to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setCodecV(String codecV) {
+@@ -2126,7 +2150,7 @@ public void setCodecV(String codecV) {
+ 	}
+ 
+ 	/**
+-	 * @return the frameRate
++	 * @return the frameRate.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getFrameRate() {
+@@ -2134,7 +2158,7 @@ public String getFrameRate() {
+ 	}
+ 
+ 	/**
+-	 * @param frameRate the frameRate to set
++	 * @param frameRate the frameRate to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setFrameRate(String frameRate) {
+@@ -2142,21 +2166,21 @@ public void setFrameRate(String frameRate) {
+ 	}
+ 
+ 	/**
+-	 * @return the frameRateOriginal
++	 * @return the frameRateOriginal.
+ 	 */
+ 	public String getFrameRateOriginal() {
+ 		return frameRateOriginal;
+ 	}
+ 
+ 	/**
+-	 * @param frameRateOriginal the frameRateOriginal to set
++	 * @param frameRateOriginal the frameRateOriginal to set.
+ 	 */
+ 	public void setFrameRateOriginal(String frameRateOriginal) {
+ 		this.frameRateOriginal = frameRateOriginal;
+ 	}
+ 
+ 	/**
+-	 * @return the frameRateMode
++	 * @return the frameRateMode.
+ 	 * @since 1.55.0
+ 	 */
+ 	public String getFrameRateMode() {
+@@ -2164,7 +2188,7 @@ public String getFrameRateMode() {
+ 	}
+ 
+ 	/**
+-	 * @param frameRateMode the frameRateMode to set
++	 * @param frameRateMode the frameRateMode to set.
+ 	 * @since 1.55.0
+ 	 */
+ 	public void setFrameRateMode(String frameRateMode) {
+@@ -2172,28 +2196,28 @@ public void setFrameRateMode(String frameRateMode) {
+ 	}
+ 
+ 	/**
+-	 * @return The unaltered frame rate mode
++	 * @return The unaltered frame rate mode.
+ 	 */
+ 	public String getFrameRateModeRaw() {
+ 		return frameRateModeRaw;
+ 	}
+ 
+ 	/**
+-	 * @param frameRateModeRaw the unaltered frame rate mode to set
++	 * @param frameRateModeRaw the unaltered frame rate mode to set.
+ 	 */
+ 	public void setFrameRateModeRaw(String frameRateModeRaw) {
+ 		this.frameRateModeRaw = frameRateModeRaw;
+ 	}
+ 
+ 	/**
+-	 * @return the video bit depth
++	 * @return the video bit depth.
+ 	 */
+ 	public int getVideoBitDepth() {
+ 		return videoBitDepth;
+ 	}
+ 
+ 	/**
+-	 * @param value the video bit depth to set
++	 * @param value the video bit depth to set.
+ 	 */
+ 	public void setVideoBitDepth(int value) {
+ 		this.videoBitDepth = value;
+@@ -2210,9 +2234,9 @@ public String getAspect() {
+ 	}
+ 
+ 	/**
+-	 * The aspect ratio for a DVD ISO video track
++	 * The aspect ratio for a DVD ISO video track.
+ 	 *
+-	 * @return the aspect
++	 * @return the aspect.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getAspectRatioDvdIso() {
+@@ -2230,7 +2254,7 @@ public void setAspect(String aspect) {
+ 	}
+ 
+ 	/**
+-	 * @param aspect the aspect to set
++	 * @param aspect the aspect to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setAspectRatioDvdIso(String aspect) {
+@@ -2242,7 +2266,7 @@ public void setAspectRatioDvdIso(String aspect) {
+ 	 * This is the aspect ratio that the renderer should display the video
+ 	 * at, and is usually the same as the video track aspect ratio.
+ 	 *
+-	 * @return the aspect ratio reported by the file/container
++	 * @return the aspect ratio reported by the file/container.
+ 	 */
+ 	public String getAspectRatioContainer() {
+ 		return aspectRatioContainer;
+@@ -2251,8 +2275,8 @@ public String getAspectRatioContainer() {
+ 	/**
+ 	 * Set the aspect ratio reported by the file/container.
+ 	 *
+-	 * @see #getAspectRatioContainer()
+-	 * @param aspect the aspect ratio to set
++	 * @see #getAspectRatioContainer().
++	 * @param aspect the aspect ratio to set.
+ 	 */
+ 	public void setAspectRatioContainer(String aspect) {
+ 		this.aspectRatioContainer = getFormattedAspectRatio(aspect);
+@@ -2262,27 +2286,27 @@ public void setAspectRatioContainer(String aspect) {
+ 	 * Get the aspect ratio of the video track.
+ 	 * This is the actual aspect ratio of the pixels, which is not
+ 	 * always the aspect ratio that the renderer should display or that we
+-	 * should output; that is {@link #getAspectRatioContainer()}
++	 * should output; that is {@link #getAspectRatioContainer()}.
+ 	 *
+-	 * @return the aspect ratio of the video track
++	 * @return the aspect ratio of the video track.
+ 	 */
+ 	public String getAspectRatioVideoTrack() {
+ 		return aspectRatioVideoTrack;
+ 	}
+ 
+ 	/**
+-	 * @param aspect the aspect ratio to set
++	 * @param aspect the aspect ratio to set.
+ 	 */
+ 	public void setAspectRatioVideoTrack(String aspect) {
+ 		this.aspectRatioVideoTrack = getFormattedAspectRatio(aspect);
+ 	}
+ 
+ 	/**
+-	 * Make sure the aspect ratio is formatted, e.g. 16:9 not 1.78
++	 * Make sure the aspect ratio is formatted, e.g. 16:9 not 1.78.
+ 	 *
+-	 * @param aspect the possibly-unformatted aspect ratio
++	 * @param aspect the possibly-unformatted aspect ratio.
+ 	 *
+-	 * @return the formatted aspect ratio or null
++	 * @return the formatted aspect ratio or null.
+ 	 */
+ 	public String getFormattedAspectRatio(String aspect) {
+ 		if (isBlank(aspect)) {
+@@ -2306,7 +2330,7 @@ public String getFormattedAspectRatio(String aspect) {
+ 	}
+ 
+ 	/**
+-	 * @return the thumb
++	 * @return the thumb.
+ 	 * @since 1.50.0
+ 	 */
+ 	public DLNAThumbnail getThumb() {
+@@ -2314,7 +2338,7 @@ public DLNAThumbnail getThumb() {
+ 	}
+ 
+ 	/**
+-	 * @param thumb the thumb to set
++	 * @param thumb the thumb to set.
+ 	 * @since 1.50.0
+ 	 * @deprecated Use {@link #setThumb(DLNAThumbnail)} instead.
+ 	 */
+@@ -2351,7 +2375,7 @@ public void setThumb(DLNAThumbnail thumbnail) {
+ 	}
+ 
+ 	/**
+-	 * @return the mimeType
++	 * @return the mimeType.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getMimeType() {
+@@ -2359,7 +2383,7 @@ public String getMimeType() {
+ 	}
+ 
+ 	/**
+-	 * @param mimeType the mimeType to set
++	 * @param mimeType the mimeType to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setMimeType(String mimeType) {
+@@ -2486,17 +2510,17 @@ public void setH264Profile(String s) {
+ 	}
+ 
+ 	/**
+-	 * @return the audioTracks
++	 * @return the audioTracks.
+ 	 * @since 1.60.0
+ 	 */
+-	// TODO (breaking change): rename to getAudioTracks
++	// TODO (breaking change): rename to getAudioTracks.
+ 	public List<DLNAMediaAudio> getAudioTracksList() {
+ 		return audioTracks;
+ 	}
+ 
+ 	/**
+-	 * @return the audioTracks
+-	 * @deprecated use getAudioTracksList() instead
++	 * @return the audioTracks.
++	 * @deprecated use getAudioTracksList() instead.
+ 	 */
+ 	@Deprecated
+ 	public ArrayList<DLNAMediaAudio> getAudioCodes() {
+@@ -2508,17 +2532,17 @@ public void setH264Profile(String s) {
+ 	}
+ 
+ 	/**
+-	 * @param audioTracks the audioTracks to set
++	 * @param audioTracks the audioTracks to set.
+ 	 * @since 1.60.0
+ 	 */
+-	// TODO (breaking change): rename to setAudioTracks
++	// TODO (breaking change): rename to setAudioTracks.
+ 	public void setAudioTracksList(List<DLNAMediaAudio> audioTracks) {
+ 		this.audioTracks = audioTracks;
+ 	}
+ 
+ 	/**
+-	 * @param audioTracks the audioTracks to set
+-	 * @deprecated use setAudioTracksList(ArrayList<DLNAMediaAudio> audioTracks) instead
++	 * @param audioTracks the audioTracks to set.
++	 * @deprecated use setAudioTracksList(ArrayList<DLNAMediaAudio> audioTracks) instead.
+ 	 */
+ 	@Deprecated
+ 	public void setAudioCodes(List<DLNAMediaAudio> audioTracks) {
+@@ -2526,17 +2550,17 @@ public void setAudioCodes(List<DLNAMediaAudio> audioTracks) {
+ 	}
+ 
+ 	/**
+-	 * @return the subtitleTracks
++	 * @return the subtitleTracks.
+ 	 * @since 1.60.0
+ 	 */
+-	// TODO (breaking change): rename to getSubtitleTracks
++	// TODO (breaking change): rename to getSubtitleTracks.
+ 	public List<DLNAMediaSubtitle> getSubtitleTracksList() {
+ 		return subtitleTracks;
+ 	}
+ 
+ 	/**
+-	 * @return the subtitleTracks
+-	 * @deprecated use getSubtitleTracksList() instead
++	 * @return the subtitleTracks.
++	 * @deprecated use getSubtitleTracksList() instead.
+ 	 */
+ 	@Deprecated
+ 	public ArrayList<DLNAMediaSubtitle> getSubtitlesCodes() {
+@@ -2548,17 +2572,17 @@ public void setAudioCodes(List<DLNAMediaAudio> audioTracks) {
+ 	}
+ 
+ 	/**
+-	 * @param subtitleTracks the subtitleTracks to set
++	 * @param subtitleTracks the subtitleTracks to set.
+ 	 * @since 1.60.0
+ 	 */
+-	// TODO (breaking change): rename to setSubtitleTracks
++	// TODO (breaking change): rename to setSubtitleTracks.
+ 	public void setSubtitleTracksList(List<DLNAMediaSubtitle> subtitleTracks) {
+ 		this.subtitleTracks = subtitleTracks;
+ 	}
+ 
+ 	/**
+-	 * @param subtitleTracks the subtitleTracks to set
+-	 * @deprecated use setSubtitleTracksList(ArrayList<DLNAMediaSubtitle> subtitleTracks) instead
++	 * @param subtitleTracks the subtitleTracks to set.
++	 * @deprecated use setSubtitleTracksList(ArrayList<DLNAMediaSubtitle> subtitleTracks) instead.
+ 	 */
+ 	@Deprecated
+ 	public void setSubtitlesCodes(List<DLNAMediaSubtitle> subtitleTracks) {
+@@ -2574,7 +2598,7 @@ public ExifOrientation getExifOrientation() {
+ 	}
+ 
+ 	/**
+-	 * @return the muxingMode
++	 * @return the muxingMode.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getMuxingMode() {
+@@ -2582,7 +2606,7 @@ public String getMuxingMode() {
+ 	}
+ 
+ 	/**
+-	 * @param muxingMode the muxingMode to set
++	 * @param muxingMode the muxingMode to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setMuxingMode(String muxingMode) {
+@@ -2590,7 +2614,7 @@ public void setMuxingMode(String muxingMode) {
+ 	}
+ 
+ 	/**
+-	 * @return the muxingModeAudio
++	 * @return the muxingModeAudio.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getMuxingModeAudio() {
+@@ -2598,7 +2622,7 @@ public String getMuxingModeAudio() {
+ 	}
+ 
+ 	/**
+-	 * @param muxingModeAudio the muxingModeAudio to set
++	 * @param muxingModeAudio the muxingModeAudio to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setMuxingModeAudio(String muxingModeAudio) {
+@@ -2606,7 +2630,7 @@ public void setMuxingModeAudio(String muxingModeAudio) {
+ 	}
+ 
+ 	/**
+-	 * @return the container
++	 * @return the container.
+ 	 * @since 1.50.0
+ 	 */
+ 	public String getContainer() {
+@@ -2614,7 +2638,7 @@ public String getContainer() {
+ 	}
+ 
+ 	/**
+-	 * @param container the container to set
++	 * @param container the container to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setContainer(String container) {
+@@ -2622,7 +2646,7 @@ public void setContainer(String container) {
+ 	}
+ 
+ 	/**
+-	 * @return the h264_annexB
++	 * @return the h264_annexB.
+ 	 * @since 1.50.0
+ 	 */
+ 	public byte[] getH264AnnexB() {
+@@ -2637,7 +2661,7 @@ public void setContainer(String container) {
+ 	}
+ 
+ 	/**
+-	 * @param h264AnnexB the h264_annexB to set
++	 * @param h264AnnexB the h264_annexB to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setH264AnnexB(byte[] h264AnnexB) {
+@@ -2652,7 +2676,7 @@ public void setH264AnnexB(byte[] h264AnnexB) {
+ 	}
+ 
+ 	/**
+-	 * @return the mediaparsed
++	 * @return the mediaparsed.
+ 	 * @since 1.50.0
+ 	 */
+ 	public boolean isMediaparsed() {
+@@ -2660,7 +2684,7 @@ public boolean isMediaparsed() {
+ 	}
+ 
+ 	/**
+-	 * @param mediaparsed the mediaparsed to set
++	 * @param mediaparsed the mediaparsed to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setMediaparsed(boolean mediaparsed) {
+@@ -2680,7 +2704,7 @@ public boolean isThumbready() {
+ 	}
+ 
+ 	/**
+-	 * @param thumbready the thumbready to set
++	 * @param thumbready the thumbready to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setThumbready(boolean thumbready) {
+@@ -2688,7 +2712,7 @@ public void setThumbready(boolean thumbready) {
+ 	}
+ 
+ 	/**
+-	 * @return the dvdtrack
++	 * @return the dvdtrack.
+ 	 * @since 1.50.0
+ 	 */
+ 	public int getDvdtrack() {
+@@ -2696,7 +2720,7 @@ public int getDvdtrack() {
+ 	}
+ 
+ 	/**
+-	 * @param dvdtrack the dvdtrack to set
++	 * @param dvdtrack the dvdtrack to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setDvdtrack(int dvdtrack) {
+@@ -2704,7 +2728,7 @@ public void setDvdtrack(int dvdtrack) {
+ 	}
+ 
+ 	/**
+-	 * @return the secondaryFormatValid
++	 * @return the secondaryFormatValid.
+ 	 * @since 1.50.0
+ 	 */
+ 	public boolean isSecondaryFormatValid() {
+@@ -2712,7 +2736,7 @@ public boolean isSecondaryFormatValid() {
+ 	}
+ 
+ 	/**
+-	 * @param secondaryFormatValid the secondaryFormatValid to set
++	 * @param secondaryFormatValid the secondaryFormatValid to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setSecondaryFormatValid(boolean secondaryFormatValid) {
+@@ -2720,7 +2744,7 @@ public void setSecondaryFormatValid(boolean secondaryFormatValid) {
+ 	}
+ 
+ 	/**
+-	 * @return the parsing
++	 * @return the parsing.
+ 	 * @since 1.50.0
+ 	 */
+ 	public boolean isParsing() {
+@@ -2730,7 +2754,7 @@ public boolean isParsing() {
+ 	}
+ 
+ 	/**
+-	 * @param parsing the parsing to set
++	 * @param parsing the parsing to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setParsing(boolean parsing) {
+@@ -2740,7 +2764,7 @@ public void setParsing(boolean parsing) {
+ 	}
+ 
+ 	/**
+-	 * @return the encrypted
++	 * @return the encrypted.
+ 	 * @since 1.50.0
+ 	 */
+ 	public boolean isEncrypted() {
+@@ -2748,7 +2772,7 @@ public boolean isEncrypted() {
+ 	}
+ 
+ 	/**
+-	 * @param encrypted the encrypted to set
++	 * @param encrypted the encrypted to set.
+ 	 * @since 1.50.0
+ 	 */
+ 	public void setEncrypted(boolean encrypted) {
+@@ -2771,7 +2795,7 @@ public boolean isMod4() {
+ 	 * unreliable; it will be unlikely to find a false-positive but there
+ 	 * will be false-negatives, similar to language flags.
+ 	 *
+-	 * @return whether the video track is 3D
++	 * @return whether the video track is 3D.
+ 	 */
+ 	public boolean is3d() {
+ 		return isNotBlank(stereoscopy);
+@@ -2782,7 +2806,7 @@ public boolean is3d() {
+ 	 * in this case when transcoding.
+ 	 * Example: 3840x1080 should be resized to 1920x1080, not 1920x540.
+ 	 *
+-	 * @return whether the video track is full SBS or OU 3D
++	 * @return whether the video track is full SBS or OU 3D.
+ 	 */
+ 	public boolean is3dFullSbsOrOu() {
+ 		if (!is3d()) {
+@@ -2810,7 +2834,7 @@ public boolean is3dFullSbsOrOu() {
+ 	 * unreliable; it will be unlikely to find a false-positive but there
+ 	 * will be false-negatives, similar to language flags.
+ 	 *
+-	 * @return the type of stereoscopy (3D) of the video track
++	 * @return the type of stereoscopy (3D) of the video track.
+ 	 */
+ 	public String getStereoscopy() {
+ 		return stereoscopy;
+@@ -2823,14 +2847,14 @@ public String getStereoscopy() {
+ 	 * unreliable; it will be unlikely to find a false-positive but there
+ 	 * will be false-negatives, similar to language flags.
+ 	 *
+-	 * @param stereoscopy the type of stereoscopy (3D) of the video track
++	 * @param stereoscopy the type of stereoscopy (3D) of the video track.
+ 	 */
+ 	public void setStereoscopy(String stereoscopy) {
+ 		this.stereoscopy = stereoscopy;
+ 	}
+ 
+ 	/**
+-	 * Used by FFmpeg for 3D video format naming
++	 * Used by FFmpeg for 3D video format naming.
+ 	 */
+ 	public enum Mode3D {
+ 		SBSL,
+diff --git a/src/main/java/net/pms/dlna/LibMediaInfoParser.java b/src/main/java/net/pms/dlna/LibMediaInfoParser.java
+index ac74e8f616..0d8441c11f 100644
+--- a/src/main/java/net/pms/dlna/LibMediaInfoParser.java
++++ b/src/main/java/net/pms/dlna/LibMediaInfoParser.java
+@@ -87,6 +87,7 @@ public synchronized static void parse(DLNAMediaInfo media, InputFile inputFile,
+ 				getFormat(general, media, currentAudioTrack, MI.Get(general, 0, "CodecID").trim(), file);
+ 				media.setDuration(getDuration(MI.Get(general, 0, "Duration/String1")));
+ 				media.setBitrate(getBitrate(MI.Get(general, 0, "OverallBitRate")));
++				media.setTruncated(getTruncated(MI.Get(general, 0, "IsTruncated")));
+ 				value = MI.Get(general, 0, "Cover_Data");
+ 				if (!value.isEmpty()) {
+ 					try {
+@@ -720,6 +721,14 @@ public static String getAvcProfile(String value) {
+ 		}
+ 	}
+ 
++	public static String getTruncated(String value) {
++		if (isNotBlank(value)) {
++			return value;
++		} else {
++			return null;
++		}
++	}
++
+ 	public static int getBitrate(String value) {
+ 		if (value.isEmpty()) {
+ 			return 0;
+@@ -753,8 +762,8 @@ public static int getSpecificID(String value) {
+ 
+ 	public static String getSampleFrequency(String value) {
+ 		/**
+-		 * Some tracks show several values, e.g. "48000 / 48000 / 24000" for HE-AAC
+-		 * We store only the first value
++		 * Some tracks show several values, e.g. "48000 / 48000 / 24000" for HE-AAC.
++		 * We store only the first value.
+ 		 */
+ 		if (value.indexOf('/') > -1) {
+ 			value = value.substring(0, value.indexOf('/'));
+@@ -800,7 +809,7 @@ public static String getLang(String value) {
+ 	}
+ 
+ 	/**
+-	 * @deprecated use trim()
++	 * @deprecated use trim().
+ 	 */
+ 	@Deprecated
+ 	public static String getFlavor(String value) {

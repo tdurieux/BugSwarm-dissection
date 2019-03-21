@@ -1,0 +1,93 @@
+diff --git a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
+index 615ac2cb3e..cc66d5e25c 100644
+--- a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
++++ b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/ByteBuddyAgent.java
+@@ -434,7 +434,9 @@ private static void installExternal(AttachmentProvider.Accessor.ExternalAttachme
+             }
+         } finally {
+             if (attachmentJar != null) {
+-                attachmentJar.delete();
++                if (!attachmentJar.delete()) {
++                    attachmentJar.deleteOnExit();
++                }
+             }
+         }
+     }
+diff --git a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/VirtualMachine.java b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/VirtualMachine.java
+index 4b024f23a4..ebb0dcd256 100644
+--- a/byte-buddy-agent/src/main/java/net/bytebuddy/agent/VirtualMachine.java
++++ b/byte-buddy-agent/src/main/java/net/bytebuddy/agent/VirtualMachine.java
+@@ -310,7 +310,9 @@ protected void connect() throws IOException {
+                     } catch (InterruptedException exception) {
+                         throw new IllegalStateException("Interrupted during wait for process", exception);
+                     } finally {
+-                        attachFile.delete();
++                        if (!attachFile.delete()) {
++                            attachFile.deleteOnExit();
++                        }
+                     }
+                 }
+                 ((AFUNIXSocket) socket).setSoTimeout((int) timeUnit.toMillis(timeout));
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
+index ba8caab719..8ca2897275 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/DynamicType.java
+@@ -4185,8 +4185,8 @@ public boolean hasAliveLoadedTypeInitializers() {
+         public Map<TypeDescription, File> saveIn(File folder) throws IOException {
+             Map<TypeDescription, File> savedFiles = new HashMap<TypeDescription, File>();
+             File target = new File(folder, typeDescription.getName().replace('.', File.separatorChar) + CLASS_FILE_EXTENSION);
+-            if (target.getParentFile() != null) {
+-                target.getParentFile().mkdirs();
++            if (target.getParentFile() != null && !target.getParentFile().exists() && !target.getParentFile().mkdirs()) {
++                throw new IllegalArgumentException("Could not create directory: " + target.getParentFile());
+             }
+             OutputStream outputStream = new FileOutputStream(target);
+             try {
+@@ -4205,7 +4205,9 @@ public boolean hasAliveLoadedTypeInitializers() {
+         public File inject(File sourceJar, File targetJar) throws IOException {
+             JarInputStream jarInputStream = new JarInputStream(new BufferedInputStream(new FileInputStream(sourceJar)));
+             try {
+-                targetJar.createNewFile();
++                if (!targetJar.exists() && !targetJar.createNewFile()) {
++                    throw new IllegalStateException("Could not create file: " + targetJar);
++                }
+                 JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(targetJar), jarInputStream.getManifest());
+                 try {
+                     Map<TypeDescription, byte[]> rawAuxiliaryTypes = getAuxiliaryTypes();
+@@ -4264,7 +4266,9 @@ public File inject(File jar) throws IOException {
+                     jarInputStream.close();
+                 }
+             } finally {
+-                temporary.delete();
++                if (!temporary.delete()) {
++                    temporary.deleteOnExit();
++                }
+             }
+             return jar;
+         }
+@@ -4278,7 +4282,9 @@ public File toJar(File file) throws IOException {
+ 
+         @Override
+         public File toJar(File file, Manifest manifest) throws IOException {
+-            file.createNewFile();
++            if (!file.exists() && !file.createNewFile()) {
++                throw new IllegalArgumentException("Could not create file: " + file);
++            }
+             JarOutputStream outputStream = new JarOutputStream(new FileOutputStream(file), manifest);
+             try {
+                 for (Map.Entry<TypeDescription, byte[]> entry : getAuxiliaryTypes().entrySet()) {
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+index a7852f7a00..6a9e813448 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+@@ -1634,8 +1634,8 @@ protected Default(TypeDescription instrumentedType,
+             if (DUMP_FOLDER != null) {
+                 try {
+                     AccessController.doPrivileged(new ClassDumpAction(DUMP_FOLDER, instrumentedType, unresolvedType.getBinaryRepresentation()));
+-                } catch (Exception ignored) {
+-                    /* empty */
++                } catch (Exception exception) {
++                    exception.printStackTrace();
+                 }
+             }
+             return unresolvedType.toDynamicType(typeResolutionStrategy);

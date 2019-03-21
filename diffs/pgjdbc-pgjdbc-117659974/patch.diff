@@ -1,0 +1,476 @@
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/ProtocolConnection.java b/pgjdbc/src/main/java/org/postgresql/core/ProtocolConnection.java
+index 4974e0e9f..1d204819b 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/ProtocolConnection.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/ProtocolConnection.java
+@@ -15,6 +15,7 @@
+ import java.sql.SQLException;
+ import java.sql.SQLWarning;
+ import java.util.Set;
++import java.util.TimeZone;
+ 
+ /**
+  * Provides access to protocol-level connection operations.
+@@ -173,4 +174,16 @@
+    * Abort at network level without sending the Terminate message to the backend.
+    */
+   public void abort();
++
++  /**
++   * Return TimestampUtils that is aware of connection-specific {@code TimeZone} value.
++   *
++   * @return timestampUtils instance
++   */
++
++  /**
++   * Returns backend timezone in java format.
++   * @return backend timezone in java format.
++   */
++  TimeZone getTimeZone();
+ }
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/Provider.java b/pgjdbc/src/main/java/org/postgresql/core/Provider.java
+new file mode 100644
+index 000000000..8280fcd41
+--- /dev/null
++++ b/pgjdbc/src/main/java/org/postgresql/core/Provider.java
+@@ -0,0 +1,16 @@
++package org.postgresql.core;
++
++/**
++ * Represents a provider of results.
++ *
++ * @param <T> the type of results provided by this provider
++ */
++public interface Provider<T> {
++
++  /**
++   * Gets a result.
++   *
++   * @return a result
++   */
++  T get();
++}
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v2/ProtocolConnectionImpl.java b/pgjdbc/src/main/java/org/postgresql/core/v2/ProtocolConnectionImpl.java
+index 6b24cefde..43b0feb8f 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v2/ProtocolConnectionImpl.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v2/ProtocolConnectionImpl.java
+@@ -23,6 +23,7 @@
+ import java.sql.SQLWarning;
+ import java.util.ArrayList;
+ import java.util.Set;
++import java.util.TimeZone;
+ 
+ /**
+  * V2 implementation of ProtocolConnection.
+@@ -228,6 +229,11 @@ public void abort() {
+     closed = true;
+   }
+ 
++  @Override
++  public TimeZone getTimeZone() {
++    return TimeZone.getDefault();
++  }
++
+   private String serverVersion;
+   private int serverVersionNum = 0;
+   private int cancelPid;
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v3/ProtocolConnectionImpl.java b/pgjdbc/src/main/java/org/postgresql/core/v3/ProtocolConnectionImpl.java
+index bed54739b..f80101b12 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v3/ProtocolConnectionImpl.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v3/ProtocolConnectionImpl.java
+@@ -25,6 +25,7 @@
+ import java.util.HashSet;
+ import java.util.Properties;
+ import java.util.Set;
++import java.util.TimeZone;
+ 
+ 
+ /**
+@@ -235,6 +236,15 @@ public void abort() {
+     closed = true;
+   }
+ 
++  public void setTimeZone(TimeZone timeZone) {
++    this.timeZone = timeZone;
++  }
++
++  @Override
++  public TimeZone getTimeZone() {
++    return timeZone;
++  }
++
+   /**
+    * True if server uses integers for date and time fields. False if server uses double.
+    */
+@@ -264,4 +274,9 @@ public void abort() {
+   private final Logger logger;
+ 
+   private final int connectTimeout;
++
++  /**
++   * TimeZone of the current connection (TimeZone backend parameter)
++   */
++  private TimeZone timeZone;
+ }
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+index b1b358013..28927cda1 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+@@ -26,6 +26,7 @@
+ import org.postgresql.core.ResultHandler;
+ import org.postgresql.core.Utils;
+ import org.postgresql.jdbc.BatchResultHandler;
++import org.postgresql.jdbc.TimestampUtils;
+ import org.postgresql.util.GT;
+ import org.postgresql.util.PSQLException;
+ import org.postgresql.util.PSQLState;
+@@ -2067,6 +2068,10 @@ protected void processResults(ResultHandler handler, int flags) throws IOExcepti
+               endQuery = true;
+             }
+           }
++
++          if ("TimeZone".equals(name)) {
++            protoConnection.setTimeZone(TimestampUtils.parseBackendTimeZone(value));
++          }
+           break;
+         }
+ 
+diff --git a/pgjdbc/src/main/java/org/postgresql/jdbc/PgConnection.java b/pgjdbc/src/main/java/org/postgresql/jdbc/PgConnection.java
+index 815f7f159..c1bff9626 100644
+--- a/pgjdbc/src/main/java/org/postgresql/jdbc/PgConnection.java
++++ b/pgjdbc/src/main/java/org/postgresql/jdbc/PgConnection.java
+@@ -21,6 +21,7 @@
+ import org.postgresql.core.Logger;
+ import org.postgresql.core.Oid;
+ import org.postgresql.core.ProtocolConnection;
++import org.postgresql.core.Provider;
+ import org.postgresql.core.Query;
+ import org.postgresql.core.QueryExecutor;
+ import org.postgresql.core.ResultCursor;
+@@ -69,6 +70,7 @@
+ import java.util.Properties;
+ import java.util.Set;
+ import java.util.StringTokenizer;
++import java.util.TimeZone;
+ import java.util.Timer;
+ import java.util.TimerTask;
+ import java.util.concurrent.Executor;
+@@ -318,7 +320,13 @@ public PgConnection(HostSpec[] hostSpecs, String user, String database, Properti
+ 
+     // Initialize timestamp stuff
+     timestampUtils = new TimestampUtils(haveMinimumServerVersion(ServerVersion.v7_4),
+-        haveMinimumServerVersion(ServerVersion.v8_2), !protoConnection.getIntegerDateTimes());
++        haveMinimumServerVersion(ServerVersion.v8_2), !protoConnection.getIntegerDateTimes(),
++        new Provider<TimeZone>() {
++          @Override
++          public TimeZone get() {
++            return protoConnection.getTimeZone();
++          }
++        });
+ 
+     // Initialize common queries.
+     commitQuery = getQueryExecutor().createSimpleQuery("COMMIT");
+diff --git a/pgjdbc/src/main/java/org/postgresql/jdbc/PgResultSet.java b/pgjdbc/src/main/java/org/postgresql/jdbc/PgResultSet.java
+index 26327f198..c40557ed0 100644
+--- a/pgjdbc/src/main/java/org/postgresql/jdbc/PgResultSet.java
++++ b/pgjdbc/src/main/java/org/postgresql/jdbc/PgResultSet.java
+@@ -1884,13 +1884,16 @@ public String getString(int columnIndex) throws SQLException {
+ 
+     // varchar in binary is same as text, other binary fields are converted to their text format
+     if (isBinary(columnIndex) && getSQLType(columnIndex) != Types.VARCHAR) {
+-      Object obj = internalGetObject(columnIndex, fields[columnIndex - 1]);
++      Field field = fields[columnIndex - 1];
++      Object obj = internalGetObject(columnIndex, field);
+       if (obj == null) {
+         return null;
+       }
+       // hack to be compatible with text protocol
+       if (obj instanceof java.util.Date) {
+-        return connection.getTimestampUtils().timeToString((java.util.Date) obj);
++        int oid = field.getOID();
++        return connection.getTimestampUtils().timeToString((java.util.Date) obj,
++            oid == Oid.TIMESTAMPTZ || oid == Oid.TIMETZ);
+       }
+       if ("hstore".equals(getPGType(columnIndex))) {
+         return HStoreConverter.toString((Map<?, ?>) obj);
+diff --git a/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java b/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
+index 95d8e367f..6a0e88807 100644
+--- a/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
++++ b/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
+@@ -10,6 +10,7 @@
+ 
+ import org.postgresql.PGStatement;
+ import org.postgresql.core.Oid;
++import org.postgresql.core.Provider;
+ import org.postgresql.util.ByteConverter;
+ import org.postgresql.util.GT;
+ import org.postgresql.util.PSQLException;
+@@ -30,6 +31,7 @@
+ //#endif
+ import java.util.Calendar;
+ import java.util.GregorianCalendar;
++import java.util.HashMap;
+ import java.util.SimpleTimeZone;
+ import java.util.TimeZone;
+ 
+@@ -44,12 +46,34 @@
+   private static final int ONEDAY = 24 * 3600 * 1000;
+   private static final char[] ZEROS = {'0', '0', '0', '0', '0', '0', '0', '0', '0'};
+   private static final char[][] NUMBERS;
++  private static final HashMap<String, TimeZone> GMT_ZONES = new HashMap<String, TimeZone>();
+ 
+   static {
+     // The expected maximum value is 60 (seconds), so 64 is used "just in case"
+     NUMBERS = new char[64][];
+     for (int i = 0; i < NUMBERS.length; i++) {
+-      NUMBERS[i] = Integer.toString(i).toCharArray();
++      NUMBERS[i] = ((i < 10 ? "0" : "") + Integer.toString(i)).toCharArray();
++    }
++
++    // Backend's gmt-3 means GMT+03 in Java. Here a map is created so gmt-3 can be converted to
++    // java TimeZone
++    for (int i = -12; i <= 14; i++) {
++      TimeZone timeZone;
++      String pgZoneName;
++      if (i == 0) {
++        timeZone = TimeZone.getTimeZone("GMT");
++        pgZoneName = "GMT";
++      } else {
++        timeZone = TimeZone.getTimeZone("GMT" + (i <= 0 ? "+" : "-") + Math.abs(i));
++        pgZoneName = "GMT" + (i >= 0 ? "+" : "-");
++      }
++
++      if (i == 0) {
++        GMT_ZONES.put(pgZoneName, timeZone);
++        continue;
++      }
++      GMT_ZONES.put(pgZoneName + Math.abs(i), timeZone);
++      GMT_ZONES.put(pgZoneName + NUMBERS[Math.abs(i)], timeZone);
+     }
+   }
+ 
+@@ -70,11 +94,14 @@
+    * True if the backend uses doubles for time values. False if long is used.
+    */
+   private final boolean usesDouble;
++  private final Provider<TimeZone> timeZoneProvider;
+ 
+-  TimestampUtils(boolean min74, boolean min82, boolean usesDouble) {
++  TimestampUtils(boolean min74, boolean min82, boolean usesDouble,
++      Provider<TimeZone> timeZoneProvider) {
+     this.min74 = min74;
+     this.min82 = min82;
+     this.usesDouble = usesDouble;
++    this.timeZoneProvider = timeZoneProvider;
+   }
+ 
+   private Calendar getCalendar(int sign, int hr, int min, int sec) {
+@@ -433,6 +460,11 @@ private Calendar setupCalendar(Calendar cal) {
+   }
+ 
+   public synchronized String toString(Calendar cal, Timestamp x) {
++    return toString(cal, x, true);
++  }
++
++  public synchronized String toString(Calendar cal, Timestamp x,
++      boolean withTimeZone) {
+     if (x.getTime() == PGStatement.DATE_POSITIVE_INFINITY) {
+       return "infinity";
+     } else if (x.getTime() == PGStatement.DATE_NEGATIVE_INFINITY) {
+@@ -447,13 +479,20 @@ public synchronized String toString(Calendar cal, Timestamp x) {
+     appendDate(sbuf, cal);
+     sbuf.append(' ');
+     appendTime(sbuf, cal, x.getNanos());
+-    appendTimeZone(sbuf, cal);
++    if (withTimeZone) {
++      appendTimeZone(sbuf, cal);
++    }
+     appendEra(sbuf, cal);
+ 
+     return sbuf.toString();
+   }
+ 
+   public synchronized String toString(Calendar cal, Date x) {
++    return toString(cal, x, true);
++  }
++
++  public synchronized String toString(Calendar cal, Date x,
++      boolean withTimeZone) {
+     if (x.getTime() == PGStatement.DATE_POSITIVE_INFINITY) {
+       return "infinity";
+     } else if (x.getTime() == PGStatement.DATE_NEGATIVE_INFINITY) {
+@@ -467,12 +506,20 @@ public synchronized String toString(Calendar cal, Date x) {
+ 
+     appendDate(sbuf, cal);
+     appendEra(sbuf, cal);
+-    appendTimeZone(sbuf, cal);
++    if (withTimeZone) {
++      sbuf.append(' ');
++      appendTimeZone(sbuf, cal);
++    }
+ 
+     return sbuf.toString();
+   }
+ 
+   public synchronized String toString(Calendar cal, Time x) {
++    return toString(cal, x, true);
++  }
++
++  public synchronized String toString(Calendar cal, Time x,
++      boolean withTimeZone) {
+     cal = setupCalendar(cal);
+     cal.setTime(x);
+ 
+@@ -481,7 +528,7 @@ public synchronized String toString(Calendar cal, Time x) {
+     appendTime(sbuf, cal, cal.get(Calendar.MILLISECOND) * 1000000);
+ 
+     // The 'time' parser for <= 7.3 doesn't like timezones.
+-    if (min74) {
++    if (min74 && withTimeZone) {
+       appendTimeZone(sbuf, cal);
+     }
+ 
+@@ -533,6 +580,9 @@ private static void appendTime(StringBuilder sb, int hours, int minutes, int sec
+     // a two digit fractional second, but we don't need to support 7.1
+     // anymore and getting the version number here is difficult.
+     //
++    if (nanos == 0) {
++      return;
++    }
+     sb.append('.');
+     int len = sb.length();
+     sb.append(nanos / 1000); // append microseconds
+@@ -554,15 +604,18 @@ private void appendTimeZone(StringBuilder sb, int offset) {
+     int mins = (absoff - hours * 60 * 60) / 60;
+     int secs = absoff - hours * 60 * 60 - mins * 60;
+ 
+-    sb.append((offset >= 0) ? " +" : " -");
++    sb.append((offset >= 0) ? "+" : "-");
+ 
+     sb.append(NUMBERS[hours]);
+ 
++    if (mins == 0 && secs == 0) {
++      return;
++    }
+     sb.append(':');
+ 
+     sb.append(NUMBERS[mins]);
+ 
+-    if (min82) {
++    if (min82 && secs != 0) {
+       sb.append(':');
+       sb.append(NUMBERS[secs]);
+     }
+@@ -1061,17 +1114,22 @@ public Time convertToTime(long millis, TimeZone tz) {
+    * in text mode.
+    *
+    * @param time time value
++   * @param withTimeZone whether timezone should be added
+    * @return given time value as String
+    */
+-  public String timeToString(java.util.Date time) {
+-    long millis = time.getTime();
+-    if (millis <= PGStatement.DATE_NEGATIVE_INFINITY) {
+-      return "-infinity";
++  public String timeToString(java.util.Date time, boolean withTimeZone) {
++    Calendar cal = null;
++    if (withTimeZone) {
++      cal = calendarWithUserTz;
++      cal.setTimeZone(timeZoneProvider.get());
+     }
+-    if (millis >= PGStatement.DATE_POSITIVE_INFINITY) {
+-      return "infinity";
++    if (time instanceof Timestamp) {
++      return toString(cal, (Timestamp) time, withTimeZone);
+     }
+-    return time.toString();
++    if (time instanceof Time) {
++      return toString(cal, (Time) time, withTimeZone);
++    }
++    return toString(cal, (Date) time, withTimeZone);
+   }
+ 
+   /**
+@@ -1150,4 +1208,18 @@ public void toBinDate(TimeZone tz, byte[] bytes, Date value) throws PSQLExceptio
+     ByteConverter.int4(bytes, 0, (int) (secs / 86400));
+   }
+ 
++  /**
++   * Converts backend's TimeZone parameter to java format.
++   * Notable difference: backend's gmt-3 is GMT+03 in Java.
++   * @return java TimeZone
++   */
++  public static TimeZone parseBackendTimeZone(String timeZone) {
++    if (timeZone.startsWith("GMT")) {
++      TimeZone tz = GMT_ZONES.get(timeZone);
++      if (tz != null) {
++        return tz;
++      }
++    }
++    return TimeZone.getTimeZone(timeZone);
++  }
+ }
+diff --git a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimezoneTest.java b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimezoneTest.java
+index dcd4e85be..457ad66f3 100644
+--- a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimezoneTest.java
++++ b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimezoneTest.java
+@@ -122,6 +122,7 @@ public void testGetTimestamp() throws Exception {
+         "INSERT INTO testtimezone(tstz,ts,t,tz,d) VALUES('2005-01-01 15:00:00 +0300', '2005-01-01 15:00:00', '15:00:00', '15:00:00 +0300', '2005-01-01')");
+ 
+     for (int i = 0; i < PREPARE_THRESHOLD; i++) {
++      String format = i == 0 ? ", text" : ", binary";
+       PreparedStatement ps = con.prepareStatement("SELECT tstz,ts,t,tz,d from testtimezone");
+       ResultSet rs = ps.executeQuery();
+ 
+@@ -131,6 +132,7 @@ public void testGetTimestamp() throws Exception {
+               "2005-01-01"});
+ 
+       Timestamp ts;
++      String str;
+ 
+       // timestamptz: 2005-01-01 15:00:00+03
+       ts = rs.getTimestamp(1); // Represents an instant in time, timezone is irrelevant.
+@@ -143,6 +145,8 @@ public void testGetTimestamp() throws Exception {
+       assertEquals(1104580800000L, ts.getTime()); // 2005-01-01 12:00:00 UTC
+       ts = rs.getTimestamp(1, cGMT13); // Represents an instant in time, timezone is irrelevant.
+       assertEquals(1104580800000L, ts.getTime()); // 2005-01-01 12:00:00 UTC
++      str = rs.getString(1);
++      assertEquals("tstz -> getString" + format, "2005-01-01 15:00:00+03", str);
+ 
+       // timestamp: 2005-01-01 15:00:00
+       ts = rs.getTimestamp(2); // Convert timestamp to +0100
+@@ -155,6 +159,8 @@ public void testGetTimestamp() throws Exception {
+       assertEquals(1104609600000L, ts.getTime()); // 2005-01-01 15:00:00 -0500
+       ts = rs.getTimestamp(2, cGMT13); // Convert timestamp to +1300
+       assertEquals(1104544800000L, ts.getTime()); // 2005-01-01 15:00:00 +1300
++      str = rs.getString(2);
++      assertEquals("ts -> getString" + format, "2005-01-01 15:00:00", str);
+ 
+       // time: 15:00:00
+       ts = rs.getTimestamp(3);
+@@ -167,6 +173,8 @@ public void testGetTimestamp() throws Exception {
+       assertEquals(72000000L, ts.getTime()); // 1970-01-01 15:00:00 -0500
+       ts = rs.getTimestamp(3, cGMT13);
+       assertEquals(7200000L, ts.getTime()); // 1970-01-01 15:00:00 +1300
++      str = rs.getString(3);
++      assertEquals("time -> getString" + format, "15:00:00", str);
+ 
+       // timetz: 15:00:00+03
+       ts = rs.getTimestamp(4);
+@@ -184,6 +192,8 @@ public void testGetTimestamp() throws Exception {
+       ts = rs.getTimestamp(4, cGMT13);
+       // 1970-01-01 15:00:00 +0300 -> 1970-01-02 01:00:00 +1300 (CHECK ME)
+       assertEquals(-43200000L, ts.getTime());
++      str = rs.getString(3);
++      assertEquals("timetz -> getString" + format, "15:00:00", str);
+ 
+       // date: 2005-01-01
+       ts = rs.getTimestamp(5);
+@@ -196,6 +206,8 @@ public void testGetTimestamp() throws Exception {
+       assertEquals(1104555600000L, ts.getTime()); // 2005-01-01 00:00:00 -0500
+       ts = rs.getTimestamp(5, cGMT13);
+       assertEquals(1104490800000L, ts.getTime()); // 2005-01-01 00:00:00 +1300
++      str = rs.getString(5);
++      assertEquals("date -> getString" + format, "2005-01-01", str);
+ 
+       assertTrue(!rs.next());
+       ps.close();

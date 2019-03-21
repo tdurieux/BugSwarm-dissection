@@ -1,0 +1,317 @@
+diff --git a/java-squid/src/main/java/org/sonar/java/cfg/CFG.java b/java-squid/src/main/java/org/sonar/java/cfg/CFG.java
+new file mode 100644
+index 0000000000..1596c5648d
+--- /dev/null
++++ b/java-squid/src/main/java/org/sonar/java/cfg/CFG.java
+@@ -0,0 +1,199 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012 SonarSource
++ * sonarqube@googlegroups.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
++ */
++package org.sonar.java.cfg;
++
++import com.google.common.base.Preconditions;
++import com.google.common.collect.Lists;
++import org.sonar.java.model.JavaTree;
++import org.sonar.plugins.java.api.tree.BinaryExpressionTree;
++import org.sonar.plugins.java.api.tree.BlockTree;
++import org.sonar.plugins.java.api.tree.IdentifierTree;
++import org.sonar.plugins.java.api.tree.IfStatementTree;
++import org.sonar.plugins.java.api.tree.LiteralTree;
++import org.sonar.plugins.java.api.tree.MethodTree;
++import org.sonar.plugins.java.api.tree.ParenthesizedTree;
++import org.sonar.plugins.java.api.tree.StatementTree;
++import org.sonar.plugins.java.api.tree.Tree;
++
++import java.io.PrintStream;
++import java.util.ArrayList;
++import java.util.List;
++
++public class CFG {
++
++  private final Block exitBlock;
++  private Block currentBlock;
++
++  /**
++   * List of all blocks in order they were created.
++   */
++  final List<Block> blocks = new ArrayList<>();
++
++  static class Block {
++    final int id;
++    final List<Tree> elements = new ArrayList<>();
++    List<Block> successors = Lists.newArrayList();
++    Tree terminator;
++
++    public Block(int id) {
++      this.id = id;
++    }
++  }
++
++  private CFG(BlockTree tree) {
++    exitBlock = createBlock();
++    currentBlock = createBlock(exitBlock);
++    for (StatementTree statementTree : Lists.reverse(tree.body())) {
++      build(statementTree);
++    }
++  }
++
++  private Block createBlock(Block successor) {
++    Block result = createBlock();
++    result.successors.add(successor);
++    return result;
++  }
++
++  private Block createBlock() {
++    Block result = new Block(blocks.size());
++    blocks.add(result);
++    return result;
++  }
++
++  public static CFG build(MethodTree tree) {
++    Preconditions.checkArgument(tree.block() != null, "Cannot build CFG for method with no body.");
++    return new CFG(tree.block());
++  }
++
++  private void build(Tree tree) {
++    switch (((JavaTree) tree).getKind()) {
++      case BLOCK:
++        currentBlock.elements.add(tree);
++        for (StatementTree statementTree : Lists.reverse(((BlockTree) tree).body())) {
++          build(statementTree);
++        }
++        break;
++      case IF_STATEMENT:
++        IfStatementTree ifStatementTree = (IfStatementTree) tree;
++        Block next = currentBlock;
++        // process else-branch
++        Block elseBlock = next;
++        StatementTree elseStatement = ifStatementTree.elseStatement();
++        if (elseStatement != null) {
++          // if statement will create the required block.
++          if (!elseStatement.is(Tree.Kind.IF_STATEMENT)) {
++            currentBlock = createBlock(next);
++          }
++          build(elseStatement);
++          elseBlock = currentBlock;
++        }
++        // process then-branch
++        currentBlock = createBlock(next);
++        build(ifStatementTree.thenStatement());
++        Block thenBlock = currentBlock;
++        // process condition
++        currentBlock = createBranch(ifStatementTree, thenBlock, elseBlock);
++        buildCondition(ifStatementTree.condition(), thenBlock, elseBlock);
++        break;
++    }
++
++  }
++
++  private void buildCondition(Tree syntaxNode, Block trueBlock, Block falseBlock) {
++    switch (((JavaTree) syntaxNode).getKind()) {
++      case CONDITIONAL_OR: {
++        BinaryExpressionTree e = (BinaryExpressionTree) syntaxNode;
++        // process RHS
++        buildCondition(e.rightOperand(), trueBlock, falseBlock);
++        falseBlock = currentBlock;
++        // process LHS
++        currentBlock = createBranch(e, trueBlock, falseBlock);
++        buildCondition(e.leftOperand(), trueBlock, falseBlock);
++        break;
++      }
++      case CONDITIONAL_AND: {
++        // process RHS
++        BinaryExpressionTree e = (BinaryExpressionTree) syntaxNode;
++        buildCondition(e.rightOperand(), trueBlock, falseBlock);
++        trueBlock = currentBlock;
++        // process LHS
++        currentBlock = createBranch(e, trueBlock, falseBlock);
++        buildCondition(e.leftOperand(), trueBlock, falseBlock);
++        break;
++      }
++      // Skip syntactic sugar:
++      case PARENTHESIZED_EXPRESSION:
++        buildCondition(((ParenthesizedTree) syntaxNode).expression(), trueBlock, falseBlock);
++        break;
++      default:
++        build(syntaxNode);
++        break;
++    }
++  }
++
++  private Block createBranch(Tree terminator, Block trueBranch, Block falseBranch) {
++    Block result = createBlock();
++    result.terminator = terminator;
++    result.successors.add(trueBranch);
++    result.successors.add(falseBranch);
++    return result;
++  }
++
++  public void debugTo(PrintStream out) {
++    for (Block block : Lists.reverse(blocks)) {
++      if (block.id != 0) {
++        out.println("B" + block.id + ":");
++      } else {
++        out.println("B" + block.id + " (Exit) :");
++      }
++      int i = 0;
++      for (Tree tree : block.elements) {
++        out.println("  " + i + ": " + syntaxNodeToDebugString((JavaTree) tree));
++        i++;
++      }
++      if (block.terminator != null) {
++        out.println("  T: " + syntaxNodeToDebugString((JavaTree) block.terminator));
++      }
++      if (!block.successors.isEmpty()) {
++        out.print("  Successors:");
++        for (Block successor : block.successors) {
++          out.print(" B" + successor.id);
++        }
++        out.println();
++      }
++    }
++    out.println();
++  }
++
++  private static String syntaxNodeToDebugString(JavaTree syntaxNode) {
++    StringBuilder sb = new StringBuilder(syntaxNode.getKind().name())
++      .append(' ').append(Integer.toHexString(syntaxNode.hashCode()));
++    switch (syntaxNode.getKind()) {
++      case IDENTIFIER:
++        sb.append(' ').append(((IdentifierTree) syntaxNode).identifierToken().text());
++        break;
++      case INT_LITERAL:
++        sb.append(' ').append(((LiteralTree) syntaxNode).token().text());
++        break;
++    }
++    return sb.toString();
++  }
++
++}
+diff --git a/java-squid/src/test/java/org/sonar/java/cfg/CFGTest.java b/java-squid/src/test/java/org/sonar/java/cfg/CFGTest.java
+new file mode 100644
+index 0000000000..0015f6ccfc
+--- /dev/null
++++ b/java-squid/src/test/java/org/sonar/java/cfg/CFGTest.java
+@@ -0,0 +1,106 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012 SonarSource
++ * sonarqube@googlegroups.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
++ */
++package org.sonar.java.cfg;
++
++import com.google.common.base.Charsets;
++import org.junit.Test;
++import org.sonar.java.ast.parser.JavaParser;
++import org.sonar.java.parser.sslr.ActionParser;
++import org.sonar.plugins.java.api.tree.ClassTree;
++import org.sonar.plugins.java.api.tree.CompilationUnitTree;
++import org.sonar.plugins.java.api.tree.MethodTree;
++import org.sonar.plugins.java.api.tree.Tree;
++
++import static org.fest.assertions.Assertions.assertThat;
++
++public class CFGTest {
++
++  public static final ActionParser parser = JavaParser.createParser(Charsets.UTF_8);
++
++  private static CFG buildCFG(String methodCode) {
++    CompilationUnitTree cut = (CompilationUnitTree) parser.parse("class A { "+methodCode+" }");
++    MethodTree tree = ((MethodTree) ((ClassTree) cut.types().get(0)).members().get(0));
++    return CFG.build(tree);
++  }
++
++  @Test
++  public void simplest_cfg() throws Exception {
++    CFG cfg = buildCFG("void fun() {}");
++    assertThat(cfg.blocks).hasSize(2);
++    cfg = buildCFG("void fun() { bar();}");
++    assertThat(cfg.blocks).hasSize(2);
++    cfg = buildCFG("void fun() { bar();qix();baz();}");
++    assertThat(cfg.blocks).hasSize(2);
++  }
++
++  @Test
++  public void cfg_if_statement() throws Exception {
++    CFG cfg = buildCFG("void fun() {if(a) { foo(); } }");
++    assertThat(cfg.blocks).hasSize(4);
++    assertThat(successors(cfg.blocks.get(1))).containsOnly(0);
++    assertThat(successors(cfg.blocks.get(2))).containsOnly(1);
++    assertThat(successors(cfg.blocks.get(3))).containsOnly(1, 2);
++    assertThat(cfg.blocks.get(3).terminator).isNotNull();
++    assertThat(cfg.blocks.get(3).elements).isEmpty();
++    assertThat(cfg.blocks.get(3).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++
++    cfg = buildCFG("void fun() {if(a) { foo(); } else { bar(); } }");
++    assertThat(cfg.blocks).hasSize(5);
++    assertThat(successors(cfg.blocks.get(1))).containsOnly(0);
++    assertThat(successors(cfg.blocks.get(2))).containsOnly(1);
++    assertThat(successors(cfg.blocks.get(3))).containsOnly(1);
++    assertThat(successors(cfg.blocks.get(4))).containsOnly(2, 3);
++    assertThat(cfg.blocks.get(4).terminator).isNotNull();
++    assertThat(cfg.blocks.get(4).elements).isEmpty();
++    assertThat(cfg.blocks.get(3).elements).hasSize(1);
++    assertThat(cfg.blocks.get(2).elements).hasSize(1);
++    assertThat(cfg.blocks.get(4).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++
++    cfg = buildCFG("void fun() {\nif(a) {\n foo(); \n } else if(b) {\n bar();\n } }");
++    assertThat(cfg.blocks).hasSize(6);
++    assertThat(cfg.blocks.get(5).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++    assertThat(cfg.blocks.get(3).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++  }
++
++  @Test
++  public void conditional_expression() throws Exception {
++    CFG cfg = buildCFG("void fun() {if(a || b) { foo(); } }");
++    assertThat(cfg.blocks).hasSize(5);
++    assertThat(cfg.blocks.get(4).terminator.is(Tree.Kind.CONDITIONAL_OR)).isTrue();
++    assertThat(cfg.blocks.get(3).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++
++    cfg = buildCFG("void fun() {if((a && b)) { foo(); } }");
++    assertThat(cfg.blocks).hasSize(5);
++    assertThat(cfg.blocks.get(4).terminator.is(Tree.Kind.CONDITIONAL_AND)).isTrue();
++    assertThat(cfg.blocks.get(3).terminator.is(Tree.Kind.IF_STATEMENT)).isTrue();
++  }
++
++  private static int[] successors(CFG.Block block) {
++    int[] successors = new int[block.successors.size()];
++    for (int i = 0; i < block.successors.size(); i++) {
++      successors[i] = block.successors.get(i).id;
++    }
++    return successors;
++  }
++
++
++
++
++}

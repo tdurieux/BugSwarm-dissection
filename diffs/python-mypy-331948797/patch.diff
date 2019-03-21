@@ -1,0 +1,2464 @@
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index a7b21dcd87..1fe3d2c099 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -109,6 +109,9 @@ which consist mainly of a reference to
+ [PEP 8](https://www.python.org/dev/peps/pep-0008/) -- for the code you
+ put in the pull request.
+ 
++Also, do not squash your commits after you have submitted a pull request, as this
++erases context during review. We will squash commits when the pull request is merged.
++
+ You may also find other pages in the
+ [Mypy developer guide](https://github.com/python/mypy/wiki/Developer-Guides)
+ helpful in developing your change.
+diff --git a/CREDITS b/CREDITS
+index e43e952459..171e54d03c 100644
+--- a/CREDITS
++++ b/CREDITS
+@@ -11,6 +11,8 @@ Mypy team:
+ 
+   Jukka Lehtosalo <jukka.lehtosalo@iki.fi>
+   Guido van Rossum <guido@python.org>
++  Ivan Levkivskyi
++  Michael J. Sullivan
+ 
+ Past Dropbox core team members:
+ 
+@@ -23,7 +25,6 @@ Past Dropbox core team members:
+ 
+ Non-Dropbox core team members:
+ 
+-  Ivan Levkivskyi
+   Ethan Smith
+   Jelle Zijlstra
+ 
+diff --git a/ISSUE_TEMPLATE.md b/ISSUE_TEMPLATE.md
+index be838e9148..3884fd7102 100644
+--- a/ISSUE_TEMPLATE.md
++++ b/ISSUE_TEMPLATE.md
+@@ -1,3 +1,7 @@
++Note: if you are reporting a wrong signature of a function or a class in
++the standard library, then the typeshed tracker is better suited
++for this report: https://github.com/python/typeshed/issues
++
+ Please provide more information to help us understand the issue:
+ 
+ * Are you reporting a bug, or opening a feature request?
+diff --git a/mypy/checker.py b/mypy/checker.py
+index ba3cb543e7..8e4af18c17 100644
+--- a/mypy/checker.py
++++ b/mypy/checker.py
+@@ -1940,13 +1940,13 @@ def infer_variable_type(self, name: Var, lvalue: Lvalue,
+             # partial type which will be made more specific later. A partial type
+             # gets generated in assignment like 'x = []' where item type is not known.
+             if not self.infer_partial_type(name, lvalue, init_type):
+-                self.fail(messages.NEED_ANNOTATION_FOR_VAR, context)
++                self.msg.need_annotation_for_var(name, context)
+                 self.set_inference_error_fallback_type(name, lvalue, init_type, context)
+         elif (isinstance(lvalue, MemberExpr) and self.inferred_attribute_types is not None
+               and lvalue.def_var and lvalue.def_var in self.inferred_attribute_types
+               and not is_same_type(self.inferred_attribute_types[lvalue.def_var], init_type)):
+             # Multiple, inconsistent types inferred for an attribute.
+-            self.fail(messages.NEED_ANNOTATION_FOR_VAR, context)
++            self.msg.need_annotation_for_var(name, context)
+             name.type = AnyType(TypeOfAny.from_error)
+         else:
+             # Infer type of the target.
+@@ -3101,7 +3101,7 @@ def enter_partial_types(self) -> Iterator[None]:
+                     var.type = NoneTyp()
+                 else:
+                     if var not in self.partial_reported:
+-                        self.msg.fail(messages.NEED_ANNOTATION_FOR_VAR, context)
++                        self.msg.need_annotation_for_var(var, context)
+                         self.partial_reported.add(var)
+                     var.type = AnyType(TypeOfAny.from_error)
+ 
+diff --git a/mypy/checkexpr.py b/mypy/checkexpr.py
+index ecc4fd7b92..1cbf611bec 100644
+--- a/mypy/checkexpr.py
++++ b/mypy/checkexpr.py
+@@ -145,7 +145,7 @@ def analyze_ref_expr(self, e: RefExpr, lvalue: bool = False) -> Type:
+                     partial_types = self.chk.find_partial_types(node)
+                     if partial_types is not None and not self.chk.current_node_deferred:
+                         context = partial_types[node]
+-                        self.msg.fail(messages.NEED_ANNOTATION_FOR_VAR, context)
++                        self.msg.need_annotation_for_var(node, context)
+                     result = AnyType(TypeOfAny.special_form)
+         elif isinstance(node, FuncDef):
+             # Reference to a global function.
+@@ -2595,7 +2595,11 @@ def bool_type(self) -> Instance:
+     def narrow_type_from_binder(self, expr: Expression, known_type: Type) -> Type:
+         if literal(expr) >= LITERAL_TYPE:
+             restriction = self.chk.binder.get(expr)
+-            if restriction:
++            # If the current node is deferred, some variables may get Any types that they
++            # otherwise wouldn't have. We don't want to narrow down these since it may
++            # produce invalid inferred Optional[Any] types, at least.
++            if restriction and not (isinstance(known_type, AnyType)
++                                    and self.chk.current_node_deferred):
+                 ans = narrow_declared_type(known_type, restriction)
+                 return ans
+         return known_type
+diff --git a/mypy/checkmember.py b/mypy/checkmember.py
+index af2d142335..eb731d5996 100644
+--- a/mypy/checkmember.py
++++ b/mypy/checkmember.py
+@@ -366,7 +366,7 @@ def freeze_type_vars(member_type: Type) -> None:
+ 
+ 
+ def handle_partial_attribute_type(typ: PartialType, is_lvalue: bool, msg: MessageBuilder,
+-                                  context: Context) -> Type:
++                                  node: SymbolNode) -> Type:
+     if typ.type is None:
+         # 'None' partial type. It has a well-defined type -- 'None'.
+         # In an lvalue context we want to preserver the knowledge of
+@@ -375,7 +375,7 @@ def handle_partial_attribute_type(typ: PartialType, is_lvalue: bool, msg: Messag
+             return NoneTyp()
+         return typ
+     else:
+-        msg.fail(messages.NEED_ANNOTATION_FOR_VAR, context)
++        msg.need_annotation_for_var(node, node)
+         return AnyType(TypeOfAny.from_error)
+ 
+ 
+diff --git a/mypy/dmypy_server.py b/mypy/dmypy_server.py
+index a873823db7..0b330db109 100644
+--- a/mypy/dmypy_server.py
++++ b/mypy/dmypy_server.py
+@@ -13,12 +13,14 @@
+ import socket
+ import sys
+ import time
++import traceback
+ 
+-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
++from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+ 
+ import mypy.build
+ import mypy.errors
+ import mypy.main
++import mypy.server.update
+ from mypy.dmypy_util import STATUS_FILE, receive
+ from mypy.gclogger import GcLogger
+ 
+@@ -82,6 +84,12 @@ class Server:
+     def __init__(self, flags: List[str]) -> None:
+         """Initialize the server with the desired mypy flags."""
+         self.saved_cache = {}  # type: mypy.build.SavedCache
++        if '--experimental' in flags:
++            self.fine_grained = True
++            self.fine_grained_initialized = False
++            flags.remove('--experimental')
++        else:
++            self.fine_grained = False
+         sources, options = mypy.main.process_options(['-i'] + flags, False)
+         if sources:
+             sys.exit("dmypy: start/restart does not accept sources")
+@@ -94,6 +102,10 @@ def __init__(self, flags: List[str]) -> None:
+         self.options = options
+         if os.path.isfile(STATUS_FILE):
+             os.unlink(STATUS_FILE)
++        if self.fine_grained:
++            options.incremental = True
++            options.show_traceback = True
++            options.cache_dir = os.devnull
+ 
+     def serve(self) -> None:
+         """Serve requests, synchronously (no thread or fork)."""
+@@ -128,6 +140,9 @@ def serve(self) -> None:
+                 os.unlink(STATUS_FILE)
+         finally:
+             os.unlink(self.sockname)
++            exc_info = sys.exc_info()
++            if exc_info[0]:
++                traceback.print_exception(*exc_info)  # type: ignore
+ 
+     def create_listening_socket(self) -> socket.socket:
+         """Create the socket and set it up for listening."""
+@@ -190,6 +205,14 @@ def cmd_recheck(self) -> Dict[str, object]:
+ 
+     def check(self, sources: List[mypy.build.BuildSource],
+               alt_lib_path: Optional[str] = None) -> Dict[str, Any]:
++        if self.fine_grained:
++            return self.check_fine_grained(sources)
++        else:
++            return self.check_default(sources, alt_lib_path)
++
++    def check_default(self, sources: List[mypy.build.BuildSource],
++                      alt_lib_path: Optional[str] = None) -> Dict[str, Any]:
++        """Check using the default (per-file) incremental mode."""
+         self.last_manager = None
+         with GcLogger() as gc_result:
+             try:
+@@ -212,6 +235,85 @@ def check(self, sources: List[mypy.build.BuildSource],
+             response.update(self.last_manager.stats_summary())
+         return response
+ 
++    def check_fine_grained(self, sources: List[mypy.build.BuildSource]) -> Dict[str, Any]:
++        """Check using fine-grained incremental mode."""
++        if not self.fine_grained_initialized:
++            return self.initialize_fine_grained(sources)
++        else:
++            return self.fine_grained_increment(sources)
++
++    def initialize_fine_grained(self, sources: List[mypy.build.BuildSource]) -> Dict[str, Any]:
++        self.file_modified = {}  # type: Dict[str, float]
++        for source in sources:
++            assert source.path
++            try:
++                self.file_modified[source.path] = os.stat(source.path).st_mtime
++            except FileNotFoundError:
++                # Don't crash if passed a non-existent file.
++                pass
++        try:
++            # TODO: alt_lib_path
++            result = mypy.build.build(sources=sources,
++                                      options=self.options)
++        except mypy.errors.CompileError as e:
++            output = ''.join(s + '\n' for s in e.messages)
++            if e.use_stdout:
++                out, err = output, ''
++            else:
++                out, err = '', output
++            return {'out': out, 'err': err, 'status': 2}
++        messages = result.errors
++        manager = result.manager
++        graph = result.graph
++        self.fine_grained_manager = mypy.server.update.FineGrainedBuildManager(manager, graph)
++        status = 1 if messages else 0
++        self.previous_messages = messages[:]
++        self.fine_grained_initialized = True
++        self.previous_sources = sources
++        return {'out': ''.join(s + '\n' for s in messages), 'err': '', 'status': status}
++
++    def fine_grained_increment(self, sources: List[mypy.build.BuildSource]) -> Dict[str, Any]:
++        changed = self.find_changed(sources)
++        if not changed:
++            # Nothing changed -- just produce the same result as before.
++            messages = self.previous_messages
++        else:
++            messages = self.fine_grained_manager.update(changed)
++        status = 1 if messages else 0
++        self.previous_messages = messages[:]
++        self.previous_sources = sources
++        return {'out': ''.join(s + '\n' for s in messages), 'err': '', 'status': status}
++
++    def find_changed(self, sources: List[mypy.build.BuildSource]) -> List[Tuple[str, str]]:
++        changed = []
++        for source in sources:
++            path = source.path
++            assert path
++            try:
++                mtime = os.stat(path).st_mtime
++            except FileNotFoundError:
++                # A non-existent file was included on the command line.
++                #
++                # TODO: Generate error if file is missing (if not ignoring missing imports)
++                if path in self.file_modified:
++                    changed.append((source.module, path))
++            else:
++                if path not in self.file_modified or self.file_modified[path] != mtime:
++                    self.file_modified[path] = mtime
++                    changed.append((source.module, path))
++        modules = {source.module for source in sources}
++        omitted = [source for source in self.previous_sources if source.module not in modules]
++        for source in omitted:
++            path = source.path
++            assert path
++            # Note that a file could be removed from the list of root sources but still continue
++            # to exist on the file system.
++            if not os.path.isfile(path):
++                changed.append((source.module, path))
++                if source.path in self.file_modified:
++                    del self.file_modified[source.path]
++        return changed
++
+     def cmd_hang(self) -> Dict[str, object]:
+         """Hang for 100 seconds, as a debug hack."""
+         time.sleep(100)
+diff --git a/mypy/errors.py b/mypy/errors.py
+index 4cc7f077ea..b1ec7ab1ec 100644
+--- a/mypy/errors.py
++++ b/mypy/errors.py
+@@ -411,7 +411,7 @@ def format_messages(self, error_info: List[ErrorInfo]) -> List[str]:
+             if file is not None:
+                 if self.show_column_numbers and line is not None and line >= 0 \
+                         and column is not None and column >= 0:
+-                    srcloc = '{}:{}:{}'.format(file, line, column)
++                    srcloc = '{}:{}:{}'.format(file, line, 1 + column)
+                 elif line is not None and line >= 0:
+                     srcloc = '{}:{}'.format(file, line)
+                 else:
+diff --git a/mypy/messages.py b/mypy/messages.py
+index 3c13a2c41d..ec877d3299 100644
+--- a/mypy/messages.py
++++ b/mypy/messages.py
+@@ -25,7 +25,7 @@
+ from mypy.nodes import (
+     TypeInfo, Context, MypyFile, op_methods, FuncDef, reverse_type_aliases,
+     ARG_POS, ARG_OPT, ARG_NAMED, ARG_NAMED_OPT, ARG_STAR, ARG_STAR2,
+-    ReturnStmt, NameExpr, Var, CONTRAVARIANT, COVARIANT,
++    ReturnStmt, NameExpr, Var, CONTRAVARIANT, COVARIANT, SymbolNode
+ )
+ 
+ 
+@@ -62,7 +62,6 @@
+ MUST_HAVE_NONE_RETURN_TYPE = 'The return type of "{}" must be None'
+ INVALID_TUPLE_INDEX_TYPE = 'Invalid tuple index type'
+ TUPLE_INDEX_OUT_OF_RANGE = 'Tuple index out of range'
+-NEED_ANNOTATION_FOR_VAR = 'Need type annotation for variable'
+ ITERABLE_EXPECTED = 'Iterable expected'
+ ASYNC_ITERABLE_EXPECTED = 'AsyncIterable expected'
+ INVALID_SLICE_INDEX = 'Slice index must be an integer or None'
+@@ -962,6 +961,9 @@ def unimported_type_becomes_any(self, prefix: str, typ: Type, ctx: Context) -> N
+         self.fail("{} becomes {} due to an unfollowed import".format(prefix, self.format(typ)),
+                   ctx)
+ 
++    def need_annotation_for_var(self, node: SymbolNode, context: Context) -> None:
++        self.fail("Need type annotation for '{}'".format(node.name()), context)
++
+     def explicit_any(self, ctx: Context) -> None:
+         self.fail('Explicit "Any" is not allowed', ctx)
+ 
+diff --git a/mypy/plugin.py b/mypy/plugin.py
+index 3512094656..ada4e97c7e 100644
+--- a/mypy/plugin.py
++++ b/mypy/plugin.py
+@@ -69,6 +69,7 @@ class SemanticAnalyzerPluginInterface:
+     """Interface for accessing semantic analyzer functionality in plugins."""
+ 
+     options = None  # type: Options
++    msg = None  # type: MessageBuilder
+ 
+     @abstractmethod
+     def named_type(self, qualified_name: str, args: Optional[List[Type]] = None) -> Instance:
+@@ -534,7 +535,8 @@ def attr_class_maker_callback(
+                             and rvalue.callee.fullname in attr_attrib_makers):
+                         if auto_attribs and not stmt.new_syntax:
+                             # auto_attribs requires annotation on every attr.ib.
+-                            ctx.api.fail(messages.NEED_ANNOTATION_FOR_VAR, stmt)
++                            assert lhs.node is not None
++                            ctx.api.msg.need_annotation_for_var(lhs.node, stmt)
+                             continue
+ 
+                         if len(stmt.lvalues) > 1:
+@@ -560,6 +562,14 @@ def attr_class_maker_callback(
+                                     lhs.node.type = typ
+                                     lhs.is_inferred_def = False
+ 
++                        if ctx.api.options.disallow_untyped_defs and not typ:
++                            # This is a compromise.  If you don't have a type here then the
++                            # __init__ will be untyped. But since the __init__ is added it's
++                            # pointing at the decorator. So instead we also show the error in the
++                            # assignment, which is where you would fix the issue.
++                            assert lhs.node is not None
++                            ctx.api.msg.need_annotation_for_var(lhs.node, stmt)
++
+                         # If the attrib has a converter function take the type of the first
+                         # argument as the init type.
+                         # Note: convert is deprecated but works the same as converter.
+@@ -636,15 +646,6 @@ def attr_class_maker_callback(
+     # TODO: This doesn't work with incremental mode if the parent class is in a different file.
+     attr_classes[info] = attributes
+ 
+-    if ctx.api.options.disallow_untyped_defs:
+-        for attribute in attributes:
+-            if attribute.type is None:
+-                # This is a compromise.  If you don't have a type here then the __init__ will
+-                # be untyped. But since the __init__ is added it's pointing at the decorator.
+-                # So instead we just show the error in the assignment, which is where you
+-                # would fix the issue.
+-                ctx.api.fail(messages.NEED_ANNOTATION_FOR_VAR, attribute.context)
+-
+     # Check the init args for correct default-ness.  Note: This has to be done after all the
+     # attributes for all classes have been read, because subclasses can override parents.
+     last_default = False
+diff --git a/mypy/server/astdiff.py b/mypy/server/astdiff.py
+index 5f0d3d01a3..160b4e36f2 100644
+--- a/mypy/server/astdiff.py
++++ b/mypy/server/astdiff.py
+@@ -306,13 +306,13 @@ def snapshot_definition(node: Optional[SymbolNode],
+         #   type_vars
+         #   bases
+         #   _promote
+-        #   tuple_type
+         #   typeddict_type
+         attrs = (node.is_abstract,
+                  node.is_enum,
+                  node.fallback_to_any,
+                  node.is_named_tuple,
+                  node.is_newtype,
++                 snapshot_optional_type(node.tuple_type),
+                  [base.fullname() for base in node.mro])
+         prefix = node.fullname()
+         symbol_table = snapshot_symbol_table(prefix, node.names)
+diff --git a/mypy/server/astmerge.py b/mypy/server/astmerge.py
+index 7f8d416e97..511c3b685e 100644
+--- a/mypy/server/astmerge.py
++++ b/mypy/server/astmerge.py
+@@ -203,6 +203,7 @@ def visit_ref_expr(self, node: RefExpr) -> None:
+ 
+     def visit_namedtuple_expr(self, node: NamedTupleExpr) -> None:
+         super().visit_namedtuple_expr(node)
++        node.info = self.fixup(node.info)
+         self.process_type_info(node.info)
+ 
+     def visit_super_expr(self, node: SuperExpr) -> None:
+@@ -258,7 +259,6 @@ def process_type_info(self, info: TypeInfo) -> None:
+         # - declared_metaclass
+         # - metaclass_type
+         # - _promote
+-        # - tuple_type
+         # - typeddict_type
+         # - replaced
+         replace_nodes_in_symbol_table(info.names, self.replacements)
+@@ -266,6 +266,8 @@ def process_type_info(self, info: TypeInfo) -> None:
+             info.mro[i] = self.fixup(info.mro[i])
+         for i, base in enumerate(info.bases):
+             self.fixup_type(info.bases[i])
++        if info.tuple_type:
++            self.fixup_type(info.tuple_type)
+ 
+     def replace_statements(self, nodes: List[Statement]) -> List[Statement]:
+         result = []
+@@ -300,7 +302,9 @@ def visit_callable_type(self, typ: CallableType) -> None:
+         if typ.definition:
+             # No need to fixup since this is just a cross-reference.
+             typ.definition = self.replacements.get(typ.definition, typ.definition)
+-        # TODO: typ.fallback
++        # Fallback can be None for callable types that haven't been semantically analyzed.
++        if typ.fallback is not None:
++            typ.fallback.accept(self)
+         for tv in typ.variables:
+             tv.upper_bound.accept(self)
+             for value in tv.values:
+@@ -309,6 +313,7 @@ def visit_callable_type(self, typ: CallableType) -> None:
+     def visit_overloaded(self, t: Overloaded) -> None:
+         for item in t.items():
+             item.accept(self)
++        t.fallback.accept(self)
+ 
+     def visit_deleted_type(self, typ: DeletedType) -> None:
+         pass
+@@ -319,6 +324,7 @@ def visit_partial_type(self, typ: PartialType) -> None:
+     def visit_tuple_type(self, typ: TupleType) -> None:
+         for item in typ.items:
+             item.accept(self)
++        typ.fallback.accept(self)
+ 
+     def visit_type_type(self, typ: TypeType) -> None:
+         typ.item.accept(self)
+diff --git a/mypy/server/deps.py b/mypy/server/deps.py
+index 1980a04735..d8a8e56f4a 100644
+--- a/mypy/server/deps.py
++++ b/mypy/server/deps.py
+@@ -116,7 +116,7 @@ def get_dependencies_of_target(module_id: str,
+     """Get dependencies of a target -- don't recursive into nested targets."""
+     # TODO: Add tests for this function.
+     visitor = DependencyVisitor(type_map, python_version)
+-    visitor.enter_file_scope(module_id)
++    visitor.scope.enter_file(module_id)
+     if isinstance(target, MypyFile):
+         # Only get dependencies of the top-level of the module. Don't recurse into
+         # functions.
+@@ -127,12 +127,12 @@ def get_dependencies_of_target(module_id: str,
+     elif isinstance(target, FuncBase) and target.info:
+         # It's a method.
+         # TODO: Methods in nested classes.
+-        visitor.enter_class_scope(target.info)
++        visitor.scope.enter_class(target.info)
+         target.accept(visitor)
+-        visitor.leave_scope()
++        visitor.scope.leave()
+     else:
+         target.accept(visitor)
+-    visitor.leave_scope()
++    visitor.scope.leave()
+     return visitor.map
+ 
+ 
+@@ -140,12 +140,7 @@ class DependencyVisitor(TraverserVisitor):
+     def __init__(self,
+                  type_map: Dict[Expression, Type],
+                  python_version: Tuple[int, int]) -> None:
+-        # Stack of names of targets being processed. For stack targets we use the
+-        # surrounding module.
+-        self.target_stack = []  # type: List[str]
+-        # Stack of names of targets being processed, including class targets.
+-        self.full_target_stack = []  # type: List[str]
+-        self.scope_stack = []  # type: List[Union[None, TypeInfo, FuncDef]]
++        self.scope = Scope()
+         self.type_map = type_map
+         self.python2 = python_version[0] == 2
+         self.map = {}  # type: Dict[str, Set[str]]
+@@ -165,20 +160,14 @@ def __init__(self,
+     #   type variable with value restriction
+ 
+     def visit_mypy_file(self, o: MypyFile) -> None:
+-        self.enter_file_scope(o.fullname())
++        self.scope.enter_file(o.fullname())
+         self.is_package_init_file = o.is_package_init_file()
+         super().visit_mypy_file(o)
+-        self.leave_scope()
++        self.scope.leave()
+ 
+     def visit_func_def(self, o: FuncDef) -> None:
+-        if not isinstance(self.current_scope(), FuncDef):
+-            # Not a nested function, so create a new target.
+-            new_scope = True
+-            target = self.enter_function_scope(o)
+-        else:
+-            # Treat nested functions as components of the parent function target.
+-            new_scope = False
+-            target = self.current_target()
++        self.scope.enter_function(o)
++        target = self.scope.current_target()
+         if o.type:
+             if self.is_class and isinstance(o.type, FunctionLike):
+                 signature = bind_self(o.type)  # type: Type
+@@ -191,15 +180,15 @@ def visit_func_def(self, o: FuncDef) -> None:
+             for base in non_trivial_bases(o.info):
+                 self.add_dependency(make_trigger(base.fullname() + '.' + o.name()))
+         super().visit_func_def(o)
+-        if new_scope:
+-            self.leave_scope()
++        self.scope.leave()
+ 
+     def visit_decorator(self, o: Decorator) -> None:
+         self.add_dependency(make_trigger(o.func.fullname()))
+         super().visit_decorator(o)
+ 
+     def visit_class_def(self, o: ClassDef) -> None:
+-        target = self.enter_class_scope(o.info)
++        self.scope.enter_class(o.info)
++        target = self.scope.current_full_target()
+         self.add_dependency(make_trigger(target), target)
+         old_is_class = self.is_class
+         self.is_class = True
+@@ -226,15 +215,15 @@ def visit_class_def(self, o: ClassDef) -> None:
+                                     target=make_trigger(info.fullname() + '.' + name))
+             self.add_dependency(make_trigger(base_info.fullname() + '.__init__'),
+                                 target=make_trigger(info.fullname() + '.__init__'))
+-        self.leave_scope()
++        self.scope.leave()
+ 
+     def visit_import(self, o: Import) -> None:
+         for id, as_id in o.ids:
+             # TODO: as_id
+-            self.add_dependency(make_trigger(id), self.current_target())
++            self.add_dependency(make_trigger(id), self.scope.current_target())
+ 
+     def visit_import_from(self, o: ImportFrom) -> None:
+-        module_id, _ = correct_relative_import(self.current_module_id(),
++        module_id, _ = correct_relative_import(self.scope.current_module_id(),
+                                                o.relative,
+                                                o.id,
+                                                self.is_package_init_file)
+@@ -260,7 +249,7 @@ def visit_assignment_stmt(self, o: AssignmentStmt) -> None:
+         elif isinstance(rvalue, CallExpr) and isinstance(rvalue.analyzed, NamedTupleExpr):
+             # Depend on types of named tuple items.
+             info = rvalue.analyzed.info
+-            prefix = '%s.%s' % (self.current_full_target(), info.name())
++            prefix = '%s.%s' % (self.scope.current_full_target(), info.name())
+             for name, symnode in info.names.items():
+                 if not name.startswith('_') and isinstance(symnode.node, Var):
+                     typ = symnode.node.type
+@@ -293,7 +282,8 @@ def process_lvalue(self, lvalue: Expression) -> None:
+                 # global variable.
+                 lvalue_type = self.get_non_partial_lvalue_type(lvalue)
+                 type_triggers = get_type_triggers(lvalue_type)
+-                attr_trigger = make_trigger('%s.%s' % (self.full_target_stack[-1], lvalue.name))
++                attr_trigger = make_trigger('%s.%s' % (self.scope.current_full_target(),
++                                                       lvalue.name))
+                 for type_trigger in type_triggers:
+                     self.add_dependency(type_trigger, attr_trigger)
+         elif isinstance(lvalue, MemberExpr):
+@@ -515,7 +505,7 @@ def add_dependency(self, trigger: str, target: Optional[str] = None) -> None:
+             # anyway.
+             return
+         if target is None:
+-            target = self.current_target()
++            target = self.scope.current_target()
+         self.map.setdefault(trigger, set()).add(target)
+ 
+     def add_type_dependencies(self, typ: Type, target: Optional[str] = None) -> None:
+@@ -569,50 +559,77 @@ def add_iter_dependency(self, node: Expression) -> None:
+         if typ:
+             self.add_attribute_dependency(typ, '__iter__')
+ 
+-    def current_module_id(self) -> str:
+-        return self.target_stack[0]
+-
+-    def enter_file_scope(self, prefix: str) -> None:
+-        """Enter a module target scope."""
+-        assert not self.target_stack
+-        self.target_stack.append(prefix)
+-        self.full_target_stack.append(prefix)
+-        self.scope_stack.append(None)
+-
+-    def enter_function_scope(self, fdef: FuncDef) -> str:
+-        """Enter a function target scope."""
+-        target = '%s.%s' % (self.full_target_stack[-1], fdef.name())
+-        self.target_stack.append(target)
+-        self.full_target_stack.append(target)
+-        self.scope_stack.append(fdef)
+-        return target
+ 
+-    def enter_class_scope(self, info: TypeInfo) -> str:
+-        """Enter a class target scope."""
+-        # Duplicate the previous top non-class target (it can't be a class but since the
+-        # depths of all stacks must agree we need something).
+-        self.target_stack.append(self.target_stack[-1])
+-        full_target = '%s.%s' % (self.full_target_stack[-1], info.name())
+-        self.full_target_stack.append(full_target)
+-        self.scope_stack.append(info)
+-        return full_target
+-
+-    def leave_scope(self) -> None:
+-        """Leave a target scope."""
+-        self.target_stack.pop()
+-        self.full_target_stack.pop()
+-        self.scope_stack.pop()
++class Scope:
++    """Track which target we are processing at any given time."""
++
++    def __init__(self) -> None:
++        self.module = None  # type: Optional[str]
++        self.classes = []  # type: List[TypeInfo]
++        self.function = None  # type: Optional[FuncDef]
++        # Number of nested scopes ignored (that don't get their own separate targets)
++        self.ignored = 0
++
++    def current_module_id(self) -> str:
++        assert self.module
++        return self.module
+ 
+     def current_target(self) -> str:
+         """Return the current target (non-class; for a class return enclosing module)."""
+-        return self.target_stack[-1]
++        assert self.module
++        target = self.module
++        if self.function:
++            if self.classes:
++                target += '.' + '.'.join(c.name() for c in self.classes)
++            target += '.' + self.function.name()
++        return target
+ 
+     def current_full_target(self) -> str:
+         """Return the current target (may be a class)."""
+-        return self.full_target_stack[-1]
++        assert self.module
++        target = self.module
++        if self.classes:
++            target += '.' + '.'.join(c.name() for c in self.classes)
++        if self.function:
++            target += '.' + self.function.name()
++        return target
++
++    def enter_file(self, prefix: str) -> None:
++        self.module = prefix
++        self.classes = []
++        self.function = None
++        self.ignored = 0
++
++    def enter_function(self, fdef: FuncDef) -> None:
++        if not self.function:
++            self.function = fdef
++        else:
++            # Nested functions are part of the topmost function target.
++            self.ignored += 1
+ 
+-    def current_scope(self) -> Optional[Node]:
+-        return self.scope_stack[-1]
++    def enter_class(self, info: TypeInfo) -> None:
++        """Enter a class target scope."""
++        if not self.function:
++            self.classes.append(info)
++        else:
++            # Classes within functions are part of the enclosing function target.
++            self.ignored += 1
++
++    def leave(self) -> None:
++        """Leave the innermost scope (can be any kind of scope)."""
++        if self.ignored:
++            # Leave a scope that's included in the enclosing target.
++            self.ignored -= 1
++        elif self.function:
++            # Function is always the innermost target.
++            self.function = None
++        elif self.classes:
++            # Leave the innermost class.
++            self.classes.pop()
++        else:
++            # Leave module.
++            assert self.module
++            self.module = None
+ 
+ 
+ def get_type_triggers(typ: Type) -> List[str]:
+diff --git a/mypy/server/update.py b/mypy/server/update.py
+index 09d18aa6b6..4844671665 100644
+--- a/mypy/server/update.py
++++ b/mypy/server/update.py
+@@ -493,9 +493,13 @@ def delete_module(module_id: str,
+         del manager.saved_cache[module_id]
+     components = module_id.split('.')
+     if len(components) > 1:
+-        parent = manager.modules['.'.join(components[:-1])]
+-        if components[-1] in parent.names:
+-            del parent.names[components[-1]]
++        # Delete reference to module in parent module.
++        parent_id = '.'.join(components[:-1])
++        # If parent module is ignored, it won't be included in the modules dictionary.
++        if parent_id in manager.modules:
++            parent = manager.modules[parent_id]
++            if components[-1] in parent.names:
++                del parent.names[components[-1]]
+     return new_graph
+ 
+ 
+@@ -643,7 +647,7 @@ def update_dependencies(new_modules: Mapping[str, Optional[MypyFile]],
+     for id, node in new_modules.items():
+         if node is None:
+             continue
+-        if '/typeshed/' in node.path:
++        if '/typeshed/' in node.path or node.path.startswith('typeshed/'):
+             # We don't track changes to typeshed -- the assumption is that they are only changed
+             # as part of mypy updates, which will invalidate everything anyway.
+             #
+diff --git a/mypy/stubgen.py b/mypy/stubgen.py
+index 707fb32f06..c1dac63c23 100644
+--- a/mypy/stubgen.py
++++ b/mypy/stubgen.py
+@@ -59,7 +59,7 @@
+     Expression, IntExpr, UnaryExpr, StrExpr, BytesExpr, NameExpr, FloatExpr, MemberExpr, TupleExpr,
+     ListExpr, ComparisonExpr, CallExpr, IndexExpr, EllipsisExpr,
+     ClassDef, MypyFile, Decorator, AssignmentStmt,
+-    IfStmt, ImportAll, ImportFrom, Import, FuncDef, FuncBase, TempNode,
++    IfStmt, ReturnStmt, ImportAll, ImportFrom, Import, FuncDef, FuncBase, TempNode,
+     ARG_POS, ARG_STAR, ARG_STAR2, ARG_NAMED, ARG_NAMED_OPT,
+ )
+ from mypy.stubgenc import parse_all_signatures, find_unique_signatures, generate_stub_for_c_module
+@@ -475,7 +475,7 @@ def visit_func_def(self, o: FuncDef) -> None:
+         retname = None
+         if isinstance(o.type, CallableType):
+             retname = self.print_annotation(o.type.ret_type)
+-        elif o.name() == '__init__':
++        elif o.name() == '__init__' or not has_return_statement(o):
+             retname = 'None'
+         retfield = ''
+         if retname is not None:
+@@ -593,7 +593,7 @@ def process_namedtuple(self, lvalue: NameExpr, rvalue: CallExpr) -> None:
+         name = repr(getattr(rvalue.args[0], 'value', '<ERROR>'))
+         if isinstance(rvalue.args[1], StrExpr):
+             items = repr(rvalue.args[1].value)
+-        elif isinstance(rvalue.args[1], ListExpr):
++        elif isinstance(rvalue.args[1], (ListExpr, TupleExpr)):
+             list_items = cast(List[StrExpr], rvalue.args[1].items)
+             items = '[%s]' % ', '.join(repr(item.value) for item in list_items)
+         else:
+@@ -814,6 +814,19 @@ def visit_assignment_stmt(self, o: AssignmentStmt) -> None:
+     return results
+ 
+ 
++def has_return_statement(fdef: FuncBase) -> bool:
++    class ReturnSeeker(mypy.traverser.TraverserVisitor):
++        def __init__(self) -> None:
++            self.found = False
++
++        def visit_return_stmt(self, o: ReturnStmt) -> None:
++            self.found = True
++
++    seeker = ReturnSeeker()
++    fdef.accept(seeker)
++    return seeker.found
++
++
+ def get_qualified_name(o: Expression) -> str:
+     if isinstance(o, NameExpr):
+         return o.name
+diff --git a/mypy/subtypes.py b/mypy/subtypes.py
+index e5034cd50b..2b70cfb9e8 100644
+--- a/mypy/subtypes.py
++++ b/mypy/subtypes.py
+@@ -289,13 +289,46 @@ def visit_overloaded(self, left: Overloaded) -> bool:
+                     return True
+             return False
+         elif isinstance(right, Overloaded):
+-            # TODO: this may be too restrictive
+-            if len(left.items()) != len(right.items()):
+-                return False
+-            for i in range(len(left.items())):
+-                if not is_subtype(left.items()[i], right.items()[i], self.check_type_parameter,
+-                                  ignore_pos_arg_names=self.ignore_pos_arg_names):
++            # Ensure each overload in the right side (the supertype) is accounted for.
++            previous_match_left_index = -1
++            matched_overloads = set()
++            possible_invalid_overloads = set()
++
++            for right_index, right_item in enumerate(right.items()):
++                found_match = False
++
++                for left_index, left_item in enumerate(left.items()):
++                    subtype_match = is_subtype(left_item, right_item, self.check_type_parameter,
++                                               ignore_pos_arg_names=self.ignore_pos_arg_names)
++
++                    # Order matters: we need to make sure that the index of
++                    # this item is at least the index of the previous one.
++                    if subtype_match and previous_match_left_index <= left_index:
++                        if not found_match:
++                            # Update the index of the previous match.
++                            previous_match_left_index = left_index
++                            found_match = True
++                            matched_overloads.add(left_item)
++                            possible_invalid_overloads.discard(left_item)
++                    else:
++                        # If this one overlaps with the supertype in any way, but it wasn't
++                        # an exact match, then it's a potential error.
++                        if (is_callable_subtype(left_item, right_item, ignore_return=True,
++                                            ignore_pos_arg_names=self.ignore_pos_arg_names) or
++                                is_callable_subtype(right_item, left_item, ignore_return=True,
++                                                ignore_pos_arg_names=self.ignore_pos_arg_names)):
++                            # If this is an overload that's already been matched, there's no
++                            # problem.
++                            if left_item not in matched_overloads:
++                                possible_invalid_overloads.add(left_item)
++
++                if not found_match:
+                     return False
++
++            if possible_invalid_overloads:
++                # There were potentially invalid overloads that were never matched to the
++                # supertype.
++                return False
+             return True
+         elif isinstance(right, UnboundType):
+             return True
+diff --git a/mypy/test/testdmypy.py b/mypy/test/testdmypy.py
+index dedceccabd..ef2f87e64d 100644
+--- a/mypy/test/testdmypy.py
++++ b/mypy/test/testdmypy.py
+@@ -28,11 +28,22 @@
+         'check-enum.test',
+         'check-incremental.test',
+         'check-newtype.test',
++        'check-dmypy-fine-grained.test',
+     ]
+ else:
+     dmypy_files = []  # type: List[str]
+ 
+ 
++# By default we complain about missing files. This is a special module prefix
++# for which we allow non-existence. This is used for testing missing files.
++NON_EXISTENT_PREFIX = 'nonexistent'
++
++# If this suffix is used together with NON_EXISTENT_PREFIX, the non-existent
++# file is a .pyi file. Since the file doesn't exist, we can't automatically
++# figure out the extension.
++STUB_SUFFIX = '_stub'
++
++
+ class TypeCheckSuite(DataSuite):
+     files = dmypy_files
+     base_path = test_temp_dir
+@@ -72,16 +83,8 @@ def run_case_once(self, testcase: DataDrivenTestCase, incremental_step: int) ->
+         assert incremental_step >= 1
+         build.find_module_clear_caches()
+         original_program_text = '\n'.join(testcase.input)
+-        module_data = self.parse_module(original_program_text, incremental_step)
+ 
+-        if incremental_step == 1:
+-            # In run 1, copy program text to program file.
+-            for module_name, program_path, program_text in module_data:
+-                if module_name == '__main__':
+-                    with open(program_path, 'w') as f:
+-                        f.write(program_text)
+-                    break
+-        elif incremental_step > 1:
++        if incremental_step > 1:
+             # In runs 2+, copy *.[num] files to * files.
+             for dn, dirs, files in os.walk(os.curdir):
+                 for file in files:
+@@ -101,10 +104,23 @@ def run_case_once(self, testcase: DataDrivenTestCase, incremental_step: int) ->
+                 # Use retries to work around potential flakiness on Windows (AppVeyor).
+                 retry_on_error(lambda: os.remove(path))
+ 
++        module_data = self.parse_module(original_program_text, incremental_step)
++
++        if incremental_step == 1:
++            # In run 1, copy program text to program file.
++            for module_name, program_path, program_text in module_data:
++                if module_name == '__main__' and program_text is not None:
++                    with open(program_path, 'w') as f:
++                        f.write(program_text)
++                    break
++
+         # Parse options after moving files (in case mypy.ini is being moved).
+         options = self.parse_options(original_program_text, testcase, incremental_step)
+         if incremental_step == 1:
+-            self.server = dmypy_server.Server([])  # TODO: Fix ugly API
++            server_options = []  # type: List[str]
++            if 'fine-grained' in testcase.file:
++                server_options.append('--experimental')
++            self.server = dmypy_server.Server(server_options)  # TODO: Fix ugly API
+             self.server.options = options
+ 
+         assert self.server is not None  # Set in step 1 and survives into next steps
+@@ -160,7 +176,7 @@ def check_module_equivalence(self, name: str,
+                     ', '.join(expected_normalized),
+                     name))
+ 
+-    def verify_cache(self, module_data: List[Tuple[str, str, str]], a: List[str],
++    def verify_cache(self, module_data: List[Tuple[str, str, Optional[str]]], a: List[str],
+                      manager: build.BuildManager) -> None:
+         # There should be valid cache metadata for each module except
+         # those in error_paths; for those there should not be.
+@@ -222,7 +238,7 @@ def find_missing_cache_files(self, modules: Dict[str, str],
+ 
+     def parse_module(self,
+                      program_text: str,
+-                     incremental_step: int) -> List[Tuple[str, str, str]]:
++                     incremental_step: int) -> List[Tuple[str, str, Optional[str]]]:
+         """Return the module and program names for a test case.
+ 
+         Normally, the unit tests will parse the default ('__main__')
+@@ -251,13 +267,23 @@ def parse_module(self,
+             # module. Look up the module and give it as the thing to
+             # analyze.
+             module_names = m.group(1)
+-            out = []
++            out = []  # type: List[Tuple[str, str, Optional[str]]]
+             for module_name in module_names.split(' '):
+                 path = build.find_module(module_name, [test_temp_dir])
+-                assert path is not None, "Can't find ad hoc case file"
+-                with open(path) as f:
+-                    program_text = f.read()
+-                out.append((module_name, path, program_text))
++                if path is None and module_name.startswith(NON_EXISTENT_PREFIX):
++                    # This is a special name for a file that we don't want to exist.
++                    assert '.' not in module_name  # TODO: Packages not supported here
++                    if module_name.endswith(STUB_SUFFIX):
++                        fnam = '{}.pyi'.format(module_name)
++                    else:
++                        fnam = '{}.py'.format(module_name)
++                    path = os.path.join(test_temp_dir, fnam)
++                    out.append((module_name, path, None))
++                else:
++                    assert path is not None, "Can't find ad hoc case file for %r" % module_name
++                    with open(path) as f:
++                        program_text = f.read()
++                    out.append((module_name, path, program_text))
+             return out
+         else:
+             return [('__main__', 'main', program_text)]
+diff --git a/mypy/test/testfinegrained.py b/mypy/test/testfinegrained.py
+index ba6bb52443..a442f1052e 100644
+--- a/mypy/test/testfinegrained.py
++++ b/mypy/test/testfinegrained.py
+@@ -137,7 +137,7 @@ def parse_sources(self, program_text: str) -> Optional[List[Tuple[str, str]]]:
+         description.
+         """
+         # TODO: Support defining separately for each incremental step.
+-        m = re.search('# cmd: mypy ([a-zA-Z0-9_. ]+)$', program_text, flags=re.MULTILINE)
++        m = re.search('# cmd: mypy ([a-zA-Z0-9_./ ]+)$', program_text, flags=re.MULTILINE)
+         if m:
+             # The test case wants to use a non-default set of files.
+             paths = m.group(1).strip().split()
+diff --git a/mypy/types.py b/mypy/types.py
+index 123654e1a2..5edc06f4de 100644
+--- a/mypy/types.py
++++ b/mypy/types.py
+@@ -327,12 +327,15 @@ def __eq__(self, other: object) -> bool:
+         return isinstance(other, AnyType)
+ 
+     def serialize(self) -> JsonDict:
+-        return {'.class': 'AnyType'}
++        return {'.class': 'AnyType', 'type_of_any': self.type_of_any.name,
++                'source_any': self.source_any.serialize() if self.source_any is not None else None}
+ 
+     @classmethod
+     def deserialize(cls, data: JsonDict) -> 'AnyType':
+         assert data['.class'] == 'AnyType'
+-        return AnyType(TypeOfAny.special_form)
++        source = data['source_any']
++        return AnyType(TypeOfAny[data['type_of_any']],
++                       AnyType.deserialize(source) if source is not None else None)
+ 
+ 
+ class UninhabitedType(Type):
+diff --git a/test-data/unit/check-attr.test b/test-data/unit/check-attr.test
+index 51ce2dabdb..c5459f4cca 100644
+--- a/test-data/unit/check-attr.test
++++ b/test-data/unit/check-attr.test
+@@ -76,10 +76,10 @@ A(1, [2], '3', 4, 5)  # E: Too many arguments for "A"
+ import attr
+ @attr.s    # E: Function is missing a type annotation for one or more arguments
+ class A:
+-    a = attr.ib()  # E: Need type annotation for variable
+-    _b = attr.ib()  # E: Need type annotation for variable
+-    c = attr.ib(18)  # E: Need type annotation for variable
+-    _d = attr.ib(validator=None, default=18)   # E: Need type annotation for variable
++    a = attr.ib()  # E: Need type annotation for 'a'
++    _b = attr.ib()  # E: Need type annotation for '_b'
++    c = attr.ib(18)  # E: Need type annotation for 'c'
++    _d = attr.ib(validator=None, default=18)   # E: Need type annotation for '_d'
+     E = 18
+ [builtins fixtures/bool.pyi]
+ 
+@@ -621,9 +621,9 @@ class A:
+    a: int
+    b = 17
+    # The following forms are not allowed with auto_attribs=True
+-   c = attr.ib()  # E: Need type annotation for variable
+-   d, e = attr.ib(), attr.ib() # E: Need type annotation for variable
+-   f = g = attr.ib()  # E: Need type annotation for variable
++   c = attr.ib()  # E: Need type annotation for 'c'
++   d, e = attr.ib(), attr.ib() # E: Need type annotation for 'd' # E: Need type annotation for 'e'
++   f = g = attr.ib()  # E: Need type annotation for 'f' # E: Need type annotation for 'g'
+ [builtins fixtures/bool.pyi]
+ 
+ [case testAttrsRepeatedName]
+diff --git a/test-data/unit/check-classes.test b/test-data/unit/check-classes.test
+index e543c22a15..e656eb2696 100644
+--- a/test-data/unit/check-classes.test
++++ b/test-data/unit/check-classes.test
+@@ -767,7 +767,7 @@ class C:
+ x = C.x
+ [builtins fixtures/list.pyi]
+ [out]
+-main:2: error: Need type annotation for variable
++main:2: error: Need type annotation for 'x'
+ 
+ [case testAccessingGenericClassAttribute]
+ from typing import Generic, TypeVar
+@@ -1606,8 +1606,6 @@ class B(A):
+     def __add__(self, x: str) -> A: pass
+     @overload
+     def __add__(self, x: type) -> A: pass
+-[out]
+-tmp/foo.pyi:8: error: Signature of "__add__" incompatible with supertype "A"
+ 
+ [case testOverloadedOperatorMethodOverrideWithSwitchedItemOrder]
+ from foo import *
+@@ -2774,6 +2772,88 @@ reveal_type(f(BChild()))  # E: Revealed type is 'foo.B'
+ [builtins fixtures/classmethod.pyi]
+ [out]
+ 
++[case testSubtypeWithMoreOverloadsThanSupertypeSucceeds]
++from foo import *
++[file foo.pyi]
++from typing import overload
++
++
++class X: pass
++class Y: pass
++class Z: pass
++
++
++class A:
++    @overload
++    def f(self, x: X) -> X: pass
++    @overload
++    def f(self, y: Y) -> Y: pass
++
++class B(A):
++    @overload
++    def f(self, x: X) -> X: pass
++    @overload
++    def f(self, y: Y) -> Y: pass
++    @overload
++    def f(self, z: Z) -> Z: pass
++[builtins fixtures/classmethod.pyi]
++[out]
++
++[case testSubtypeOverloadCoveringMultipleSupertypeOverloadsSucceeds]
++from foo import *
++[file foo.pyi]
++from typing import overload
++
++
++class A: pass
++class B(A): pass
++class C(A): pass
++class D: pass
++
++
++class Super:
++    @overload
++    def foo(self, a: B) -> C: pass
++    @overload
++    def foo(self, a: C) -> A: pass
++    @overload
++    def foo(self, a: D) -> D: pass
++
++class Sub(Super):
++    @overload
++    def foo(self, a: A) -> C: pass
++    @overload
++    def foo(self, a: D) -> D: pass
++[builtins fixtures/classmethod.pyi]
++[out]
++
++[case testSubtypeOverloadWithOverlappingArgumentsButWrongReturnType]
++from foo import *
++[file foo.pyi]
++from typing import overload
++
++
++class A: pass
++class B(A): pass
++class C: pass
++
++
++class Super:
++    @overload
++    def foo(self, a: A) -> A: pass
++    @overload
++    def foo(self, a: C) -> C: pass
++
++class Sub(Super):
++    @overload  # E: Signature of "foo" incompatible with supertype "Super"
++    def foo(self, a: A) -> A: pass
++    @overload
++    def foo(self, a: B) -> C: pass
++    @overload
++    def foo(self, a: C) -> C: pass
++[builtins fixtures/classmethod.pyi]
++[out]
++
+ [case testTypeTypeOverlapsWithObjectAndType]
+ from foo import *
+ [file foo.pyi]
+diff --git a/test-data/unit/check-columns.test b/test-data/unit/check-columns.test
+index 9b2c0b9f9f..44d9d6881a 100644
+--- a/test-data/unit/check-columns.test
++++ b/test-data/unit/check-columns.test
+@@ -2,7 +2,7 @@
+ # flags: --show-column-numbers
+ 1 +
+ [out]
+-main:2:4: error: invalid syntax
++main:2:5: error: invalid syntax
+ 
+ 
+ [case testColumnsNestedFunctions]
+@@ -15,8 +15,8 @@ def f() -> 'A':
+ class A: pass
+ class B: pass
+ [out]
+-main:5:8: error: Incompatible return value type (got "A", expected "B")
+-main:6:4: error: Incompatible return value type (got "B", expected "A")
++main:5:9: error: Incompatible return value type (got "A", expected "B")
++main:6:5: error: Incompatible return value type (got "B", expected "A")
+ 
+ [case testColumnsNestedFunctionsWithFastParse]
+ # flags: --show-column-numbers
+@@ -28,8 +28,8 @@ def f() -> 'A':
+ class A: pass
+ class B: pass
+ [out]
+-main:5:8: error: Incompatible return value type (got "A", expected "B")
+-main:6:4: error: Incompatible return value type (got "B", expected "A")
++main:5:9: error: Incompatible return value type (got "A", expected "B")
++main:6:5: error: Incompatible return value type (got "B", expected "A")
+ 
+ 
+ [case testColumnsMethodDefaultArgumentsAndSignatureAsComment]
+@@ -40,28 +40,28 @@ class A:
+         pass
+ A().f()
+ A().f(1)
+-A().f('') # E:0: Argument 1 to "f" of "A" has incompatible type "str"; expected "int"
+-A().f(1, 1) # E:0: Argument 2 to "f" of "A" has incompatible type "int"; expected "str"
+-A().f(1, 'hello', 'hi') # E:0: Too many arguments for "f" of "A"
++A().f('') # E:1: Argument 1 to "f" of "A" has incompatible type "str"; expected "int"
++A().f(1, 1) # E:1: Argument 2 to "f" of "A" has incompatible type "int"; expected "str"
++A().f(1, 'hello', 'hi') # E:1: Too many arguments for "f" of "A"
+ 
+ [case testColumnsMultipleStatementsPerLine]
+ # flags: --show-column-numbers
+-x = 1
++x = 15
+ y = 'hello'
+ x = 2; y = x; y += 1
+ [out]
+-main:4:7: error: Incompatible types in assignment (expression has type "int", variable has type "str")
+-main:4:14: error: Unsupported operand types for + ("str" and "int")
++main:4:8: error: Incompatible types in assignment (expression has type "int", variable has type "str")
++main:4:15: error: Unsupported operand types for + ("str" and "int")
+ 
+ [case testColumnsSimpleIsinstance]
+ # flags: --show-column-numbers
+ import typing
+ def f(x: object, n: int, s: str) -> None:
+-    n = x # E:4: Incompatible types in assignment (expression has type "object", variable has type "int")
++    n = x # E:5: Incompatible types in assignment (expression has type "object", variable has type "int")
+     if isinstance(x, int):
+         n = x
+-        s = x # E:8: Incompatible types in assignment (expression has type "int", variable has type "str")
+-    n = x # E:4: Incompatible types in assignment (expression has type "object", variable has type "int")
++        s = x # E:9: Incompatible types in assignment (expression has type "int", variable has type "str")
++    n = x # E:5: Incompatible types in assignment (expression has type "object", variable has type "int")
+ [builtins fixtures/isinstance.pyi]
+ [out]
+ 
+diff --git a/test-data/unit/check-dmypy-fine-grained.test b/test-data/unit/check-dmypy-fine-grained.test
+new file mode 100644
+index 0000000000..bf0d47dfcc
+--- /dev/null
++++ b/test-data/unit/check-dmypy-fine-grained.test
+@@ -0,0 +1,166 @@
++[case testCleanFineGrainedIncremental]
++# cmd: mypy -m a b
++[file b.py]
++import a
++x = a.f()
++
++[file a.py]
++def f() -> int:
++    return 1
++
++[file a.py.2]
++def f() -> str:
++    return ''
++[out1]
++[out2]
++
++[case testErrorFineGrainedIncremental]
++# cmd: mypy -m a b
++[file b.py]
++import a
++x = a.f()
++x = 1
++
++[file a.py]
++def f() -> int:
++    return 1
++
++[file a.py.2]
++def f() -> str:
++    return ''
++[out1]
++[out2]
++tmp/b.py:3: error: Incompatible types in assignment (expression has type "int", variable has type "str")
++
++[case testAddFileFineGrainedIncremental]
++# cmd: mypy -m a
++# cmd2: mypy -m a b
++[file a.py]
++import b
++b.f(1)
++[file b.py.2]
++def f(x: str) -> None: pass
++[out1]
++tmp/a.py:1: error: Cannot find module named 'b'
++tmp/a.py:1: note: (Perhaps setting MYPYPATH or using the "--ignore-missing-imports" flag would help)
++[out2]
++tmp/a.py:2: error: Argument 1 to "f" has incompatible type "int"; expected "str"
++
++[case testDeleteFileFineGrainedIncremental]
++# cmd: mypy -m a b
++# cmd2: mypy -m a
++[file a.py]
++import b
++b.f(1)
++[file b.py]
++def f(x: str) -> None: pass
++[delete b.py.2]
++[out1]
++tmp/a.py:2: error: Argument 1 to "f" has incompatible type "int"; expected "str"
++[out2]
++tmp/a.py:1: error: Cannot find module named 'b'
++tmp/a.py:1: note: (Perhaps setting MYPYPATH or using the "--ignore-missing-imports" flag would help)
++
++[case testInitialErrorFineGrainedIncremental]
++# cmd: mypy -m a b
++[file b.py]
++import a
++x = a.f()
++x = ''
++
++[file a.py]
++def f() -> int:
++    return 1
++
++[file a.py.2]
++def f() -> str:
++    return ''
++[out1]
++tmp/b.py:3: error: Incompatible types in assignment (expression has type "str", variable has type "int")
++[out2]
++
++[case testInitialBlockerFineGrainedIncremental]
++# cmd: mypy -m a b
++[file a.py]
++1 1
++[file b.py]
++def f() -> int:
++    return ''
++[file a.py.2]
++x = 1
++[file b.py.3]
++def f() -> int:
++    return 0
++[out1]
++tmp/a.py:1: error: invalid syntax
++[out2]
++tmp/b.py:2: error: Incompatible return value type (got "str", expected "int")
++[out3]
++
++[case testNoOpUpdateFineGrainedIncremental]
++# cmd: mypy -m a
++[file a.py]
++1()
++[file b.py.2]
++# Note: this file is not part of the build
++[file a.py.3]
++x = 1
++[out1]
++tmp/a.py:1: error: "int" not callable
++[out2]
++tmp/a.py:1: error: "int" not callable
++[out3]
++
++[case testNonExistentFileOnCommandLineFineGrainedIncremental1]
++# cmd: mypy -m a nonexistent
++# NOTE: 'nonexistent' is a magic module name understood by mypy.test.testdmypy
++[file a.py]
++[file a.py.2]
++1()
++[out1]
++mypy: can't read file 'tmp/nonexistent.py': No such file or directory
++[out2]
++mypy: can't read file 'tmp/nonexistent.py': No such file or directory
++
++[case testNonExistentFileOnCommandLineFineGrainedIncremental2]
++# cmd: mypy -m a
++# cmd2: mypy -m a nonexistent
++# NOTE: 'nonexistent' is a magic module name understood by mypy.test.testdmypy
++# TODO: Should generate an error for missing file
++[file a.py]
++[file a.py.2]
++1()
++[out1]
++[out2]
++tmp/a.py:1: error: "int" not callable
++
++[case testNonExistentFileOnCommandLineFineGrainedIncremental3]
++# cmd: mypy -m a
++# cmd2: mypy -m a nonexistent
++# NOTE: 'nonexistent' is a magic module name understood by mypy.test.testdmypy
++# TODO: Should generate an error for missing file
++[file a.py]
++[file nonexistent.py]
++[delete nonexistent.py.2]
++[out1]
++[out2]
++
++[case testNonExistentFileOnCommandLineFineGrainedIncremental4]
++# cmd: mypy -m a nonexistent
++# NOTE: 'nonexistent' is a magic module name understood by mypy.test.testdmypy
++# TODO: Should generate an error for missing file
++[file a.py]
++[file nonexistent.py]
++[delete nonexistent.py.2]
++[out1]
++[out2]
++
++[case testNonExistentFileOnCommandLineFineGrainedIncremental5]
++# cmd: mypy -m a nonexistent_stub
++# NOTE: 'nonexistent_stub' is a magic module name understood by mypy.test.testdmypy
++# TODO: Should generate an error for missing file
++[file a.py]
++[file nonexistent_stub.pyi]
++[delete nonexistent_stub.pyi.2]
++[out1]
++[out2]
+diff --git a/test-data/unit/check-expressions.test b/test-data/unit/check-expressions.test
+index 06d3b45601..e5fd05ab48 100644
+--- a/test-data/unit/check-expressions.test
++++ b/test-data/unit/check-expressions.test
+@@ -1562,7 +1562,7 @@ d5 = dict(a=1, b='') # type: Dict[str, Any]
+ 
+ [case testDictWithoutKeywordArgs]
+ from typing import Dict
+-d = dict() # E: Need type annotation for variable
++d = dict() # E: Need type annotation for 'd'
+ d2 = dict() # type: Dict[int, str]
+ dict(undefined) # E: Name 'undefined' is not defined
+ [builtins fixtures/dict.pyi]
+@@ -1787,3 +1787,8 @@ reveal_type(a.__pow__(2)) # E: Revealed type is 'builtins.int'
+ reveal_type(a.__pow__(a)) # E: Revealed type is 'Any'
+ a.__pow__() # E: Too few arguments for "__pow__" of "int"
+ [builtins fixtures/ops.pyi]
++
++[case testTypeAnnotationNeededMultipleAssignment]
++x, y = [], [] # E: Need type annotation for 'x' \
++            # E: Need type annotation for 'y'
++[builtins fixtures/list.pyi]
+diff --git a/test-data/unit/check-functions.test b/test-data/unit/check-functions.test
+index 608752b4f0..f5669b58fa 100644
+--- a/test-data/unit/check-functions.test
++++ b/test-data/unit/check-functions.test
+@@ -1391,7 +1391,7 @@ if g(C()):
+     def f(x: B) -> B: pass
+ 
+ [case testRedefineFunctionDefinedAsVariableInitializedToEmptyList]
+-f = [] # E: Need type annotation for variable
++f = [] # E: Need type annotation for 'f'
+ if object():
+     def f(): pass # E: Incompatible redefinition
+ f()
+@@ -2200,7 +2200,7 @@ def make_list() -> List[T]: pass
+ 
+ l: List[int] = make_list()
+ 
+-bad = make_list()  # E: Need type annotation for variable
++bad = make_list()  # E: Need type annotation for 'bad'
+ [builtins fixtures/list.pyi]
+ 
+ [case testAnonymousArgumentError]
+diff --git a/test-data/unit/check-generics.test b/test-data/unit/check-generics.test
+index 8b9b4d52af..9c99d7b038 100644
+--- a/test-data/unit/check-generics.test
++++ b/test-data/unit/check-generics.test
+@@ -615,17 +615,17 @@ X = T # Error
+ 
+ [builtins fixtures/list.pyi]
+ [out]
+-main:9:4: error: "Node" expects 2 type arguments, but 1 given
+-main:11:4: error: "Node" expects 2 type arguments, but 3 given
+-main:15:9: error: "list" expects 1 type argument, but 2 given
+-main:16:18: error: "list" expects 1 type argument, but 2 given
+-main:17:24: error: "Node" expects 2 type arguments, but 1 given
+-main:18:3: error: "Node" expects 2 type arguments, but 1 given
+-main:19:4: error: Bad number of arguments for type alias, expected: 1, given: 2
+-main:19:4: error: "Node" expects 2 type arguments, but 1 given
+-main:22:0: error: Revealed type is '__main__.Node[builtins.int, builtins.str]'
+-main:24:0: error: Revealed type is '__main__.Node[__main__.Node[builtins.int, builtins.int], builtins.list[builtins.int]]'
+-main:26:4: error: Type variable "__main__.T" is invalid as target for type alias
++main:9:5: error: "Node" expects 2 type arguments, but 1 given
++main:11:5: error: "Node" expects 2 type arguments, but 3 given
++main:15:10: error: "list" expects 1 type argument, but 2 given
++main:16:19: error: "list" expects 1 type argument, but 2 given
++main:17:25: error: "Node" expects 2 type arguments, but 1 given
++main:18:4: error: "Node" expects 2 type arguments, but 1 given
++main:19:5: error: Bad number of arguments for type alias, expected: 1, given: 2
++main:19:5: error: "Node" expects 2 type arguments, but 1 given
++main:22:1: error: Revealed type is '__main__.Node[builtins.int, builtins.str]'
++main:24:1: error: Revealed type is '__main__.Node[__main__.Node[builtins.int, builtins.int], builtins.list[builtins.int]]'
++main:26:5: error: Type variable "__main__.T" is invalid as target for type alias
+ 
+ [case testGenericTypeAliasesForAliases]
+ from typing import TypeVar, Generic, List, Union
+@@ -1000,7 +1000,7 @@ IntNode[int](1, 1)
+ IntNode[int](1, 'a')  # E: Argument 2 to "Node" has incompatible type "str"; expected "int"
+ 
+ SameNode = Node[T, T]
+-ff = SameNode[T](1, 1)  # E: Need type annotation for variable
++ff = SameNode[T](1, 1)  # E: Need type annotation for 'ff'
+ a = SameNode(1, 'x')
+ reveal_type(a) # E: Revealed type is '__main__.Node[Any, Any]'
+ b = SameNode[int](1, 1)
+@@ -1068,7 +1068,7 @@ y = None # type: SameA[str] # Two errors here, for both args of A
+ 
+ [builtins fixtures/list.pyi]
+ [out]
+-main:9:7: error: Value of type variable "T" of "A" cannot be "str"
++main:9:8: error: Value of type variable "T" of "A" cannot be "str"
+ main:13: error: Value of type variable "T" of "A" cannot be "str"
+ main:13: error: Value of type variable "S" of "A" cannot be "str"
+ 
+diff --git a/test-data/unit/check-incremental.test b/test-data/unit/check-incremental.test
+index 6df0d81a68..653db57256 100644
+--- a/test-data/unit/check-incremental.test
++++ b/test-data/unit/check-incremental.test
+@@ -3447,3 +3447,22 @@ import m  # No error here
+ tmp/m/a.py:1: error: Unsupported operand types for + ("int" and "str")
+ [out2]
+ tmp/m/a.py:1: error: Unsupported operand types for + ("int" and "str")
++
++[case testDisallowAnyExprIncremental]
++# cmd: mypy -m main
++# flags:  --disallow-any-expr
++
++[file ns.py]
++class Namespace:
++    def __init__(self):
++        self.user = 0
++
++[file main.py]
++import ns
++user = ns.Namespace.user
++
++[out1]
++tmp/main.py:2: error: Expression has type "Any"
++
++[out2]
++tmp/main.py:2: error: Expression has type "Any"
+diff --git a/test-data/unit/check-inference-context.test b/test-data/unit/check-inference-context.test
+index cbfd940d89..318e909387 100644
+--- a/test-data/unit/check-inference-context.test
++++ b/test-data/unit/check-inference-context.test
+@@ -90,7 +90,7 @@ class B: pass
+ from typing import TypeVar, Generic
+ T = TypeVar('T')
+ def g() -> None:
+-    x = f() # E: Need type annotation for variable
++    x = f() # E: Need type annotation for 'x'
+ 
+ def f() -> 'A[T]': pass
+ class A(Generic[T]): pass
+@@ -384,7 +384,7 @@ class B(A): pass
+ [case testLocalVariableInferenceFromEmptyList]
+ import typing
+ def f() -> None:
+-    a = []     # E: Need type annotation for variable
++    a = []     # E: Need type annotation for 'a'
+     b = [None]
+     c = [B()]
+     c = [object()] # E: List item 0 has incompatible type "object"; expected "B"
+diff --git a/test-data/unit/check-inference.test b/test-data/unit/check-inference.test
+index c9bb0fdb05..3bcdf2d6d2 100644
+--- a/test-data/unit/check-inference.test
++++ b/test-data/unit/check-inference.test
+@@ -420,7 +420,7 @@ class A: pass
+ a = None # type: A
+ 
+ def ff() -> None:
+-    x = f() # E: Need type annotation for variable
++    x = f() # E: Need type annotation for 'x'
+     reveal_type(x) # E: Revealed type is 'Any'
+ 
+ g(None) # Ok
+@@ -875,7 +875,7 @@ for x in [A()]:
+     b = x # E: Incompatible types in assignment (expression has type "A", variable has type "B")
+     a = x
+ 
+-for y in []: # E: Need type annotation for variable
++for y in []: # E: Need type annotation for 'y'
+     a = y # E: Cannot determine type of 'y'
+     reveal_type(y)  # E: Revealed type is 'Any' \
+                     # E: Cannot determine type of 'y'
+@@ -922,7 +922,8 @@ for x, y in [[A()]]:
+     a = x
+     a = y
+ 
+-for e, f in [[]]:  # E: Need type annotation for variable
++for e, f in [[]]:  # E: Need type annotation for 'e' \
++                   # E: Need type annotation for 'f'
+     reveal_type(e)  # E: Revealed type is 'Any' \
+                     # E: Cannot determine type of 'e'
+     reveal_type(f)  # E: Revealed type is 'Any' \
+@@ -1237,12 +1238,12 @@ a.append(0)  # E: Argument 1 to "append" of "list" has incompatible type "int";
+ [out]
+ 
+ [case testInferListInitializedToEmptyAndNotAnnotated]
+-a = []  # E: Need type annotation for variable
++a = []  # E: Need type annotation for 'a'
+ [builtins fixtures/list.pyi]
+ [out]
+ 
+ [case testInferListInitializedToEmptyAndReadBeforeAppend]
+-a = []  # E: Need type annotation for variable
++a = []  # E: Need type annotation for 'a'
+ if a: pass
+ a.xyz
+ a.append('')
+@@ -1250,7 +1251,7 @@ a.append('')
+ [out]
+ 
+ [case testInferListInitializedToEmptyAndIncompleteTypeInAppend]
+-a = [] # E: Need type annotation for variable
++a = [] # E: Need type annotation for 'a'
+ a.append([])
+ a()
+ [builtins fixtures/list.pyi]
+@@ -1275,7 +1276,7 @@ def f() -> None:
+ 
+ [case testInferListInitializedToEmptyAndNotAnnotatedInFunction]
+ def f() -> None:
+-    a = []  # E: Need type annotation for variable
++    a = []  # E: Need type annotation for 'a'
+ 
+ def g() -> None: pass
+ 
+@@ -1286,7 +1287,7 @@ a.append(1)
+ 
+ [case testInferListInitializedToEmptyAndReadBeforeAppendInFunction]
+ def f() -> None:
+-    a = []  # E: Need type annotation for variable
++    a = []  # E: Need type annotation for 'a'
+     if a: pass
+     a.xyz
+     a.append('')
+@@ -1303,7 +1304,7 @@ class A:
+ 
+ [case testInferListInitializedToEmptyAndNotAnnotatedInClassBody]
+ class A:
+-    a = []  # E: Need type annotation for variable
++    a = []  # E: Need type annotation for 'a'
+ 
+ class B:
+     a = []
+@@ -1323,7 +1324,7 @@ class A:
+ [case testInferListInitializedToEmptyAndNotAnnotatedInMethod]
+ class A:
+     def f(self) -> None:
+-        a = []  # E: Need type annotation for variable
++        a = []  # E: Need type annotation for 'a'
+ [builtins fixtures/list.pyi]
+ [out]
+ 
+@@ -1331,7 +1332,7 @@ class A:
+ class A:
+     def f(self) -> None:
+         # Attributes aren't supported right now.
+-        self.a = [] # E: Need type annotation for variable
++        self.a = [] # E: Need type annotation for 'a'
+         self.a.append(1)
+         self.a.append('')
+ [builtins fixtures/list.pyi]
+@@ -1342,7 +1343,7 @@ from typing import List
+ 
+ class A:
+     def __init__(self) -> None:
+-        self.x = [] # E: Need type annotation for variable
++        self.x = [] # E: Need type annotation for 'x'
+ 
+ class B(A):
+     @property
+@@ -1387,16 +1388,16 @@ a() # E: "Dict[str, int]" not callable
+ [out]
+ 
+ [case testInferDictInitializedToEmptyUsingUpdateError]
+-a = {}  # E: Need type annotation for variable
++a = {}  # E: Need type annotation for 'a'
+ a.update([1, 2])
+ a()
+ [builtins fixtures/dict.pyi]
+ [out]
+ 
+ [case testInferDictInitializedToEmptyAndIncompleteTypeInUpdate]
+-a = {} # E: Need type annotation for variable
++a = {} # E: Need type annotation for 'a'
+ a[1] = {}
+-b = {} # E: Need type annotation for variable
++b = {} # E: Need type annotation for 'b'
+ b[{}] = 1
+ [builtins fixtures/dict.pyi]
+ [out]
+@@ -1415,14 +1416,14 @@ def add():
+ 
+ [case testSpecialCaseEmptyListInitialization]
+ def f(blocks: Any): # E: Name 'Any' is not defined
+-    to_process = [] # E: Need type annotation for variable
++    to_process = [] # E: Need type annotation for 'to_process'
+     to_process = list(blocks)
+ [builtins fixtures/list.pyi]
+ [out]
+ 
+ [case testSpecialCaseEmptyListInitialization2]
+ def f(blocks: object):
+-    to_process = [] # E: Need type annotation for variable
++    to_process = [] # E: Need type annotation for 'to_process'
+     to_process = list(blocks) # E: No overload variant of "list" matches argument types [builtins.object]
+ [builtins fixtures/list.pyi]
+ [out]
+@@ -1478,7 +1479,7 @@ x.append('') # E: Argument 1 to "append" of "list" has incompatible type "str";
+ x = None
+ if object():
+     # Promote from partial None to partial list.
+-    x = []  # E: Need type annotation for variable
++    x = []  # E: Need type annotation for 'x'
+     x
+ [builtins fixtures/list.pyi]
+ 
+@@ -1487,7 +1488,7 @@ def f() -> None:
+     x = None
+     if object():
+         # Promote from partial None to partial list.
+-        x = []  # E: Need type annotation for variable
++        x = []  # E: Need type annotation for 'x'
+ [builtins fixtures/list.pyi]
+ [out]
+ 
+@@ -1496,7 +1497,7 @@ def f() -> None:
+ from typing import TypeVar,  Dict
+ T = TypeVar('T')
+ def f(*x: T) -> Dict[int, T]: pass
+-x = None  # E: Need type annotation for variable
++x = None  # E: Need type annotation for 'x'
+ if object():
+     x = f()
+ [builtins fixtures/dict.pyi]
+@@ -1573,7 +1574,7 @@ class A:
+             pass
+ [builtins fixtures/for.pyi]
+ [out]
+-main:3: error: Need type annotation for variable
++main:3: error: Need type annotation for 'x'
+ 
+ [case testPartialTypeErrorSpecialCase3]
+ class A:
+@@ -1739,9 +1740,9 @@ o = 1
+ 
+ [case testMultipassAndPartialTypesSpecialCase3]
+ def f() -> None:
+-    x = {} # E: Need type annotation for variable
++    x = {} # E: Need type annotation for 'x'
+     y = o
+-    z = {} # E: Need type annotation for variable
++    z = {} # E: Need type annotation for 'z'
+ o = 1
+ [builtins fixtures/dict.pyi]
+ [out]
+@@ -1901,7 +1902,7 @@ main:4: error: Unsupported target for indexed assignment
+ class C:
+     x = None
+     def __init__(self) -> None:
+-        self.x = []  # E: Need type annotation for variable
++        self.x = []  # E: Need type annotation for 'x'
+ [builtins fixtures/list.pyi]
+ [out]
+ 
+@@ -1958,7 +1959,7 @@ T = TypeVar('T')
+ def f() -> T: pass
+ 
+ class C:
+-    x = f() # E: Need type annotation for variable
++    x = f() # E: Need type annotation for 'x'
+     def m(self) -> str:
+         return 42 # E: Incompatible return value type (got "int", expected "str")
+ 
+@@ -1975,7 +1976,7 @@ T = TypeVar('T')
+ def f(x: Optional[T] = None) -> T: pass
+ 
+ class C:
+-    x = f() # E: Need type annotation for variable
++    x = f() # E: Need type annotation for 'x'
+     def m(self) -> str:
+         return 42 # E: Incompatible return value type (got "int", expected "str")
+ 
+@@ -1991,7 +1992,7 @@ T = TypeVar('T')
+ def f(x: List[T]) -> T: pass
+ 
+ class C:
+-    x = f([]) # E: Need type annotation for variable
++    x = f([]) # E: Need type annotation for 'x'
+     def m(self) -> str:
+         return 42 # E: Incompatible return value type (got "int", expected "str")
+ 
+diff --git a/test-data/unit/check-optional.test b/test-data/unit/check-optional.test
+index b7f6b047bb..d7e550ecc2 100644
+--- a/test-data/unit/check-optional.test
++++ b/test-data/unit/check-optional.test
+@@ -673,3 +673,19 @@ class A:
+         lambda: (self.y, x.a) # E: Cannot determine type of 'y'
+         self.y = int()
+ [builtins fixtures/isinstancelist.pyi]
++
++[case testDeferredAndOptionalInferenceSpecialCase]
++def f() -> str:
++    y
++    x = None
++    if int():
++        x = ''
++    if x is None:
++        x = ''
++        g(x)
++    return x
++
++def g(x: str) -> None: pass
++
++y = int()
++[builtins fixtures/bool.pyi]
+diff --git a/test-data/unit/check-tuples.test b/test-data/unit/check-tuples.test
+index 5dc4082c21..8992d3c223 100644
+--- a/test-data/unit/check-tuples.test
++++ b/test-data/unit/check-tuples.test
+@@ -380,8 +380,8 @@ d, e = f, g, h = 1, 1 # E: Need more than 2 values to unpack (3 expected)
+ [case testAssignmentToStarMissingAnnotation]
+ from typing import List
+ t = 1, 2
+-a, b, *c = 1, 2  # E: Need type annotation for variable
+-aa, bb, *cc = t  # E: Need type annotation for variable
++a, b, *c = 1, 2  # E: Need type annotation for 'c'
++aa, bb, *cc = t  # E: Need type annotation for 'cc'
+ [builtins fixtures/list.pyi]
+ 
+ [case testAssignmentToStarAnnotation]
+@@ -633,7 +633,7 @@ for x in t:
+ [case testForLoopOverEmptyTuple]
+ import typing
+ t = ()
+-for x in t: pass  # E: Need type annotation for variable
++for x in t: pass  # E: Need type annotation for 'x'
+ [builtins fixtures/for.pyi]
+ 
+ [case testForLoopOverNoneValuedTuple]
+@@ -891,7 +891,7 @@ a = (1, [])  # E: Incompatible types in assignment (expression has type "Tuple[i
+ [builtins fixtures/tuple.pyi]
+ 
+ [case testTupleWithoutContext]
+-a = (1, [])  # E: Need type annotation for variable
++a = (1, [])  # E: Need type annotation for 'a'
+ [builtins fixtures/tuple.pyi]
+ 
+ [case testTupleWithUnionContext]
+diff --git a/test-data/unit/check-typevar-values.test b/test-data/unit/check-typevar-values.test
+index 09aef74652..43ab8f85a7 100644
+--- a/test-data/unit/check-typevar-values.test
++++ b/test-data/unit/check-typevar-values.test
+@@ -328,7 +328,7 @@ from typing import TypeVar, Generic
+ X = TypeVar('X', int, str)
+ class C(Generic[X]):
+     def f(self, x: X) -> None:
+-        self.x = x # E: Need type annotation for variable
++        self.x = x # E: Need type annotation for 'x'
+ ci: C[int]
+ cs: C[str]
+ reveal_type(ci.x) # E: Revealed type is 'Any'
+@@ -352,7 +352,7 @@ X = TypeVar('X', int, str)
+ class C(Generic[X]):
+     x: X
+     def f(self) -> None:
+-        self.y = self.x # E: Need type annotation for variable
++        self.y = self.x # E: Need type annotation for 'y'
+ ci: C[int]
+ cs: C[str]
+ reveal_type(ci.y) # E: Revealed type is 'Any'
+@@ -454,8 +454,8 @@ from typing import TypeVar
+ T = TypeVar('T', int, str)
+ class A:
+     def f(self, x: T) -> None:
+-        self.x = x # E: Need type annotation for variable
+-        self.y = [x] # E: Need type annotation for variable
++        self.x = x # E: Need type annotation for 'x'
++        self.y = [x] # E: Need type annotation for 'y'
+         self.z = 1
+ reveal_type(A().x)  # E: Revealed type is 'Any'
+ reveal_type(A().y)  # E: Revealed type is 'Any'
+diff --git a/test-data/unit/cmdline.test b/test-data/unit/cmdline.test
+index b892757123..83e2b68be1 100644
+--- a/test-data/unit/cmdline.test
++++ b/test-data/unit/cmdline.test
+@@ -894,7 +894,7 @@ y: List = []  # error
+ m.py:3: error: Missing type parameters for generic type
+ m.py:5: error: Missing type parameters for generic type
+ m.py:6: error: Missing type parameters for generic type
+-m.py:8: error: Need type annotation for variable
++m.py:8: error: Need type annotation for 'x'
+ m.py:9: error: Missing type parameters for generic type
+ 
+ [case testDisallowAnyGenericsCustomGenericClass]
+diff --git a/test-data/unit/deps-classes.test b/test-data/unit/deps-classes.test
+index f6a58725dd..e155296bf1 100644
+--- a/test-data/unit/deps-classes.test
++++ b/test-data/unit/deps-classes.test
+@@ -49,3 +49,20 @@ class C:
+ [out]
+ <m.C.x> -> m.C.__init__
+ <m.C> -> m.C
++
++[case testClassNestedWithinFunction]
++class C: pass
++
++def f() -> None:
++    class S1(C): pass
++
++class D:
++    def g(self) -> None:
++        class S2(C): pass
++[out]
++-- TODO: Is it okay to have targets like m.S1@4.__init__?
++<m.C.__init__> -> <m.S1@4.__init__>, <m.S2@8.__init__>
++<m.C> -> m.C, m.D.g, m.f
++<m.D.g> -> m.D.g
++<m.D> -> m.D
++<m.f> -> m.f
+diff --git a/test-data/unit/diff.test b/test-data/unit/diff.test
+index 4f2d134850..f1a84dd1e7 100644
+--- a/test-data/unit/diff.test
++++ b/test-data/unit/diff.test
+@@ -274,6 +274,7 @@ N = NamedTuple('N', [('x', int), ('y', int)])
+ M = NamedTuple('M', [('x', int), ('y', str)])
+ [out]
+ __main__.A
++__main__.N
+ __main__.N.__init__
+ __main__.N._asdict
+ __main__.N._make
+diff --git a/test-data/unit/fine-grained-modules.test b/test-data/unit/fine-grained-modules.test
+index 82480dfe7d..a343d3a648 100644
+--- a/test-data/unit/fine-grained-modules.test
++++ b/test-data/unit/fine-grained-modules.test
+@@ -619,3 +619,15 @@ import x
+ a/b.py:3: error: Revealed type is 'Any'
+ ==
+ a/b.py:3: error: Unsupported operand types for + ("int" and "str")
++
++[case testDeleteModuleWithinPackageInitIgnored]
++# cmd: mypy x.py a/b.py
++# flags: --follow-imports=skip --ignore-missing-imports
++[file x.py]
++import a.b
++[file a/__init__.py]
++[file a/b.py]
++x = 1
++[delete a/b.py.2]
++[out]
++==
+diff --git a/test-data/unit/fine-grained.test b/test-data/unit/fine-grained.test
+index 9fab5986ab..40f35cc4cf 100644
+--- a/test-data/unit/fine-grained.test
++++ b/test-data/unit/fine-grained.test
+@@ -1293,7 +1293,7 @@ class C(Generic[T]): pass
+ [out]
+ main:4: error: "object" has no attribute "C"
+ ==
+-main:4: error: Need type annotation for variable
++main:4: error: Need type annotation for 'x'
+ 
+ [case testPartialTypeInNestedClass]
+ import a
+@@ -1310,9 +1310,9 @@ def g() -> None: pass
+ def g() -> int: pass
+ [builtins fixtures/dict.pyi]
+ [out]
+-main:7: error: Need type annotation for variable
++main:7: error: Need type annotation for 'x'
+ ==
+-main:7: error: Need type annotation for variable
++main:7: error: Need type annotation for 'x'
+ 
+ [case testRefreshPartialTypeInClass]
+ import a
+@@ -1327,9 +1327,9 @@ def g() -> None: pass
+ def g() -> int: pass
+ [builtins fixtures/dict.pyi]
+ [out]
+-main:5: error: Need type annotation for variable
++main:5: error: Need type annotation for 'x'
+ ==
+-main:5: error: Need type annotation for variable
++main:5: error: Need type annotation for 'x'
+ 
+ [case testRefreshTryExcept]
+ import a
+@@ -1495,3 +1495,107 @@ def f(o: object) -> None:
+ [builtins fixtures/callable.pyi]
+ [out]
+ ==
++
++[case testRefreshFunctionalNamedTuple]
++import a
++
++[file a.py]
++from typing import NamedTuple
++from b import L
++
++A = NamedTuple('A', [])
++a: A
++
++def g() -> None:
++    x = L(A())
++    x.f(a)
++
++[file b.pyi]
++from typing import TypeVar, Generic, overload
++
++T = TypeVar('T')
++
++class L(Generic[T]):
++    def __init__(self, x: T) -> None: pass
++    @overload
++    def f(self) -> None: pass
++    @overload
++    def f(self, a: T) -> None: pass
++
++[file a.py.2]
++from typing import NamedTuple
++from b import L
++
++A = NamedTuple('A', [])
++a: A
++
++def g() -> None:
++    x = L(A())
++    x.f(a)
++[out]
++==
++
++[case testRefreshSubclassNestedInFunction1]
++from a import C
++def f() -> None:
++    class D(C): pass
++[file a.py]
++class C: pass
++[file a.py.2]
++[out]
++==
++main:1: error: Module 'a' has no attribute 'C'
++
++[case testRefreshSubclassNestedInFunction2]
++from a import C
++def f() -> None:
++    class D(C):
++        def g(self) -> None:
++            super().__init__()
++    d = D()
++[file a.py]
++class C:
++    def __init__(self) -> None: pass
++[file a.py.2]
++class C:
++    def __init__(self, x: int) -> None: pass
++[out]
++==
++main:5: error: Too few arguments for "__init__" of "C"
++main:6: error: Too few arguments for "D"
++
++[case testNamedTupleUpdate]
++import b
++[file a.py]
++from typing import NamedTuple
++N = NamedTuple('N', [('x', int)])
++x = N(1)
++[file a.py.2]
++from typing import NamedTuple
++N = NamedTuple('N', [('x', str)])
++x = N('hi')
++[file b.py]
++import a
++def f(x: a.N) -> None:
++    pass
++f(a.x)
++[out]
++==
++
++[case testNamedTupleUpdate2]
++import b
++[file a.py]
++from typing import NamedTuple
++N = NamedTuple('N', [('x', int)])
++x = N(1)
++[file a.py.2]
++from typing import NamedTuple
++N = NamedTuple('N', [('y', int)])
++x = N(2)
++[file b.py]
++import a
++def f(x: a.N) -> None:
++    pass
++f(a.x)
++[out]
++==
+diff --git a/test-data/unit/stubgen.test b/test-data/unit/stubgen.test
+index 6bb0724927..aa8b6136d6 100644
+--- a/test-data/unit/stubgen.test
++++ b/test-data/unit/stubgen.test
+@@ -5,7 +5,7 @@
+ def f():
+     x = 1
+ [out]
+-def f(): ...
++def f() -> None: ...
+ 
+ [case testTwoFunctions]
+ def f(a, b):
+@@ -13,49 +13,49 @@ def f(a, b):
+ def g(arg):
+     pass
+ [out]
+-def f(a, b): ...
+-def g(arg): ...
++def f(a, b) -> None: ...
++def g(arg) -> None: ...
+ 
+ [case testDefaultArgInt]
+ def f(a, b=2): ...
+ def g(b=-1, c=0): ...
+ [out]
+-def f(a, b: int = ...): ...
+-def g(b: int = ..., c: int = ...): ...
++def f(a, b: int = ...) -> None: ...
++def g(b: int = ..., c: int = ...) -> None: ...
+ 
+ [case testDefaultArgNone]
+ def f(x=None): ...
+ [out]
+ from typing import Any, Optional
+ 
+-def f(x: Optional[Any] = ...): ...
++def f(x: Optional[Any] = ...) -> None: ...
+ 
+ [case testDefaultArgBool]
+ def f(x=True, y=False): ...
+ [out]
+-def f(x: bool = ..., y: bool = ...): ...
++def f(x: bool = ..., y: bool = ...) -> None: ...
+ 
+ [case testDefaultArgStr]
+ def f(x='foo'): ...
+ [out]
+-def f(x: str = ...): ...
++def f(x: str = ...) -> None: ...
+ 
+ [case testDefaultArgBytes]
+ def f(x=b'foo'): ...
+ [out]
+-def f(x: bytes = ...): ...
++def f(x: bytes = ...) -> None: ...
+ 
+ [case testDefaultArgFloat]
+ def f(x=1.2): ...
+ [out]
+-def f(x: float = ...): ...
++def f(x: float = ...) -> None: ...
+ 
+ [case testDefaultArgOther]
+ def f(x=ord): ...
+ [out]
+ from typing import Any
+ 
+-def f(x: Any = ...): ...
++def f(x: Any = ...) -> None: ...
+ 
+ [case testPreserveFunctionAnnotation]
+ def f(x: Foo) -> Bar: ...
+@@ -75,12 +75,12 @@ x: Foo
+ [case testVarArgs]
+ def f(x, *y): ...
+ [out]
+-def f(x, *y): ...
++def f(x, *y) -> None: ...
+ 
+ [case testKwVarArgs]
+ def f(x, **y): ...
+ [out]
+-def f(x, **y): ...
++def f(x, **y) -> None: ...
+ 
+ [case testClass]
+ class A:
+@@ -89,9 +89,9 @@ class A:
+ def g(): ...
+ [out]
+ class A:
+-    def f(self, x): ...
++    def f(self, x) -> None: ...
+ 
+-def g(): ...
++def g() -> None: ...
+ 
+ [case testVariable]
+ x = 1
+@@ -169,15 +169,15 @@ class A: ...
+ def _f(): ...
+ def g(): ...
+ [out]
+-def g(): ...
++def g() -> None: ...
+ 
+ [case testIncludePrivateFunction]
+ # flags:  --include-private
+ def _f(): ...
+ def g(): ...
+ [out]
+-def _f(): ...
+-def g(): ...
++def _f() -> None: ...
++def g() -> None: ...
+ 
+ [case testSkipPrivateMethod]
+ class A:
+@@ -191,7 +191,7 @@ class A:
+     def _f(self): ...
+ [out]
+ class A:
+-    def _f(self): ...
++    def _f(self) -> None: ...
+ 
+ [case testSkipPrivateVar]
+ _x = 1
+@@ -228,7 +228,7 @@ class B(A): ...
+ @decorator
+ def foo(x): ...
+ [out]
+-def foo(x): ...
++def foo(x) -> None: ...
+ 
+ [case testMultipleAssignment]
+ x, y = 1, 2
+@@ -256,8 +256,8 @@ y: Any
+ def f(x, *, y=1): ...
+ def g(x, *, y=1, z=2): ...
+ [out]
+-def f(x, *, y: int = ...): ...
+-def g(x, *, y: int = ..., z: int = ...): ...
++def f(x, *, y: int = ...) -> None: ...
++def g(x, *, y: int = ..., z: int = ...) -> None: ...
+ 
+ [case testProperty]
+ class A:
+@@ -271,7 +271,7 @@ class A:
+     @property
+     def f(self): ...
+     @f.setter
+-    def f(self, x): ...
++    def f(self, x) -> None: ...
+ 
+ [case testStaticMethod]
+ class A:
+@@ -280,7 +280,7 @@ class A:
+ [out]
+ class A:
+     @staticmethod
+-    def f(x): ...
++    def f(x) -> None: ...
+ 
+ [case testClassMethod]
+ class A:
+@@ -289,7 +289,7 @@ class A:
+ [out]
+ class A:
+     @classmethod
+-    def f(cls): ...
++    def f(cls) -> None: ...
+ 
+ [case testIfMainCheck]
+ def a(): ...
+@@ -298,8 +298,8 @@ if __name__ == '__main__':
+     def f(): ...
+ def b(): ...
+ [out]
+-def a(): ...
+-def b(): ...
++def a() -> None: ...
++def b() -> None: ...
+ 
+ [case testImportStar]
+ from x import *
+@@ -309,7 +309,7 @@ def f(): ...
+ from x import *
+ from a.b import *
+ 
+-def f(): ...
++def f() -> None: ...
+ 
+ [case testNoSpacesBetweenEmptyClasses]
+ class X:
+@@ -320,13 +320,13 @@ class C:
+     def f(self): ...
+ [out]
+ class X:
+-    def g(self): ...
++    def g(self) -> None: ...
+ 
+ class A: ...
+ class B: ...
+ 
+ class C:
+-    def f(self): ...
++    def f(self) -> None: ...
+ 
+ [case testExceptionBaseClasses]
+ class A(Exception): ...
+@@ -344,14 +344,14 @@ class A:
+     def __setstate__(self, state): ...
+ [out]
+ class A:
+-    def __eq__(self): ...
++    def __eq__(self) -> None: ...
+ 
+ [case testOmitDefsNotInAll_import]
+ __all__ = [] + ['f']
+ def f(): ...
+ def g(): ...
+ [out]
+-def f(): ...
++def f() -> None: ...
+ 
+ [case testVarDefsNotInAll_import]
+ __all__ = [] + ['f', 'g']
+@@ -360,15 +360,15 @@ x = 1
+ y = 1
+ def g(): ...
+ [out]
+-def f(): ...
+-def g(): ...
++def f() -> None: ...
++def g() -> None: ...
+ 
+ [case testIncludeClassNotInAll_import]
+ __all__ = [] + ['f']
+ def f(): ...
+ class A: ...
+ [out]
+-def f(): ...
++def f() -> None: ...
+ 
+ class A: ...
+ 
+@@ -380,7 +380,7 @@ class A:
+ [out]
+ class A:
+     x: int = ...
+-    def f(self): ...
++    def f(self) -> None: ...
+ 
+ [case testSkipMultiplePrivateDefs]
+ class A: ...
+@@ -472,12 +472,12 @@ x = 1
+ class C:
+     def g(self): ...
+ [out]
+-def f(): ...
++def f() -> None: ...
+ 
+ x: int
+ 
+ class C:
+-    def g(self): ...
++    def g(self) -> None: ...
+ 
+ # Names in __all__ with no definition:
+ #   g
+@@ -503,7 +503,7 @@ class A:
+ [out]
+ class A:
+     @property
+-    def _foo(self): ...
++    def _foo(self) -> None: ...
+ 
+ [case testSkipPrivateStaticAndClassMethod]
+ class A:
+@@ -524,9 +524,9 @@ class A:
+ [out]
+ class A:
+     @staticmethod
+-    def _foo(): ...
++    def _foo() -> None: ...
+     @classmethod
+-    def _bar(cls): ...
++    def _bar(cls) -> None: ...
+ 
+ [case testNamedtuple]
+ import collections, x
+@@ -552,11 +552,11 @@ def g(): ...
+ [out]
+ from collections import namedtuple
+ 
+-def f(): ...
++def f() -> None: ...
+ 
+ X = namedtuple('X', 'a b')
+ 
+-def g(): ...
++def g() -> None: ...
+ 
+ [case testNamedtupleBaseClass]
+ import collections, x
+@@ -569,6 +569,20 @@ _X = namedtuple('_X', ['a', 'b'])
+ 
+ class Y(_X): ...
+ 
++[case testNamedtupleAltSyntaxFieldsTuples]
++from collections import namedtuple, x
++X = namedtuple('X', ())
++Y = namedtuple('Y', ('a',))
++Z = namedtuple('Z', ('a', 'b', 'c', 'd', 'e'))
++[out]
++from collections import namedtuple
++
++X = namedtuple('X', [])
++
++Y = namedtuple('Y', ['a'])
++
++Z = namedtuple('Z', ['a', 'b', 'c', 'd', 'e'])
++
+ [case testArbitraryBaseClass]
+ import x
+ class D(x.C): ...
+@@ -624,9 +638,9 @@ def f():
+             self.x = 1
+ def g(): ...
+ [out]
+-def x(): ...
+-def f(): ...
+-def g(): ...
++def x() -> None: ...
++def f() -> None: ...
++def g() -> None: ...
+ 
+ [case testNestedClass]
+ class A:
+@@ -638,8 +652,8 @@ class A:
+ class A:
+     class B:
+         x: int = ...
+-        def f(self): ...
+-    def g(self): ...
++        def f(self) -> None: ...
++    def g(self) -> None: ...
+ 
+ [case testExportViaRelativeImport]
+ from .api import get
+@@ -668,13 +682,13 @@ class A(X): ...
+ def syslog(a): pass
+ def syslog(a): pass
+ [out]
+-def syslog(a): ...
++def syslog(a) -> None: ...
+ 
+ [case testAsyncAwait_fast_parser]
+ async def f(a):
+    x = await y
+ [out]
+-def f(a): ...
++def f(a) -> None: ...
+ 
+ [case testInferOptionalOnlyFunc]
+ class A:
+@@ -689,7 +703,7 @@ from typing import Any, Optional
+ class A:
+     x: Any = ...
+     def __init__(self, a: Optional[Any] = ...) -> None: ...
+-    def method(self, a: Optional[Any] = ...): ...
++    def method(self, a: Optional[Any] = ...) -> None: ...
+ 
+ [case testAnnotationImportsFrom]
+ import foo
+@@ -839,3 +853,23 @@ noalias3: bool
+ 
+ -- More features/fixes:
+ --   do not export deleted names
++
++[case testFunctionNoReturnInfersReturnNone]
++def f():
++    x = 1
++[out]
++def f() -> None: ...
++
++[case testFunctionReturnNoReturnType]
++def f():
++    return 1
++def g():
++    return
++[out]
++def f(): ...
++def g(): ...
++
++[case testFunctionEllipsisInfersReturnNone]
++def f(): ...
++[out]
++def f() -> None: ...
+diff --git a/typeshed b/typeshed
+index 7073bc0a49..c2fa0a153a 160000
+--- a/typeshed
++++ b/typeshed
+@@ -1 +1 @@
+-Subproject commit 7073bc0a49f87ed86444b69cc7332d74b3a4234d
++Subproject commit c2fa0a153a6bb83881c7abca6d57af43df605d3d

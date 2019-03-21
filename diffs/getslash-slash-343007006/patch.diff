@@ -1,0 +1,132 @@
+diff --git a/doc/changelog.rst b/doc/changelog.rst
+index abd1c13c..ef0a5bf9 100644
+--- a/doc/changelog.rst
++++ b/doc/changelog.rst
+@@ -2,6 +2,7 @@ Changelog
+ =========
+ 
+ * :feature:`702` Rename log.traceback_level to log.console_traceback_level
++* :feature:`681` Added a new hook, ``log_file_closed``, and added configuration ``log.cleanup`` to enable removing log files after they are closed
+ * :feature:`-` ``-X`` can now be used to turn off stop-on-error behavior. Useful if you have it on by default through a configuration file
+ * :feature:`723` Add configuration for resume state path location
+ * :bug:`721 major` Add timeout to sending emails through SMTP
+diff --git a/slash/conf.py b/slash/conf.py
+index 1da7e966..5cda8c01 100644
+--- a/slash/conf.py
++++ b/slash/conf.py
+@@ -66,6 +66,10 @@
+         "localtime": False // Doc("Use local time for logging. If False, will use UTC"),
+         "unittest_mode": False // Doc("Used during unit testing. Emit all logs to stderr as well as the log files"),
+         "unified_session_log": False // Doc("Make the session log file contain all logs, including from tests"),
++        "cleanup": {
++            "enabled": False,
++            "keep_failed": True,
++        }
+     },
+     "run": {
+         "dump_variation": False // Doc("Output the full variation structure before each test is run (mainly used for internal debugging)"),
+diff --git a/slash/hooks.py b/slash/hooks.py
+index 0535565e..9c01111e 100644
+--- a/slash/hooks.py
++++ b/slash/hooks.py
+@@ -34,6 +34,7 @@ def _define(hook_name, **kwargs):
+ _define('test_start', doc="Called right after a test starts")
+ _define('test_distributed', doc="Called in parallel mode, after the parent sent a test to child)", arg_names=('test_logical_id', 'worker_session_id',)) # pylint: disable=line-too-long
+ _define('test_end', doc="Called right before a test ends, regardless of the reason for termination")
++_define('log_file_closed', doc="Called right after a log file was closed")
+ _define('before_test_cleanups', doc="Called right before a test cleanups are executed")
+ _define('test_success', doc="Called on test success")
+ _define('test_error', doc="Called on test error")
+diff --git a/slash/log.py b/slash/log.py
+index df3bc32d..356d1f49 100644
+--- a/slash/log.py
++++ b/slash/log.py
+@@ -12,6 +12,7 @@
+ from .conf import config
+ from .utils.path import ensure_containing_directory
+ from .warnings import WarnHandler
++from . import hooks
+ 
+ _logger = logbook.Logger(__name__)
+ 
+@@ -153,21 +154,32 @@ def get_session_logging_context(self):
+ 
+     @contextmanager
+     def _get_file_logging_context(self, filename_template, symlink):
+-        with ExitStack() as stack:
+-            handler, path = self._get_file_log_handler(filename_template, symlink)
+-            stack.enter_context(handler.applicationbound())
+-            stack.enter_context(self.console_handler.applicationbound())
+-            stack.enter_context(self.warnings_handler.applicationbound())
+-            stack.enter_context(self._get_error_logging_context())
+-            stack.enter_context(self._get_silenced_logs_context())
+-            if config.root.log.unittest_mode:
+-                stack.enter_context(logbook.StreamHandler(sys.stderr, bubble=True, level=logbook.TRACE))
+-            for extra_handler in _extra_handlers:
+-                stack.enter_context(extra_handler.applicationbound())
+-            if config.root.log.unified_session_log and self.session_log_handler is not None:
+-                stack.enter_context(_make_bubbling_handler(self.session_log_handler))
+-
+-            yield handler, path
++        try:
++            with ExitStack() as stack:
++                handler, path = self._get_file_log_handler(filename_template, symlink)
++                stack.enter_context(handler.applicationbound())
++                stack.enter_context(self.console_handler.applicationbound())
++                stack.enter_context(self.warnings_handler.applicationbound())
++                stack.enter_context(self._get_error_logging_context())
++                stack.enter_context(self._get_silenced_logs_context())
++                if config.root.log.unittest_mode:
++                    stack.enter_context(logbook.StreamHandler(sys.stderr, bubble=True, level=logbook.TRACE))
++                for extra_handler in _extra_handlers:
++                    stack.enter_context(extra_handler.applicationbound())
++                if config.root.log.unified_session_log and self.session_log_handler is not None:
++                    stack.enter_context(_make_bubbling_handler(self.session_log_handler))
++
++                yield handler, path
++        finally:
++            if path is not None:
++                hooks.log_file_closed()  # pylint: disable=no-member
++                if config.root.log.cleanup.enabled and self._should_delete_log():
++                    os.remove(path)
++
++    def _should_delete_log(self):
++        return (not config.root.log.cleanup.keep_failed) or \
++               (not self.session.results.current.is_global_result() and self.session.results.current.is_success(allow_skips=True)) or \
++               (self.session.results.current.is_global_result() and self.session.results.is_success(allow_skips=True))
+ 
+     def _get_error_logging_context(self):
+         path = config.root.log.errors_subpath
+diff --git a/tests/test_logging.py b/tests/test_logging.py
+index 429a074a..8b778e84 100644
+--- a/tests/test_logging.py
++++ b/tests/test_logging.py
+@@ -139,6 +139,28 @@ def test_errors_log_for_test(suite, suite_test, errors_log_path, logs_dir):
+         lines = f.read().splitlines()
+         assert error_line in lines
+ 
++@pytest.mark.parametrize('should_keep_failed_tests', [True, False])
++def test_logs_deletion(suite, suite_test, errors_log_path, logs_dir, config_override, should_keep_failed_tests):
++    config_override('log.cleanup.enabled', True)
++    config_override('log.cleanup.keep_failed', should_keep_failed_tests)
++    expected_remaining_files = [errors_log_path]
++
++    suite_test.when_run.fail()
++    summary = suite.run()
++
++    remaining_files = []
++    for dirname, _, files in os.walk(str(logs_dir)):
++        for filename in files:
++            f = os.path.join(dirname, filename)
++            if os.path.isfile(f) and not os.path.islink(f):
++                remaining_files.append(f)
++
++    if should_keep_failed_tests:
++        assert len(remaining_files) == 3
++        expected_remaining_files.extend([summary[suite_test].get_log_path(), summary.session.results.global_result.get_log_path()])
++    else:
++        assert len(remaining_files) == 1
++    assert set(remaining_files) == set(expected_remaining_files)
+ 
+ def test_errors_log_for_session(suite, errors_log_path, request, logs_dir):
+     @gossip.register('slash.session_start')

@@ -1,0 +1,65 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+index 08c28d163f..a3c643558b 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+@@ -619,7 +619,7 @@ public static ClassLoadingDelegate of(ClassLoader classLoader) {
+                 public static ClassLoadingDelegate of(ClassLoader classLoader, AccessControlContext accessControlContext) {
+                     return ForDelegatingClassLoader.isDelegating(classLoader)
+                             ? new ForDelegatingClassLoader(classLoader, accessControlContext)
+-                            : new Default(classLoader);
++                            : new Default(classLoader == null ? ClassLoader.getSystemClassLoader() : classLoader);
+                 }
+ 
+                 @Override
+@@ -911,7 +911,7 @@ public String toString() {
+                  * @param types       A collection of classes that cannot be looked up explicitly.
+                  */
+                 public Explicit(ClassLoader classLoader, Collection<? extends Class<?>> types) {
+-                    this(new Default(classLoader), types);
++                    this(Default.of(classLoader), types);
+                 }
+ 
+                 /**
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/ClassFileLocatorAgentBasedTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/ClassFileLocatorAgentBasedTest.java
+index 5c1b6d1c7c..aa1fbbc273 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/ClassFileLocatorAgentBasedTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/ClassFileLocatorAgentBasedTest.java
+@@ -22,7 +22,8 @@
+ import static org.hamcrest.CoreMatchers.*;
+ import static org.hamcrest.MatcherAssert.assertThat;
+ import static org.junit.Assert.assertEquals;
+-import static org.mockito.Mockito.*;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.when;
+ 
+ public class ClassFileLocatorAgentBasedTest {
+ 
+@@ -69,18 +70,19 @@ public void testExtractionOfInflatedMethodAccessor() throws Exception {
+     }
+ 
+     @Test
+-    public void testExplicitLookup() throws Exception {
+-        ClassFileLocator.AgentBased.ClassLoadingDelegate fallback = mock(ClassFileLocator.AgentBased.ClassLoadingDelegate.class);
++    public void testExplicitLookupBootstrapClassLoader() throws Exception {
+         ClassFileLocator.AgentBased.ClassLoadingDelegate classLoadingDelegate = ClassFileLocator.AgentBased.ClassLoadingDelegate.Explicit.of(Object.class);
++        assertThat(classLoadingDelegate.getClassLoader(), is(ClassLoader.getSystemClassLoader()));
+         assertEquals(Object.class, classLoadingDelegate.locate(Object.class.getName()));
+-        doReturn(String.class).when(fallback).locate(String.class.getName());
+         assertEquals(String.class, classLoadingDelegate.locate(String.class.getName()));
+-        verify(fallback).locate(String.class.getName());
+-        ClassLoader classLoader = mock(ClassLoader.class);
+-        when(fallback.getClassLoader()).thenReturn(classLoader);
+-        assertThat(classLoadingDelegate.getClassLoader(), is(classLoader));
+-        verify(fallback).getClassLoader();
+-        verifyNoMoreInteractions(fallback);
++    }
++
++    @Test
++    public void testExplicitLookup() throws Exception {
++        ClassFileLocator.AgentBased.ClassLoadingDelegate classLoadingDelegate = ClassFileLocator.AgentBased.ClassLoadingDelegate.Explicit.of(Foo.class);
++        assertThat(classLoadingDelegate.getClassLoader(), is(Foo.class.getClassLoader()));
++        assertEquals(Foo.class, classLoadingDelegate.locate(Foo.class.getName()));
++        assertEquals(Object.class, classLoadingDelegate.locate(Object.class.getName()));
+     }
+ 
+     @Test

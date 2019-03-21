@@ -1,0 +1,952 @@
+diff --git a/src/main/java/com/zaxxer/hikari/HikariConfig.java b/src/main/java/com/zaxxer/hikari/HikariConfig.java
+index df8f51aaa..3787d6cc6 100644
+--- a/src/main/java/com/zaxxer/hikari/HikariConfig.java
++++ b/src/main/java/com/zaxxer/hikari/HikariConfig.java
+@@ -471,20 +471,8 @@ public void setDriverClassName(String driverClassName)
+    {
+       checkIfSealed();
+ 
+-      Class<?> driverClass = null;
+-      ClassLoader threadContextClassLoader = Thread.currentThread().getContextClassLoader();
++      Class<?> driverClass = attemptFromContextLoader(driverClassName);
+       try {
+-         if (threadContextClassLoader != null) {
+-            try {
+-               driverClass = threadContextClassLoader.loadClass(driverClassName);
+-               LOGGER.debug("Driver class {} found in Thread context class loader {}", driverClassName, threadContextClassLoader);
+-            }
+-            catch (ClassNotFoundException e) {
+-               LOGGER.debug("Driver class {} not found in Thread context class loader {}, trying classloader {}",
+-                            driverClassName, threadContextClassLoader, this.getClass().getClassLoader());
+-            }
+-         }
+-
+          if (driverClass == null) {
+             driverClass = this.getClass().getClassLoader().loadClass(driverClassName);
+             LOGGER.debug("Driver class {} found in the HikariConfig class classloader {}", driverClassName, this.getClass().getClassLoader());
+@@ -905,6 +893,22 @@ public void copyStateTo(HikariConfig other)
+    //                          Private methods
+    // ***********************************************************************
+ 
++   private Class<?> attemptFromContextLoader(final String driverClassName) {
++      final ClassLoader threadContextClassLoader = Thread.currentThread().getContextClassLoader();
++      if (threadContextClassLoader != null) {
++         try {
++            final Class<?> driverClass = threadContextClassLoader.loadClass(driverClassName);
++            LOGGER.debug("Driver class {} found in Thread context class loader {}", driverClassName, threadContextClassLoader);
++            return driverClass;
++         } catch (ClassNotFoundException e) {
++            LOGGER.debug("Driver class {} not found in Thread context class loader {}, trying classloader {}",
++               driverClassName, threadContextClassLoader, this.getClass().getClassLoader());
++         }
++      }
++
++      return null;
++   }
++
+    @SuppressWarnings("StatementWithEmptyBody")
+    public void validate()
+    {
+@@ -1005,7 +1009,7 @@ private void validateNumerics()
+       }
+ 
+       if (idleTimeout != IDLE_TIMEOUT && idleTimeout != 0 && minIdle == maxPoolSize) {
+-         LOGGER.warn("{} - idleTimeout has been set but has no effect because the pool is operating as a fixed size pool.");
++         LOGGER.warn("{} - idleTimeout has been set but has no effect because the pool is operating as a fixed size pool.", poolName);
+       }
+    }
+ 
+diff --git a/src/main/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTracker.java b/src/main/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTracker.java
+index ba0ee804f..633ff52d0 100644
+--- a/src/main/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTracker.java
++++ b/src/main/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTracker.java
+@@ -47,7 +47,7 @@
+    private static final String METRIC_NAME_MAX_CONNECTIONS = "MaxConnections";
+    private static final String METRIC_NAME_MIN_CONNECTIONS = "MinConnections";
+ 
+-   public CodaHaleMetricsTracker(final String poolName, final PoolStats poolStats, final MetricRegistry registry)
++   CodaHaleMetricsTracker(final String poolName, final PoolStats poolStats, final MetricRegistry registry)
+    {
+       this.poolName = poolName;
+       this.registry = registry;
+@@ -57,52 +57,22 @@ public CodaHaleMetricsTracker(final String poolName, final PoolStats poolStats,
+       this.connectionTimeoutMeter = registry.meter(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_TIMEOUT_RATE));
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_TOTAL_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getTotalConnections();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getTotalConnections);
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_IDLE_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getIdleConnections();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getIdleConnections);
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_ACTIVE_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getActiveConnections();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getActiveConnections);
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_PENDING_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getPendingThreads();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getPendingThreads);
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_MAX_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getMaxConnections();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getMaxConnections);
+ 
+       registry.register(MetricRegistry.name(poolName, METRIC_CATEGORY, METRIC_NAME_MIN_CONNECTIONS),
+-                        new Gauge<Integer>() {
+-                           @Override
+-                           public Integer getValue() {
+-                              return poolStats.getMinConnections();
+-                           }
+-                        });
++         (Gauge<Integer>) poolStats::getMinConnections);
+    }
+ 
+    /** {@inheritDoc} */
+diff --git a/src/main/java/com/zaxxer/hikari/metrics/prometheus/PrometheusHistogramMetricsTracker.java b/src/main/java/com/zaxxer/hikari/metrics/prometheus/PrometheusHistogramMetricsTracker.java
+index ad3342f36..4b7befce5 100644
+--- a/src/main/java/com/zaxxer/hikari/metrics/prometheus/PrometheusHistogramMetricsTracker.java
++++ b/src/main/java/com/zaxxer/hikari/metrics/prometheus/PrometheusHistogramMetricsTracker.java
+@@ -37,22 +37,22 @@
+       .create();
+ 
+    private static final Histogram ELAPSED_ACQUIRED_HISTOGRAM =
+-      registerHistogram("hikaricp_connection_acquired_nanos", "Connection acquired time (ns)");
++      registerHistogram("hikaricp_connection_acquired_nanos", "Connection acquired time (ns)", 1_000);
+ 
+    private static final Histogram ELAPSED_BORROWED_HISTOGRAM =
+-      registerHistogram("hikaricp_connection_usage_millis", "Connection usage (ms)");
++      registerHistogram("hikaricp_connection_usage_millis", "Connection usage (ms)", 1);
+ 
+    private static final Histogram ELAPSED_CREATION_HISTOGRAM =
+-      registerHistogram("hikaricp_connection_creation_millis", "Connection creation (ms)");
++      registerHistogram("hikaricp_connection_creation_millis", "Connection creation (ms)", 1);
+ 
+    private final Counter.Child connectionTimeoutCounterChild;
+ 
+-   private static Histogram registerHistogram(String name, String help) {
++   private static Histogram registerHistogram(String name, String help, double bucketStart) {
+       return Histogram.build()
+          .name(name)
+          .labelNames("pool")
+          .help(help)
+-         .exponentialBuckets(0.001, 2.0, 11)
++         .exponentialBuckets(bucketStart, 2.0, 11)
+          .create();
+    }
+ 
+diff --git a/src/main/java/com/zaxxer/hikari/pool/HikariPool.java b/src/main/java/com/zaxxer/hikari/pool/HikariPool.java
+index 47297ae76..6c3428c0a 100644
+--- a/src/main/java/com/zaxxer/hikari/pool/HikariPool.java
++++ b/src/main/java/com/zaxxer/hikari/pool/HikariPool.java
+@@ -70,7 +70,7 @@
+  */
+ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBagStateListener
+ {
+-   private final Logger LOGGER = LoggerFactory.getLogger(HikariPool.class);
++   private final Logger logger = LoggerFactory.getLogger(HikariPool.class);
+ 
+    public static final int POOL_NORMAL = 0;
+    public static final int POOL_SUSPENDED = 1;
+@@ -78,14 +78,14 @@
+ 
+    public volatile int poolState;
+ 
+-   private final long ALIVE_BYPASS_WINDOW_MS = Long.getLong("com.zaxxer.hikari.aliveBypassWindowMs", MILLISECONDS.toMillis(500));
+-   private final long HOUSEKEEPING_PERIOD_MS = Long.getLong("com.zaxxer.hikari.housekeeping.periodMs", SECONDS.toMillis(30));
++   private final long aliveBypassWindowMs = Long.getLong("com.zaxxer.hikari.aliveBypassWindowMs", MILLISECONDS.toMillis(500));
++   private final long housekeepingPeriodMs = Long.getLong("com.zaxxer.hikari.housekeeping.periodMs", SECONDS.toMillis(30));
+ 
+    private static final String EVICTED_CONNECTION_MESSAGE = "(connection was evicted)";
+    private static final String DEAD_CONNECTION_MESSAGE = "(connection is dead)";
+ 
+-   private final PoolEntryCreator POOL_ENTRY_CREATOR = new PoolEntryCreator(null /*logging prefix*/);
+-   private final PoolEntryCreator POST_FILL_POOL_ENTRY_CREATOR = new PoolEntryCreator("After adding ");
++   private final PoolEntryCreator poolEntryCreator = new PoolEntryCreator(null /*logging prefix*/);
++   private final PoolEntryCreator postFillPoolEntryCreator = new PoolEntryCreator("After adding ");
+    private final Collection<Runnable> addConnectionQueue;
+    private final ThreadPoolExecutor addConnectionExecutor;
+    private final ThreadPoolExecutor closeConnectionExecutor;
+@@ -123,18 +123,18 @@ public HikariPool(final HikariConfig config)
+ 
+       setHealthCheckRegistry(config.getHealthCheckRegistry());
+ 
+-      registerMBeans(this);
++      handleMBeans(this, true);
+ 
+       ThreadFactory threadFactory = config.getThreadFactory();
+ 
+-      LinkedBlockingQueue<Runnable> addConnectionQueue = new LinkedBlockingQueue<>(config.getMaximumPoolSize());
+-      this.addConnectionQueue = unmodifiableCollection(addConnectionQueue);
+-      this.addConnectionExecutor = createThreadPoolExecutor(addConnectionQueue, poolName + " connection adder", threadFactory, new ThreadPoolExecutor.DiscardPolicy());
++      LinkedBlockingQueue<Runnable> addQueue = new LinkedBlockingQueue<>(config.getMaximumPoolSize());
++      this.addConnectionQueue = unmodifiableCollection(addQueue);
++      this.addConnectionExecutor = createThreadPoolExecutor(addQueue, poolName + " connection adder", threadFactory, new ThreadPoolExecutor.DiscardPolicy());
+       this.closeConnectionExecutor = createThreadPoolExecutor(config.getMaximumPoolSize(), poolName + " connection closer", threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
+ 
+       this.leakTaskFactory = new ProxyLeakTaskFactory(config.getLeakDetectionThreshold(), houseKeepingExecutorService);
+ 
+-      this.houseKeeperTask = houseKeepingExecutorService.scheduleWithFixedDelay(new HouseKeeper(), 100L, HOUSEKEEPING_PERIOD_MS, MILLISECONDS);
++      this.houseKeeperTask = houseKeepingExecutorService.scheduleWithFixedDelay(new HouseKeeper(), 100L, housekeepingPeriodMs, MILLISECONDS);
+ 
+       if (Boolean.getBoolean("com.zaxxer.hikari.blockUntilFilled") && config.getInitializationFailTimeout() > 1) {
+          final long startTime = currentTime();
+@@ -176,7 +176,7 @@ public Connection getConnection(final long hardTimeout) throws SQLException
+             }
+ 
+             final long now = currentTime();
+-            if (poolEntry.isMarkedEvicted() || (elapsedMillis(poolEntry.lastAccessed, now) > ALIVE_BYPASS_WINDOW_MS && !isConnectionAlive(poolEntry.connection))) {
++            if (poolEntry.isMarkedEvicted() || (elapsedMillis(poolEntry.lastAccessed, now) > aliveBypassWindowMs && !isConnectionAlive(poolEntry.connection))) {
+                closeConnection(poolEntry, poolEntry.isMarkedEvicted() ? EVICTED_CONNECTION_MESSAGE : DEAD_CONNECTION_MESSAGE);
+                timeout = hardTimeout - elapsedMillis(startTime);
+             }
+@@ -249,7 +249,7 @@ public synchronized void shutdown() throws InterruptedException
+       }
+       finally {
+          logPoolState("After shutdown ");
+-         unregisterMBeans();
++         handleMBeans(this, false);
+          metricsTracker.close();
+       }
+    }
+@@ -329,7 +329,7 @@ public void addBagItem(final int waiting)
+    {
+       final boolean shouldAdd = waiting - addConnectionQueue.size() >= 0; // Yes, >= is intentional.
+       if (shouldAdd) {
+-         addConnectionExecutor.submit(POOL_ENTRY_CREATOR);
++         addConnectionExecutor.submit(poolEntryCreator);
+       }
+    }
+ 
+@@ -407,8 +407,8 @@ public synchronized void resumePool()
+     */
+    void logPoolState(String... prefix)
+    {
+-      if (LOGGER.isDebugEnabled()) {
+-         LOGGER.debug("{} - {}stats (total={}, active={}, idle={}, waiting={})",
++      if (logger.isDebugEnabled()) {
++         logger.debug("{} - {}stats (total={}, active={}, idle={}, waiting={})",
+                       poolName, (prefix.length > 0 ? prefix[0] : ""),
+                       getTotalConnections(), getActiveConnections(), getIdleConnections(), getThreadsAwaitingConnection());
+       }
+@@ -482,20 +482,24 @@ private PoolEntry createPoolEntry()
+ 
+          return poolEntry;
+       }
++      catch (ConnectionSetupException e) {
++         if (poolState == POOL_NORMAL) { // we check POOL_NORMAL to avoid a flood of messages if shutdown() is running concurrently
++            logger.error("{} - Error thrown while acquiring connection from data source", poolName, e.getCause());
++            lastConnectionFailure.set(e);
++         }
++         return null;
++      }
+       catch (SQLException e) {
+          if (poolState == POOL_NORMAL) { // we check POOL_NORMAL to avoid a flood of messages if shutdown() is running concurrently
+-            LOGGER.debug("{} - Cannot acquire connection from data source", poolName, e);
++            logger.debug("{} - Cannot acquire connection from data source", poolName, e);
++            lastConnectionFailure.set(new ConnectionSetupException(e));
+          }
+          return null;
+       }
+-      catch (Throwable e) {
++      catch (Exception e) {
+          if (poolState == POOL_NORMAL) { // we check POOL_NORMAL to avoid a flood of messages if shutdown() is running concurrently
+-            LOGGER.error("{} - Error thrown while acquiring connection from data source", poolName, (e instanceof ConnectionSetupException ? e.getCause() : e));
+-            if (e instanceof ConnectionSetupException) {
+-               lastConnectionFailure.set(e);
+-            } else {
+-               lastConnectionFailure.set(new ConnectionSetupException(e));
+-            }
++            logger.error("{} - Error thrown while acquiring connection from data source", poolName, e);
++            lastConnectionFailure.set(new ConnectionSetupException(e));
+          }
+          return null;
+       }
+@@ -509,7 +513,7 @@ private synchronized void fillPool()
+       final int connectionsToAdd = Math.min(config.getMaximumPoolSize() - getTotalConnections(), config.getMinimumIdle() - getIdleConnections())
+                                    - addConnectionQueue.size();
+       for (int i = 0; i < connectionsToAdd; i++) {
+-         addConnectionExecutor.submit((i < connectionsToAdd - 1) ? POOL_ENTRY_CREATOR : POST_FILL_POOL_ENTRY_CREATOR);
++         addConnectionExecutor.submit((i < connectionsToAdd - 1) ? poolEntryCreator : postFillPoolEntryCreator);
+       }
+    }
+ 
+@@ -553,7 +557,7 @@ private void checkFailFast()
+          if (poolEntry != null) {
+             if (config.getMinimumIdle() > 0) {
+                connectionBag.add(poolEntry);
+-               LOGGER.debug("{} - Added connection {}", poolName, poolEntry.connection);
++               logger.debug("{} - Added connection {}", poolName, poolEntry.connection);
+             }
+             else {
+                quietlyCloseConnection(poolEntry.close(), "(initialization check complete and minimumIdle is zero)");
+@@ -582,7 +586,7 @@ private void checkFailFast()
+     */
+    private void throwPoolInitializationException(Throwable t)
+    {
+-      LOGGER.error("{} - Exception during pool initialization.", poolName, t);
++      logger.error("{} - Exception during pool initialization.", poolName, t);
+       destroyHouseKeepingExecutorService();
+       throw new PoolInitializationException(t);
+    }
+@@ -717,7 +721,7 @@ public Boolean call()
+             final PoolEntry poolEntry = createPoolEntry();
+             if (poolEntry != null) {
+                connectionBag.add(poolEntry);
+-               LOGGER.debug("{} - Added connection {}", poolName, poolEntry.connection);
++               logger.debug("{} - Added connection {}", poolName, poolEntry.connection);
+                if (loggingPrefix != null) {
+                   logPoolState(loggingPrefix);
+                }
+@@ -749,7 +753,7 @@ private boolean shouldCreateAnotherConnection() {
+     */
+    private final class HouseKeeper implements Runnable
+    {
+-      private volatile long previous = plusMillis(currentTime(), -HOUSEKEEPING_PERIOD_MS);
++      private volatile long previous = plusMillis(currentTime(), -housekeepingPeriodMs);
+ 
+       @Override
+       public void run()
+@@ -765,16 +769,16 @@ public void run()
+             final long now = currentTime();
+ 
+             // Detect retrograde time, allowing +128ms as per NTP spec.
+-            if (plusMillis(now, 128) < plusMillis(previous, HOUSEKEEPING_PERIOD_MS)) {
+-               LOGGER.warn("{} - Retrograde clock change detected (housekeeper delta={}), soft-evicting connections from pool.",
++            if (plusMillis(now, 128) < plusMillis(previous, housekeepingPeriodMs)) {
++               logger.warn("{} - Retrograde clock change detected (housekeeper delta={}), soft-evicting connections from pool.",
+                            poolName, elapsedDisplayString(previous, now));
+                previous = now;
+                softEvictConnections();
+                return;
+             }
+-            else if (now > plusMillis(previous, (3 * HOUSEKEEPING_PERIOD_MS) / 2)) {
++            else if (now > plusMillis(previous, (3 * housekeepingPeriodMs) / 2)) {
+                // No point evicting for forward clock motion, this merely accelerates connection retirement anyway
+-               LOGGER.warn("{} - Thread starvation or clock leap detected (housekeeper delta={}).", poolName, elapsedDisplayString(previous, now));
++               logger.warn("{} - Thread starvation or clock leap detected (housekeeper delta={}).", poolName, elapsedDisplayString(previous, now));
+             }
+ 
+             previous = now;
+@@ -799,7 +803,7 @@ else if (now > plusMillis(previous, (3 * HOUSEKEEPING_PERIOD_MS) / 2)) {
+             fillPool(); // Try to maintain minimum connections
+          }
+          catch (Exception e) {
+-            LOGGER.error("Unexpected exception in housekeeping task", e);
++            logger.error("Unexpected exception in housekeeping task", e);
+          }
+       }
+    }
+diff --git a/src/main/java/com/zaxxer/hikari/pool/PoolBase.java b/src/main/java/com/zaxxer/hikari/pool/PoolBase.java
+index 34a39846d..1356a4ee1 100644
+--- a/src/main/java/com/zaxxer/hikari/pool/PoolBase.java
++++ b/src/main/java/com/zaxxer/hikari/pool/PoolBase.java
+@@ -34,7 +34,6 @@
+ import java.lang.management.ManagementFactory;
+ import java.sql.Connection;
+ import java.sql.SQLException;
+-import java.sql.SQLTransientConnectionException;
+ import java.sql.Statement;
+ import java.util.Properties;
+ import java.util.concurrent.Executor;
+@@ -51,14 +50,15 @@
+ 
+ abstract class PoolBase
+ {
+-   private final Logger LOGGER = LoggerFactory.getLogger(PoolBase.class);
++   private final Logger logger = LoggerFactory.getLogger(PoolBase.class);
+ 
+    public final HikariConfig config;
+    IMetricsTrackerDelegate metricsTracker;
+ 
+-   protected volatile String catalog;
+    protected final String poolName;
+-   protected final AtomicReference<Throwable> lastConnectionFailure;
++
++   volatile String catalog;
++   final AtomicReference<Exception> lastConnectionFailure;
+ 
+    long connectionTimeout;
+    long validationTimeout;
+@@ -126,7 +126,7 @@ void quietlyCloseConnection(final Connection connection, final String closureRea
+    {
+       if (connection != null) {
+          try {
+-            LOGGER.debug("{} - Closing connection {}: {}", poolName, connection, closureReason);
++            logger.debug("{} - Closing connection {}: {}", poolName, connection, closureReason);
+ 
+             try {
+                setNetworkTimeout(connection, SECONDS.toMillis(15));
+@@ -138,8 +138,8 @@ void quietlyCloseConnection(final Connection connection, final String closureRea
+                connection.close(); // continue with the close even if setNetworkTimeout() throws
+             }
+          }
+-         catch (Throwable e) {
+-            LOGGER.debug("{} - Closing connection {} failed", poolName, connection, e);
++         catch (Exception e) {
++            logger.debug("{} - Closing connection {} failed", poolName, connection, e);
+          }
+       }
+    }
+@@ -176,13 +176,13 @@ boolean isConnectionAlive(final Connection connection)
+       }
+       catch (Exception e) {
+          lastConnectionFailure.set(e);
+-         LOGGER.warn("{} - Failed to validate connection {} ({}). Possibly consider using a shorter maxLifetime value.",
++         logger.warn("{} - Failed to validate connection {} ({}). Possibly consider using a shorter maxLifetime value.",
+                      poolName, connection, e.getMessage());
+          return false;
+       }
+    }
+ 
+-   Throwable getLastConnectionFailure()
++   Exception getLastConnectionFailure()
+    {
+       return lastConnectionFailure.get();
+    }
+@@ -235,8 +235,8 @@ void resetConnectionState(final Connection connection, final ProxyConnection pro
+          resetBits |= DIRTY_BIT_SCHEMA;
+       }
+ 
+-      if (resetBits != 0 && LOGGER.isDebugEnabled()) {
+-         LOGGER.debug("{} - Reset ({}) on connection {}", poolName, stringFromResetBits(resetBits), connection);
++      if (resetBits != 0 && logger.isDebugEnabled()) {
++         logger.debug("{} - Reset ({}) on connection {}", poolName, stringFromResetBits(resetBits), connection);
+       }
+    }
+ 
+@@ -265,7 +265,7 @@ long getLoginTimeout()
+     *
+     * @param hikariPool a HikariPool instance
+     */
+-   void registerMBeans(final HikariPool hikariPool)
++   void handleMBeans(final HikariPool hikariPool, final boolean register)
+    {
+       if (!config.isRegisterMbeans()) {
+          return;
+@@ -276,40 +276,21 @@ void registerMBeans(final HikariPool hikariPool)
+ 
+          final ObjectName beanConfigName = new ObjectName("com.zaxxer.hikari:type=PoolConfig (" + poolName + ")");
+          final ObjectName beanPoolName = new ObjectName("com.zaxxer.hikari:type=Pool (" + poolName + ")");
+-         if (!mBeanServer.isRegistered(beanConfigName)) {
+-            mBeanServer.registerMBean(config, beanConfigName);
+-            mBeanServer.registerMBean(hikariPool, beanPoolName);
+-         }
+-         else {
+-            LOGGER.error("{} - JMX name ({}) is already registered.", poolName, poolName);
++         if (register) {
++            if (!mBeanServer.isRegistered(beanConfigName)) {
++               mBeanServer.registerMBean(config, beanConfigName);
++               mBeanServer.registerMBean(hikariPool, beanPoolName);
++            } else {
++               logger.error("{} - JMX name ({}) is already registered.", poolName, poolName);
++            }
+          }
+-      }
+-      catch (Exception e) {
+-         LOGGER.warn("{} - Failed to register management beans.", poolName, e);
+-      }
+-   }
+-
+-   /**
+-    * Unregister MBeans for HikariConfig and HikariPool.
+-    */
+-   void unregisterMBeans()
+-   {
+-      if (!config.isRegisterMbeans()) {
+-         return;
+-      }
+-
+-      try {
+-         final MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+-
+-         final ObjectName beanConfigName = new ObjectName("com.zaxxer.hikari:type=PoolConfig (" + poolName + ")");
+-         final ObjectName beanPoolName = new ObjectName("com.zaxxer.hikari:type=Pool (" + poolName + ")");
+-         if (mBeanServer.isRegistered(beanConfigName)) {
++         else if (mBeanServer.isRegistered(beanConfigName)) {
+             mBeanServer.unregisterMBean(beanConfigName);
+             mBeanServer.unregisterMBean(beanPoolName);
+          }
+       }
+       catch (Exception e) {
+-         LOGGER.warn("{} - Failed to unregister management beans.", poolName, e);
++         logger.warn("{} - Failed to {} management beans.", poolName, (register ? "register" : "unregister"), e);
+       }
+    }
+ 
+@@ -330,29 +311,29 @@ private void initializeDataSource()
+       final String dataSourceJNDI = config.getDataSourceJNDI();
+       final Properties dataSourceProperties = config.getDataSourceProperties();
+ 
+-      DataSource dataSource = config.getDataSource();
+-      if (dsClassName != null && dataSource == null) {
+-         dataSource = createInstance(dsClassName, DataSource.class);
+-         PropertyElf.setTargetFromProperties(dataSource, dataSourceProperties);
++      DataSource ds = config.getDataSource();
++      if (dsClassName != null && ds == null) {
++         ds = createInstance(dsClassName, DataSource.class);
++         PropertyElf.setTargetFromProperties(ds, dataSourceProperties);
+       }
+-      else if (jdbcUrl != null && dataSource == null) {
+-         dataSource = new DriverDataSource(jdbcUrl, driverClassName, dataSourceProperties, username, password);
++      else if (jdbcUrl != null && ds == null) {
++         ds = new DriverDataSource(jdbcUrl, driverClassName, dataSourceProperties, username, password);
+       }
+-      else if (dataSourceJNDI != null && dataSource == null) {
++      else if (dataSourceJNDI != null && ds == null) {
+          try {
+             InitialContext ic = new InitialContext();
+-            dataSource = (DataSource) ic.lookup(dataSourceJNDI);
++            ds = (DataSource) ic.lookup(dataSourceJNDI);
+          } catch (NamingException e) {
+             throw new PoolInitializationException(e);
+          }
+       }
+ 
+-      if (dataSource != null) {
+-         setLoginTimeout(dataSource);
+-         createNetworkTimeoutExecutor(dataSource, dsClassName, jdbcUrl);
++      if (ds != null) {
++         setLoginTimeout(ds);
++         createNetworkTimeoutExecutor(ds, dsClassName, jdbcUrl);
+       }
+ 
+-      this.dataSource = dataSource;
++      this.dataSource = ds;
+    }
+ 
+    /**
+@@ -370,9 +351,6 @@ private Connection newConnection() throws Exception
+          String password = config.getPassword();
+ 
+          connection = (username == null) ? dataSource.getConnection() : dataSource.getConnection(username, password);
+-         if (connection == null) {
+-            throw new SQLTransientConnectionException("DataSource returned null unexpectedly");
+-         }
+ 
+          setupConnection(connection);
+          lastConnectionFailure.set(null);
+@@ -383,7 +361,7 @@ private Connection newConnection() throws Exception
+             quietlyCloseConnection(connection, "(Failed to create/setup connection)");
+          }
+          else if (getLastConnectionFailure() == null) {
+-            LOGGER.debug("{} - Failed to create/setup connection: {}", poolName, e.getMessage());
++            logger.debug("{} - Failed to create/setup connection: {}", poolName, e.getMessage());
+          }
+ 
+          lastConnectionFailure.set(e);
+@@ -452,33 +430,54 @@ private void setupConnection(final Connection connection) throws ConnectionSetup
+    private void checkDriverSupport(final Connection connection) throws SQLException
+    {
+       if (!isValidChecked) {
+-         try {
+-            if (isUseJdbc4Validation) {
+-               connection.isValid(1);
+-            }
+-            else {
+-               executeSql(connection, config.getConnectionTestQuery(), false);
+-            }
++         checkValidationSupport(connection);
++         checkDefaultIsolation(connection);
++
++         isValidChecked = true;
++      }
++   }
++
++   /**
++    * Check whether Connection.isValid() is supported, or that the user has test query configured.
++    *
++    * @param connection a Connection to check
++    * @throws SQLException rethrown from the driver
++    */
++   private void checkValidationSupport(final Connection connection) throws SQLException
++   {
++      try {
++         if (isUseJdbc4Validation) {
++            connection.isValid(1);
+          }
+-         catch (Throwable e) {
+-            LOGGER.error("{} - Failed to execute" + (isUseJdbc4Validation ? " isValid() for connection, configure" : "") + " connection test query ({}).", poolName, e.getMessage());
+-            throw e;
++         else {
++            executeSql(connection, config.getConnectionTestQuery(), false);
+          }
++      }
++      catch (Exception | AbstractMethodError e) {
++         logger.error("{} - Failed to execute{} connection test query ({}).", poolName, (isUseJdbc4Validation ? " isValid() for connection, configure" : ""), e.getMessage());
++         throw e;
++      }
++   }
+ 
+-         try {
+-            defaultTransactionIsolation = connection.getTransactionIsolation();
+-            if (transactionIsolation == -1) {
+-               transactionIsolation = defaultTransactionIsolation;
+-            }
++   /**
++    * Check the default transaction isolation of the Connection.
++    *
++    * @param connection a Connection to check
++    * @throws SQLException rethrown from the driver
++    */
++   private void checkDefaultIsolation(final Connection connection) throws SQLException
++   {
++      try {
++         defaultTransactionIsolation = connection.getTransactionIsolation();
++         if (transactionIsolation == -1) {
++            transactionIsolation = defaultTransactionIsolation;
+          }
+-         catch (SQLException e) {
+-            LOGGER.warn("{} - Default transaction isolation level detection failed ({}).", poolName, e.getMessage());
+-            if (e.getSQLState() != null && !e.getSQLState().startsWith("08")) {
+-               throw e;
+-            }
++      }
++      catch (SQLException e) {
++         logger.warn("{} - Default transaction isolation level detection failed ({}).", poolName, e.getMessage());
++         if (e.getSQLState() != null && !e.getSQLState().startsWith("08")) {
++            throw e;
+          }
+-
+-         isValidChecked = true;
+       }
+    }
+ 
+@@ -495,10 +494,10 @@ private void setQueryTimeout(final Statement statement, final int timeoutSec)
+             statement.setQueryTimeout(timeoutSec);
+             isQueryTimeoutSupported = TRUE;
+          }
+-         catch (Throwable e) {
++         catch (Exception e) {
+             if (isQueryTimeoutSupported == UNINITIALIZED) {
+                isQueryTimeoutSupported = FALSE;
+-               LOGGER.info("{} - Failed to set query timeout for statement. ({})", poolName, e.getMessage());
++               logger.info("{} - Failed to set query timeout for statement. ({})", poolName, e.getMessage());
+             }
+          }
+       }
+@@ -521,16 +520,16 @@ private int getAndSetNetworkTimeout(final Connection connection, final long time
+             isNetworkTimeoutSupported = TRUE;
+             return originalTimeout;
+          }
+-         catch (Throwable e) {
++         catch (Exception | AbstractMethodError e) {
+             if (isNetworkTimeoutSupported == UNINITIALIZED) {
+                isNetworkTimeoutSupported = FALSE;
+ 
+-               LOGGER.info("{} - Driver does not support get/set network timeout for connections. ({})", poolName, e.getMessage());
++               logger.info("{} - Driver does not support get/set network timeout for connections. ({})", poolName, e.getMessage());
+                if (validationTimeout < SECONDS.toMillis(1)) {
+-                  LOGGER.warn("{} - A validationTimeout of less than 1 second cannot be honored on drivers without setNetworkTimeout() support.", poolName);
++                  logger.warn("{} - A validationTimeout of less than 1 second cannot be honored on drivers without setNetworkTimeout() support.", poolName);
+                }
+                else if (validationTimeout % SECONDS.toMillis(1) != 0) {
+-                  LOGGER.warn("{} - A validationTimeout with fractional second granularity cannot be honored on drivers without setNetworkTimeout() support.", poolName);
++                  logger.warn("{} - A validationTimeout with fractional second granularity cannot be honored on drivers without setNetworkTimeout() support.", poolName);
+                }
+             }
+          }
+@@ -610,8 +609,8 @@ private void setLoginTimeout(final DataSource dataSource)
+          try {
+             dataSource.setLoginTimeout(Math.max(1, (int) MILLISECONDS.toSeconds(500L + connectionTimeout)));
+          }
+-         catch (Throwable e) {
+-            LOGGER.info("{} - Failed to set login timeout for data source. ({})", poolName, e.getMessage());
++         catch (Exception e) {
++            logger.info("{} - Failed to set login timeout for data source. ({})", poolName, e.getMessage());
+          }
+       }
+    }
+@@ -666,7 +665,7 @@ public void execute(Runnable command)
+          try {
+             command.run();
+          }
+-         catch (Throwable t) {
++         catch (Exception t) {
+             LoggerFactory.getLogger(PoolBase.class).debug("Failed to execute: {}", command, t);
+          }
+       }
+diff --git a/src/main/java/com/zaxxer/hikari/pool/ProxyStatement.java b/src/main/java/com/zaxxer/hikari/pool/ProxyStatement.java
+index c0b86f91b..737ab16db 100644
+--- a/src/main/java/com/zaxxer/hikari/pool/ProxyStatement.java
++++ b/src/main/java/com/zaxxer/hikari/pool/ProxyStatement.java
+@@ -228,13 +228,8 @@ public ResultSet getResultSet() throws SQLException {
+    public ResultSet getGeneratedKeys() throws SQLException
+    {
+       ResultSet resultSet = delegate.getGeneratedKeys();
+-      if (resultSet != null) {
+-         if (proxyResultSet == null || ((ProxyResultSet) proxyResultSet).delegate != resultSet) {
+-            proxyResultSet = ProxyFactory.getProxyResultSet(connection, this, resultSet);
+-         }
+-      }
+-      else {
+-         proxyResultSet = null;
++      if (proxyResultSet == null || ((ProxyResultSet) proxyResultSet).delegate != resultSet) {
++         proxyResultSet = ProxyFactory.getProxyResultSet(connection, this, resultSet);
+       }
+       return proxyResultSet;
+    }
+diff --git a/src/main/java/com/zaxxer/hikari/util/DriverDataSource.java b/src/main/java/com/zaxxer/hikari/util/DriverDataSource.java
+index de78101fa..c6794c253 100644
+--- a/src/main/java/com/zaxxer/hikari/util/DriverDataSource.java
++++ b/src/main/java/com/zaxxer/hikari/util/DriverDataSource.java
+@@ -33,6 +33,8 @@
+ public final class DriverDataSource implements DataSource
+ {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DriverDataSource.class);
++   private static final String PASSWORD = "password";
++   private static final String USER = "user";
+ 
+    private final String jdbcUrl;
+    private final Properties driverProperties;
+@@ -48,10 +50,10 @@ public DriverDataSource(String jdbcUrl, String driverClassName, Properties prope
+       }
+ 
+       if (username != null) {
+-         driverProperties.put("user", driverProperties.getProperty("user", username));
++         driverProperties.put(USER, driverProperties.getProperty("user", username));
+       }
+       if (password != null) {
+-         driverProperties.put("password", driverProperties.getProperty("password", password));
++         driverProperties.put(PASSWORD, driverProperties.getProperty("password", password));
+       }
+ 
+       if (driverClassName != null) {
+diff --git a/src/main/java/com/zaxxer/hikari/util/JavassistProxyFactory.java b/src/main/java/com/zaxxer/hikari/util/JavassistProxyFactory.java
+index d369a3c9d..5a09e271f 100644
+--- a/src/main/java/com/zaxxer/hikari/util/JavassistProxyFactory.java
++++ b/src/main/java/com/zaxxer/hikari/util/JavassistProxyFactory.java
+@@ -16,6 +16,7 @@
+ 
+ package com.zaxxer.hikari.util;
+ 
++import java.io.IOException;
+ import java.lang.reflect.Array;
+ import java.sql.CallableStatement;
+ import java.sql.Connection;
+@@ -35,13 +36,7 @@
+ import com.zaxxer.hikari.pool.ProxyResultSet;
+ import com.zaxxer.hikari.pool.ProxyStatement;
+ 
+-import javassist.ClassPool;
+-import javassist.CtClass;
+-import javassist.CtMethod;
+-import javassist.CtNewMethod;
+-import javassist.LoaderClassPath;
+-import javassist.Modifier;
+-import javassist.NotFoundException;
++import javassist.*;
+ import javassist.bytecode.ClassFile;
+ 
+ /**
+@@ -57,8 +52,7 @@
+    private static ClassPool classPool;
+    private static String genDirectory = "";
+ 
+-   public static void main(String... args)
+-   {
++   public static void main(String... args) throws Exception {
+       classPool = new ClassPool();
+       classPool.importPackage("java.sql");
+       classPool.appendClassPath(new LoaderClassPath(JavassistProxyFactory.class.getClassLoader()));
+@@ -67,27 +61,21 @@ public static void main(String... args)
+          genDirectory = args[0];
+       }
+ 
+-      try {
+-         // Cast is not needed for these
+-         String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";
+-         generateProxyClass(Connection.class, ProxyConnection.class.getName(), methodBody);
+-         generateProxyClass(Statement.class, ProxyStatement.class.getName(), methodBody);
+-         generateProxyClass(ResultSet.class, ProxyResultSet.class.getName(), methodBody);
+-
+-         // For these we have to cast the delegate
+-         methodBody = "{ try { return ((cast) delegate).method($$); } catch (SQLException e) { throw checkException(e); } }";
+-         generateProxyClass(PreparedStatement.class, ProxyPreparedStatement.class.getName(), methodBody);
+-         generateProxyClass(CallableStatement.class, ProxyCallableStatement.class.getName(), methodBody);
+-
+-         modifyProxyFactory();
+-      }
+-      catch (Exception e) {
+-         throw new RuntimeException(e);
+-      }
++      // Cast is not needed for these
++      String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";
++      generateProxyClass(Connection.class, ProxyConnection.class.getName(), methodBody);
++      generateProxyClass(Statement.class, ProxyStatement.class.getName(), methodBody);
++      generateProxyClass(ResultSet.class, ProxyResultSet.class.getName(), methodBody);
++
++      // For these we have to cast the delegate
++      methodBody = "{ try { return ((cast) delegate).method($$); } catch (SQLException e) { throw checkException(e); } }";
++      generateProxyClass(PreparedStatement.class, ProxyPreparedStatement.class.getName(), methodBody);
++      generateProxyClass(CallableStatement.class, ProxyCallableStatement.class.getName(), methodBody);
++
++      modifyProxyFactory();
+    }
+ 
+-   private static void modifyProxyFactory() throws Exception
+-   {
++   private static void modifyProxyFactory() throws NotFoundException, CannotCompileException, IOException {
+       System.out.println("Generating method bodies for com.zaxxer.hikari.proxy.ProxyFactory");
+ 
+       String packageName = ProxyConnection.class.getPackage().getName();
+@@ -168,7 +156,7 @@ private static void modifyProxyFactory() throws Exception
+ 
+             // If the super-Proxy has concrete methods (non-abstract), transform the call into a simple super.method() call
+             CtMethod superMethod = superCt.getMethod(intfMethod.getName(), intfMethod.getSignature());
+-            if ((superMethod.getModifiers() & Modifier.ABSTRACT) != Modifier.ABSTRACT && !isDefaultMethod(intf, intfCt, intfMethod)) {
++            if ((superMethod.getModifiers() & Modifier.ABSTRACT) != Modifier.ABSTRACT && !isDefaultMethod(intf, intfMethod)) {
+                modifiedBody = modifiedBody.replace("((cast) ", "");
+                modifiedBody = modifiedBody.replace("delegate", "super");
+                modifiedBody = modifiedBody.replace("super)", "super");
+@@ -213,7 +201,7 @@ private static boolean isThrowsSqlException(CtMethod method)
+       return false;
+    }
+ 
+-   private static boolean isDefaultMethod(Class<?> intf, CtClass intfCt, CtMethod intfMethod) throws Exception
++   private static boolean isDefaultMethod(Class<?> intf, CtMethod intfMethod) throws Exception
+    {
+       List<Class<?>> paramTypes = new ArrayList<>();
+ 
+diff --git a/src/main/java/com/zaxxer/hikari/util/PropertyElf.java b/src/main/java/com/zaxxer/hikari/util/PropertyElf.java
+index d7ca117b2..965dfd7b7 100644
+--- a/src/main/java/com/zaxxer/hikari/util/PropertyElf.java
++++ b/src/main/java/com/zaxxer/hikari/util/PropertyElf.java
+@@ -38,10 +38,12 @@
+  */
+ public final class PropertyElf
+ {
+-   private static final Logger LOGGER = LoggerFactory.getLogger(PropertyElf.class);
+-
+    private static final Pattern GETTER_PATTERN = Pattern.compile("(get|is)[A-Z].+");
+ 
++   private PropertyElf() {
++      // cannot be constructed
++   }
++
+    public static void setTargetFromProperties(final Object target, final Properties properties)
+    {
+       if (target == null || properties == null) {
+@@ -80,7 +82,7 @@ public static void setTargetFromProperties(final Object target, final Properties
+                }
+             }
+             catch (Exception e) {
+-               continue;
++               // fall thru (continue)
+             }
+          }
+       }
+@@ -117,6 +119,8 @@ public static Properties copyProperties(final Properties props)
+ 
+    private static void setProperty(final Object target, final String propName, final Object propValue, final List<Method> methods)
+    {
++      final Logger logger = LoggerFactory.getLogger(PropertyElf.class);
++
+       // use the english locale to avoid the infamous turkish locale bug
+       String methodName = "set" + propName.substring(0, 1).toUpperCase(Locale.ENGLISH) + propName.substring(1);
+       Method writeMethod = methods.stream().filter(m -> m.getName().equals(methodName) && m.getParameterCount() == 1).findFirst().orElse(null);
+@@ -127,7 +131,7 @@ private static void setProperty(final Object target, final String propName, fina
+       }
+ 
+       if (writeMethod == null) {
+-         LOGGER.error("Property {} does not exist on target {}", propName, target.getClass());
++         logger.error("Property {} does not exist on target {}", propName, target.getClass());
+          throw new RuntimeException(String.format("Property %s does not exist on target %s", propName, target.getClass()));
+       }
+ 
+@@ -147,17 +151,17 @@ else if (paramClass == String.class) {
+          }
+          else {
+             try {
+-               LOGGER.debug("Try to create a new instance of \"{}\"", propValue.toString());
++               logger.debug("Try to create a new instance of \"{}\"", propValue.toString());
+                writeMethod.invoke(target, Class.forName(propValue.toString()).newInstance());
+             }
+             catch (InstantiationException | ClassNotFoundException e) {
+-               LOGGER.debug("Class \"{}\" not found or could not instantiate it (Default constructor)", propValue.toString());
++               logger.debug("Class \"{}\" not found or could not instantiate it (Default constructor)", propValue.toString());
+                writeMethod.invoke(target, propValue);
+             }
+          }
+       }
+       catch (Exception e) {
+-         LOGGER.error("Failed to set property {} on target {}", propName, target.getClass(), e);
++         logger.error("Failed to set property {} on target {}", propName, target.getClass(), e);
+          throw new RuntimeException(e);
+       }
+    }
+diff --git a/src/test/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTrackerTest.java b/src/test/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTrackerTest.java
+index 0da6baefc..6a7ed1a18 100644
+--- a/src/test/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTrackerTest.java
++++ b/src/test/java/com/zaxxer/hikari/metrics/dropwizard/CodaHaleMetricsTrackerTest.java
+@@ -2,6 +2,7 @@
+ 
+ import static org.mockito.Mockito.verify;
+ 
++import com.zaxxer.hikari.metrics.PoolStats;
+ import org.junit.Before;
+ import org.junit.Test;
+ import org.junit.runner.RunWith;
+@@ -19,8 +20,8 @@
+    private CodaHaleMetricsTracker testee;
+ 
+    @Before
+-   public void setup(){
+-      testee = new CodaHaleMetricsTracker("mypool", null, mockMetricRegistry);
++   public void setup() {
++      testee = new CodaHaleMetricsTracker("mypool", poolStats(), mockMetricRegistry);
+    }
+ 
+    @Test
+@@ -38,4 +39,13 @@ public void close() throws Exception {
+       verify(mockMetricRegistry).remove("mypool.pool.MaxConnections");
+       verify(mockMetricRegistry).remove("mypool.pool.MinConnections");
+    }
++
++   private PoolStats poolStats() {
++      return new PoolStats(0) {
++         @Override
++         protected void update() {
++            // do nothing
++         }
++      };
++   }
+ }
+diff --git a/src/test/java/com/zaxxer/hikari/pool/TestConnections.java b/src/test/java/com/zaxxer/hikari/pool/TestConnections.java
+index 8f91de9cf..92b80b2e5 100644
+--- a/src/test/java/com/zaxxer/hikari/pool/TestConnections.java
++++ b/src/test/java/com/zaxxer/hikari/pool/TestConnections.java
+@@ -745,7 +745,7 @@ public Connection getConnection() throws SQLException {
+             return new StubConnection();
+          }
+ 
+-         throw new Error("Bad thing happens on datasource.");
++         throw new RuntimeException("Bad thing happens on datasource.");
+       }
+ 
+       public void setErrorOnConnection(boolean errorOnConnection) {

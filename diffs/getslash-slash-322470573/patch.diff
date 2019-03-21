@@ -1,0 +1,363 @@
+diff --git a/slash/core/error.py b/slash/core/error.py
+index 00abb0b0..11d69c87 100644
+--- a/slash/core/error.py
++++ b/slash/core/error.py
+@@ -4,11 +4,10 @@
+ import arrow
+ from vintage import deprecated
+ 
+-from .._compat import StringIO, iteritems, string_types
++from .._compat import string_types
+ from ..exception_handling import is_exception_fatal
+ from ..exceptions import FAILURE_EXCEPTION_TYPES
+-from ..utils.formatter import Formatter
+-from ..utils.traceback_utils import distill_call_stack, distill_traceback, distill_object_attributes
++from ..utils.traceback_utils import distill_call_stack, distill_traceback
+ 
+ 
+ class Error(object):
+@@ -28,13 +27,10 @@ def __init__(self, msg=None, exc_info=None, frame_correction=0):
+         self.message = msg
+         #: A string representation of the exception caught, if exists
+         self.exception_str = exception = None
+-        #: A dictionary of distilled attributes of the exception object
+-        self.exception_attributes = None
+         self.exc_info = exc_info
+         if exc_info is not None:
+             self.exception_type, exception, tb = exc_info  # pylint: disable=unpacking-non-sequence
+             self.exception_str = repr(exception)
+-            self.exception_attributes = distill_object_attributes(exception, truncate=False)
+             self.traceback = distill_traceback(tb)
+         else:
+             self.traceback = distill_call_stack(frame_correction=frame_correction+4)
+@@ -110,31 +106,3 @@ def func_name(self):
+ 
+     def __repr__(self):
+         return self.message
+-
+-    def get_detailed_traceback_str(self):
+-        """Returns a formatted traceback string for the exception caught
+-        """
+-        if self._cached_detailed_traceback_str is None:
+-            stream = StringIO()
+-            f = Formatter(stream, indentation_string='  ')
+-            f.writeln("Traceback (most recent call last):")
+-            with f.indented():
+-                for frame in self.traceback.frames:
+-                    f.writeln('File "{f.filename}", line {f.lineno}, in {f.func_name}:'.format(f=frame))
+-                    with f.indented():
+-                        f.writeln('>', frame.code_line.strip() or '?')
+-                        with f.indented():
+-                            for title, vars in [('globals', frame.globals), ('locals', frame.locals)]:
+-                                for index, (var_name, var_repr) in enumerate(iteritems(vars)):
+-                                    if index == 0:
+-                                        f.writeln(title)
+-                                        f.indent()
+-                                    f.writeln(' - {0}: {1}'.format(var_name, var_repr['value']))
+-                            f.dedent()
+-            self._cached_detailed_traceback_str = stream.getvalue()
+-
+-        return self._cached_detailed_traceback_str
+-
+-    def get_detailed_str(self):
+-        return '{0}*** {1}'.format(
+-            self.get_detailed_traceback_str(), self)
+diff --git a/slash/utils/traceback_utils.py b/slash/utils/traceback_utils.py
+index d00e038a..a2c2d75a 100644
+--- a/slash/utils/traceback_utils.py
++++ b/slash/utils/traceback_utils.py
+@@ -140,8 +140,6 @@ def __init__(self, frame, lineno=None):
+             lineno = frame.f_lineno
+         self.lineno = lineno
+         self.func_name = frame.f_code.co_name
+-        self.locals = self._capture_locals(frame)
+-        self.globals = self._capture_globals(frame)
+         self.code_line = linecache.getline(self.filename, self.lineno).rstrip()
+         self.code_string = "".join(
+             linecache.getline(self.filename, lineno)
+@@ -160,65 +158,15 @@ def is_in_test_code(self):
+ 
+     def to_dict(self):
+         serialized = {}
+-        for attr in ['filename', 'lineno', 'func_name', 'locals', 'globals', 'code_line', 'code_string']:
++        for attr in ['filename', 'lineno', 'func_name', 'code_line', 'code_string']:
+             serialized[attr] = getattr(self, attr)
+         serialized['is_in_test_code'] = self._is_in_test_code
+         return serialized
+ 
+-    def _capture_globals(self, frame):
+-        used_globals = set(frame.f_code.co_names)
+-        return dict((global_name, {"value": _safe_repr(value)})
+-                    for global_name, value in frame.f_globals.items()
+-                    if global_name in used_globals and self._is_global_included(value))
+-
+-    def _is_global_included(self, g):
+-        if isinstance(g, (types.FunctionType, types.MethodType, types.ModuleType, type)):
+-            return False
+-        return True
+-
+-    def _capture_locals(self, frame):
+-        return dict((local_name, {"value": _safe_repr(local_value)})
+-                    for key, value in frame.f_locals.items()
+-                    if "@" not in key
+-                    for local_name, local_value in self._unwrap_local(key, value))
+-
+-    def _unwrap_local(self, local_name, local_value):
+-        yield local_name, local_value
+-        if local_name != 'self':
+-            return
+-
+-        for attr, value in iter_distilled_object_attributes(local_value):
+-            yield 'self.{}'.format(attr), value
+-
+     def __repr__(self):
+         return '{0.filename}, line {0.lineno}:\n    {0.code_line}'.format(self)
+ 
+ 
+-
+-def iter_distilled_object_attributes(obj):
+-    try:
+-        obj_dict = getattr(obj, '__dict__', {})
+-    except Exception:       # pylint: disable=broad-except
+-        obj_dict = {}
+-
+-    for attr in obj_dict:
+-        if attr.startswith('__') and attr.endswith('__'):
+-            continue
+-        try:
+-            value = getattr(obj, attr)
+-        except Exception:   # pylint: disable=broad-except
+-            continue
+-        if isinstance(value, _FILTERED_MEMBER_TYPES):
+-            continue
+-        yield attr, value
+-
+-
+-def distill_object_attributes(obj, truncate=True):
+-
+-    return {attr: value if isinstance(value, _ALLOWED_ATTRIBUTE_TYPES) else _safe_repr(value, truncate=truncate)
+-            for attr, value in iter_distilled_object_attributes(obj)}
+-
+-
+ def _safe_repr(value, truncate=True):
+     try:
+         returned = repr(value)
+diff --git a/tests/test_error_object.py b/tests/test_error_object.py
+index 1d150ab7..5752eee1 100644
+--- a/tests/test_error_object.py
++++ b/tests/test_error_object.py
+@@ -17,11 +17,6 @@ def test_error_exception_str_repr(error):
+     assert "NotImplementedError" in repr(error)
+ 
+ 
+-def test_detailed_exception(error):
+-    assert error.get_detailed_str()
+-    assert 'NotImplementedError' in error.get_detailed_str()
+-
+-
+ def test_error_filename(error):
+     assert error.filename == without_pyc(os.path.abspath(__file__))
+ 
+@@ -73,35 +68,13 @@ def test_error_frame_objects_forgotten_by_default(suite, suite_test):
+         assert frame.python_frame is None
+ 
+ 
+-def test_frame_locals(error):
+-    assert error.traceback.frames[-3].locals == {
+-        "local_func_1": {
+-            "value": "'global_func_1'"
+-        }}
+-
+-
+ def test_to_list(error):
+     serialized = error.traceback.to_list()
+-    assert serialized[-3]['locals'] == {
+-        "local_func_1": {
+-            "value": "'global_func_1'"
+-        }}
++    assert serialized[-3]['func_name'] == 'func_1'
+     # Just make sure that it's serializable
+     json.dumps(serialized)
+ 
+ 
+-def test_frame_locals_no_assertion_markers(assertion_error):
+-    for var_name, _ in assertion_error.cause.locals.items():
+-        assert "@" not in var_name
+-
+-
+-def test_frame_globals(error):
+-    assert error.traceback.frames[-3].globals == {
+-        "global_func_1": {
+-            "value": "'global_func_1'"
+-        }}
+-
+-
+ def test_capture_exception_twice_caches_object():
+     try:
+         try:
+@@ -115,11 +88,6 @@ def test_capture_exception_twice_caches_object():
+     assert err1 is err2
+ 
+ 
+-def test_detailed_traceback(error):
+-    detailed = error.get_detailed_str()
+-    assert detailed
+-
+-
+ def test_error_is_fatal(error):
+     assert not error.is_fatal()
+ 
+diff --git a/tests/test_error_object_stack_trace.py b/tests/test_error_object_stack_trace.py
+index b00e5592..c5a64c4a 100644
+--- a/tests/test_error_object_stack_trace.py
++++ b/tests/test_error_object_stack_trace.py
+@@ -11,16 +11,6 @@ def test_frame_order(error, use_exception):
+         assert code_line == 'get_error_adder()("error message")'
+ 
+ 
+-def test_self_variables(error):
+-    frame = error.traceback.frames[-3]
+-    assert frame.func_name == 'method1'
+-    assert 'ExampleObject' in frame.locals['self']['value']
+-    assert frame.locals['self.a']['value'] == '1'
+-    assert frame.locals['self.b']['value'] == '2'
+-    for var_name in frame.locals:
+-        assert not var_name.startswith('self.__')
+-
+-
+ @pytest.fixture
+ def error(get_error_adder, use_exception):
+ 
+diff --git a/tests/test_exception_attributes.py b/tests/test_exception_attributes.py
+deleted file mode 100644
+index 1bcd85d0..00000000
+--- a/tests/test_exception_attributes.py
++++ /dev/null
+@@ -1,38 +0,0 @@
+-import sys
+-import pytest
+-
+-from slash.core.error import Error
+-from .utils import Unprintable
+-
+-
+-def test_exception_attributes(error):  # pylint: disable=redefined-outer-name, unused-argument
+-    attrs = error.exception_attributes
+-    assert attrs['x'] == 2
+-    assert isinstance(attrs['y'], str)
+-
+-
+-def test_exception_attributes_with_message():
+-    assert Error('x').exception_attributes is None
+-
+-
+-@pytest.fixture
+-def error():
+-
+-    class MyException(Exception):
+-
+-        def __init__(self):
+-            super(MyException, self).__init__()
+-            self.x = 2
+-            self.y = [str(i) for i in range(10)]
+-            self.d = {'some': 'dict', 'here': 'too'}
+-            self.unprintable = Unprintable()
+-
+-    def func():
+-        raise MyException()
+-
+-    try:
+-        func()
+-    except MyException:
+-        return Error(exc_info=sys.exc_info())
+-    else:
+-        assert False, 'Did not raise'
+diff --git a/tests/test_parallel.py b/tests/test_parallel.py
+index 7d522d42..ba885cbe 100644
+--- a/tests/test_parallel.py
++++ b/tests/test_parallel.py
+@@ -188,8 +188,6 @@ def test_traceback_vars(parallel_suite):
+             found_failure += 1
+             assert len(result.get_failures()) == 1
+             assert len(result.get_failures()[0].traceback.frames) == 3
+-            assert 'x' in result.get_failures()[0].traceback.frames[2].locals
+-            assert 'num' in result.get_failures()[0].traceback.frames[1].locals
+     assert found_failure == 1
+ 
+ def test_result_data_not_picklable(parallel_suite):
+diff --git a/tests/test_traceback_utils.py b/tests/test_traceback_utils.py
+index 5b80b83e..520ebcbc 100644
+--- a/tests/test_traceback_utils.py
++++ b/tests/test_traceback_utils.py
+@@ -3,7 +3,6 @@
+ import emport
+ 
+ from slash.core.error import Error
+-from slash.utils.traceback_utils import _MAX_VARIABLE_VALUE_LENGTH
+ 
+ 
+ 
+@@ -39,27 +38,6 @@ def context():
+     assert err.traceback.frames[-2].lineno == 6
+ 
+ 
+-def test_variable_capping():
+-
+-    def f():
+-        g()
+-
+-    def g():
+-        long_var = 'a' * 1000
+-        assert len(long_var) > _MAX_VARIABLE_VALUE_LENGTH
+-        1/0                     # pylint: disable=pointless-statement
+-
+-    try:
+-        f()
+-    except ZeroDivisionError:
+-        err = Error(exc_info=sys.exc_info())
+-
+-    distilled = err.traceback.to_list()
+-    assert len(distilled[-1]['locals']['long_var']['value']) == _MAX_VARIABLE_VALUE_LENGTH
+-
+-
+-
+-
+ def test_is_test_code(suite, suite_test):
+     suite_test.when_run.error()
+     summary = suite.run()
+@@ -69,35 +47,3 @@ def test_is_test_code(suite, suite_test):
+ 
+     error_json = err.traceback.to_list()
+     assert error_json[-1]['is_in_test_code']
+-
+-
+-def test_self_attribute_throws():
+-
+-    class CustomException(Exception):
+-        pass
+-
+-    def func():
+-        x = DangerousObject()
+-        x.method()
+-
+-    class DangerousObject(object):
+-
+-        def __getattribute__(self, attr):
+-            if attr == '__dict__':
+-                1/0  # pylint: disable=pointless-statement
+-            return super(DangerousObject, self).__getattribute__(attr)
+-
+-        def method(self):
+-            raise CustomException()
+-
+-    try:
+-        func()
+-    except CustomException:
+-        error = Error(exc_info=sys.exc_info())
+-    else:
+-        assert False, 'Did not raise'
+-
+-    locals = error.traceback.frames[-1].locals
+-    assert 'self' in locals
+-    for key in locals:
+-        assert 'self.' not in key

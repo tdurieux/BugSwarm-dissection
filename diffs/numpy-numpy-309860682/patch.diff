@@ -1,0 +1,275 @@
+diff --git a/numpy/core/arrayprint.py b/numpy/core/arrayprint.py
+index 93a659616bd..6607a159408 100644
+--- a/numpy/core/arrayprint.py
++++ b/numpy/core/arrayprint.py
+@@ -273,25 +273,24 @@ def get_printoptions():
+     return _format_options.copy()
+ 
+ 
+-def _leading_trailing(a, index=()):
++def _leading_trailing(a, edgeitems, index=()):
+     """
+     Keep only the N-D corners (leading and trailing edges) of an array.
+ 
+     Should be passed a base-class ndarray, since it makes no guarantees about
+     preserving subclasses.
+     """
+-    edgeitems =  _format_options['edgeitems']
+     axis = len(index)
+     if axis == a.ndim:
+         return a[index]
+ 
+     if a.shape[axis] > 2*edgeitems:
+         return concatenate((
+-            _leading_trailing(a, index + np.index_exp[ :edgeitems]),
+-            _leading_trailing(a, index + np.index_exp[-edgeitems:])
++            _leading_trailing(a, edgeitems, index + np.index_exp[ :edgeitems]),
++            _leading_trailing(a, edgeitems, index + np.index_exp[-edgeitems:])
+         ), axis=axis)
+     else:
+-        return _leading_trailing(a, index + np.index_exp[:])
++        return _leading_trailing(a, edgeitems, index + np.index_exp[:])
+ 
+ 
+ def _object_format(o):
+@@ -437,7 +436,7 @@ def _array2string(a, options, separator=' ', prefix=""):
+ 
+     if a.size > options['threshold']:
+         summary_insert = "..."
+-        data = _leading_trailing(data)
++        data = _leading_trailing(data, options['edgeitems'])
+     else:
+         summary_insert = ""
+ 
+@@ -449,7 +448,7 @@ def _array2string(a, options, separator=' ', prefix=""):
+     # skip over array(
+     next_line_prefix += " "*len(prefix)
+ 
+-    lst = _formatArray(a, format_function, a.ndim, options['linewidth'],
++    lst = _formatArray(a, format_function, options['linewidth'],
+                        next_line_prefix, separator, options['edgeitems'],
+                        summary_insert, options['legacy'])[:-1]
+     return lst
+@@ -624,8 +623,8 @@ def _extendLine(s, line, word, max_line_len, next_line_prefix):
+     return s, line
+ 
+ 
+-def _formatArray(a, format_function, rank, max_line_len, next_line_prefix,
+-                 separator, edge_items, summary_insert, legacy):
++def _formatArray(a, format_function, max_line_len, next_line_prefix,
++                 separator, edge_items, summary_insert, legacy, index=()):
+     """formatArray is designed for two modes of operation:
+ 
+     1. Full output
+@@ -633,69 +632,73 @@ def _formatArray(a, format_function, rank, max_line_len, next_line_prefix,
+     2. Summarized output
+ 
+     """
+-    if rank == 0:
++    axis = len(index)
++    axes_left = a.ndim - axis
++
++    if axes_left == 0:
+         return format_function(a[()]) + '\n'
+ 
+-    if summary_insert and 2*edge_items < len(a):
++    a_len = a.shape[axis]
++    show_summary = summary_insert and 2*edge_items < a_len
++    if show_summary:
+         leading_items = edge_items
+         trailing_items = edge_items
+-        summary_insert1 = summary_insert + separator
+-        if legacy == '1.13':
+-            summary_insert1 = summary_insert + ', '
+     else:
+         leading_items = 0
+-        trailing_items = len(a)
+-        summary_insert1 = ""
++        trailing_items = a_len
+ 
+-    if rank == 1:
++    if axes_left == 1:
+         s = ""
+         line = next_line_prefix
+         for i in range(leading_items):
+-            word = format_function(a[i]) + separator
++            word = format_function(a[index + (i,)]) + separator
+             s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
+ 
+-        if summary_insert1:
+-            s, line = _extendLine(s, line, summary_insert1, max_line_len,
+-                                  next_line_prefix)
++        if show_summary:
++            if legacy == '1.13':
++                word = summary_insert + ", "
++            else:
++                word = summary_insert + separator
++            s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
+ 
+         for i in range(trailing_items, 1, -1):
+-            word = format_function(a[-i]) + separator
++            word = format_function(a[index + (-i,)]) + separator
+             s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
+ 
+-        word = format_function(a[-1])
++        word = format_function(a[index + (-1,)])
+         s, line = _extendLine(s, line, word, max_line_len, next_line_prefix)
+         s += line + "]\n"
+         s = '[' + s[len(next_line_prefix):]
+     else:
+         s = '['
+-        sep = separator.rstrip()
+-        line_sep = '\n'*max(rank-1, 1)
++        line_sep = separator.rstrip() + '\n'*(axes_left - 1)
+         for i in range(leading_items):
+             if i > 0:
+                 s += next_line_prefix
+-            s += _formatArray(a[i], format_function, rank-1, max_line_len,
++            s += _formatArray(a, format_function, max_line_len,
+                               " " + next_line_prefix, separator, edge_items,
+-                              summary_insert, legacy)
+-            s = s.rstrip() + sep.rstrip() + line_sep
++                              summary_insert, legacy, index=index+(i,))
++            s = s.rstrip() + line_sep
+ 
+-        if summary_insert1:
++        if show_summary:
+             if legacy == '1.13':
+-                s += next_line_prefix + summary_insert1 + "\n"
++                # trailing space, fixed number of newlines, and fixed separator
++                s += next_line_prefix + summary_insert + ", \n"
+             else:
+-                s += next_line_prefix + summary_insert1.strip() + line_sep
++                s += next_line_prefix + summary_insert + line_sep
+ 
+         for i in range(trailing_items, 1, -1):
+             if leading_items or i != trailing_items:
+                 s += next_line_prefix
+-            s += _formatArray(a[-i], format_function, rank-1, max_line_len,
++            s += _formatArray(a, format_function, max_line_len,
+                               " " + next_line_prefix, separator, edge_items,
+-                              summary_insert, legacy)
+-            s = s.rstrip() + sep.rstrip() + line_sep
++                              summary_insert, legacy, index=index+(-i,))
++            s = s.rstrip() + line_sep
+         if leading_items or trailing_items > 1:
+             s += next_line_prefix
+-        s += _formatArray(a[-1], format_function, rank-1, max_line_len,
++        s += _formatArray(a, format_function, max_line_len,
+                           " " + next_line_prefix, separator, edge_items,
+-                          summary_insert, legacy).rstrip()+']\n'
++                          summary_insert, legacy, index=index+(-1,)).rstrip() + ']\n'
+     return s
+ 
+ 
+diff --git a/numpy/core/tests/test_arrayprint.py b/numpy/core/tests/test_arrayprint.py
+index 4d67d6eacbc..993edd41d84 100644
+--- a/numpy/core/tests/test_arrayprint.py
++++ b/numpy/core/tests/test_arrayprint.py
+@@ -230,6 +230,32 @@ def test_unstructured_void_repr(self):
+         assert_equal(eval(repr(a), vars(np)), a)
+         assert_equal(eval(repr(a[0]), vars(np)), a[0])
+ 
++    def test_edgeitems_kwarg(self):
++        # previously the global print options would be taken over the kwarg
++        arr = np.zeros(3, int)
++        assert_equal(
++            np.array2string(arr, edgeitems=1, threshold=0),
++            "[0 ... 0]"
++        )
++
++    def test_summarize_1d(self):
++        A = np.arange(1001)
++        strA = '[   0    1    2 ...  998  999 1000]'
++        assert_equal(str(A), strA)
++
++        reprA = 'array([   0,    1,    2, ...,  998,  999, 1000])'
++        assert_equal(repr(A), reprA)
++
++    def test_summarize_2d(self):
++        A = np.arange(1002).reshape(2, 501)
++        strA = '[[   0    1    2 ...  498  499  500]\n' \
++               ' [ 501  502  503 ...  999 1000 1001]]'
++        assert_equal(str(A), strA)
++
++        reprA = 'array([[   0,    1,    2, ...,  498,  499,  500],\n' \
++                '       [ 501,  502,  503, ...,  999, 1000, 1001]])'
++        assert_equal(repr(A), reprA)
++
+ 
+ class TestPrintOptions(object):
+     """Test getting and setting global print options."""
+diff --git a/numpy/core/tests/test_multiarray.py b/numpy/core/tests/test_multiarray.py
+index a625a1bce18..306f21f1642 100644
+--- a/numpy/core/tests/test_multiarray.py
++++ b/numpy/core/tests/test_multiarray.py
+@@ -5677,26 +5677,6 @@ def test_3d_tensor(self):
+             assert_equal(np.inner(b, a).transpose(2,3,0,1), desired)
+ 
+ 
+-class TestSummarization(object):
+-    def test_1d(self):
+-        A = np.arange(1001)
+-        strA = '[   0    1    2 ...  998  999 1000]'
+-        assert_(str(A) == strA)
+-
+-        reprA = 'array([   0,    1,    2, ...,  998,  999, 1000])'
+-        assert_(repr(A) == reprA)
+-
+-    def test_2d(self):
+-        A = np.arange(1002).reshape(2, 501)
+-        strA = '[[   0    1    2 ...  498  499  500]\n' \
+-               ' [ 501  502  503 ...  999 1000 1001]]'
+-        assert_(str(A) == strA)
+-
+-        reprA = 'array([[   0,    1,    2, ...,  498,  499,  500],\n' \
+-                '       [ 501,  502,  503, ...,  999, 1000, 1001]])'
+-        assert_(repr(A) == reprA)
+-
+-
+ class TestAlen(object):
+     def test_basic(self):
+         m = np.array([1, 2, 3])
+diff --git a/numpy/matrixlib/defmatrix.py b/numpy/matrixlib/defmatrix.py
+index 08e867dea56..1f5c94921f6 100644
+--- a/numpy/matrixlib/defmatrix.py
++++ b/numpy/matrixlib/defmatrix.py
+@@ -328,19 +328,6 @@ def __ipow__(self, other):
+     def __rpow__(self, other):
+         return NotImplemented
+ 
+-    def __repr__(self):
+-        s = repr(self.__array__()).replace('array', 'matrix')
+-        # now, 'matrix' has 6 letters, and 'array' 5, so the columns don't
+-        # line up anymore. We need to add a space.
+-        l = s.splitlines()
+-        for i in range(1, len(l)):
+-            if l[i]:
+-                l[i] = ' ' + l[i]
+-        return '\n'.join(l)
+-
+-    def __str__(self):
+-        return str(self.__array__())
+-
+     def _align(self, axis):
+         """A convenience function for operations that need to preserve axis
+         orientation.
+diff --git a/numpy/testing/tests/test_utils.py b/numpy/testing/tests/test_utils.py
+index 08d67153adf..77fb974cffe 100644
+--- a/numpy/testing/tests/test_utils.py
++++ b/numpy/testing/tests/test_utils.py
+@@ -296,11 +296,13 @@ def test_error_message(self):
+ 
+             (shapes (2,), (1, 2) mismatch)
+              x: array([1, 2])
+-             y: [repr failed for <matrix>: %d format: a number is required, not matrix]""")
++             y: matrix([[1, 2]])""")
+             try:
+                 self.assertEqual(msg, msg_reference)
+             except AssertionError:
+                 self.assertEqual(msg2, msg_reference)
++        else:
++            raise AssertionError("Did not raise")
+ 
+ 
+ class TestArrayAlmostEqual(_GenericTest, unittest.TestCase):

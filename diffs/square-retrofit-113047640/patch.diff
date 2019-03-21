@@ -1,0 +1,728 @@
+diff --git a/retrofit-converters/gson/src/test/java/retrofit2/converter/gson/GsonConverterFactoryTest.java b/retrofit-converters/gson/src/test/java/retrofit2/converter/gson/GsonConverterFactoryTest.java
+index 5f584ec85..eb80796bd 100644
+--- a/retrofit-converters/gson/src/test/java/retrofit2/converter/gson/GsonConverterFactoryTest.java
++++ b/retrofit-converters/gson/src/test/java/retrofit2/converter/gson/GsonConverterFactoryTest.java
+@@ -78,7 +78,7 @@
+   }
+ 
+   interface Service {
+-    @POST("/") Call<AnImplementation> anImplementation(@Body AnImplementation impl);
++    @POST("/") Call<AnImplementation> anImplementation(@Body(ignoreNull = false) AnImplementation impl);
+     @POST("/") Call<AnInterface> anInterface(@Body AnInterface impl);
+   }
+ 
+@@ -134,6 +134,16 @@
+     assertThat(request.getHeader("Content-Type")).isEqualTo("application/json; charset=UTF-8");
+   }
+ 
++  @Test public void serializeNull() throws IOException, InterruptedException {
++    server.enqueue(new MockResponse().setBody("{}"));
++
++    service.anImplementation(null).execute();
++
++    RecordedRequest request = server.takeRequest();
++    assertThat(request.getBody().readUtf8()).isEqualTo("null"); // Top-level null literal.
++    assertThat(request.getHeader("Content-Type")).isEqualTo("application/json; charset=UTF-8");
++  }
++
+   @Test public void deserializeUsesConfiguration() throws IOException, InterruptedException {
+     server.enqueue(new MockResponse().setBody("{/* a comment! */}"));
+ 
+diff --git a/retrofit-converters/jackson/src/test/java/retrofit2/converter/jackson/JacksonConverterFactoryTest.java b/retrofit-converters/jackson/src/test/java/retrofit2/converter/jackson/JacksonConverterFactoryTest.java
+index 19c18538e..9d702ec3b 100644
+--- a/retrofit-converters/jackson/src/test/java/retrofit2/converter/jackson/JacksonConverterFactoryTest.java
++++ b/retrofit-converters/jackson/src/test/java/retrofit2/converter/jackson/JacksonConverterFactoryTest.java
+@@ -36,7 +36,6 @@
+ import retrofit2.Call;
+ import retrofit2.Response;
+ import retrofit2.Retrofit;
+-import retrofit2.converter.jackson.JacksonConverterFactory;
+ import retrofit2.http.Body;
+ import retrofit2.http.POST;
+ 
+@@ -102,7 +101,7 @@
+   }
+ 
+   interface Service {
+-    @POST("/") Call<AnImplementation> anImplementation(@Body AnImplementation impl);
++    @POST("/") Call<AnImplementation> anImplementation(@Body(ignoreNull = false) AnImplementation impl);
+     @POST("/") Call<AnInterface> anInterface(@Body AnInterface impl);
+   }
+ 
+@@ -156,4 +155,14 @@
+     assertThat(request.getBody().readUtf8()).isEqualTo("{\"name\":\"value\"}");
+     assertThat(request.getHeader("Content-Type")).isEqualTo("application/json; charset=UTF-8");
+   }
++
++  @Test public void serializeNull() throws IOException, InterruptedException {
++    server.enqueue(new MockResponse().setBody("{}"));
++
++    service.anImplementation(null).execute();
++
++    RecordedRequest request = server.takeRequest();
++    assertThat(request.getBody().readUtf8()).isEqualTo("null"); // Top-level null literal.
++    assertThat(request.getHeader("Content-Type")).isEqualTo("application/json; charset=UTF-8");
++  }
+ }
+diff --git a/retrofit-converters/moshi/src/test/java/retrofit2/converter/moshi/MoshiConverterFactoryTest.java b/retrofit-converters/moshi/src/test/java/retrofit2/converter/moshi/MoshiConverterFactoryTest.java
+index 3a54a7ebe..59e2df300 100644
+--- a/retrofit-converters/moshi/src/test/java/retrofit2/converter/moshi/MoshiConverterFactoryTest.java
++++ b/retrofit-converters/moshi/src/test/java/retrofit2/converter/moshi/MoshiConverterFactoryTest.java
+@@ -79,7 +79,7 @@
+   }
+ 
+   interface Service {
+-    @POST("/") Call<AnImplementation> anImplementation(@Body AnImplementation impl);
++    @POST("/") Call<AnImplementation> anImplementation(@Body(ignoreNull = false) AnImplementation impl);
+     @POST("/") Call<AnInterface> anInterface(@Body AnInterface impl);
+   }
+ 
+@@ -151,4 +151,14 @@
+     AnImplementation body = response.body();
+     assertThat(body.theName).isEqualTo("value");
+   }
++
++  @Test public void serializeNull() throws IOException, InterruptedException {
++    server.enqueue(new MockResponse().setBody("{}"));
++
++    service.anImplementation(null).execute();
++
++    RecordedRequest request = server.takeRequest();
++    assertThat(request.getBody().readUtf8()).isEqualTo("null"); // Top-level null literal.
++    assertThat(request.getHeader("Content-Type")).isEqualTo("application/json; charset=UTF-8");
++  }
+ }
+diff --git a/retrofit-converters/protobuf/src/main/java/retrofit2/converter/protobuf/ProtoRequestBodyConverter.java b/retrofit-converters/protobuf/src/main/java/retrofit2/converter/protobuf/ProtoRequestBodyConverter.java
+index 814dc326b..f7a4b0d08 100644
+--- a/retrofit-converters/protobuf/src/main/java/retrofit2/converter/protobuf/ProtoRequestBodyConverter.java
++++ b/retrofit-converters/protobuf/src/main/java/retrofit2/converter/protobuf/ProtoRequestBodyConverter.java
+@@ -25,6 +25,9 @@
+   private static final MediaType MEDIA_TYPE = MediaType.parse("application/x-protobuf");
+ 
+   @Override public RequestBody convert(T value) throws IOException {
++    if (value == null) {
++      throw new IllegalStateException("Unable to serialize null message.");
++    }
+     byte[] bytes = value.toByteArray();
+     return RequestBody.create(MEDIA_TYPE, bytes);
+   }
+diff --git a/retrofit-converters/protobuf/src/test/java/retrofit2/converter/protobuf/ProtoConverterFactoryTest.java b/retrofit-converters/protobuf/src/test/java/retrofit2/converter/protobuf/ProtoConverterFactoryTest.java
+index f2ca958f4..cc7154469 100644
+--- a/retrofit-converters/protobuf/src/test/java/retrofit2/converter/protobuf/ProtoConverterFactoryTest.java
++++ b/retrofit-converters/protobuf/src/test/java/retrofit2/converter/protobuf/ProtoConverterFactoryTest.java
+@@ -40,7 +40,7 @@
+ public final class ProtoConverterFactoryTest {
+   interface Service {
+     @GET("/") Call<Phone> get();
+-    @POST("/") Call<Phone> post(@Body Phone impl);
++    @POST("/") Call<Phone> post(@Body(ignoreNull = false) Phone impl);
+     @GET("/") Call<String> wrongClass();
+     @GET("/") Call<List<String>> wrongType();
+   }
+@@ -131,4 +131,14 @@
+           .hasMessageContaining("input ended unexpectedly");
+     }
+   }
++
++  @Test public void serializeNullThrows() throws IOException {
++    Call<Phone> call = service.post(null);
++    try {
++      call.execute();
++      fail();
++    } catch (IllegalStateException e) {
++      assertThat(e).hasMessage("Unable to serialize null message.");
++    }
++  }
+ }
+diff --git a/retrofit-converters/scalars/src/main/java/retrofit2/converter/scalars/ScalarRequestBodyConverter.java b/retrofit-converters/scalars/src/main/java/retrofit2/converter/scalars/ScalarRequestBodyConverter.java
+index fd65200d4..847029bf6 100644
+--- a/retrofit-converters/scalars/src/main/java/retrofit2/converter/scalars/ScalarRequestBodyConverter.java
++++ b/retrofit-converters/scalars/src/main/java/retrofit2/converter/scalars/ScalarRequestBodyConverter.java
+@@ -23,11 +23,15 @@
+ final class ScalarRequestBodyConverter<T> implements Converter<T, RequestBody> {
+   static final ScalarRequestBodyConverter<Object> INSTANCE = new ScalarRequestBodyConverter<>();
+   private static final MediaType MEDIA_TYPE = MediaType.parse("text/plain; charset=UTF-8");
++  private static final RequestBody EMPTY_BODY = RequestBody.create(null, new byte[0]);
+ 
+   private ScalarRequestBodyConverter() {
+   }
+ 
+   @Override public RequestBody convert(T value) throws IOException {
++    if (value == null) {
++      return EMPTY_BODY;
++    }
+     return RequestBody.create(MEDIA_TYPE, String.valueOf(value));
+   }
+ }
+diff --git a/retrofit-converters/scalars/src/test/java/retrofit2/converter/scalars/ScalarsConverterFactoryTest.java b/retrofit-converters/scalars/src/test/java/retrofit2/converter/scalars/ScalarsConverterFactoryTest.java
+index cc19d4fbc..6c9c7897e 100644
+--- a/retrofit-converters/scalars/src/test/java/retrofit2/converter/scalars/ScalarsConverterFactoryTest.java
++++ b/retrofit-converters/scalars/src/test/java/retrofit2/converter/scalars/ScalarsConverterFactoryTest.java
+@@ -26,7 +26,6 @@
+ import retrofit2.Call;
+ import retrofit2.Response;
+ import retrofit2.Retrofit;
+-import retrofit2.converter.scalars.ScalarsConverterFactory;
+ import retrofit2.http.Body;
+ import retrofit2.http.GET;
+ import retrofit2.http.POST;
+@@ -38,7 +37,7 @@
+   interface Service {
+       @POST("/") Call<ResponseBody> object(@Body Object body);
+ 
+-      @POST("/") Call<ResponseBody> stringObject(@Body String body);
++      @POST("/") Call<ResponseBody> stringObject(@Body(ignoreNull = false) String body);
+       @POST("/") Call<ResponseBody> booleanPrimitive(@Body boolean body);
+       @POST("/") Call<ResponseBody> booleanObject(@Body Boolean body);
+       @POST("/") Call<ResponseBody> bytePrimitive(@Body byte body);
+@@ -97,6 +96,14 @@
+     }
+   }
+ 
++  @Test public void serializeNullToEmptyBody() throws IOException, InterruptedException {
++    server.enqueue(new MockResponse());
++    service.stringObject(null).execute();
++    RecordedRequest request = server.takeRequest();
++    assertThat(request.getHeader("Content-Type")).isNull();
++    assertThat(request.getBody().size()).isZero();
++  }
++
+   @Test public void supportedRequestTypes() throws IOException, InterruptedException {
+     RecordedRequest request;
+ 
+diff --git a/retrofit-converters/simplexml/src/main/java/retrofit2/converter/simplexml/SimpleXmlRequestBodyConverter.java b/retrofit-converters/simplexml/src/main/java/retrofit2/converter/simplexml/SimpleXmlRequestBodyConverter.java
+index 06aeee1e6..8b0a93cb7 100644
+--- a/retrofit-converters/simplexml/src/main/java/retrofit2/converter/simplexml/SimpleXmlRequestBodyConverter.java
++++ b/retrofit-converters/simplexml/src/main/java/retrofit2/converter/simplexml/SimpleXmlRequestBodyConverter.java
+@@ -34,6 +34,9 @@
+   }
+ 
+   @Override public RequestBody convert(T value) throws IOException {
++    if (value == null) {
++      throw new IllegalStateException("Unable to serialize null object.");
++    }
+     Buffer buffer = new Buffer();
+     try {
+       OutputStreamWriter osw = new OutputStreamWriter(buffer.outputStream(), CHARSET);
+diff --git a/retrofit-converters/simplexml/src/test/java/retrofit2/converter/simplexml/SimpleXmlConverterFactoryTest.java b/retrofit-converters/simplexml/src/test/java/retrofit2/converter/simplexml/SimpleXmlConverterFactoryTest.java
+index 8a74a8055..78a08fc8f 100644
+--- a/retrofit-converters/simplexml/src/test/java/retrofit2/converter/simplexml/SimpleXmlConverterFactoryTest.java
++++ b/retrofit-converters/simplexml/src/test/java/retrofit2/converter/simplexml/SimpleXmlConverterFactoryTest.java
+@@ -40,7 +40,7 @@
+ public class SimpleXmlConverterFactoryTest {
+   interface Service {
+     @GET("/") Call<MyObject> get();
+-    @POST("/") Call<MyObject> post(@Body MyObject impl);
++    @POST("/") Call<MyObject> post(@Body(ignoreNull = false) MyObject impl);
+     @GET("/") Call<String> wrongClass();
+   }
+ 
+@@ -99,4 +99,14 @@
+       assertThat(e).hasMessage("Could not deserialize body as class java.lang.String");
+     }
+   }
++
++  @Test public void serializeNullThrows() throws IOException {
++    Call<MyObject> call = service.post(null);
++    try {
++      call.execute();
++      fail();
++    } catch (IllegalStateException e) {
++      assertThat(e).hasMessage("Unable to serialize null object.");
++    }
++  }
+ }
+diff --git a/retrofit-converters/wire/src/main/java/retrofit2/converter/wire/WireRequestBodyConverter.java b/retrofit-converters/wire/src/main/java/retrofit2/converter/wire/WireRequestBodyConverter.java
+index d388a944c..a2810a978 100644
+--- a/retrofit-converters/wire/src/main/java/retrofit2/converter/wire/WireRequestBodyConverter.java
++++ b/retrofit-converters/wire/src/main/java/retrofit2/converter/wire/WireRequestBodyConverter.java
+@@ -33,6 +33,9 @@
+   }
+ 
+   @Override public RequestBody convert(T value) throws IOException {
++    if (value == null) {
++      throw new IllegalStateException("Unable to serialize null message.");
++    }
+     Buffer buffer = new Buffer();
+     adapter.encode(buffer, value);
+     return RequestBody.create(MEDIA_TYPE, buffer.snapshot());
+diff --git a/retrofit-converters/wire/src/test/java/retrofit2/converter/wire/WireConverterFactoryTest.java b/retrofit-converters/wire/src/test/java/retrofit2/converter/wire/WireConverterFactoryTest.java
+index e972d5287..3d2ba7150 100644
+--- a/retrofit-converters/wire/src/test/java/retrofit2/converter/wire/WireConverterFactoryTest.java
++++ b/retrofit-converters/wire/src/test/java/retrofit2/converter/wire/WireConverterFactoryTest.java
+@@ -39,7 +39,7 @@
+ public final class WireConverterFactoryTest {
+   interface Service {
+     @GET("/") Call<Phone> get();
+-    @POST("/") Call<Phone> post(@Body Phone impl);
++    @POST("/") Call<Phone> post(@Body(ignoreNull = false) Phone impl);
+     @GET("/") Call<String> wrongClass();
+     @GET("/") Call<List<String>> wrongType();
+   }
+@@ -128,4 +128,14 @@
+     } catch (EOFException ignored) {
+     }
+   }
++
++  @Test public void serializeNullThrows() throws IOException {
++    Call<Phone> call = service.post(null);
++    try {
++      call.execute();
++      fail();
++    } catch (IllegalStateException e) {
++      assertThat(e).hasMessage("Unable to serialize null message.");
++    }
++  }
+ }
+diff --git a/retrofit/src/main/java/retrofit2/Converter.java b/retrofit/src/main/java/retrofit2/Converter.java
+index 9fd8eddaf..2fe416053 100644
+--- a/retrofit/src/main/java/retrofit2/Converter.java
++++ b/retrofit/src/main/java/retrofit2/Converter.java
+@@ -45,6 +45,8 @@
+      * {@code type} cannot be handled by this factory. This is used to create converters for
+      * response types such as {@code SimpleResponse} from a {@code Call<SimpleResponse>}
+      * declaration.
++     * <p>
++     * The returned converter will never be passed a {@code null} value.
+      */
+     public Converter<ResponseBody, ?> responseBodyConverter(Type type, Annotation[] annotations,
+         Retrofit retrofit) {
+@@ -56,6 +58,8 @@
+      * {@code type} cannot be handled by this factory. This is used to create converters for types
+      * specified by {@link Body @Body}, {@link Part @Part}, and {@link PartMap @PartMap}
+      * values.
++     * <p>
++     * The returned converter is expected to handle {@code null} values.
+      */
+     public Converter<?, RequestBody> requestBodyConverter(Type type,
+         Annotation[] parameterAnnotations, Annotation[] methodAnnotations, Retrofit retrofit) {
+diff --git a/retrofit/src/main/java/retrofit2/RequestAction.java b/retrofit/src/main/java/retrofit2/RequestAction.java
+index 994920b6f..2ca266ec5 100644
+--- a/retrofit/src/main/java/retrofit2/RequestAction.java
++++ b/retrofit/src/main/java/retrofit2/RequestAction.java
+@@ -191,16 +191,18 @@
+   }
+ 
+   static final class Part<T> extends RequestAction<T> {
++    private final boolean ignoreNull;
+     private final Headers headers;
+     private final Converter<T, RequestBody> converter;
+ 
+-    Part(Headers headers, Converter<T, RequestBody> converter) {
++    Part(boolean ignoreNull, Headers headers, Converter<T, RequestBody> converter) {
++      this.ignoreNull = ignoreNull;
+       this.headers = headers;
+       this.converter = converter;
+     }
+ 
+     @Override void perform(RequestBuilder builder, T value) {
+-      if (value == null) return; // Skip null values.
++      if (ignoreNull && value == null) return; // Skip null values.
+ 
+       RequestBody body;
+       try {
+@@ -213,16 +215,20 @@
+   }
+ 
+   static final class PartMap<T> extends RequestAction<Map<String, T>> {
++    private final boolean ignoreNull;
+     private final Converter<T, RequestBody> valueConverter;
+     private final String transferEncoding;
+ 
+-    PartMap(Converter<T, RequestBody> valueConverter, String transferEncoding) {
++    PartMap(boolean ignoreNull, Converter<T, RequestBody> valueConverter, String transferEncoding) {
++      this.ignoreNull = ignoreNull;
+       this.valueConverter = valueConverter;
+       this.transferEncoding = transferEncoding;
+     }
+ 
+     @Override void perform(RequestBuilder builder, Map<String, T> value) throws IOException {
+-      if (value == null) return; // Skip null values.
++      if (value == null) {
++        throw new IllegalArgumentException("Part map must not be null.");
++      }
+ 
+       for (Map.Entry<String, T> entry : value.entrySet()) {
+         String entryKey = entry.getKey();
+@@ -230,7 +236,7 @@
+           throw new IllegalArgumentException("Part map contained null key.");
+         }
+         T entryValue = entry.getValue();
+-        if (entryValue == null) {
++        if (ignoreNull && entryValue == null) {
+           continue; // Skip null values.
+         }
+ 
+@@ -244,21 +250,24 @@
+   }
+ 
+   static final class Body<T> extends RequestAction<T> {
++    private final boolean ignoreNull;
+     private final Converter<T, RequestBody> converter;
+ 
+-    Body(Converter<T, RequestBody> converter) {
++    Body(boolean ignoreNull, Converter<T, RequestBody> converter) {
++      this.ignoreNull = ignoreNull;
+       this.converter = converter;
+     }
+ 
+     @Override void perform(RequestBuilder builder, T value) {
+-      if (value == null) {
+-        throw new IllegalArgumentException("Body parameter value must not be null.");
+-      }
+       RequestBody body;
+-      try {
+-        body = converter.convert(value);
+-      } catch (IOException e) {
+-        throw new RuntimeException("Unable to convert " + value + " to RequestBody", e);
++      if (ignoreNull && value == null) {
++        body = Utils.EMPTY_BODY;
++      } else {
++        try {
++          body = converter.convert(value);
++        } catch (IOException e) {
++          throw new RuntimeException("Unable to convert " + value + " to RequestBody", e);
++        }
+       }
+       builder.setBody(body);
+     }
+diff --git a/retrofit/src/main/java/retrofit2/RequestBuilder.java b/retrofit/src/main/java/retrofit2/RequestBuilder.java
+index 902c5a509..7626d49fc 100644
+--- a/retrofit/src/main/java/retrofit2/RequestBuilder.java
++++ b/retrofit/src/main/java/retrofit2/RequestBuilder.java
+@@ -193,8 +193,7 @@ Request build() {
+       } else if (multipartBuilder != null) {
+         body = multipartBuilder.build();
+       } else if (hasBody) {
+-        // Body is absent, make an empty body.
+-        body = RequestBody.create(null, new byte[0]);
++        body = Utils.EMPTY_BODY;
+       }
+     }
+ 
+diff --git a/retrofit/src/main/java/retrofit2/RequestFactoryParser.java b/retrofit/src/main/java/retrofit2/RequestFactoryParser.java
+index 15ff19a4a..8f9bf73de 100644
+--- a/retrofit/src/main/java/retrofit2/RequestFactoryParser.java
++++ b/retrofit/src/main/java/retrofit2/RequestFactoryParser.java
+@@ -417,6 +417,7 @@ private void parseParameters(Retrofit retrofit, Annotation[] methodAnnotations)
+               throw parameterError(i, "@Part parameters can only be used with multipart encoding.");
+             }
+             Part part = (Part) parameterAnnotation;
++            boolean ignoreNull = part.ignoreNull();
+             okhttp3.Headers headers = okhttp3.Headers.of(
+                 "Content-Disposition", "form-data; name=\"" + part.value() + "\"",
+                 "Content-Transfer-Encoding", part.encoding());
+@@ -434,18 +435,18 @@ private void parseParameters(Retrofit retrofit, Annotation[] methodAnnotations)
+               Converter<?, RequestBody> converter =
+                   retrofit.requestBodyConverter(iterableType, parameterAnnotations,
+                       methodAnnotations);
+-              action = new RequestAction.Part<>(headers, converter).iterable();
++              action = new RequestAction.Part<>(ignoreNull, headers, converter).iterable();
+             } else if (rawParameterType.isArray()) {
+               Class<?> arrayComponentType = boxIfPrimitive(rawParameterType.getComponentType());
+               Converter<?, RequestBody> converter =
+                   retrofit.requestBodyConverter(arrayComponentType, parameterAnnotations,
+                       methodAnnotations);
+-              action = new RequestAction.Part<>(headers, converter).array();
++              action = new RequestAction.Part<>(ignoreNull, headers, converter).array();
+             } else {
+               Converter<?, RequestBody> converter =
+                   retrofit.requestBodyConverter(parameterType, parameterAnnotations,
+                       methodAnnotations);
+-              action = new RequestAction.Part<>(headers, converter);
++              action = new RequestAction.Part<>(ignoreNull, headers, converter);
+             }
+ 
+             gotPart = true;
+@@ -474,7 +475,8 @@ private void parseParameters(Retrofit retrofit, Annotation[] methodAnnotations)
+                     methodAnnotations);
+ 
+             PartMap partMap = (PartMap) parameterAnnotation;
+-            action = new RequestAction.PartMap<>(valueConverter, partMap.encoding());
++            boolean ignoreNull = partMap.ignoreNull();
++            action = new RequestAction.PartMap<>(ignoreNull, valueConverter, partMap.encoding());
+             gotPart = true;
+ 
+           } else if (parameterAnnotation instanceof Body) {
+@@ -486,6 +488,9 @@ private void parseParameters(Retrofit retrofit, Annotation[] methodAnnotations)
+               throw parameterError(i, "Multiple @Body method annotations found.");
+             }
+ 
++            Body body = (Body) parameterAnnotation;
++            boolean ignoreNull = body.ignoreNull();
++
+             Converter<?, RequestBody> converter;
+             try {
+               converter = retrofit.requestBodyConverter(parameterType, parameterAnnotations,
+@@ -493,7 +498,7 @@ private void parseParameters(Retrofit retrofit, Annotation[] methodAnnotations)
+             } catch (RuntimeException e) { // Wide exception range because factories are user code.
+               throw parameterError(e, i, "Unable to create @Body converter for %s", parameterType);
+             }
+-            action = new RequestAction.Body<>(converter);
++            action = new RequestAction.Body<>(ignoreNull, converter);
+             gotBody = true;
+           }
+ 
+diff --git a/retrofit/src/main/java/retrofit2/Utils.java b/retrofit/src/main/java/retrofit2/Utils.java
+index 20c2d98a8..b405f21d0 100644
+--- a/retrofit/src/main/java/retrofit2/Utils.java
++++ b/retrofit/src/main/java/retrofit2/Utils.java
+@@ -25,10 +25,13 @@
+ import java.lang.reflect.TypeVariable;
+ import java.lang.reflect.WildcardType;
+ import java.util.Arrays;
++import okhttp3.RequestBody;
+ import okhttp3.ResponseBody;
+ import okio.Buffer;
+ 
+ final class Utils {
++  static final RequestBody EMPTY_BODY = RequestBody.create(null, new byte[0]);
++
+   static <T> T checkNotNull(T object, String message) {
+     if (object == null) {
+       throw new NullPointerException(message);
+diff --git a/retrofit/src/main/java/retrofit2/http/Body.java b/retrofit/src/main/java/retrofit2/http/Body.java
+index 673a0a528..ac8e32d52 100644
+--- a/retrofit/src/main/java/retrofit2/http/Body.java
++++ b/retrofit/src/main/java/retrofit2/http/Body.java
+@@ -39,4 +39,9 @@
+ @Target(PARAMETER)
+ @Retention(RUNTIME)
+ public @interface Body {
++  /**
++   * When true a {@code null} value will be ignored and an empty body will be used. Otherwise
++   * {@code null} will be passed to the {@link Converter} for this endpoint.
++   */
++  boolean ignoreNull() default true;
+ }
+diff --git a/retrofit/src/main/java/retrofit2/http/Part.java b/retrofit/src/main/java/retrofit2/http/Part.java
+index 33cadecc9..4d82b75a7 100644
+--- a/retrofit/src/main/java/retrofit2/http/Part.java
++++ b/retrofit/src/main/java/retrofit2/http/Part.java
+@@ -51,6 +51,13 @@
+ @Retention(RUNTIME)
+ public @interface Part {
+   String value();
++
+   /** The {@code Content-Transfer-Encoding} of this part. */
+   String encoding() default "binary";
++
++  /**
++   * When true a {@code null} value will cause this part to be omitted. Otherwise {@code null} will
++   * be passed to the {@link Converter} for this part.
++   */
++  boolean ignoreNull() default true;
+ }
+diff --git a/retrofit/src/main/java/retrofit2/http/PartMap.java b/retrofit/src/main/java/retrofit2/http/PartMap.java
+index 6ca2750af..a158e98a0 100644
+--- a/retrofit/src/main/java/retrofit2/http/PartMap.java
++++ b/retrofit/src/main/java/retrofit2/http/PartMap.java
+@@ -51,4 +51,10 @@
+ public @interface PartMap {
+   /** The {@code Content-Transfer-Encoding} of the parts. */
+   String encoding() default "binary";
++
++  /**
++   * When true a {@code null} values will cause their part to be omitted. Otherwise {@code null}
++   * values will be passed to the {@link Converter} for these parts.
++   */
++  boolean ignoreNull() default true;
+ }
+diff --git a/retrofit/src/test/java/retrofit2/RequestBuilderTest.java b/retrofit/src/test/java/retrofit2/RequestBuilderTest.java
+index e46cfee45..b08725d9f 100644
+--- a/retrofit/src/test/java/retrofit2/RequestBuilderTest.java
++++ b/retrofit/src/test/java/retrofit2/RequestBuilderTest.java
+@@ -1253,19 +1253,60 @@
+     assertBody(request.body(), "hi");
+   }
+ 
+-  @Test public void bodyRequired() {
++  @Test public void rawBodyIgnoringNullSetsEmpty() {
+     class Example {
+       @POST("/foo/bar/") //
+       Call<ResponseBody> method(@Body RequestBody body) {
+         return null;
+       }
+     }
+-    try {
+-      buildRequest(Example.class, new Object[] { null });
+-      fail();
+-    } catch (IllegalArgumentException e) {
+-      assertThat(e.getMessage()).isEqualTo("Body parameter value must not be null.");
++    Request request = buildRequest(Example.class, new Object[] { null });
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++    assertBody(request.body(), "");
++  }
++
++  @Test public void rawBodyNotIgnoringNullSetsEmpty() {
++    class Example {
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(@Body(ignoreNull = false) RequestBody body) {
++        return null;
++      }
+     }
++    Request request = buildRequest(Example.class, new Object[] { null });
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++    assertBody(request.body(), "");
++  }
++
++  @Test public void bodyIgnoringNullSetsEmpty() {
++    class Example {
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(@Body String body) {
++        return null;
++      }
++    }
++    Request request = buildRequest(Example.class, new Object[] { null });
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++    assertBody(request.body(), "");
++  }
++
++  @Test public void bodyNotIgnoringNullSetsEmpty() {
++    class Example {
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(@Body(ignoreNull = false) String body) {
++        return null;
++      }
++    }
++    Request request = buildRequest(Example.class, new Object[] { null });
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++    assertBody(request.body(), "NULL!!!");
+   }
+ 
+   @Test public void bodyWithPathParams() {
+@@ -1446,6 +1487,63 @@
+     assertThat(bodyString).doesNotContain("name=\"foo\"\r\n");
+   }
+ 
++  @Test public void multipartPartMapNotIgnoringNull() throws IOException {
++    class Example {
++      @Multipart //
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(@PartMap(ignoreNull = false) Map<String, String> parts) {
++        return null;
++      }
++    }
++
++    Map<String, String> params = new LinkedHashMap<>();
++    params.put("ping", "pong");
++    params.put("foo", null);
++    params.put("kit", "kat");
++
++    Request request = buildRequest(Example.class, params);
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++
++    RequestBody body = request.body();
++    Buffer buffer = new Buffer();
++    body.writeTo(buffer);
++    String bodyString = buffer.readUtf8();
++
++    assertThat(bodyString)
++        .contains("Content-Disposition: form-data;")
++        .contains("name=\"ping\"\r\n")
++        .contains("\r\npong\r\n--");
++
++    assertThat(bodyString)
++        .contains("Content-Disposition: form-data;")
++        .contains("name=\"foo\"\r\n")
++        .contains("\r\nNULL!!!\r\n--");
++
++    assertThat(bodyString)
++        .contains("Content-Disposition: form-data;")
++        .contains("name=\"kit\"")
++        .contains("\r\nkat\r\n--");
++  }
++
++  @Test public void multipartNullPartMapThrows() throws IOException {
++    class Example {
++      @Multipart //
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(@PartMap Map<String, String> parts) {
++        return null;
++      }
++    }
++
++    try {
++      buildRequest(Example.class, new Object[] { null });
++      fail();
++    } catch (IllegalArgumentException e) {
++      assertThat(e).hasMessage("Part map must not be null.");
++    }
++  }
++
+   @Test public void multipartPartMapWithEncoding() throws IOException {
+     class Example {
+       @Multipart //
+@@ -1547,7 +1645,7 @@
+         .contains("\r\n\r\nworld\r\n--");
+   }
+ 
+-  @Test public void multipartNullRemovesPart() throws IOException {
++  @Test public void multipartIgnoresNullPart() throws IOException {
+     class Example {
+       @Multipart //
+       @POST("/foo/bar/") //
+@@ -1571,7 +1669,38 @@
+         .contains("\r\npong\r\n--");
+   }
+ 
+-  @Test public void multipartPartOptional() {
++  @Test public void multipartNotIgnoringNullPart() throws IOException {
++    class Example {
++      @Multipart //
++      @POST("/foo/bar/") //
++      Call<ResponseBody> method(
++          @Part("ping") String ping,
++          @Part(value = "fizz", ignoreNull = false) String fizz) {
++        return null;
++      }
++    }
++    Request request = buildRequest(Example.class, "pong", null);
++    assertThat(request.method()).isEqualTo("POST");
++    assertThat(request.headers().size()).isZero();
++    assertThat(request.url().toString()).isEqualTo("http://example.com/foo/bar/");
++
++    RequestBody body = request.body();
++    Buffer buffer = new Buffer();
++    body.writeTo(buffer);
++    String bodyString = buffer.readUtf8();
++
++    assertThat(bodyString)
++        .contains("Content-Disposition: form-data;")
++        .contains("name=\"ping\"")
++        .contains("\r\npong\r\n--");
++
++    assertThat(bodyString)
++        .contains("Content-Disposition: form-data;")
++        .contains("name=\"fizz\"")
++        .contains("\r\nNULL!!!\r\n--");
++  }
++
++  @Test public void multipartRequiresAtLeastOnePart() {
+     class Example {
+       @Multipart //
+       @POST("/foo/bar/") //
+diff --git a/retrofit/src/test/java/retrofit2/helpers/ToStringConverterFactory.java b/retrofit/src/test/java/retrofit2/helpers/ToStringConverterFactory.java
+index 0a70e3ddb..7038b88af 100644
+--- a/retrofit/src/test/java/retrofit2/helpers/ToStringConverterFactory.java
++++ b/retrofit/src/test/java/retrofit2/helpers/ToStringConverterFactory.java
+@@ -45,6 +45,9 @@
+     if (String.class.equals(type)) {
+       return new Converter<String, RequestBody>() {
+         @Override public RequestBody convert(String value) throws IOException {
++          if (value == null) {
++            return RequestBody.create(MEDIA_TYPE, "NULL!!!");
++          }
+           return RequestBody.create(MEDIA_TYPE, value);
+         }
+       };

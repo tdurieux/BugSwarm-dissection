@@ -1,0 +1,100 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+index 6ad3cc581a..faab6a46ac 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+@@ -1065,6 +1065,9 @@ public void apply(ClassVisitor classVisitor,
+                     for (MethodDescription.TypeToken bridgeType : bridgeTypes) {
+                         MethodDescription.InDefinedShape bridgeMethod = new AccessorBridge(bridgeTarget, bridgeType, instrumentedType);
+                         MethodDescription.InDefinedShape bridgeTarget = new BridgeTarget(this.bridgeTarget, instrumentedType);
++                        if (!bridgeMethod.getReturnType().asErasure().isAssignableFrom(bridgeTarget.getReturnType().asErasure())) {
++                            throw new IllegalStateException("Cannot implement bridge " + bridgeMethod + " to " + bridgeTarget);
++                        }
+                         MethodVisitor methodVisitor = classVisitor.visitMethod(bridgeMethod.getAdjustedModifiers(true),
+                                 bridgeMethod.getInternalName(),
+                                 bridgeMethod.getDescriptor(),
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
+index 5d8a1b6ed2..f7060ce7f2 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
+@@ -388,7 +388,7 @@ public void testRetention() throws Exception {
+     public void testAnnotationTarget() throws Exception {
+         assertThat(describe(first).getElementTypes(), is((Set<ElementType>) new HashSet<ElementType>(Arrays.asList(ElementType.ANNOTATION_TYPE,
+                 ElementType.CONSTRUCTOR, ElementType.FIELD, ElementType.LOCAL_VARIABLE, ElementType.METHOD,
+-                ElementType.PACKAGE, ElementType.PARAMETER, ElementType.TYPE, ElementType.TYPE_PARAMETER))));
++                ElementType.PACKAGE, ElementType.PARAMETER, ElementType.TYPE))));
+         assertThat(describe(explicitTarget).getElementTypes(), is(Collections.singleton(ElementType.TYPE)));
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/AbstractDynamicTypeBuilderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/AbstractDynamicTypeBuilderTest.java
+index 1f976efbe1..58840b5076 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/AbstractDynamicTypeBuilderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/AbstractDynamicTypeBuilderTest.java
+@@ -13,6 +13,7 @@
+ import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+ import net.bytebuddy.dynamic.loading.PackageDefinitionStrategy;
+ import net.bytebuddy.dynamic.scaffold.InstrumentedType;
++import net.bytebuddy.implementation.FixedValue;
+ import net.bytebuddy.implementation.Implementation;
+ import net.bytebuddy.implementation.MethodCall;
+ import net.bytebuddy.implementation.StubMethod;
+@@ -863,6 +864,60 @@ public void testAnnotationTypeOnNonGenericComponentType() throws Exception {
+                 .ofType(typeAnnotationType).getValue(value, Integer.class), is(INTEGER_VALUE));
+     }
+ 
++    @Test(expected = IllegalStateException.class)
++    public void testBridgeResolutionAmbiguous() throws Exception {
++        createPlain()
++                .defineMethod(QUX, String.class)
++                .intercept(FixedValue.value(FOO))
++                .defineMethod(QUX, Object.class)
++                .intercept(FixedValue.value(BAR))
++                .make();
++    }
++
++    @Test
++    public void testCanOverloadMethodByReturnType() throws Exception {
++        Class<?> type = createPlain()
++                .defineMethod(QUX, String.class, Visibility.PUBLIC)
++                .intercept(FixedValue.value(FOO))
++                .defineMethod(QUX, Object.class, Ownership.STATIC, Visibility.PUBLIC) // TIs static to avoid method graph compiler.
++                .intercept(FixedValue.value(BAR))
++                .make()
++                .load(getClass().getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
++                .getLoaded();
++        for (Method method : type.getDeclaredMethods()) {
++            if (method.getReturnType() == String.class) {
++                assertThat(method.getName(), is(QUX));
++                assertThat(method.getParameterTypes().length, is(0));
++                assertThat(method.invoke(type.newInstance()), is((Object) FOO));
++            } else if(method.getReturnType() == Object.class) {
++                assertThat(method.getName(), is(QUX));
++                assertThat(method.getParameterTypes().length, is(0));
++                assertThat(method.invoke(null), is((Object) BAR));
++            } else {
++                throw new AssertionError();
++            }
++        }
++    }
++
++    @Test
++    public void testCanOverloadFieldByType() throws Exception {
++        Class<?> type = createPlain()
++                .defineField(QUX, String.class)
++                .defineField(QUX, Object.class)
++                .make()
++                .load(getClass().getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
++                .getLoaded();
++        for (Field field: type.getDeclaredFields()) {
++            if (field.getType() == String.class) {
++                assertThat(field.getName(), is(QUX));
++            } else if(field.getType() == Object.class) {
++                assertThat(field.getName(), is(QUX));
++            } else {
++                throw new AssertionError();
++            }
++        }
++    }
++
+     @Retention(RetentionPolicy.RUNTIME)
+     public @interface SampleAnnotation {
+ 

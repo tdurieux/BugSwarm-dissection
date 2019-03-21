@@ -1,0 +1,574 @@
+diff --git a/config/checkstyle_sevntu_checks.xml b/config/checkstyle_sevntu_checks.xml
+index 6503b7bcfc..36aff19234 100644
+--- a/config/checkstyle_sevntu_checks.xml
++++ b/config/checkstyle_sevntu_checks.xml
+@@ -139,5 +139,6 @@
+         </module>
+         <module name="LogicConditionNeedOptimizationCheck"/>
+         <module name="AvoidConditionInversionCheck"/>
++        <module name="SingleBreakOrContinueCheck"/>
+     </module>
+ </module>
+diff --git a/pom.xml b/pom.xml
+index 321d99af0c..95e8f0a891 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -196,7 +196,7 @@
+     <maven.pmd.plugin.version>3.6</maven.pmd.plugin.version>
+     <maven.jacoco.plugin.version>0.7.5.201505241946</maven.jacoco.plugin.version>
+     <maven.checkstyle.plugin.version>2.17</maven.checkstyle.plugin.version>
+-    <maven.sevntu.checkstyle.plugin.version>1.17.1</maven.sevntu.checkstyle.plugin.version>
++    <maven.sevntu.checkstyle.plugin.version>1.18.0</maven.sevntu.checkstyle.plugin.version>
+     <tools.jar.version>1.7.0</tools.jar.version>
+     <tools.jar.path>${java.home}/../lib/tools.jar</tools.jar.path>
+     <java.version>1.7</java.version>
+@@ -271,7 +271,7 @@
+     <dependency>
+       <groupId>nl.jqno.equalsverifier</groupId>
+       <artifactId>equalsverifier</artifactId>
+-      <version>1.7.6</version>
++      <version>1.7.7</version>
+       <scope>test</scope>
+     </dependency>
+     <dependency>
+diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InterfaceTypeParameterNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InterfaceTypeParameterNameTest.java
+new file mode 100644
+index 0000000000..94766304c3
+--- /dev/null
++++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InterfaceTypeParameterNameTest.java
+@@ -0,0 +1,57 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2016 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.google.checkstyle.test.chapter5naming.rule528typevariablenames;
++
++import java.io.File;
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.google.checkstyle.test.base.BaseCheckTestSupport;
++import com.puppycrawl.tools.checkstyle.api.Configuration;
++
++public class InterfaceTypeParameterNameTest extends BaseCheckTestSupport {
++
++    private static final String MSG_KEY = "name.invalidPattern";
++
++    @Override
++    protected String getPath(String fileName) throws IOException {
++        return super.getPath("chapter5naming" + File.separator + "rule528typevariablenames"
++            + File.separator + fileName);
++    }
++
++    @Test
++    public void testInterfaceDefault() throws Exception {
++        final Configuration configuration = getCheckConfig("InterfaceTypeParameterName");
++        final String format = configuration.getAttribute("format");
++
++        final String[] expected = {
++            "48:15: " + getCheckMessage(configuration.getMessages(), MSG_KEY, "Input", format),
++            "76:25: " + getCheckMessage(configuration.getMessages(), MSG_KEY, "Request", format),
++            "80:25: " + getCheckMessage(configuration.getMessages(), MSG_KEY, "TRequest", format),
++        };
++
++        final String filePath = getPath("InputInterfaceTypeParameterName.java");
++
++        final Integer[] warnList = getLinesWithWarn(filePath);
++        verify(configuration, filePath, expected, warnList);
++    }
++
++}
+diff --git a/src/it/resources/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InputInterfaceTypeParameterName.java b/src/it/resources/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InputInterfaceTypeParameterName.java
+new file mode 100644
+index 0000000000..07969354b2
+--- /dev/null
++++ b/src/it/resources/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InputInterfaceTypeParameterName.java
+@@ -0,0 +1,86 @@
++package com.google.checkstyle.test.chapter5naming.rule528typevariablenames;
++
++import java.io.Serializable;
++
++public class InputInterfaceTypeParameterName <t>
++{
++    public <TT> void foo() { }
++
++    <e_e> void foo(int i) {
++    }
++}
++
++class OtherClass <foo extends Serializable & Cloneable> {
++
++    foo getOne() {
++        return null;//comment
++    }
++
++    <Tfo$o2T extends foo> /*comment*/Tfo$o2T getTwo(Tfo$o2T a) {
++        return null;
++    }
++
++    <foo extends Runnable> foo getShadow() {
++        return null;
++    }
++
++    static class Junk <foo> {
++        <_fo extends foo> void getMoreFoo() {
++        }
++    }
++}
++
++class MoreOtherClass <T extends Cloneable> {
++
++    <E extends T> void getMore() {
++        new Other() {
++            <T> void getMoreFoo() {
++            }
++        };
++
++//        Other o = new Other() {
++//            <EE> void getMoreFoo() {
++//            }
++//        };
++    }
++}
++
++interface Boo<Input> { // warn
++    Input boo();
++}
++
++interface FooInterface<T> {
++    T foo();
++}
++
++interface FooInterface2 {
++    Input foo();
++}
++
++interface FooInterface3<T2> {
++    Input foo();
++}
++
++interface FooInterface4<E> {
++    Input foo();
++}
++
++interface FooInterface5<X> {
++    Input foo();
++}
++
++interface FooInterface6<RequestT> {
++    Input foo();
++}
++
++interface FooInterface7<Request> { // warn
++    Input foo();
++}
++
++interface FooInterface8<TRequest> { // warn
++    Input foo();
++}
++
++class Input {
++
++}
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheck.java
+index 7226966b77..7d0842463f 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheck.java
+@@ -256,13 +256,15 @@ private void processMethods(DetailAST ast) {
+                 final DetailAST classModifiers =
+                     parent.findFirstToken(TokenTypes.MODIFIERS);
+                 checkFinal = checkFinal || classModifiers.branchContains(TokenTypes.FINAL);
+-                break;
++                parent = null;
+             }
+-            if (parent.getType() == TokenTypes.LITERAL_NEW) {
++            else if (parent.getType() == TokenTypes.LITERAL_NEW) {
+                 checkFinal = true;
+-                break;
++                parent = null;
++            }
++            else {
++                parent = parent.getParent();
+             }
+-            parent = parent.getParent();
+         }
+         if (checkFinal && !isAnnotatedWithSafeVarargs(ast)) {
+             DetailAST modifier = modifiers.getFirstChild();
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
+index 39465ab5b3..0ca9cf4322 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
+@@ -19,6 +19,10 @@
+ 
+ package com.puppycrawl.tools.checkstyle.filters;
+ 
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.URI;
++import java.net.URL;
+ import java.util.Objects;
+ 
+ import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+@@ -26,6 +30,7 @@
+ import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
+ import com.puppycrawl.tools.checkstyle.api.Filter;
+ import com.puppycrawl.tools.checkstyle.api.FilterSet;
++import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
+ 
+ /**
+  * <p>
+@@ -37,17 +42,31 @@
+ public class SuppressionFilter
+     extends AutomaticBean
+     implements Filter {
++    /** Filename of supression file. */
++    private String file;
++    /** Tells whether this check is optional. */
++    private boolean optional;
+     /** Set of individual suppresses. */
+     private FilterSet filters = new FilterSet();
+ 
+     /**
+-     * Loads the suppressions for a file.
++     * Sets name of the supression file.
+      * @param fileName name of the suppressions file.
+      * @throws CheckstyleException if there is an error.
+      */
+     public void setFile(String fileName)
+         throws CheckstyleException {
+-        filters = SuppressionsLoader.loadSuppressions(fileName);
++        file = fileName;
++    }
++
++    /**
++     * Sets whether this check is optional.
++     * @param optional tells if check is optional.
++     * @throws CheckstyleException if there is an error.
++     */
++    public void setOptional(boolean optional)
++        throws CheckstyleException {
++        this.optional = optional;
+     }
+ 
+     @Override
+@@ -71,4 +90,53 @@ public boolean equals(Object obj) {
+     public int hashCode() {
+         return Objects.hash(filters);
+     }
++
++    @Override
++    protected void finishLocalSetup() throws CheckstyleException {
++        if (file != null) {
++            if (optional) {
++                if (suppressionSourceExists(file)) {
++                    filters = SuppressionsLoader.loadSuppressions(file);
++                }
++                else {
++                    filters = new FilterSet();
++                }
++            }
++            else {
++                filters = SuppressionsLoader.loadSuppressions(file);
++            }
++        }
++    }
++
++    /**
++     * Checks if suppression source with given fileName exists.
++     * @param fileName name of the suppressions file.
++     * @return true if suppression file exists, otherwise false
++     */
++    private static boolean suppressionSourceExists(String fileName) {
++        boolean suppressionSourceExists = true;
++        InputStream sourceInput = null;
++        try {
++            final URI uriByFilename = CommonUtils.getUriByFilename(fileName);
++            final URL url = uriByFilename.toURL();
++            sourceInput = url.openStream();
++        }
++        catch (CheckstyleException ex) {
++            suppressionSourceExists = false;
++        }
++        catch (IOException ex) {
++            suppressionSourceExists = false;
++        }
++        finally {
++            if (sourceInput != null) {
++                try {
++                    sourceInput.close();
++                }
++                catch (IOException ex) {
++                    suppressionSourceExists = false;
++                }
++            }
++        }
++        return suppressionSourceExists;
++    }
+ }
+diff --git a/src/main/resources/google_checks.xml b/src/main/resources/google_checks.xml
+index 548d03826d..4fa2737761 100644
+--- a/src/main/resources/google_checks.xml
++++ b/src/main/resources/google_checks.xml
+@@ -128,6 +128,11 @@
+             <message key="name.invalidPattern"
+              value="Method type name ''{0}'' must match pattern ''{1}''."/>
+         </module>
++        <module name="InterfaceTypeParameterName">
++            <property name="format" value="(^[A-Z][0-9]?)$|([A-Z][a-zA-Z0-9]*[T]$)"/>
++            <message key="name.invalidPattern"
++             value="Interface type name ''{0}'' must match pattern ''{1}''."/>
++        </module>
+         <module name="NoFinalizer"/>
+         <module name="GenericWhitespace">
+             <message key="ws.followed"
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
+index d065f4dc27..c76928baca 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
+@@ -19,14 +19,30 @@
+ 
+ package com.puppycrawl.tools.checkstyle.filters;
+ 
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.URI;
++import java.net.URL;
++
+ import org.junit.Assert;
+ import org.junit.Test;
++import org.junit.runner.RunWith;
++
++import org.mockito.BDDMockito;
++
++import org.powermock.api.mockito.PowerMockito;
++import org.powermock.core.classloader.annotations.PrepareForTest;
++import org.powermock.modules.junit4.PowerMockRunner;
+ 
+ import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+ import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
++import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
++
+ import nl.jqno.equalsverifier.EqualsVerifier;
+ import nl.jqno.equalsverifier.Warning;
+ 
++@RunWith(PowerMockRunner.class)
++@PrepareForTest({SuppressionFilter.class, CommonUtils.class})
+ public class SuppressionFilterTest {
+     @Test
+     public void testEqualsAndHashCode() {
+@@ -39,13 +55,111 @@ public void testEqualsAndHashCode() {
+ 
+     @Test
+     public void testAccept() throws CheckstyleException {
+-        final SuppressionFilter filter = new SuppressionFilter();
+-        filter.setFile("src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
+-            + "suppressions_none.xml");
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                          + "suppressions_none.xml";
++        final boolean optional = false;
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
+ 
+         final AuditEvent ev = new AuditEvent(this, "ATest.java", null);
+ 
+         Assert.assertTrue(filter.accept(ev));
+     }
+ 
++    @Test
++    public void testAcceptOnNullFile() throws CheckstyleException {
++        final String fileName = null;
++        final boolean optional = false;
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
++
++        final AuditEvent ev = new AuditEvent(this, "AnyJava.java", null);
++
++        Assert.assertTrue(filter.accept(ev));
++    }
++
++    @Test(expected = CheckstyleException.class)
++    public void testNonExistanceSuppressionFileWithFalseOptional() throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "non_existance_suppresion_file.xml";
++        final boolean optional = false;
++
++        createSupressionFilter(fileName, optional);
++    }
++
++    @Test(expected = CheckstyleException.class)
++    public void testExistanceInvalidSuppressionFileWithTrueOptional() throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "suppressions_invalid_file.xml";
++        final boolean optional = true;
++
++        createSupressionFilter(fileName, optional);
++    }
++
++    @Test
++    public void testExistingSuppressionFileWithTrueOptional() throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "suppressions_none.xml";
++        final boolean optional = true;
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
++
++        final AuditEvent ev = new AuditEvent(this, "AnyFile.java", null);
++
++        Assert.assertTrue(filter.accept(ev));
++    }
++
++    @Test
++    public void testExistingSuppressionFileWithTrueOptionalThrowsIoErrorWhileClosing()
++            throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "suppressions_none.xml";
++        final boolean optional = true;
++
++        final InputStream inputStream = PowerMockito.mock(InputStream.class);
++        BDDMockito.doThrow(IOException.class).when(inputStream).close();
++
++        final URL url = PowerMockito.mock(URL.class);
++        BDDMockito.given(url.openStream()).willReturn(inputStream);
++
++        final URI uri = PowerMockito.mock(URI.class);
++        BDDMockito.given(uri.toURL()).willReturn(url);
++
++        PowerMockito.mockStatic(CommonUtils.class);
++        BDDMockito.given(CommonUtils.getUriByFilename(fileName)).willReturn(uri);
++
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
++        final AuditEvent ev = new AuditEvent(this, "AnyFile.java", null);
++        Assert.assertTrue(filter.accept(ev));
++    }
++
++    @Test
++    public void testNonExistanceSuppressionFileWithTrueOptional() throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "non_existance_suppresion_file.xml";
++        final boolean optional = true;
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
++
++        final AuditEvent ev = new AuditEvent(this, "AnyFile.java", null);
++
++        Assert.assertTrue(filter.accept(ev));
++    }
++
++    @Test
++    public void testNonExistanceSuppressionUrlWithTrueOptional() throws Exception {
++        final String fileName =
++                "http://checkstyle.sourceforge.net/non_existing_suppression.xml";
++        final boolean optional = true;
++        final SuppressionFilter filter = createSupressionFilter(fileName, optional);
++
++        final AuditEvent ev = new AuditEvent(this, "AnyFile.java", null);
++
++        Assert.assertTrue(filter.accept(ev));
++    }
++
++    private static SuppressionFilter createSupressionFilter(String fileName, boolean optional)
++        throws CheckstyleException {
++        final SuppressionFilter suppressionFilter = new SuppressionFilter();
++        suppressionFilter.setFile(fileName);
++        suppressionFilter.setOptional(optional);
++        suppressionFilter.finishLocalSetup();
++        return suppressionFilter;
++    }
+ }
+diff --git a/src/xdocs/config_filters.xml b/src/xdocs/config_filters.xml
+index 18563a2467..aa81722037 100644
+--- a/src/xdocs/config_filters.xml
++++ b/src/xdocs/config_filters.xml
+@@ -389,7 +389,8 @@ public static void foo() {
+             audit events for Check errors according to
+             a <a href="config.html#XML_Structure"><em>suppressions XML
+             document</em></a> in a file. If there is no configured
+-            suppressions file, the Filter accepts all audit events.
++            suppressions file or the optional is set to true and
++            suppressions file was not found the Filter accepts all audit events.
+           </p>
+       </subsection>
+       <subsection name="Properties">
+@@ -421,6 +422,18 @@ public static void foo() {
+                <td><a href="property_types.html#string">string</a></td>
+                <td><code>none</code></td>
+              </tr>
++             <tr>
++               <td>optional</td>
++               <td>
++                   Tells what to do when the file is not existing. If
++                   optional is set to false the file must exist, or else
++                   it ends with error. On the other hand if optional is
++                   true and file is not found, the filter accept all
++                   audit events.
++               </td>
++               <td><a href="property_types.html#boolean">boolean</a></td>
++               <td><code>false</code></td>
++             </tr>
+           </table>
+       </subsection>
+       <subsection name="Examples">
+@@ -433,6 +446,7 @@ public static void foo() {
+           <source>
+ &lt;module name=&quot;SuppressionFilter&quot;&gt;
+   &lt;property name=&quot;file&quot; value=&quot;config/suppressions.xml&quot;/&gt;
++  &lt;property name=&quot;optional&quot; value=&quot;false&quot;/&gt;
+ &lt;/module&gt;
+           </source>
+           <p>
+diff --git a/src/xdocs/google_style.xml b/src/xdocs/google_style.xml
+index 519d0c6c4d..327612f620 100644
+--- a/src/xdocs/google_style.xml
++++ b/src/xdocs/google_style.xml
+@@ -1201,6 +1201,11 @@
+                                     src="images/ok_green.png"
+                                     alt="" />
+                                 <a href="config_naming.html#ClassTypeParameterName">ClassTypeParameterName</a>
++                                <br/>
++                                <img
++                                   src="images/ok_green.png"
++                                   alt="" />
++                                <a href="config_naming.html#InterfaceTypeParameterName">InterfaceTypeParameterName</a>
+                             </td>
+                             <td>
+                                 <a
+@@ -1214,6 +1219,12 @@
+                                 <br />
+                                 <a
+                                     href="https://github.com/checkstyle/checkstyle/blob/master/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/ClassTypeParameterNameTest.java">test</a>
++                                <br />
++                                <a
++                                    href="https://github.com/search?q=path%3Asrc%2Fmain%2Fresources+filename%3Agoogle_checks.xml+repo%3Acheckstyle%2Fcheckstyle+InterfaceTypeParameterName">config</a>
++                                <br />
++                                <a
++                                    href="https://github.com/checkstyle/checkstyle/blob/master/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/InterfaceTypeParameterNameTest.java">test</a>
+                             </td>
+                         </tr>
+                         <tr>
+diff --git a/src/xdocs/index.xml.vm b/src/xdocs/index.xml.vm
+index e9a08e87e1..decc765859 100644
+--- a/src/xdocs/index.xml.vm
++++ b/src/xdocs/index.xml.vm
+@@ -106,8 +106,8 @@
+       </p>
+ 
+       <ul>
+-        <li>An <a href="http://ant.apache.org/index.html">Ant</a> task.</li>
+-        <li>A command line tool.</li>
++        <li>An <a href="anttask.html">Ant task</a>.</li>
++        <li>A <a href="cmdline.html">command line</a> interface (CLI).</li>
+       </ul>
+ 
+       <p>

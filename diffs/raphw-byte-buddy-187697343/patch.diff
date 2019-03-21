@@ -1,0 +1,485 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/DefaultMethodCall.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/DefaultMethodCall.java
+index 7f6097027f..cd5d336031 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/DefaultMethodCall.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/DefaultMethodCall.java
+@@ -226,13 +226,13 @@ private StackManipulation locateDefault(MethodDescription methodDescription) {
+             MethodDescription.SignatureToken methodToken = methodDescription.asSignatureToken();
+             SpecialMethodInvocation specialMethodInvocation = SpecialMethodInvocation.Illegal.INSTANCE;
+             for (TypeDescription typeDescription : prioritizedInterfaces) {
+-                specialMethodInvocation = implementationTarget.invokeDefault(typeDescription, methodToken);
++                specialMethodInvocation = implementationTarget.invokeDefault(methodToken, typeDescription);
+                 if (specialMethodInvocation.isValid()) {
+                     return specialMethodInvocation;
+                 }
+             }
+             for (TypeDescription typeDescription : nonPrioritizedInterfaces) {
+-                SpecialMethodInvocation other = implementationTarget.invokeDefault(typeDescription, methodToken);
++                SpecialMethodInvocation other = implementationTarget.invokeDefault(methodToken, typeDescription);
+                 if (specialMethodInvocation.isValid() && other.isValid()) {
+                     throw new IllegalStateException(methodDescription + " has an ambiguous default method with "
+                             + other.getMethodDescription() + " and " + specialMethodInvocation.getMethodDescription());
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
+index d0756ac5bf..5ae48cd6eb 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
+@@ -263,11 +263,19 @@ public String toString() {
+          * Creates a special method invocation for invoking the super method of the given method.
+          *
+          * @param token A token of the method that is to be invoked as a super method.
+-         * @return The corresponding special method invocation which might be illegal if the requested invocation is
+-         * not legal.
++         * @return The corresponding special method invocation which might be illegal if the requested invocation is not legal.
+          */
+         SpecialMethodInvocation invokeSuper(MethodDescription.SignatureToken token);
+ 
++        /**
++         * Creates a special method invocation for invoking a default method with the given token. The default method call must
++         * not be ambiguous or an illegal special method invocation is returned.
++         *
++         * @param token A token of the method that is to be invoked as a default method.
++         * @return The corresponding default method invocation which might be illegal if the requested invocation is not legal or ambiguous.
++         */
++        SpecialMethodInvocation invokeDefault(MethodDescription.SignatureToken token);
++
+         /**
+          * Creates a special method invocation for invoking a default method.
+          *
+@@ -276,7 +284,7 @@ public String toString() {
+          * @return The corresponding special method invocation which might be illegal if the requested invocation is
+          * not legal.
+          */
+-        SpecialMethodInvocation invokeDefault(TypeDescription targetType, MethodDescription.SignatureToken token);
++        SpecialMethodInvocation invokeDefault(MethodDescription.SignatureToken token, TypeDescription targetType);
+ 
+         /**
+          * Invokes a dominant method, i.e. if the method token can be invoked as a super method invocation, this invocation is considered dominant.
+@@ -343,25 +351,32 @@ public TypeDescription getInstrumentedType() {
+             }
+ 
+             @Override
+-            public SpecialMethodInvocation invokeDefault(TypeDescription targetType, MethodDescription.SignatureToken token) {
++            public SpecialMethodInvocation invokeDefault(MethodDescription.SignatureToken token) {
++                SpecialMethodInvocation specialMethodInvocation = SpecialMethodInvocation.Illegal.INSTANCE;
++                for (TypeDescription interfaceType : instrumentedType.getInterfaces().asErasures()) {
++                    SpecialMethodInvocation invocation = invokeDefault(token, interfaceType);
++                    if (invocation.isValid()) {
++                        if (specialMethodInvocation.isValid()) {
++                            return SpecialMethodInvocation.Illegal.INSTANCE;
++                        } else {
++                            specialMethodInvocation = invocation;
++                        }
++                    }
++                }
++                return specialMethodInvocation;
++            }
++
++            @Override
++            public SpecialMethodInvocation invokeDefault(MethodDescription.SignatureToken token, TypeDescription targetType) {
+                 return defaultMethodInvocation.apply(methodGraph.getInterfaceGraph(targetType).locate(token), targetType);
+             }
+ 
+             @Override
+             public SpecialMethodInvocation invokeDominant(MethodDescription.SignatureToken token) {
+                 SpecialMethodInvocation specialMethodInvocation = invokeSuper(token);
+-                if (!specialMethodInvocation.isValid()) {
+-                    Iterator<TypeDescription> iterator = instrumentedType.getInterfaces().asErasures().iterator();
+-                    while (!specialMethodInvocation.isValid() && iterator.hasNext()) {
+-                        specialMethodInvocation = invokeDefault(iterator.next(), token);
+-                    }
+-                    while (iterator.hasNext()) {
+-                        if (invokeDefault(iterator.next(), token).isValid()) {
+-                            return SpecialMethodInvocation.Illegal.INSTANCE;
+-                        }
+-                    }
+-                }
+-                return specialMethodInvocation;
++                return specialMethodInvocation.isValid()
++                        ? specialMethodInvocation
++                        : invokeDefault(token);
+             }
+ 
+             @Override
+@@ -674,7 +689,7 @@ public String toString() {
+          * A default implementation of an {@link Implementation.Context.ExtractableView}
+          * which serves as its own {@link MethodAccessorFactory}.
+          */
+-        class Default extends ExtractableView.AbstractBase implements MethodAccessorFactory {
++        class Default extends ExtractableView.AbstractBase {
+ 
+             /**
+              * The name suffix to be appended to an accessor method.
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodCall.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodCall.java
+index 7494d41263..3171cec3b8 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodCall.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodCall.java
+@@ -2785,7 +2785,7 @@ public StackManipulation invoke(MethodDescription invokedMethod, Target implemen
+                 if (!invokedMethod.isInvokableOn(implementationTarget.getInstrumentedType())) {
+                     throw new IllegalStateException("Cannot invoke " + invokedMethod + " as default method of " + implementationTarget.getInstrumentedType());
+                 }
+-                StackManipulation stackManipulation = implementationTarget.invokeDefault(invokedMethod.getDeclaringType().asErasure(), invokedMethod.asSignatureToken());
++                StackManipulation stackManipulation = implementationTarget.invokeDefault(invokedMethod.asSignatureToken(), invokedMethod.getDeclaringType().asErasure());
+                 if (!stackManipulation.isValid()) {
+                     throw new IllegalStateException("Cannot invoke " + invokedMethod + " on " + implementationTarget.getInstrumentedType());
+                 }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/TypeProxy.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/TypeProxy.java
+index d2ce456b39..1ea680dedb 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/TypeProxy.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/auxiliary/TypeProxy.java
+@@ -395,7 +395,7 @@ public String toString() {
+                 public Implementation.SpecialMethodInvocation invoke(Implementation.Target implementationTarget,
+                                                                      TypeDescription proxiedType,
+                                                                      MethodDescription instrumentedMethod) {
+-                    return implementationTarget.invokeDefault(proxiedType, instrumentedMethod.asSignatureToken());
++                    return implementationTarget.invokeDefault(instrumentedMethod.asSignatureToken(), proxiedType);
+                 }
+             };
+ 
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultCall.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultCall.java
+index 05fb5e705e..c0b49595a9 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultCall.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultCall.java
+@@ -167,16 +167,7 @@ public String toString() {
+ 
+                 @Override
+                 public Implementation.SpecialMethodInvocation resolve(Implementation.Target implementationTarget, MethodDescription source) {
+-                    Implementation.SpecialMethodInvocation specialMethodInvocation = Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
+-                    for (TypeDescription candidate : implementationTarget.getInstrumentedType().getInterfaces().asErasures()) {
+-                        if (source.isSpecializableFor(candidate)) {
+-                            if (specialMethodInvocation.isValid()) {
+-                                return Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
+-                            }
+-                            specialMethodInvocation = implementationTarget.invokeDefault(candidate, source.asSignatureToken());
+-                        }
+-                    }
+-                    return specialMethodInvocation;
++                    return implementationTarget.invokeDefault(source.asSignatureToken());
+                 }
+ 
+                 @Override
+@@ -210,7 +201,7 @@ public Explicit(TypeDescription typeDescription) {
+                     if (!typeDescription.isInterface()) {
+                         throw new IllegalStateException(source + " method carries default method call parameter on non-interface type");
+                     }
+-                    return implementationTarget.invokeDefault(typeDescription, source.asSignatureToken());
++                    return implementationTarget.invokeDefault(source.asSignatureToken(), typeDescription);
+                 }
+ 
+                 @Override
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultMethod.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultMethod.java
+index 3b3d97c8d5..3249adc672 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultMethod.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/DefaultMethod.java
+@@ -154,19 +154,7 @@ public String toString() {
+ 
+                 @Override
+                 public Implementation.SpecialMethodInvocation resolve(Implementation.Target implementationTarget, MethodDescription source) {
+-                    Implementation.SpecialMethodInvocation result = Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
+-                    for (TypeDescription typeDescription : implementationTarget.getInstrumentedType().getInterfaces().asErasures()) {
+-                        if (source.isSpecializableFor(typeDescription)) {
+-                            Implementation.SpecialMethodInvocation invocation = implementationTarget.invokeDefault(typeDescription, source.asSignatureToken());
+-                            if (invocation.isValid()) {
+-                                if (result.isValid()) {
+-                                    return Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
+-                                }
+-                                result = invocation;
+-                            }
+-                        }
+-                    }
+-                    return result;
++                    return implementationTarget.invokeDefault(source.asSignatureToken());
+                 }
+ 
+                 @Override
+@@ -199,7 +187,7 @@ protected ForExplicitType(TypeDescription typeDescription) {
+                     if (!typeDescription.isInterface()) {
+                         throw new IllegalStateException(source + " method carries default method call parameter on non-interface type");
+                     }
+-                    return implementationTarget.invokeDefault(TargetType.resolve(typeDescription, implementationTarget.getInstrumentedType()), source.asSignatureToken());
++                    return implementationTarget.invokeDefault(source.asSignatureToken(), TargetType.resolve(typeDescription, implementationTarget.getInstrumentedType()));
+                 }
+ 
+                 @Override
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Morph.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Morph.java
+index 144e74df44..b96639d4d4 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Morph.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/Morph.java
+@@ -253,18 +253,7 @@ public String toString() {
+ 
+                 @Override
+                 public Implementation.SpecialMethodInvocation resolve(Implementation.Target implementationTarget, MethodDescription source) {
+-                    Implementation.SpecialMethodInvocation specialMethodInvocation = null;
+-                    for (TypeDescription candidate : implementationTarget.getInstrumentedType().getInterfaces().asErasures()) {
+-                        if (source.isSpecializableFor(candidate)) {
+-                            if (specialMethodInvocation != null) {
+-                                return Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
+-                            }
+-                            specialMethodInvocation = implementationTarget.invokeDefault(candidate, source.asSignatureToken());
+-                        }
+-                    }
+-                    return specialMethodInvocation != null
+-                            ? specialMethodInvocation
+-                            : Implementation.SpecialMethodInvocation.Illegal.INSTANCE;
++                    return implementationTarget.invokeDefault(source.asSignatureToken());
+                 }
+ 
+                 @Override
+@@ -294,12 +283,11 @@ public Explicit(TypeDescription typeDescription) {
+                 }
+ 
+                 @Override
+-                public Implementation.SpecialMethodInvocation resolve(Implementation.Target implementationTarget,
+-                                                                      MethodDescription source) {
++                public Implementation.SpecialMethodInvocation resolve(Implementation.Target implementationTarget, MethodDescription source) {
+                     if (!typeDescription.isInterface()) {
+                         throw new IllegalStateException(source + " method carries default method call parameter on non-interface type");
+                     }
+-                    return implementationTarget.invokeDefault(typeDescription, source.asSignatureToken());
++                    return implementationTarget.invokeDefault(source.asSignatureToken(), typeDescription);
+                 }
+ 
+                 @Override
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/AbstractImplementationTargetTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/AbstractImplementationTargetTest.java
+index 398f332ff7..ebb52d574d 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/AbstractImplementationTargetTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/AbstractImplementationTargetTest.java
+@@ -86,7 +86,7 @@ public void setUp() throws Exception {
+ 
+     @Test
+     public void testDefaultMethodInvocation() throws Exception {
+-        Implementation.SpecialMethodInvocation specialMethodInvocation = makeImplementationTarget().invokeDefault(defaultMethodDeclaringType, defaultToken);
++        Implementation.SpecialMethodInvocation specialMethodInvocation = makeImplementationTarget().invokeDefault(defaultToken, defaultMethodDeclaringType);
+         assertThat(specialMethodInvocation.isValid(), is(true));
+         assertThat(specialMethodInvocation.getMethodDescription(), is((MethodDescription) defaultMethod));
+         assertThat(specialMethodInvocation.getTypeDescription(), is(defaultMethodDeclaringType));
+@@ -103,13 +103,13 @@ public void testDefaultMethodInvocation() throws Exception {
+     @Test
+     public void testDefaultMethodInvocationNotSupported() throws Exception {
+         defaultMethodInvocation = Implementation.Target.AbstractBase.DefaultMethodInvocation.DISABLED;
+-        Implementation.SpecialMethodInvocation specialMethodInvocation = makeImplementationTarget().invokeDefault(defaultMethodDeclaringType, defaultToken);
++        Implementation.SpecialMethodInvocation specialMethodInvocation = makeImplementationTarget().invokeDefault(defaultToken, defaultMethodDeclaringType);
+         assertThat(specialMethodInvocation.isValid(), is(false));
+     }
+ 
+     @Test
+     public void testIllegalDefaultMethod() throws Exception {
+-        assertThat(makeImplementationTarget().invokeDefault(defaultMethodDeclaringType, mock(MethodDescription.SignatureToken.class)).isValid(), is(false));
++        assertThat(makeImplementationTarget().invokeDefault(mock(MethodDescription.SignatureToken.class), defaultMethodDeclaringType).isValid(), is(false));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/auxiliary/TypeProxyInvocationFactoryDefaultTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/auxiliary/TypeProxyInvocationFactoryDefaultTest.java
+index cbc113f8da..b445d8e964 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/auxiliary/TypeProxyInvocationFactoryDefaultTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/auxiliary/TypeProxyInvocationFactoryDefaultTest.java
+@@ -50,10 +50,10 @@ public void testSuperMethod() throws Exception {
+ 
+     @Test
+     public void testDefaultMethod() throws Exception {
+-        when(implementationTarget.invokeDefault(typeDescription, token)).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(token, typeDescription)).thenReturn(specialMethodInvocation);
+         assertThat(TypeProxy.InvocationFactory.Default.DEFAULT_METHOD.invoke(implementationTarget, typeDescription, methodDescription),
+                 is(specialMethodInvocation));
+-        verify(implementationTarget).invokeDefault(typeDescription, token);
++        verify(implementationTarget).invokeDefault(token, typeDescription);
+         verifyNoMoreInteractions(implementationTarget);
+     }
+ }
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultCallBinderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultCallBinderTest.java
+index afcfdcfe62..1a26c8c215 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultCallBinderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultCallBinderTest.java
+@@ -42,7 +42,8 @@ public void setUp() throws Exception {
+         super.setUp();
+         when(target.getType()).thenReturn(genericTargetParameterType);
+         when(genericTargetParameterType.asErasure()).thenReturn(targetParameterType);
+-        when(implementationTarget.invokeDefault(any(TypeDescription.class), eq(token))).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(token)).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(eq(token), any(TypeDescription.class))).thenReturn(specialMethodInvocation);
+         when(firstGenericInterface.asErasure()).thenReturn(firstInterface);
+         when(secondGenericInterface.asErasure()).thenReturn(secondInterface);
+         when(firstInterface.asGenericType()).thenReturn(firstGenericInterface);
+@@ -60,30 +61,10 @@ public void testImplicitLookupIsUnique() throws Exception {
+         when(specialMethodInvocation.isValid()).thenReturn(true, false);
+         doReturn(VOID_TYPE).when(annotation).targetType();
+         when(source.asSignatureToken()).thenReturn(token);
+-        when(source.isSpecializableFor(firstInterface)).thenReturn(true);
+-        when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.Explicit(firstInterface, secondInterface));
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = DefaultCall.Binder.INSTANCE
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(parameterBinding.isValid(), is(true));
+-        verify(implementationTarget).getInstrumentedType();
+-        verify(implementationTarget).invokeDefault(firstInterface, token);
+-        verifyNoMoreInteractions(implementationTarget);
+-    }
+-
+-    @Test
+-    public void testImplicitLookupIsAmbiguous() throws Exception {
+-        when(targetParameterType.represents(any(Class.class))).thenReturn(true);
+-        when(specialMethodInvocation.isValid()).thenReturn(true, false);
+-        doReturn(VOID_TYPE).when(annotation).targetType();
+-        when(source.asSignatureToken()).thenReturn(token);
+-        when(source.isSpecializableFor(firstInterface)).thenReturn(true);
+-        when(source.isSpecializableFor(secondInterface)).thenReturn(true);
+-        when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.Explicit(firstInterface, secondInterface));
+-        MethodDelegationBinder.ParameterBinding<?> parameterBinding = DefaultCall.Binder.INSTANCE
+-                .bind(annotationDescription, source, target, implementationTarget, assigner);
+-        assertThat(parameterBinding.isValid(), is(false));
+-        verify(implementationTarget).getInstrumentedType();
+-        verify(implementationTarget).invokeDefault(firstInterface, token);
++        verify(implementationTarget).invokeDefault(token);
+         verifyNoMoreInteractions(implementationTarget);
+     }
+ 
+@@ -100,8 +81,7 @@ public void testImplicitLookupIsAmbiguousNullFallback() throws Exception {
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = DefaultCall.Binder.INSTANCE
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(parameterBinding.isValid(), is(true));
+-        verify(implementationTarget).getInstrumentedType();
+-        verify(implementationTarget).invokeDefault(firstInterface, token);
++        verify(implementationTarget).invokeDefault(token);
+         verifyNoMoreInteractions(implementationTarget);
+     }
+ 
+@@ -114,7 +94,7 @@ public void testExplicitLookup() throws Exception {
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = DefaultCall.Binder.INSTANCE
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(parameterBinding.isValid(), is(true));
+-        verify(implementationTarget).invokeDefault(new TypeDescription.ForLoadedType(INTERFACE_TYPE), token);
++        verify(implementationTarget).invokeDefault(token, new TypeDescription.ForLoadedType(INTERFACE_TYPE));
+         verifyNoMoreInteractions(implementationTarget);
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultMethodBinderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultMethodBinderTest.java
+index 1b6e457643..244b3961d9 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultMethodBinderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/DefaultMethodBinderTest.java
+@@ -1,6 +1,5 @@
+ package net.bytebuddy.implementation.bind.annotation;
+ 
+-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.description.type.TypeList;
+@@ -62,48 +61,21 @@ public void testBindNoMethodParameter() throws Exception {
+     public void testBind() throws Exception {
+         when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+         when(source.isMethod()).thenReturn(true);
+-        when(implementationTarget.invokeDefault(interfaceType, token)).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(token)).thenReturn(specialMethodInvocation);
+         when(specialMethodInvocation.isValid()).thenReturn(true);
+         when(annotation.targetType()).thenReturn((Class) void.class);
+-        when(source.isSpecializableFor(interfaceType)).thenReturn(true);
+         MethodDelegationBinder.ParameterBinding<?> binding = DefaultMethod.Binder.INSTANCE.bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(binding.isValid(), is(true));
+     }
+ 
+-    @Test
+-    @SuppressWarnings("unchecked")
+-    public void testBindNonSpecializable() throws Exception {
+-        when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+-        when(source.isMethod()).thenReturn(true);
+-        when(implementationTarget.invokeDefault(interfaceType, token)).thenReturn(specialMethodInvocation);
+-        when(specialMethodInvocation.isValid()).thenReturn(true);
+-        when(annotation.targetType()).thenReturn((Class) void.class);
+-        when(source.isSpecializableFor(interfaceType)).thenReturn(false);
+-        MethodDelegationBinder.ParameterBinding<?> binding = DefaultMethod.Binder.INSTANCE.bind(annotationDescription, source, target, implementationTarget, assigner);
+-        assertThat(binding.isValid(), is(false));
+-    }
+-
+     @Test
+     @SuppressWarnings("unchecked")
+     public void testBindNoInterface() throws Exception {
+         when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+         when(source.isMethod()).thenReturn(true);
+         when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.Empty());
++        when(implementationTarget.invokeDefault(token)).thenReturn(specialMethodInvocation);
+         when(annotation.targetType()).thenReturn((Class) void.class);
+-        when(source.isSpecializableFor(interfaceType)).thenReturn(false);
+-        MethodDelegationBinder.ParameterBinding<?> binding = DefaultMethod.Binder.INSTANCE.bind(annotationDescription, source, target, implementationTarget, assigner);
+-        assertThat(binding.isValid(), is(false));
+-    }
+-
+-    @Test
+-    @SuppressWarnings("unchecked")
+-    public void testBindAmbiguous() throws Exception {
+-        when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+-        when(source.isMethod()).thenReturn(true);
+-        when(implementationTarget.invokeDefault(interfaceType, token)).thenReturn(specialMethodInvocation);
+-        when(specialMethodInvocation.isValid()).thenReturn(true);
+-        when(annotation.targetType()).thenReturn((Class) void.class);
+-        when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.Explicit(genericInterfaceType, genericInterfaceType));
+         MethodDelegationBinder.ParameterBinding<?> binding = DefaultMethod.Binder.INSTANCE.bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(binding.isValid(), is(false));
+     }
+@@ -113,7 +85,7 @@ public void testBindAmbiguous() throws Exception {
+     public void testBindExplicit() throws Exception {
+         when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+         when(source.isMethod()).thenReturn(true);
+-        when(implementationTarget.invokeDefault(new TypeDescription.ForLoadedType(Runnable.class), token)).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(token, new TypeDescription.ForLoadedType(Runnable.class))).thenReturn(specialMethodInvocation);
+         when(specialMethodInvocation.isValid()).thenReturn(true);
+         when(annotation.targetType()).thenReturn((Class) Runnable.class);
+         when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.Explicit(genericInterfaceType, genericInterfaceType));
+@@ -136,7 +108,7 @@ public void testBindIllegalFallback() throws Exception {
+         when(targetType.isAssignableFrom(Method.class)).thenReturn(true);
+         when(source.isMethod()).thenReturn(true);
+         when(annotation.nullIfImpossible()).thenReturn(true);
+-        when(implementationTarget.invokeDefault(interfaceType, token)).thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(token)).thenReturn(specialMethodInvocation);
+         when(specialMethodInvocation.isValid()).thenReturn(false);
+         when(annotation.targetType()).thenReturn((Class) void.class);
+         MethodDelegationBinder.ParameterBinding<?> binding = DefaultMethod.Binder.INSTANCE.bind(annotationDescription, source, target, implementationTarget, assigner);
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/MorphBinderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/MorphBinderTest.java
+index 5e103429cc..f36ec670da 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/MorphBinderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/MorphBinderTest.java
+@@ -90,14 +90,11 @@ public void testSuperMethodCallValid() throws Exception {
+     @Test
+     public void testDefaultMethodCallImplicitInvalid() throws Exception {
+         when(source.asSignatureToken()).thenReturn(morphToken);
+-        when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.ForLoadedTypes(Foo.class));
+         when(target.getType()).thenReturn(genericMorphType);
+         when(morphMethod.getDeclaringType()).thenReturn(morphType);
+         when(annotation.defaultMethod()).thenReturn(true);
+         doReturn(void.class).when(annotation).defaultTarget();
+-        when(source.isSpecializableFor(new TypeDescription.ForLoadedType(Foo.class))).thenReturn(true);
+-        when(implementationTarget.invokeDefault(new TypeDescription.ForLoadedType(Foo.class), morphToken))
+-                .thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(morphToken)).thenReturn(specialMethodInvocation);
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = new Morph.Binder(morphMethod)
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+         assertThat(parameterBinding.isValid(), is(false));
+@@ -107,14 +104,11 @@ public void testDefaultMethodCallImplicitInvalid() throws Exception {
+     @Test
+     public void testDefaultMethodCallImplicitValid() throws Exception {
+         when(source.asSignatureToken()).thenReturn(morphToken);
+-        when(instrumentedType.getInterfaces()).thenReturn(new TypeList.Generic.ForLoadedTypes(Foo.class));
+         when(target.getType()).thenReturn(genericMorphType);
+         when(morphMethod.getDeclaringType()).thenReturn(morphType);
+         when(annotation.defaultMethod()).thenReturn(true);
+         doReturn(void.class).when(annotation).defaultTarget();
+-        when(source.isSpecializableFor(new TypeDescription.ForLoadedType(Foo.class))).thenReturn(true);
+-        when(implementationTarget.invokeDefault(new TypeDescription.ForLoadedType(Foo.class), morphToken))
+-                .thenReturn(specialMethodInvocation);
++        when(implementationTarget.invokeDefault(morphToken)).thenReturn(specialMethodInvocation);
+         when(specialMethodInvocation.isValid()).thenReturn(true);
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = new Morph.Binder(morphMethod)
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+@@ -130,7 +124,7 @@ public void testDefaultMethodCallExplicitInvalid() throws Exception {
+         when(morphMethod.getDeclaringType()).thenReturn(morphType);
+         when(annotation.defaultMethod()).thenReturn(true);
+         doReturn(Foo.class).when(annotation).defaultTarget();
+-        when(implementationTarget.invokeDefault(new TypeDescription.ForLoadedType(Foo.class), morphToken))
++        when(implementationTarget.invokeDefault(morphToken, new TypeDescription.ForLoadedType(Foo.class)))
+                 .thenReturn(specialMethodInvocation);
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = new Morph.Binder(morphMethod)
+                 .bind(annotationDescription, source, target, implementationTarget, assigner);
+@@ -146,7 +140,7 @@ public void testDefaultMethodCallExplicitValid() throws Exception {
+         when(morphMethod.getDeclaringType()).thenReturn(morphType);
+         when(annotation.defaultMethod()).thenReturn(true);
+         doReturn(Foo.class).when(annotation).defaultTarget();
+-        when(implementationTarget.invokeDefault(new TypeDescription.ForLoadedType(Foo.class), morphToken))
++        when(implementationTarget.invokeDefault(morphToken, new TypeDescription.ForLoadedType(Foo.class)))
+                 .thenReturn(specialMethodInvocation);
+         when(specialMethodInvocation.isValid()).thenReturn(true);
+         MethodDelegationBinder.ParameterBinding<?> parameterBinding = new Morph.Binder(morphMethod)

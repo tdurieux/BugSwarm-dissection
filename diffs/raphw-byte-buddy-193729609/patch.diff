@@ -1,0 +1,21 @@
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeFrozenTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeFrozenTest.java
+index e0dbcf6aff..15b72397c0 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeFrozenTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeFrozenTest.java
+@@ -12,6 +12,7 @@
+ import org.junit.Test;
+ 
+ import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
+ import java.util.Collections;
+ 
+ import static org.hamcrest.CoreMatchers.is;
+@@ -23,7 +24,7 @@
+     @Test
+     public void testDelegation() throws Exception {
+         for (Method method : TypeDescription.class.getDeclaredMethods()) {
+-            if (method.getParameterTypes().length == 0) {
++            if (method.getParameterTypes().length == 0 && Modifier.isPublic(method.getModifiers()) && !method.isSynthetic()) {
+                 assertThat(method.invoke(new InstrumentedType.Frozen(TypeDescription.STRING, LoadedTypeInitializer.NoOp.INSTANCE)),
+                         is(method.invoke(TypeDescription.STRING)));
+             }

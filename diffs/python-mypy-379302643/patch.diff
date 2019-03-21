@@ -1,0 +1,1938 @@
+diff --git a/docs/source/basics.rst b/docs/source/basics.rst
+index 87999c0533..b4cf68c035 100644
+--- a/docs/source/basics.rst
++++ b/docs/source/basics.rst
+@@ -46,30 +46,29 @@ Arguments with default values can be annotated as follows:
+    def greeting(name: str, prefix: str = 'Mr.') -> str:
+       return 'Hello, {} {}'.format(name, prefix)
+ 
+-Mixing dynamic and static typing
+-********************************
++Running mypy
++************
+ 
+-Mixing dynamic and static typing within a single file is often
+-useful. For example, if you are migrating existing Python code to
+-static typing, it may be easiest to do this incrementally, such as by
+-migrating a few functions at a time. Also, when prototyping a new
+-feature, you may decide to first implement the relevant code using
+-dynamic typing and only add type signatures later, when the code is
+-more stable.
++You can type check a program by using the ``mypy`` tool, which is
++basically a linter -- it checks your program for errors without actually
++running it::
+ 
+-.. code-block:: python
++   $ mypy program.py
+ 
+-   def f():
+-       1 + 'x'  # No static type error (dynamically typed)
++All errors reported by mypy are essentially warnings that you are free
++to ignore, if you so wish.
+ 
+-   def g() -> None:
+-       1 + 'x'  # Type check error (statically typed)
++The next chapter explains how to download and install mypy:
++:ref:`getting-started`.
++
++More command line options are documented in :ref:`command-line`.
+ 
+ .. note::
+ 
+-   The earlier stages of mypy, known as the semantic analysis, may
+-   report errors even for dynamically typed functions. However, you
+-   should not rely on this, as this may change in the future.
++   Depending on how mypy is configured, you may have to run mypy like
++   this::
++
++     $ python3 -m mypy program.py
+ 
+ The typing module
+ *****************
+@@ -87,37 +86,33 @@ them (we'll explain ``Iterable`` later in this document):
+            print('Hello, {}'.format(name))
+ 
+ For brevity, we often omit the ``typing`` import in code examples, but
+-you should always include it in modules that contain statically typed
+-code.
+-
+-The presence or absence of the ``typing`` module does not affect
+-whether your code is type checked; it is only required when you use
+-one or more special features it defines.
++mypy will give an error if you use definitions such as ``Iterable``
++without first importing them.
+ 
+-Type checking programs
+-**********************
+-
+-You can type check a program by using the ``mypy`` tool, which is
+-basically a linter -- it checks your program for errors without actually
+-running it::
++Mixing dynamic and static typing
++********************************
+ 
+-   $ mypy program.py
++Mixing dynamic and static typing within a single file is often
++useful. For example, if you are migrating existing Python code to
++static typing, it may be easiest to do this incrementally, such as by
++migrating a few functions at a time. Also, when prototyping a new
++feature, you may decide to first implement the relevant code using
++dynamic typing and only add type signatures later, when the code is
++more stable.
+ 
+-All errors reported by mypy are essentially warnings that you are free
+-to ignore, if you so wish.
++.. code-block:: python
+ 
+-The next chapter explains how to download and install mypy:
+-:ref:`getting-started`.
++   def f():
++       1 + 'x'  # No static type error (dynamically typed)
+ 
+-More command line options are documented in :ref:`command-line`.
++   def g() -> None:
++       1 + 'x'  # Type check error (statically typed)
+ 
+ .. note::
+ 
+-   Depending on how mypy is configured, you may have to explicitly use
+-   the Python 3 interpreter to run mypy. The mypy tool is an ordinary
+-   mypy (and so also Python) program. For example::
+-
+-     $ python3 -m mypy program.py
++   The earlier stages of mypy, known as the semantic analysis, may
++   report errors even for dynamically typed functions. However, you
++   should not rely on this, as this may change in the future.
+ 
+ .. _library-stubs:
+ 
+@@ -147,7 +142,7 @@ the builtins contains a definition like this for ``chr``:
+ 
+     def chr(code: int) -> str: ...
+ 
+-In stub files we don't care about the function bodies, so we use 
++In stub files we don't care about the function bodies, so we use
+ an ellipsis instead.  That ``...`` is three literal dots!
+ 
+ Mypy complains if it can't find a stub (or a real module) for a
+@@ -175,7 +170,7 @@ typeshed yet).
+ 
+ That's it! Now you can access the module in mypy programs and type check
+ code that uses the library. If you write a stub for a library module,
+-consider making it available for other programmers that use mypy 
++consider making it available for other programmers that use mypy
+ by contributing it back to the typeshed repo.
+ 
+ There is more information about creating stubs in the
+diff --git a/docs/source/builtin_types.rst b/docs/source/builtin_types.rst
+index c3df1e2ee3..d371e56574 100644
+--- a/docs/source/builtin_types.rst
++++ b/docs/source/builtin_types.rst
+@@ -3,25 +3,26 @@ Built-in types
+ 
+ These are examples of some of the most common built-in types:
+ 
+-=================== ===============================
+-Type                Description
+-=================== ===============================
+-``int``             integer of arbitrary size
+-``float``           floating point number
+-``bool``            boolean value
+-``str``             unicode string
+-``bytes``           8-bit string
+-``object``          an arbitrary object (``object`` is the common base class)
+-``List[str]``       list of ``str`` objects
+-``Tuple[int, int]`` tuple of two ``int`` objects (``Tuple[()]`` is the empty tuple)
+-``Tuple[int, ...]`` tuple of an arbitrary number of ``int`` objects
+-``Dict[str, int]``  dictionary from ``str`` keys to ``int`` values
+-``Iterable[int]``   iterable object containing ints
+-``Sequence[bool]``  sequence of booleans
+-``Any``             dynamically typed value with an arbitrary type
+-=================== ===============================
++====================== ===============================
++Type                   Description
++====================== ===============================
++``int``                integer
++``float``              floating point number
++``bool``               boolean value
++``str``                string (unicode)
++``bytes``              8-bit string
++``object``             an arbitrary object (``object`` is the common base class)
++``List[str]``          list of ``str`` objects
++``Tuple[int, int]``    tuple of two ``int`` objects (``Tuple[()]`` is the empty tuple)
++``Tuple[int, ...]``    tuple of an arbitrary number of ``int`` objects
++``Dict[str, int]``     dictionary from ``str`` keys to ``int`` values
++``Iterable[int]``      iterable object containing ints
++``Sequence[bool]``     sequence of booleans (read-only)
++``Mapping[str, int]``  mapping from ``str`` keys to ``int`` values (read-only)
++``Any``                dynamically typed value with an arbitrary type
++====================== ===============================
+ 
+-The type ``Any`` and type constructors ``List``, ``Dict``,
++The type ``Any`` and type constructors such as ``List``, ``Dict``,
+ ``Iterable`` and ``Sequence`` are defined in the ``typing`` module.
+ 
+ The type ``Dict`` is a *generic* class, signified by type arguments within
+@@ -30,7 +31,7 @@ strings and and ``Dict[Any, Any]`` is a dictionary of dynamically typed
+ (arbitrary) values and keys. ``List`` is another generic class. ``Dict`` and
+ ``List`` are aliases for the built-ins ``dict`` and ``list``, respectively.
+ 
+-``Iterable`` and ``Sequence`` are generic abstract base classes that
++``Iterable``, ``Sequence``, and ``Mapping`` are generic types that
+ correspond to Python protocols. For example, a ``str`` object or a
+ ``List[str]`` object is valid
+ when ``Iterable[str]`` or ``Sequence[str]`` is expected. Note that even though
+diff --git a/docs/source/common_issues.rst b/docs/source/common_issues.rst
+index 2c2d53bcee..a52d2750cc 100644
+--- a/docs/source/common_issues.rst
++++ b/docs/source/common_issues.rst
+@@ -430,12 +430,25 @@ understand how mypy handles a particular piece of code. Example:
+ 
+    reveal_type((1, 'hello'))  # Revealed type is 'Tuple[builtins.int, builtins.str]'
+ 
++You can also use ``reveal_locals()`` at any line in a file
++to see the types of all local varaibles at once. Example:
++
++.. code-block:: python
++
++   a = 1
++   b = 'one'
++   reveal_locals()
++   # Revealed local types are:
++   # a: builtins.int
++   # b: builtins.str
+ .. note::
+ 
+-   ``reveal_type`` is only understood by mypy and doesn't exist
+-   in Python, if you try to run your program. You'll have to remove
+-   any ``reveal_type`` calls before you can run your code.
+-   ``reveal_type`` is always available and you don't need to import it.
++   ``reveal_type`` and ``reveal_locals`` are only understood by mypy and
++   don't exist in Python. If you try to run your program, you'll have to
++   remove any ``reveal_type`` and ``reveal_locals`` calls before you can
++   run your code. Both are always available and you don't need to import
++   them.
++
+ 
+ .. _import-cycles:
+ 
+diff --git a/docs/source/getting_started.rst b/docs/source/getting_started.rst
+index 262b576731..6294c497a1 100644
+--- a/docs/source/getting_started.rst
++++ b/docs/source/getting_started.rst
+@@ -6,20 +6,22 @@ Getting started
+ Installation
+ ************
+ 
+-Mypy requires Python 3.4 or later.  Once you've `installed Python 3 <https://www.python.org/downloads/>`_,
++Mypy requires Python 3.4 or later to run.  Once you've
++`installed Python 3 <https://www.python.org/downloads/>`_,
+ you can install mypy with:
+ 
+ .. code-block:: text
+ 
+     $ python3 -m pip install mypy
+ 
+-Note that ``mypy`` itself requires Python 3, but you can still check Python 2
+-code using ``mypy`` as discussed in :ref:`python2`.
++Note that even though you need Python 3 to run ``mypy``, type checking
++Python 2 code is fully supported, as discussed in :ref:`python2`.
+ 
+ Installing from source
+ **********************
+ 
+-To install mypy from source, clone the github repository and then run
++To install mypy from source, clone the
++`mypy repository on GitHub <https://github.com/python/mypy>`_ and then run
+ ``pip install`` locally:
+ 
+ .. code-block:: text
+diff --git a/docs/source/index.rst b/docs/source/index.rst
+index 3556e23d34..9479717aa1 100644
+--- a/docs/source/index.rst
++++ b/docs/source/index.rst
+@@ -6,7 +6,7 @@
+ Welcome to Mypy documentation!
+ ==============================
+ 
+-Mypy is a static type checker for Python.
++Mypy is a static type checker for Python 3 and Python 2.7.
+ 
+ .. toctree::
+    :maxdepth: 2
+diff --git a/docs/source/introduction.rst b/docs/source/introduction.rst
+index 3bcd0ad04b..d84027ae07 100644
+--- a/docs/source/introduction.rst
++++ b/docs/source/introduction.rst
+@@ -1,24 +1,25 @@
+ Introduction
+ ============
+ 
+-Mypy is a static type checker for Python. If you sprinkle your code
+-with type annotations, mypy can type check your code and find common bugs.
+-As mypy is a static analyzer, or a lint-like tool, your code's type
+-annotations are just hints and don't interfere when running your program.
++Mypy is a static type checker for Python 3 and Python 2.7. If you sprinkle
++your code with type annotations, mypy can type check your code and find common
++bugs. As mypy is a static analyzer, or a lint-like tool, the type
++annotations are just hints for mypy and don't interfere when running your program.
+ You run your program with a standard Python interpreter, and the annotations
+-are treated primarily as comments.
++are treated effectively as comments.
+ 
+-Using the Python 3 function annotation syntax (using the PEP 484 notation) or
++Using the Python 3 function annotation syntax (using the
++`PEP 484 <https://www.python.org/dev/peps/pep-0484/>`_ notation) or
+ a comment-based annotation syntax for Python 2 code, you will be able to
+ efficiently annotate your code and use mypy to check the code for common
+-errors. Mypy has a powerful, easy-to-use, type system with modern features
+-such as type inference, generics, function types, tuple types and
++errors. Mypy has a powerful and easy-to-use type system with modern features
++such as type inference, generics, function types, tuple types, and
+ union types.
+ 
+ As a developer, you decide how to use mypy in your workflow. You can always
+ escape to dynamic typing as mypy's approach to static typing doesn't restrict
+ what you can do in your programs. Using mypy will make your programs easier to
+-debug, maintain, and understand.
++understand, debug, and maintain.
+ 
+ This documentation provides a short introduction to mypy. It will help you
+ get started writing statically typed code. Knowledge of Python and a
+@@ -26,5 +27,7 @@ statically typed object-oriented language, such as Java, are assumed.
+ 
+ .. note::
+ 
+-   Mypy is still experimental. There will be changes
+-   that break backward compatibility.
++   Mypy is used in production by many companies and projects, but mypy is
++   officially beta software. There will be occasional changes
++   that break backward compatibility. The mypy development team tries to
++   minimize the impact of changes to user code.
+diff --git a/docs/source/python2.rst b/docs/source/python2.rst
+index 12673964d9..178420dfe9 100644
+--- a/docs/source/python2.rst
++++ b/docs/source/python2.rst
+@@ -89,10 +89,10 @@ function using the form ``# type: (...) -> rt``, where ``rt`` is the
+ return type. Note that the  return type annotation contains literal
+ three dots.
+ 
+-Note that when using multi-line comments, you do not need to prefix the
++When using multi-line comments, you do not need to prefix the
+ types of your ``*arg`` and ``**kwarg`` parameters with ``*`` or ``**``.
+ For example, here is how you would annotate the first example using
+-multi-line comments.
++multi-line comments:
+ 
+ .. code-block:: python
+ 
+@@ -120,10 +120,11 @@ Additional notes
+ - The annotation can be on the same line as the function header or on
+   the following line.
+ 
+-- The type syntax for variables is the same as for Python 3.
++- Variables use a comment-based type syntax (explained in
++  :ref:`explicit-var-types`).
+ 
+ - You don't need to use string literal escapes for forward references
+-  within comments.
++  within comments (string literal escapes are explained later).
+ 
+ - Mypy uses a separate set of library stub files in `typeshed
+   <https://github.com/python/typeshed>`_ for Python 2. Library support
+diff --git a/docs/source/type_inference_and_annotations.rst b/docs/source/type_inference_and_annotations.rst
+index 2ae6396c2d..117e8ecf6a 100644
+--- a/docs/source/type_inference_and_annotations.rst
++++ b/docs/source/type_inference_and_annotations.rst
+@@ -4,71 +4,37 @@ Type inference and type annotations
+ Type inference
+ **************
+ 
+-The initial assignment defines a variable. If you do not explicitly
++Mypy considers the initial assignment as the definition of a variable.
++If you do not explicitly
+ specify the type of the variable, mypy infers the type based on the
+ static type of the value expression:
+ 
+ .. code-block:: python
+ 
+-   i = 1           # Infer type int for i
+-   l = [1, 2]      # Infer type List[int] for l
+-
+-Type inference is bidirectional and takes context into account. For
+-example, the following is valid:
+-
+-.. code-block:: python
+-
+-   def f(l: List[object]) -> None:
+-       l = [1, 2]  # Infer type List[object] for [1, 2]
+-
+-In an assignment, the type context is determined by the assignment
+-target. In this case this is ``l``, which has the type
+-``List[object]``. The value expression ``[1, 2]`` is type checked in
+-this context and given the type ``List[object]``. In the previous
+-example we introduced a new variable ``l``, and here the type context
+-was empty.
+-
+-Note that the following is not valid, since ``List[int]`` is not
+-compatible with ``List[object]``:
+-
+-.. code-block:: python
+-
+-   def f(l: List[object], k: List[int]) -> None:
+-       l = k       # Type check error: incompatible types in assignment
+-
+-The reason why the above assignment is disallowed is that allowing the
+-assignment could result in non-int values stored in a list of ``int``:
+-
+-.. code-block:: python
+-
+-   def f(l: List[object], k: List[int]) -> None:
+-       l = k
+-       l.append('x')
+-       print(k[-1])  # Ouch; a string in List[int]
+-
+-You can still run the above program; it prints ``x``. This illustrates
+-the fact that static types are used during type checking, but they do
+-not affect the runtime behavior of programs. You can run programs with
+-type check failures, which is often very handy when performing a large
+-refactoring. Thus you can always 'work around' the type system, and it
+-doesn't really limit what you can do in your program.
++   i = 1           # Infer type "int" for i
++   l = [1, 2]      # Infer type "List[int]" for l
+ 
+ Type inference is not used in dynamically typed functions (those
+-without an explicit return type) — every local variable type defaults
+-to ``Any``, which is discussed later.
++without a function type annotation) — every local variable type defaults
++to ``Any`` in such functions. ``Any`` is discussed later in more detail.
++
++.. _explicit-var-types:
+ 
+ Explicit types for variables
+ ****************************
+ 
+ You can override the inferred type of a variable by using a
+-special type comment after an assignment statement:
++variable type annotation:
+ 
+ .. code-block:: python
+ 
+-   x = 1  # type: Union[int, str]
++   from typing import Union
+ 
+-Without the type comment, the type of ``x`` would be just ``int``. We
+-use an annotation to give it a more general type ``Union[int, str]``.
++   x: Union[int, str] = 1
++
++Without the type annotation, the type of ``x`` would be just ``int``. We
++use an annotation to give it a more general type ``Union[int, str]`` (this
++type means that the value can be either an ``int`` or a ``str``).
+ Mypy checks that the type of the initializer is compatible with the
+ declared type. The following example is not valid, since the initializer is
+ a floating point number, and this is incompatible with the declared
+@@ -76,19 +42,20 @@ type:
+ 
+ .. code-block:: python
+ 
+-   x = 1.1  # type: Union[int, str]  # Error!
++   x: Union[int, str] = 1.1  # Error!
+ 
+-Python 3.6 introduced a new syntax for variable annotations, which
+-resembles function annotations:
++The variable annotation syntax is available starting from Python 3.6.
++In earlier Python versions, you can use a special comment after an
++assignment statement to declare the type of a variable:
+ 
+ .. code-block:: python
+ 
+-   x: Union[int, str] = 1
++   x = 1  # type: Union[int, str]
+ 
+ We'll use both syntax variants in examples. The syntax variants are
+-mostly interchangeable, but the Python 3.6 syntax allows defining the
+-type of a variable without initialization, which is not possible with
+-the comment-based syntax:
++mostly interchangeable, but the variable annotation syntax allows
++defining the type of a variable without initialization, which is not
++possible with the comment syntax:
+ 
+ .. code-block:: python
+ 
+@@ -96,7 +63,7 @@ the comment-based syntax:
+ 
+ .. note::
+ 
+-   The best way to think about this is that the type comment sets the
++   The best way to think about this is that the type annotation sets the
+    type of the variable, not the type of the expression. To force the
+    type of an expression you can use ``cast(<type>, <expression>)``.
+ 
+@@ -106,26 +73,112 @@ Explicit types for collections
+ The type checker cannot always infer the type of a list or a
+ dictionary. This often arises when creating an empty list or
+ dictionary and assigning it to a new variable that doesn't have an explicit
+-variable type. In these cases you can give the type explicitly using
+-a type annotation comment:
++variable type. Here is an example where mypy can't infer the type
++without some help:
++
++.. code-block:: python
++
++   l = []  # Error: Need type annotation for 'l'
++
++In these cases you can give the type explicitly using a type annotation:
+ 
+ .. code-block:: python
+ 
+-   l = []  # type: List[int]       # Create empty list with type List[int]
+-   d = {}  # type: Dict[str, int]  # Create empty dictionary (str -> int)
++   l: List[int] = []       # Create empty list with type List[int]
++   d: Dict[str, int] = {}  # Create empty dictionary (str -> int)
+ 
+ Similarly, you can also give an explicit type when creating an empty set:
+ 
+ .. code-block:: python
+ 
+-   s = set()  # type: Set[int]
++   s: Set[int] = set()
++
++Compatibility of container types
++********************************
++
++The following program generates a mypy error, since ``List[int]``
++is not compatible with ``List[object]``:
++
++.. code-block:: python
++
++   def f(l: List[object], k: List[int]) -> None:
++       l = k  # Type check error: incompatible types in assignment
++
++The reason why the above assignment is disallowed is that allowing the
++assignment could result in non-int values stored in a list of ``int``:
++
++.. code-block:: python
++
++   def f(l: List[object], k: List[int]) -> None:
++       l = k
++       l.append('x')
++       print(k[-1])  # Ouch; a string in List[int]
++
++Other container types like ``Dict`` and ``Set`` behave similarly. We
++will discuss how you can work around this in :ref:`variance`.
++
++You can still run the above program; it prints ``x``. This illustrates
++the fact that static types are used during type checking, but they do
++not affect the runtime behavior of programs. You can run programs with
++type check failures, which is often very handy when performing a large
++refactoring. Thus you can always 'work around' the type system, and it
++doesn't really limit what you can do in your program.
++
++Context in type inference
++*************************
++
++Type inference is *bidirectional* and takes context into account. For
++example, the following is valid:
++
++.. code-block:: python
++
++   def f(l: List[object]) -> None:
++       l = [1, 2]  # Infer type List[object] for [1, 2], not List[int]
++
++In an assignment, the type context is determined by the assignment
++target. In this case this is ``l``, which has the type
++``List[object]``. The value expression ``[1, 2]`` is type checked in
++this context and given the type ``List[object]``. In the previous
++example we introduced a new variable ``l``, and here the type context
++was empty.
++
++Declared argument types are also used for type context. In this program
++mypy knows that the empty list ``[]`` should have type ``List[int]`` based
++on the declared type of ``arg`` in ``foo``:
++
++.. code-block:: python
++
++    def foo(arg: List[int]) -> None:
++        print('Items:', ''.join(str(a) for a in arg))
++
++    foo([])  # OK
++
++However, context only works within a single statement. Here mypy requires
++an annotation for the empty list, since the context would only be available
++in the following statement:
++
++.. code-block:: python
++
++    def foo(arg: List[int]) -> None:
++        print(Items: ', '.join(arg))
++
++    a = []  # Error: Need type annotation for 'a'
++    foo(a)
++
++Working around the issue is easy by adding a type annotation:
++
++.. code-block:: Python
++
++    ...
++    a: List[int] = []  # OK
++    foo(a)
+ 
+ Declaring multiple variable types at a time
+ *******************************************
+ 
+-You can declare more than a single variable at a time. In order to
+-nicely work with multiple assignment, you must give each variable a
+-type separately:
++You can declare more than a single variable at a time, but only with
++a type comment. In order to nicely work with multiple assignment, you
++must give each variable a type separately:
+ 
+ .. code-block:: python
+ 
+@@ -169,7 +222,7 @@ Types in stub files
+ 
+ :ref:`Stub files <library-stubs>` are written in normal Python 3
+ syntax, but generally leaving out runtime logic like variable
+-initializers, function bodies, and default arguments, replacing them
++initializers, function bodies, and default arguments, or replacing them
+ with ellipses.
+ 
+ In this example, each ellipsis ``...`` is literally written in the
+@@ -177,9 +230,10 @@ stub file as three dots:
+ 
+ .. code-block:: python
+ 
+-    x = ...  # type: int
++    x: int
++
+     def afunc(code: str) -> int: ...
+-    def afunc(a: int, b: int=...) -> int: ...
++    def afunc(a: int, b: int = ...) -> int: ...
+ 
+ .. note::
+ 
+diff --git a/mypy/build.py b/mypy/build.py
+index 7ff0449c08..69884f255b 100644
+--- a/mypy/build.py
++++ b/mypy/build.py
+@@ -713,16 +713,22 @@ def correct_rel_imp(imp: Union[ImportFrom, ImportAll]) -> str:
+                 elif isinstance(imp, ImportFrom):
+                     cur_id = correct_rel_imp(imp)
+                     pos = len(res)
++                    all_are_submodules = True
+                     # Also add any imported names that are submodules.
+                     pri = import_priority(imp, PRI_MED)
+                     for name, __ in imp.names:
+                         sub_id = cur_id + '.' + name
+                         if self.is_module(sub_id):
+                             res.append((pri, sub_id, imp.line))
++                        else:
++                            all_are_submodules = False
+                     # Add cur_id as a dependency, even if all of the
+                     # imports are submodules. Processing import from will try
+                     # to look through cur_id, so we should depend on it.
+-                    pri = import_priority(imp, PRI_HIGH)
++                    # As a workaround for for some bugs in cycle handling (#4498),
++                    # if all of the imports are submodules, do the import at a lower
++                    # priority.
++                    pri = import_priority(imp, PRI_HIGH if not all_are_submodules else PRI_LOW)
+                     res.insert(pos, ((pri, cur_id, imp.line)))
+                 elif isinstance(imp, ImportAll):
+                     pri = import_priority(imp, PRI_HIGH)
+diff --git a/mypy/checker.py b/mypy/checker.py
+index caa868f534..fc582e7388 100644
+--- a/mypy/checker.py
++++ b/mypy/checker.py
+@@ -581,7 +581,9 @@ def get_generator_receive_type(self, return_type: Type, is_coroutine: bool) -> T
+     def get_coroutine_return_type(self, return_type: Type) -> Type:
+         if isinstance(return_type, AnyType):
+             return AnyType(TypeOfAny.from_another_any, source_any=return_type)
+-        return return_type.args[0]
++        assert isinstance(return_type, Instance), "Should only be called on coroutine functions!"
++        # return type is 3rd type specification in Coroutine!
++        return return_type.args[2]
+ 
+     def get_generator_return_type(self, return_type: Type, is_coroutine: bool) -> Type:
+         """Given the declared return type of a generator (t), return the type it returns (tr)."""
+@@ -888,7 +890,8 @@ def is_unannotated_any(t: Type) -> bool:
+                 if is_unannotated_any(ret_type):
+                     self.fail(messages.RETURN_TYPE_EXPECTED, fdef)
+                 elif (fdef.is_coroutine and isinstance(ret_type, Instance) and
+-                      is_unannotated_any(ret_type.args[0])):
++                      is_unannotated_any(ret_type.args[2])):
++                    # NOTE: Coroutine is [Any, Any, T]
+                     self.fail(messages.RETURN_TYPE_EXPECTED, fdef)
+                 if any(is_unannotated_any(t) for t in fdef.type.arg_types):
+                     self.fail(messages.ARGUMENT_TYPE_EXPECTED, fdef)
+@@ -1338,9 +1341,9 @@ def check_protocol_variance(self, defn: ClassDef) -> None:
+         tvars = info.defn.type_vars
+         for i, tvar in enumerate(tvars):
+             up_args = [object_type if i == j else AnyType(TypeOfAny.special_form)
+-                       for j, _ in enumerate(tvars)]
++                       for j, _ in enumerate(tvars)]  # type: List[Type]
+             down_args = [UninhabitedType() if i == j else AnyType(TypeOfAny.special_form)
+-                         for j, _ in enumerate(tvars)]
++                         for j, _ in enumerate(tvars)]  # type: List[Type]
+             up, down = Instance(info, up_args), Instance(info, down_args)
+             # TODO: add advanced variance checks for recursive protocols
+             if is_subtype(down, up, ignore_declared_variance=True):
+diff --git a/mypy/checkexpr.py b/mypy/checkexpr.py
+index 072515194a..0e349a436d 100644
+--- a/mypy/checkexpr.py
++++ b/mypy/checkexpr.py
+@@ -15,14 +15,14 @@
+ from mypy.nodes import (
+     NameExpr, RefExpr, Var, FuncDef, OverloadedFuncDef, TypeInfo, CallExpr,
+     MemberExpr, IntExpr, StrExpr, BytesExpr, UnicodeExpr, FloatExpr,
+-    OpExpr, UnaryExpr, IndexExpr, CastExpr, RevealTypeExpr, TypeApplication, ListExpr,
++    OpExpr, UnaryExpr, IndexExpr, CastExpr, RevealExpr, TypeApplication, ListExpr,
+     TupleExpr, DictExpr, LambdaExpr, SuperExpr, SliceExpr, Context, Expression,
+     ListComprehension, GeneratorExpr, SetExpr, MypyFile, Decorator,
+     ConditionalExpr, ComparisonExpr, TempNode, SetComprehension,
+     DictionaryComprehension, ComplexExpr, EllipsisExpr, StarExpr, AwaitExpr, YieldExpr,
+     YieldFromExpr, TypedDictExpr, PromoteExpr, NewTypeExpr, NamedTupleExpr, TypeVarExpr,
+     TypeAliasExpr, BackquoteExpr, EnumCallExpr,
+-    ARG_POS, ARG_NAMED, ARG_STAR, ARG_STAR2, MODULE_REF, TVAR, LITERAL_TYPE,
++    ARG_POS, ARG_NAMED, ARG_STAR, ARG_STAR2, MODULE_REF, TVAR, LITERAL_TYPE, REVEAL_TYPE
+ )
+ from mypy.literals import literal
+ from mypy import nodes
+@@ -1278,7 +1278,13 @@ def analyze_descriptor_access(self, instance_type: Type, descriptor_type: Type,
+         Return:
+             The return type of the appropriate ``__get__`` overload for the descriptor.
+         """
+-        if not isinstance(descriptor_type, Instance):
++        if isinstance(descriptor_type, UnionType):
++            # Map the access over union types
++            return UnionType.make_simplified_union([
++                self.analyze_descriptor_access(instance_type, typ, context)
++                for typ in descriptor_type.items
++            ])
++        elif not isinstance(descriptor_type, Instance):
+             return descriptor_type
+ 
+         if not descriptor_type.type.has_readable_member('__get__'):
+@@ -1796,14 +1802,29 @@ def visit_cast_expr(self, expr: CastExpr) -> Type:
+                                context=expr)
+         return target_type
+ 
+-    def visit_reveal_type_expr(self, expr: RevealTypeExpr) -> Type:
++    def visit_reveal_expr(self, expr: RevealExpr) -> Type:
+         """Type check a reveal_type expression."""
+-        revealed_type = self.accept(expr.expr, type_context=self.type_context[-1])
+-        if not self.chk.current_node_deferred:
+-            self.msg.reveal_type(revealed_type, expr)
+-            if not self.chk.in_checked_function():
+-                self.msg.note("'reveal_type' always outputs 'Any' in unchecked functions", expr)
+-        return revealed_type
++        if expr.kind == REVEAL_TYPE:
++            assert expr.expr is not None
++            revealed_type = self.accept(expr.expr, type_context=self.type_context[-1])
++            if not self.chk.current_node_deferred:
++                self.msg.reveal_type(revealed_type, expr)
++                if not self.chk.in_checked_function():
++                    self.msg.note("'reveal_type' always outputs 'Any' in unchecked functions",
++                                  expr)
++            return revealed_type
++        else:
++            # REVEAL_LOCALS
++            if not self.chk.current_node_deferred:
++                # the RevealExpr contains a local_nodes attribute,
++                # calculated at semantic analysis time. Use it to pull out the
++                # corresponding subset of variables in self.chk.type_map
++                names_to_types = {
++                    var_node.name(): var_node.type for var_node in expr.local_nodes
++                } if expr.local_nodes is not None else {}
++
++                self.msg.reveal_locals(names_to_types, expr)
++            return NoneTyp()
+ 
+     def visit_type_application(self, tapp: TypeApplication) -> Type:
+         """Type check a type application (expr[type, ...])."""
+@@ -2336,7 +2357,7 @@ def visit_conditional_expr(self, e: ConditionalExpr) -> Type:
+             # branch's type.
+             else_type = self.analyze_cond_branch(else_map, e.else_expr, context=if_type)
+ 
+-        res = join.join_types(if_type, else_type)
++        res = UnionType.make_simplified_union([if_type, else_type])
+ 
+         return res
+ 
+diff --git a/mypy/literals.py b/mypy/literals.py
+index 39cdb21490..44616564a7 100644
+--- a/mypy/literals.py
++++ b/mypy/literals.py
+@@ -4,7 +4,7 @@
+     Expression, ComparisonExpr, OpExpr, MemberExpr, UnaryExpr, StarExpr, IndexExpr, LITERAL_YES,
+     LITERAL_NO, NameExpr, LITERAL_TYPE, IntExpr, FloatExpr, ComplexExpr, StrExpr, BytesExpr,
+     UnicodeExpr, ListExpr, TupleExpr, SetExpr, DictExpr, CallExpr, SliceExpr, CastExpr,
+-    ConditionalExpr, EllipsisExpr, YieldFromExpr, YieldExpr, RevealTypeExpr, SuperExpr,
++    ConditionalExpr, EllipsisExpr, YieldFromExpr, YieldExpr, RevealExpr, SuperExpr,
+     TypeApplication, LambdaExpr, ListComprehension, SetComprehension, DictionaryComprehension,
+     GeneratorExpr, BackquoteExpr, TypeVarExpr, TypeAliasExpr, NamedTupleExpr, EnumCallExpr,
+     TypedDictExpr, NewTypeExpr, PromoteExpr, AwaitExpr, TempNode,
+@@ -175,7 +175,7 @@ def visit_yield_from_expr(self, e: YieldFromExpr) -> None:
+     def visit_yield_expr(self, e: YieldExpr) -> None:
+         return None
+ 
+-    def visit_reveal_type_expr(self, e: RevealTypeExpr) -> None:
++    def visit_reveal_expr(self, e: RevealExpr) -> None:
+         return None
+ 
+     def visit_super_expr(self, e: SuperExpr) -> None:
+diff --git a/mypy/messages.py b/mypy/messages.py
+index 9922d9d16a..2b77c7276e 100644
+--- a/mypy/messages.py
++++ b/mypy/messages.py
+@@ -10,6 +10,7 @@
+ checker but we are moving away from this convention.
+ """
+ 
++from collections import OrderedDict
+ import re
+ import difflib
+ 
+@@ -26,10 +27,9 @@
+     TypeInfo, Context, MypyFile, op_methods, FuncDef, reverse_type_aliases,
+     ARG_POS, ARG_OPT, ARG_NAMED, ARG_NAMED_OPT, ARG_STAR, ARG_STAR2,
+     ReturnStmt, NameExpr, Var, CONTRAVARIANT, COVARIANT, SymbolNode,
+-    CallExpr
++    CallExpr, Expression
+ )
+ 
+-
+ # Constants that represent simple type checker error message, i.e. messages
+ # that do not have any parameters.
+ 
+@@ -970,6 +970,16 @@ def invalid_signature(self, func_type: Type, context: Context) -> None:
+     def reveal_type(self, typ: Type, context: Context) -> None:
+         self.fail('Revealed type is \'{}\''.format(typ), context)
+ 
++    def reveal_locals(self, type_map: Dict[str, Optional[Type]], context: Context) -> None:
++        # To ensure that the output is predictable on Python < 3.6,
++        # use an ordered dictionary sorted by variable name
++        sorted_locals = OrderedDict(sorted(type_map.items(), key=lambda t: t[0]))
++        self.fail("Revealed local types are:", context)
++        # Note that self.fail does a strip() on the message, so we cannot prepend with spaces
++        # for indentation
++        for line in ['{}: {}'.format(k, v) for k, v in sorted_locals.items()]:
++            self.fail(line, context)
++
+     def unsupported_type_type(self, item: Type, context: Context) -> None:
+         self.fail('Unsupported type Type[{}]'.format(self.format(item)), context)
+ 
+diff --git a/mypy/nodes.py b/mypy/nodes.py
+index 620ebf7ba0..240949ceed 100644
+--- a/mypy/nodes.py
++++ b/mypy/nodes.py
+@@ -78,6 +78,9 @@ def get_column(self) -> int:
+ # XXX what?
+ UNBOUND_IMPORTED = 7  # type: int
+ 
++# RevealExpr node kinds
++REVEAL_TYPE = 0  # type: int
++REVEAL_LOCALS = 1  # type: int
+ 
+ LITERAL_YES = 2
+ LITERAL_TYPE = 1
+@@ -1595,17 +1598,24 @@ def accept(self, visitor: ExpressionVisitor[T]) -> T:
+         return visitor.visit_cast_expr(self)
+ 
+ 
+-class RevealTypeExpr(Expression):
+-    """Reveal type expression reveal_type(expr)."""
++class RevealExpr(Expression):
++    """Reveal type expression reveal_type(expr) or reveal_locals() expression."""
+ 
+-    expr = None  # type: Expression
++    expr = None  # type: Optional[Expression]
++    kind = 0  # type: int
++    local_nodes = None  # type: Optional[List[Var]]
+ 
+-    def __init__(self, expr: Expression) -> None:
++    def __init__(
++            self, kind: int,
++            expr: Optional[Expression] = None,
++            local_nodes: 'Optional[List[Var]]' = None) -> None:
+         super().__init__()
+         self.expr = expr
++        self.kind = kind
++        self.local_nodes = local_nodes
+ 
+     def accept(self, visitor: ExpressionVisitor[T]) -> T:
+-        return visitor.visit_reveal_type_expr(self)
++        return visitor.visit_reveal_expr(self)
+ 
+ 
+ class SuperExpr(Expression):
+diff --git a/mypy/semanal.py b/mypy/semanal.py
+index e6d9816922..a5abb7e263 100644
+--- a/mypy/semanal.py
++++ b/mypy/semanal.py
+@@ -46,7 +46,7 @@
+     RaiseStmt, AssertStmt, OperatorAssignmentStmt, WhileStmt,
+     ForStmt, BreakStmt, ContinueStmt, IfStmt, TryStmt, WithStmt, DelStmt, PassStmt,
+     GlobalDecl, SuperExpr, DictExpr, CallExpr, RefExpr, OpExpr, UnaryExpr,
+-    SliceExpr, CastExpr, RevealTypeExpr, TypeApplication, Context, SymbolTable,
++    SliceExpr, CastExpr, RevealExpr, TypeApplication, Context, SymbolTable,
+     SymbolTableNode, TVAR, ListComprehension, GeneratorExpr,
+     LambdaExpr, MDEF, FuncBase, Decorator, SetExpr, TypeVarExpr, NewTypeExpr,
+     StrExpr, BytesExpr, PrintStmt, ConditionalExpr, PromoteExpr,
+@@ -56,7 +56,7 @@
+     YieldExpr, ExecStmt, Argument, BackquoteExpr, ImportBase, AwaitExpr,
+     IntExpr, FloatExpr, UnicodeExpr, EllipsisExpr, TempNode, EnumCallExpr, ImportedName,
+     COVARIANT, CONTRAVARIANT, INVARIANT, UNBOUND_IMPORTED, LITERAL_YES, ARG_OPT, nongen_builtins,
+-    collections_type_aliases, get_member_expr_fullname,
++    collections_type_aliases, get_member_expr_fullname, REVEAL_TYPE, REVEAL_LOCALS
+ )
+ from mypy.literals import literal
+ from mypy.tvar_scope import TypeVarScope
+@@ -434,7 +434,7 @@ def _visit_func_def(self, defn: FuncDef) -> None:
+                     # has external return type `Coroutine[T, Any, Any]`.
+                     any_type = AnyType(TypeOfAny.special_form)
+                     ret_type = self.named_type_or_none('typing.Coroutine', [
+-                        defn.type.ret_type, any_type, any_type])
++                        any_type, any_type, defn.type.ret_type])
+                     assert ret_type is not None, "Internal error: typing.Coroutine not found"
+                     defn.type = defn.type.copy_modified(ret_type=ret_type)
+ 
+@@ -2576,7 +2576,38 @@ def visit_call_expr(self, expr: CallExpr) -> None:
+         elif refers_to_fullname(expr.callee, 'builtins.reveal_type'):
+             if not self.check_fixed_args(expr, 1, 'reveal_type'):
+                 return
+-            expr.analyzed = RevealTypeExpr(expr.args[0])
++            expr.analyzed = RevealExpr(kind=REVEAL_TYPE, expr=expr.args[0])
++            expr.analyzed.line = expr.line
++            expr.analyzed.column = expr.column
++            expr.analyzed.accept(self)
++        elif refers_to_fullname(expr.callee, 'builtins.reveal_locals'):
++            # Store the local variable names into the RevealExpr for use in the
++            # type checking pass
++            local_nodes = []  # type: List[Var]
++            if self.is_module_scope():
++                # try to determine just the variable declarations in module scope
++                # self.globals.values() contains SymbolTableNode's
++                # Each SymbolTableNode has an attribute node that is nodes.Var
++                # look for variable nodes that marked as is_inferred
++                # Each symboltable node has a Var node as .node
++                local_nodes = cast(
++                    List[Var],
++                    [
++                        n.node for name, n in self.globals.items()
++                        if getattr(n.node, 'is_inferred', False)
++                    ]
++                )
++            elif self.is_class_scope():
++                # type = None  # type: Optional[TypeInfo]
++                if self.type is not None:
++                    local_nodes = cast(List[Var], [st.node for st in self.type.names.values()])
++            elif self.is_func_scope():
++                # locals = None  # type: List[Optional[SymbolTable]]
++                if self.locals is not None:
++                    symbol_table = self.locals[-1]
++                    if symbol_table is not None:
++                        local_nodes = cast(List[Var], [st.node for st in symbol_table.values()])
++            expr.analyzed = RevealExpr(kind=REVEAL_LOCALS, local_nodes=local_nodes)
+             expr.analyzed.line = expr.line
+             expr.analyzed.column = expr.column
+             expr.analyzed.accept(self)
+@@ -2828,8 +2859,14 @@ def visit_cast_expr(self, expr: CastExpr) -> None:
+         expr.expr.accept(self)
+         expr.type = self.anal_type(expr.type)
+ 
+-    def visit_reveal_type_expr(self, expr: RevealTypeExpr) -> None:
+-        expr.expr.accept(self)
++    def visit_reveal_expr(self, expr: RevealExpr) -> None:
++        if expr.kind == REVEAL_TYPE:
++            if expr.expr is not None:
++                expr.expr.accept(self)
++        else:
++            # Reveal locals doesn't have an inner expression, there's no
++            # need to traverse inside it
++            pass
+ 
+     def visit_type_application(self, expr: TypeApplication) -> None:
+         expr.expr.accept(self)
+diff --git a/mypy/semanal_pass1.py b/mypy/semanal_pass1.py
+index 2037685656..b25fd99cb6 100644
+--- a/mypy/semanal_pass1.py
++++ b/mypy/semanal_pass1.py
+@@ -103,6 +103,9 @@ def visit_file(self, file: MypyFile, fnam: str, mod_id: str, options: Options) -
+                     # reveal_type is a mypy-only function that gives an error with
+                     # the type of its arg.
+                     ('reveal_type', AnyType(TypeOfAny.special_form)),
++                    # reveal_locals is a mypy-only function that gives an error with the types of
++                    # locals
++                    ('reveal_locals', AnyType(TypeOfAny.special_form)),
+                 ]  # type: List[Tuple[str, Type]]
+ 
+                 # TODO(ddfisher): This guard is only needed because mypy defines
+diff --git a/mypy/semanal_pass3.py b/mypy/semanal_pass3.py
+index 44d2b45dc3..6b70025ed2 100644
+--- a/mypy/semanal_pass3.py
++++ b/mypy/semanal_pass3.py
+@@ -18,7 +18,7 @@
+     Node, Expression, MypyFile, FuncDef, FuncItem, Decorator, RefExpr, Context, TypeInfo, ClassDef,
+     Block, TypedDictExpr, NamedTupleExpr, AssignmentStmt, IndexExpr, TypeAliasExpr, NameExpr,
+     CallExpr, NewTypeExpr, ForStmt, WithStmt, CastExpr, TypeVarExpr, TypeApplication, Lvalue,
+-    TupleExpr, RevealTypeExpr, SymbolTableNode, SymbolTable, Var, ARG_POS, OverloadedFuncDef,
++    TupleExpr, RevealExpr, SymbolTableNode, SymbolTable, Var, ARG_POS, OverloadedFuncDef,
+     MDEF,
+ )
+ from mypy.types import (
+@@ -278,8 +278,8 @@ def visit_cast_expr(self, e: CastExpr) -> None:
+         self.analyze(e.type, e)
+         super().visit_cast_expr(e)
+ 
+-    def visit_reveal_type_expr(self, e: RevealTypeExpr) -> None:
+-        super().visit_reveal_type_expr(e)
++    def visit_reveal_expr(self, e: RevealExpr) -> None:
++        super().visit_reveal_expr(e)
+ 
+     def visit_type_application(self, e: TypeApplication) -> None:
+         for type in e.types:
+diff --git a/mypy/server/subexpr.py b/mypy/server/subexpr.py
+index 663fff2c72..57d0c2362d 100644
+--- a/mypy/server/subexpr.py
++++ b/mypy/server/subexpr.py
+@@ -4,7 +4,7 @@
+ 
+ from mypy.nodes import (
+     Expression, Node, MemberExpr, YieldFromExpr, YieldExpr, CallExpr, OpExpr, ComparisonExpr,
+-    SliceExpr, CastExpr, RevealTypeExpr, UnaryExpr, ListExpr, TupleExpr, DictExpr, SetExpr,
++    SliceExpr, CastExpr, RevealExpr, UnaryExpr, ListExpr, TupleExpr, DictExpr, SetExpr,
+     IndexExpr, GeneratorExpr, ListComprehension, SetComprehension, DictionaryComprehension,
+     ConditionalExpr, TypeApplication, LambdaExpr, StarExpr, BackquoteExpr, AwaitExpr,
+ )
+@@ -72,9 +72,9 @@ def visit_cast_expr(self, e: CastExpr) -> None:
+         self.add(e)
+         super().visit_cast_expr(e)
+ 
+-    def visit_reveal_type_expr(self, e: RevealTypeExpr) -> None:
++    def visit_reveal_expr(self, e: RevealExpr) -> None:
+         self.add(e)
+-        super().visit_reveal_type_expr(e)
++        super().visit_reveal_expr(e)
+ 
+     def visit_unary_expr(self, e: UnaryExpr) -> None:
+         self.add(e)
+diff --git a/mypy/strconv.py b/mypy/strconv.py
+index 18f4a0a3fc..8814e29e79 100644
+--- a/mypy/strconv.py
++++ b/mypy/strconv.py
+@@ -406,8 +406,12 @@ def visit_comparison_expr(self, o: 'mypy.nodes.ComparisonExpr') -> str:
+     def visit_cast_expr(self, o: 'mypy.nodes.CastExpr') -> str:
+         return self.dump([o.expr, o.type], o)
+ 
+-    def visit_reveal_type_expr(self, o: 'mypy.nodes.RevealTypeExpr') -> str:
+-        return self.dump([o.expr], o)
++    def visit_reveal_expr(self, o: 'mypy.nodes.RevealExpr') -> str:
++        if o.kind == mypy.nodes.REVEAL_TYPE:
++            return self.dump([o.expr], o)
++        else:
++            # REVEAL_LOCALS
++            return self.dump([o.local_nodes], o)
+ 
+     def visit_unary_expr(self, o: 'mypy.nodes.UnaryExpr') -> str:
+         return self.dump([o.op, o.expr], o)
+diff --git a/mypy/test/data.py b/mypy/test/data.py
+index 80600e4759..08234e3845 100644
+--- a/mypy/test/data.py
++++ b/mypy/test/data.py
+@@ -28,20 +28,16 @@
+ FileOperation = Union[UpdateFile, DeleteFile]
+ 
+ 
+-def parse_test_cases(
+-        path: str,
+-        base_path: str = '.',
+-        optional_out: bool = False,
+-        native_sep: bool = False) -> List['DataDrivenTestCase']:
+-    """Parse a file with test case descriptions.
+-
+-    Return an array of test cases.
++def parse_test_cases(parent: 'DataSuiteCollector', suite: 'DataSuite',
++                     path: str) -> Iterator['DataDrivenTestCase']:
++    """Parse a single file from suite with test case descriptions.
+ 
+     NB: this function and DataDrivenTestCase were shared between the
+     myunit and pytest codepaths -- if something looks redundant,
+     that's likely the reason.
+     """
+-    if native_sep:
++    base_path = suite.base_path
++    if suite.native_sep:
+         join = os.path.join
+     else:
+         join = posixpath.join  # type: ignore
+@@ -51,7 +47,6 @@ def parse_test_cases(
+     for i in range(len(lst)):
+         lst[i] = lst[i].rstrip('\n')
+     p = parse_test_data(lst, path)
+-    out = []  # type: List[DataDrivenTestCase]
+ 
+     # Process the parsed items. Each item has a header of form [id args],
+     # optionally followed by lines of text.
+@@ -143,7 +138,7 @@ def parse_test_cases(
+                     assert passnum > 1
+                     output = p[i].data
+                     output = [expand_variables(line) for line in output]
+-                    if native_sep and os.path.sep == '\\':
++                    if suite.native_sep and os.path.sep == '\\':
+                         output = [fix_win_path(line) for line in output]
+                     tcout2[passnum] = output
+                     ok = True
+@@ -167,7 +162,7 @@ def parse_test_cases(
+                         ('Stale modules after pass {} must be a subset of rechecked '
+                          'modules ({}:{})').format(passnum, path, p[i0].line))
+ 
+-            if optional_out:
++            if suite.optional_out:
+                 ok = True
+ 
+             if ok:
+@@ -178,24 +173,24 @@ def parse_test_cases(
+                 lastline = p[i].line if i < len(p) else p[i - 1].line + 9999
+                 arg0 = p[i0].arg
+                 assert arg0 is not None
+-                tc = DataDrivenTestCase(arg0, input, tcout, tcout2, path,
+-                                        p[i0].line, lastline,
+-                                        files, output_files, stale_modules,
+-                                        rechecked_modules, deleted_paths, native_sep,
+-                                        triggered)
+-                out.append(tc)
++                case_name = add_test_name_suffix(arg0, suite.test_name_suffix)
++                skip = arg0.endswith('-skip')
++                if skip:
++                    case_name = case_name[:-len('-skip')]
++                yield DataDrivenTestCase(case_name, parent, skip, input, tcout, tcout2, path,
++                                         p[i0].line, lastline,
++                                         files, output_files, stale_modules,
++                                         rechecked_modules, deleted_paths, suite.native_sep,
++                                         triggered)
+         if not ok:
+             raise ValueError(
+                 '{}, line {}: Error in test case description'.format(
+                     path, p[i0].line))
+ 
+-    return out
+-
+ 
+-class DataDrivenTestCase:
+-    """Holds parsed data and handles directory setup and teardown for MypyDataCase."""
++class DataDrivenTestCase(pytest.Item):  # type: ignore  # inheriting from Any
++    """Holds parsed data-driven test cases, and handles directory setup and teardown."""
+ 
+-    # TODO: rename to ParsedTestCase or merge with MypyDataCase (yet avoid multiple inheritance)
+     # TODO: only create files on setup, not during parsing
+ 
+     input = None  # type: List[str]
+@@ -215,6 +210,8 @@ class DataDrivenTestCase:
+ 
+     def __init__(self,
+                  name: str,
++                 parent: 'DataSuiteCollector',
++                 skip: bool,
+                  input: List[str],
+                  output: List[str],
+                  output2: Dict[int, List[str]],
+@@ -229,7 +226,9 @@ def __init__(self,
+                  native_sep: bool = False,
+                  triggered: Optional[List[str]] = None,
+                  ) -> None:
+-        self.name = name
++
++        super().__init__(name, parent)
++        self.skip = skip
+         self.old_cwd = None  # type: Optional[str]
+         self.tmpdir = None  # type: Optional[tempfile.TemporaryDirectory[str]]
+         self.input = input
+@@ -246,6 +245,14 @@ def __init__(self,
+         self.native_sep = native_sep
+         self.triggered = triggered or []
+ 
++    def runtest(self) -> None:
++        if self.skip:
++            pytest.skip()
++        suite = self.parent.obj()
++        suite.update_data = self.config.getoption('--update-data', False)
++        suite.setup()
++        suite.run_case(self)
++
+     def setup(self) -> None:
+         self.old_cwd = os.getcwd()
+         self.tmpdir = tempfile.TemporaryDirectory(prefix='mypy-test-')
+@@ -343,6 +350,22 @@ def teardown(self) -> None:
+         self.old_cwd = None
+         self.tmpdir = None
+ 
++    def reportinfo(self) -> Tuple[str, int, str]:
++        return self.file, self.line, self.name
++
++    def repr_failure(self, excinfo: Any) -> str:
++        if excinfo.errisinstance(SystemExit):
++            # We assume that before doing exit() (which raises SystemExit) we've printed
++            # enough context about what happened so that a stack trace is not useful.
++            # In particular, uncaught exceptions during semantic analysis or type checking
++            # call exit() and they already print out a stack trace.
++            excrepr = excinfo.exconly()
++        else:
++            self.parent._prunetraceback(excinfo)
++            excrepr = excinfo.getrepr(style='short')
++
++        return "data: {}:{}:\n{}".format(self.file, self.line, excrepr)
++
+     def find_steps(self) -> List[List[FileOperation]]:
+         """Return a list of descriptions of file operations for each incremental step.
+ 
+@@ -569,7 +592,7 @@ def fix_cobertura_filename(line: str) -> str:
+ 
+ 
+ # This function name is special to pytest.  See
+-# http://doc.pytest.org/en/latest/writing_plugins.html#initialization-command-line-and-configuration-hooks
++# https://docs.pytest.org/en/latest/reference.html#initialization-hooks
+ def pytest_addoption(parser: Any) -> None:
+     group = parser.getgroup('mypy')
+     group.addoption('--update-data', action='store_true', default=False,
+@@ -589,26 +612,20 @@ def pytest_pycollect_makeitem(collector: Any, name: str,
+         # Only classes derived from DataSuite contain test cases, not the DataSuite class itself
+         if issubclass(obj, DataSuite) and obj is not DataSuite:
+             # Non-None result means this obj is a test case.
+-            # The collect method of the returned MypyDataSuite instance will be called later,
++            # The collect method of the returned DataSuiteCollector instance will be called later,
+             # with self.obj being obj.
+-            return MypyDataSuite(name, parent=collector)
++            return DataSuiteCollector(name, parent=collector)
+     return None
+ 
+ 
+-class MypyDataSuite(pytest.Class):  # type: ignore  # inheriting from Any
++class DataSuiteCollector(pytest.Class):  # type: ignore  # inheriting from Any
+     def collect(self) -> Iterator[pytest.Item]:  # type: ignore
+         """Called by pytest on each of the object returned from pytest_pycollect_makeitem"""
+ 
+         # obj is the object for which pytest_pycollect_makeitem returned self.
+         suite = self.obj  # type: DataSuite
+         for f in suite.files:
+-            for case in parse_test_cases(os.path.join(suite.data_prefix, f),
+-                                         base_path=suite.base_path,
+-                                         optional_out=suite.optional_out,
+-                                         native_sep=suite.native_sep):
+-                if suite.filter(case):
+-                    case.name = add_test_name_suffix(case.name, suite.test_name_suffix)
+-                    yield MypyDataCase(case.name, self, case)
++            yield from parse_test_cases(self, suite, os.path.join(suite.data_prefix, f))
+ 
+ 
+ def add_test_name_suffix(name: str, suffix: str) -> str:
+@@ -637,47 +654,6 @@ def has_stable_flags(testcase: DataDrivenTestCase) -> bool:
+     return True
+ 
+ 
+-class MypyDataCase(pytest.Item):  # type: ignore  # inheriting from Any
+-    def __init__(self, name: str, parent: MypyDataSuite, case: DataDrivenTestCase) -> None:
+-        self.skip = False
+-        if name.endswith('-skip'):
+-            self.skip = True
+-            name = name[:-len('-skip')]
+-
+-        super().__init__(name, parent)
+-        self.case = case
+-
+-    def runtest(self) -> None:
+-        if self.skip:
+-            pytest.skip()
+-        suite = self.parent.obj()
+-        suite.update_data = self.config.getoption('--update-data', False)
+-        suite.setup()
+-        suite.run_case(self.case)
+-
+-    def setup(self) -> None:
+-        self.case.setup()
+-
+-    def teardown(self) -> None:
+-        self.case.teardown()
+-
+-    def reportinfo(self) -> Tuple[str, int, str]:
+-        return self.case.file, self.case.line, self.case.name
+-
+-    def repr_failure(self, excinfo: Any) -> str:
+-        if excinfo.errisinstance(SystemExit):
+-            # We assume that before doing exit() (which raises SystemExit) we've printed
+-            # enough context about what happened so that a stack trace is not useful.
+-            # In particular, uncaught exceptions during semantic analysis or type checking
+-            # call exit() and they already print out a stack trace.
+-            excrepr = excinfo.exconly()
+-        else:
+-            self.parent._prunetraceback(excinfo)
+-            excrepr = excinfo.getrepr(style='short')
+-
+-        return "data: {}:{}:\n{}".format(self.case.file, self.case.line, excrepr)
+-
+-
+ class DataSuite:
+     # option fields - class variables
+     files = None  # type: List[str]
+@@ -699,7 +675,3 @@ def setup(self) -> None:
+     @abstractmethod
+     def run_case(self, testcase: DataDrivenTestCase) -> None:
+         raise NotImplementedError
+-
+-    @classmethod
+-    def filter(cls, testcase: DataDrivenTestCase) -> bool:
+-        return True
+diff --git a/mypy/test/testcmdline.py b/mypy/test/testcmdline.py
+index 88ad272fab..60c39cb170 100644
+--- a/mypy/test/testcmdline.py
++++ b/mypy/test/testcmdline.py
+@@ -49,8 +49,7 @@ def test_python_cmdline(testcase: DataDrivenTestCase) -> None:
+     args.append('--show-traceback')
+     args.append('--no-site-packages')
+     # Type check the program.
+-    fixed = [python3_path,
+-             os.path.join(testcase.old_cwd, 'scripts', 'mypy')]
++    fixed = [python3_path, '-m', 'mypy']
+     process = subprocess.Popen(fixed + args,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+diff --git a/mypy/traverser.py b/mypy/traverser.py
+index 9b2d35bcc5..d4060852fe 100644
+--- a/mypy/traverser.py
++++ b/mypy/traverser.py
+@@ -5,12 +5,12 @@
+     Block, MypyFile, FuncItem, CallExpr, ClassDef, Decorator, FuncDef,
+     ExpressionStmt, AssignmentStmt, OperatorAssignmentStmt, WhileStmt,
+     ForStmt, ReturnStmt, AssertStmt, DelStmt, IfStmt, RaiseStmt,
+-    TryStmt, WithStmt, MemberExpr, OpExpr, SliceExpr, CastExpr, RevealTypeExpr,
++    TryStmt, WithStmt, MemberExpr, OpExpr, SliceExpr, CastExpr, RevealExpr,
+     UnaryExpr, ListExpr, TupleExpr, DictExpr, SetExpr, IndexExpr,
+     GeneratorExpr, ListComprehension, SetComprehension, DictionaryComprehension,
+     ConditionalExpr, TypeApplication, ExecStmt, Import, ImportFrom,
+     LambdaExpr, ComparisonExpr, OverloadedFuncDef, YieldFromExpr,
+-    YieldExpr, StarExpr, BackquoteExpr, AwaitExpr, PrintStmt, SuperExpr,
++    YieldExpr, StarExpr, BackquoteExpr, AwaitExpr, PrintStmt, SuperExpr, REVEAL_TYPE
+ )
+ 
+ 
+@@ -181,8 +181,13 @@ def visit_slice_expr(self, o: SliceExpr) -> None:
+     def visit_cast_expr(self, o: CastExpr) -> None:
+         o.expr.accept(self)
+ 
+-    def visit_reveal_type_expr(self, o: RevealTypeExpr) -> None:
+-        o.expr.accept(self)
++    def visit_reveal_expr(self, o: RevealExpr) -> None:
++        if o.kind == REVEAL_TYPE:
++            assert o.expr is not None
++            o.expr.accept(self)
++        else:
++            # RevealLocalsExpr doesn't have an inner expression
++            pass
+ 
+     def visit_unary_expr(self, o: UnaryExpr) -> None:
+         o.expr.accept(self)
+diff --git a/mypy/treetransform.py b/mypy/treetransform.py
+index 8dc4ca7e95..140d514e41 100644
+--- a/mypy/treetransform.py
++++ b/mypy/treetransform.py
+@@ -11,7 +11,7 @@
+     OperatorAssignmentStmt, ExpressionStmt, AssignmentStmt, ReturnStmt,
+     RaiseStmt, AssertStmt, DelStmt, BreakStmt, ContinueStmt,
+     PassStmt, GlobalDecl, WhileStmt, ForStmt, IfStmt, TryStmt, WithStmt,
+-    CastExpr, RevealTypeExpr, TupleExpr, GeneratorExpr, ListComprehension, ListExpr,
++    CastExpr, RevealExpr, TupleExpr, GeneratorExpr, ListComprehension, ListExpr,
+     ConditionalExpr, DictExpr, SetExpr, NameExpr, IntExpr, StrExpr, BytesExpr,
+     UnicodeExpr, FloatExpr, CallExpr, SuperExpr, MemberExpr, IndexExpr,
+     SliceExpr, OpExpr, UnaryExpr, LambdaExpr, TypeApplication, PrintStmt,
+@@ -20,7 +20,7 @@
+     YieldFromExpr, NamedTupleExpr, TypedDictExpr, NonlocalDecl, SetComprehension,
+     DictionaryComprehension, ComplexExpr, TypeAliasExpr, EllipsisExpr,
+     YieldExpr, ExecStmt, Argument, BackquoteExpr, AwaitExpr,
+-    OverloadPart, EnumCallExpr,
++    OverloadPart, EnumCallExpr, REVEAL_TYPE
+ )
+ from mypy.types import Type, FunctionLike
+ from mypy.traverser import TraverserVisitor
+@@ -377,8 +377,13 @@ def visit_cast_expr(self, node: CastExpr) -> CastExpr:
+         return CastExpr(self.expr(node.expr),
+                         self.type(node.type))
+ 
+-    def visit_reveal_type_expr(self, node: RevealTypeExpr) -> RevealTypeExpr:
+-        return RevealTypeExpr(self.expr(node.expr))
++    def visit_reveal_expr(self, node: RevealExpr) -> RevealExpr:
++        if node.kind == REVEAL_TYPE:
++            assert node.expr is not None
++            return RevealExpr(kind=REVEAL_TYPE, expr=self.expr(node.expr))
++        else:
++            # Reveal locals expressions don't have any sub expressions
++            return node
+ 
+     def visit_super_expr(self, node: SuperExpr) -> SuperExpr:
+         call = self.expr(node.call)
+diff --git a/mypy/typeanal.py b/mypy/typeanal.py
+index 60449d26e3..70c0766d53 100644
+--- a/mypy/typeanal.py
++++ b/mypy/typeanal.py
+@@ -419,9 +419,11 @@ def visit_tuple_type(self, t: TupleType) -> Type:
+         # Types such as (t1, t2, ...) only allowed in assignment statements. They'll
+         # generate errors elsewhere, and Tuple[t1, t2, ...] must be used instead.
+         if t.implicit and not self.allow_tuple_literal:
+-            self.fail('Invalid tuple literal type', t)
++            self.fail('Syntax error in type annotation', t)
+             if len(t.items) == 1:
+                 self.note_func('Suggestion: Is there a spurious trailing comma?', t)
++            else:
++                self.note_func('Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)', t)
+             return AnyType(TypeOfAny.from_error)
+         star_count = sum(1 for item in t.items if isinstance(item, StarType))
+         if star_count > 1:
+diff --git a/mypy/util.py b/mypy/util.py
+index 19836eaf59..8222bfe6c6 100644
+--- a/mypy/util.py
++++ b/mypy/util.py
+@@ -74,8 +74,6 @@ def decode_python_encoding(source: bytes, pyversion: Tuple[int, int]) -> str:
+     Returns:
+       A tuple: the source as a string, and the hash calculated from the binary representation.
+     """
+-    encoding = 'utf8' if pyversion[0] >= 3 else 'ascii'
+-
+     # check for BOM UTF-8 encoding and strip it out if present
+     if source.startswith(b'\xef\xbb\xbf'):
+         encoding = 'utf8'
+diff --git a/mypy/visitor.py b/mypy/visitor.py
+index 6bd7520f4f..97a05dc72a 100644
+--- a/mypy/visitor.py
++++ b/mypy/visitor.py
+@@ -1,7 +1,7 @@
+ """Generic abstract syntax tree node visitor"""
+ 
+ from abc import abstractmethod
+-from typing import TypeVar, Generic
++from typing import Dict, TypeVar, Generic
+ 
+ if False:
+     # break import cycle only needed for mypy
+@@ -77,7 +77,7 @@ def visit_cast_expr(self, o: 'mypy.nodes.CastExpr') -> T:
+         pass
+ 
+     @abstractmethod
+-    def visit_reveal_type_expr(self, o: 'mypy.nodes.RevealTypeExpr') -> T:
++    def visit_reveal_expr(self, o: 'mypy.nodes.RevealExpr') -> T:
+         pass
+ 
+     @abstractmethod
+@@ -458,7 +458,7 @@ def visit_comparison_expr(self, o: 'mypy.nodes.ComparisonExpr') -> T:
+     def visit_cast_expr(self, o: 'mypy.nodes.CastExpr') -> T:
+         pass
+ 
+-    def visit_reveal_type_expr(self, o: 'mypy.nodes.RevealTypeExpr') -> T:
++    def visit_reveal_expr(self, o: 'mypy.nodes.RevealExpr') -> T:
+         pass
+ 
+     def visit_super_expr(self, o: 'mypy.nodes.SuperExpr') -> T:
+diff --git a/runtests.py b/runtests.py
+index 36104cd747..ca2edfc0d1 100755
+--- a/runtests.py
++++ b/runtests.py
+@@ -38,7 +38,6 @@ def __init__(self, *, whitelist: List[str], blacklist: List[str],
+         self.waiter = Waiter(verbosity=verbosity, limit=parallel_limit, xfail=xfail, lf=lf, ff=ff)
+         self.versions = get_versions()
+         self.cwd = os.getcwd()
+-        self.mypy = os.path.join(self.cwd, 'scripts', 'mypy')
+         self.env = dict(os.environ)
+         self.coverage = coverage
+ 
+@@ -67,7 +66,7 @@ def add_mypy_cmd(self, name: str, mypy_args: List[str], cwd: Optional[str] = Non
+         full_name = 'check %s' % name
+         if not self.allow(full_name):
+             return
+-        args = [sys.executable, self.mypy] + mypy_args
++        args = [sys.executable, '-m', 'mypy'] + mypy_args
+         args.append('--show-traceback')
+         args.append('--no-site-packages')
+         self.waiter.add(LazySubprocess(full_name, args, cwd=cwd, env=self.env))
+@@ -196,18 +195,17 @@ def add_stubs(driver: Driver) -> None:
+ 
+ def add_stdlibsamples(driver: Driver) -> None:
+     seen = set()  # type: Set[str]
+-    for version in driver.versions:
+-        stdlibsamples_dir = join(driver.cwd, 'test-data', 'stdlib-samples', version)
+-        modules = []  # type: List[str]
+-        for f in find_files(stdlibsamples_dir, prefix='test_', suffix='.py'):
+-            module = file_to_module(f[len(stdlibsamples_dir) + 1:])
+-            if module not in seen:
+-                seen.add(module)
+-                modules.append(module)
+-        if modules:
+-            # TODO: Remove need for --no-strict-optional
+-            driver.add_mypy_modules('stdlibsamples (%s)' % (version,), modules,
+-                                    cwd=stdlibsamples_dir, extra_args=['--no-strict-optional'])
++    stdlibsamples_dir = join(driver.cwd, 'test-data', 'stdlib-samples', '3.2', 'test')
++    modules = []  # type: List[str]
++    for f in find_files(stdlibsamples_dir, prefix='test_', suffix='.py'):
++        module = file_to_module(f[len(stdlibsamples_dir) + 1:])
++        if module not in seen:
++            seen.add(module)
++            modules.append(module)
++    if modules:
++        # TODO: Remove need for --no-strict-optional
++        driver.add_mypy_modules('stdlibsamples (3.2)', modules,
++                                cwd=stdlibsamples_dir, extra_args=['--no-strict-optional'])
+ 
+ 
+ def add_samples(driver: Driver) -> None:
+diff --git a/scripts/mypy b/scripts/mypy
+deleted file mode 100755
+index 0e96016adf..0000000000
+--- a/scripts/mypy
++++ /dev/null
+@@ -1,6 +0,0 @@
+-#!/usr/bin/env python3
+-"""Mypy type checker command line tool."""
+-
+-from mypy.main import main
+-
+-main(__file__)
+diff --git a/scripts/mypy.bat b/scripts/mypy.bat
+deleted file mode 100644
+index b89d68c753..0000000000
+--- a/scripts/mypy.bat
++++ /dev/null
+@@ -1,9 +0,0 @@
+-@echo off
+-
+-setlocal
+-if exist "%~dp0\python.exe" (
+-    "%~dp0\python" "%~dp0mypy" %*
+-) else (
+-    "%~dp0..\python" "%~dp0mypy" %*
+-)
+-endlocal
+diff --git a/scripts/stubgen b/scripts/stubgen
+deleted file mode 100644
+index 9b2d05a97f..0000000000
+--- a/scripts/stubgen
++++ /dev/null
+@@ -1,20 +0,0 @@
+-#!/usr/bin/env python3
+-"""Generator of dynamically typed draft stubs for arbitrary modules.
+-
+-This is just a wrapper script. Look at mypy/stubgen.py for the actual
+-implementation.
+-"""
+-
+-import os
+-import os.path
+-import sys
+-
+-file_dir = os.path.dirname(__file__)
+-parent_dir = os.path.join(file_dir, os.pardir)
+-if os.path.exists(os.path.join(parent_dir, '.git')):
+-    # We are running from a git clone.
+-    sys.path.insert(0, parent_dir)
+-
+-import mypy.stubgen
+-
+-mypy.stubgen.main()
+diff --git a/test-data/stdlib-samples/3.2/test/mypy.ini b/test-data/stdlib-samples/3.2/test/mypy.ini
+new file mode 100644
+index 0000000000..90a0e394b2
+--- /dev/null
++++ b/test-data/stdlib-samples/3.2/test/mypy.ini
+@@ -0,0 +1,2 @@
++[mypy]
++mypy_path = ..
+diff --git a/test-data/unit/README.md b/test-data/unit/README.md
+index 77700e008a..f51e58423b 100644
+--- a/test-data/unit/README.md
++++ b/test-data/unit/README.md
+@@ -117,21 +117,20 @@ You can also run the type checker for manual testing without
+ installing it by setting up the Python module search path suitably:
+ 
+     $ export PYTHONPATH=$PWD
+-    $ python<version> -m mypy PROGRAM.py
++    $ python3 -m mypy PROGRAM.py
+ 
+ You will have to manually install the `typing` module if you're running Python
+ 3.4 or earlier.
+ 
+-You can add the entry scripts to PATH for a single python3 version:
++You can also execute mypy as a module
+ 
+-    $ export PATH=$PWD/scripts
+-    $ mypy PROGRAM.py
++    $ python3 -m mypy PROGRAM.py
+ 
+ You can check a module or string instead of a file:
+ 
+-    $ mypy PROGRAM.py
+-    $ mypy -m MODULE
+-    $ mypy -c 'import MODULE'
++    $ python3 -m mypy PROGRAM.py
++    $ python3 -m mypy -m MODULE
++    $ python3 -m mypy -c 'import MODULE'
+ 
+ To run the linter:
+ 
+diff --git a/test-data/unit/check-async-await.test b/test-data/unit/check-async-await.test
+index 5be07a9007..a59615e324 100644
+--- a/test-data/unit/check-async-await.test
++++ b/test-data/unit/check-async-await.test
+@@ -12,7 +12,7 @@ async def f() -> int:
+ 
+ async def f() -> int:
+     return 0
+-reveal_type(f())  # E: Revealed type is 'typing.Coroutine[builtins.int, Any, Any]'
++reveal_type(f())  # E: Revealed type is 'typing.Coroutine[Any, Any, builtins.int]'
+ [builtins fixtures/async_await.pyi]
+ [typing fixtures/typing-full.pyi]
+ 
+@@ -335,7 +335,7 @@ async def f() -> None:
+     async with C() as y, C() as z:  # type: str, int  # E: Incompatible types in assignment (expression has type "int", variable has type "str")
+         pass
+ 
+-    async with C() as a:  # type: int, int  # E: Invalid tuple literal type
++    async with C() as a:  # type: int, int  # E: Syntax error in type annotation # N: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+         pass
+ [builtins fixtures/async_await.pyi]
+ [typing fixtures/typing-full.pyi]
+@@ -378,7 +378,7 @@ def g() -> Generator[Any, None, str]:
+ [builtins fixtures/async_await.pyi]
+ [typing fixtures/typing-full.pyi]
+ [out]
+-main:6: error: "yield from" can't be applied to "Coroutine[str, Any, Any]"
++main:6: error: "yield from" can't be applied to "Coroutine[Any, Any, str]"
+ 
+ [case testAwaitableSubclass]
+ 
+@@ -630,9 +630,9 @@ def plain_host_generator() -> Generator[str, None, None]:
+     yield 'a'
+     x = 0
+     x = yield from plain_generator()
+-    x = yield from plain_coroutine()  # E: "yield from" can't be applied to "Coroutine[int, Any, Any]"
++    x = yield from plain_coroutine()  # E: "yield from" can't be applied to "Coroutine[Any, Any, int]"
+     x = yield from decorated_generator()
+-    x = yield from decorated_coroutine()  # E: "yield from" can't be applied to "AwaitableGenerator[Any, Any, int, Coroutine[int, Any, Any]]"
++    x = yield from decorated_coroutine()  # E: "yield from" can't be applied to "AwaitableGenerator[Any, Any, int, Coroutine[Any, Any, int]]"
+     x = yield from other_iterator()
+     x = yield from other_coroutine()  # E: "yield from" can't be applied to "Aw"
+ 
+diff --git a/test-data/unit/check-class-namedtuple.test b/test-data/unit/check-class-namedtuple.test
+index d2e8e7f6b9..4411e8f389 100644
+--- a/test-data/unit/check-class-namedtuple.test
++++ b/test-data/unit/check-class-namedtuple.test
+@@ -503,7 +503,7 @@ class XRepr(NamedTuple):
+         return 0
+ 
+ reveal_type(XMeth(1).double()) # E: Revealed type is 'builtins.int'
+-reveal_type(XMeth(1).asyncdouble())  # E: Revealed type is 'typing.Coroutine[builtins.int, Any, Any]'
++reveal_type(XMeth(1).asyncdouble())  # E: Revealed type is 'typing.Coroutine[Any, Any, builtins.int]'
+ reveal_type(XMeth(42).x)  # E: Revealed type is 'builtins.int'
+ reveal_type(XRepr(42).__str__())  # E: Revealed type is 'builtins.str'
+ reveal_type(XRepr(1, 2).__add__(XRepr(3)))  # E: Revealed type is 'builtins.int'
+diff --git a/test-data/unit/check-classes.test b/test-data/unit/check-classes.test
+index e615a4839d..65bd06fcb4 100644
+--- a/test-data/unit/check-classes.test
++++ b/test-data/unit/check-classes.test
+@@ -1495,6 +1495,20 @@ a = A()
+ a.f = 1
+ reveal_type(a.f)  # E: Revealed type is 'builtins.str'
+ 
++[case testDescriptorGetUnion]
++from typing import Any, Union
++class String:
++    def __get__(self, inst: Any, owner: Any) -> str:
++        return ''
++
++class A:
++    attr: str
++
++class B:
++    attr = String()
++
++def foo(x: Union[A, B]) -> None:
++    reveal_type(x.attr)  # E: Revealed type is 'builtins.str'
+ 
+ -- _promote decorators
+ -- -------------------
+@@ -4326,3 +4340,14 @@ class C:
+     __slots__ = ('x',)
+ class D(B, C):
+     __slots__ = ('aa', 'bb', 'cc')
++
++[case testRevealLocalsOnClassVars]
++class C1(object):
++    t = 'a'
++    y = 3.0
++    reveal_locals()
++
++[out]
++main:4: error: Revealed local types are:
++main:4: error: t: builtins.str
++main:4: error: y: builtins.float
+diff --git a/test-data/unit/check-expressions.test b/test-data/unit/check-expressions.test
+index 94ec7dd437..820a8629b9 100644
+--- a/test-data/unit/check-expressions.test
++++ b/test-data/unit/check-expressions.test
+@@ -1448,6 +1448,28 @@ x = [1]
+ x = ['x'] # E: List item 0 has incompatible type "str"; expected "int"
+ [builtins fixtures/list.pyi]
+ 
++[case testConditionalExpressionUnion]
++reveal_type(1 if bool() else 2) # E: Revealed type is 'builtins.int'
++reveal_type(1 if bool() else '') # E: Revealed type is 'Union[builtins.int, builtins.str]'
++class A:
++    pass
++class B(A):
++    pass
++class C:
++    pass
++class D(A):
++    pass
++a = A()
++b = B()
++c = C()
++d = D()
++reveal_type(a if bool() else b) # E: Revealed type is '__main__.A'
++reveal_type(b if bool() else c) # E: Revealed type is 'Union[__main__.B, __main__.C]'
++reveal_type(c if bool() else b) # E: Revealed type is 'Union[__main__.C, __main__.B]'
++reveal_type(c if bool() else a) # E: Revealed type is 'Union[__main__.C, __main__.A]'
++reveal_type(d if bool() else b) # E: Revealed type is 'Union[__main__.D, __main__.B]'
++[builtins fixtures/bool.pyi]
++
+ 
+ -- Special cases
+ -- -------------
+@@ -1708,6 +1730,17 @@ d() # E: "D[str, int]" not callable
+ [case testRevealType]
+ reveal_type(1) # E: Revealed type is 'builtins.int'
+ 
++[case testRevealLocals]
++x = 1
++y = 2
++z = x + y
++reveal_locals()
++[out]
++main:4: error: Revealed local types are:
++main:4: error: x: builtins.int
++main:4: error: y: builtins.int
++main:4: error: z: builtins.int
++
+ [case testUndefinedRevealType]
+ reveal_type(x)
+ [out]
+diff --git a/test-data/unit/check-fastparse.test b/test-data/unit/check-fastparse.test
+index e6aaa04f1f..ed85743e40 100644
+--- a/test-data/unit/check-fastparse.test
++++ b/test-data/unit/check-fastparse.test
+@@ -433,5 +433,5 @@ def update_state(tid,                # type: int
+                  ):         # type: (...) -> str
+     pass
+ [out]
+-main:3: error: Invalid tuple literal type
++main:3: error: Syntax error in type annotation
+ main:3: note: Suggestion: Is there a spurious trailing comma?
+diff --git a/test-data/unit/check-functions.test b/test-data/unit/check-functions.test
+index 183561ca28..61ea6f62a8 100644
+--- a/test-data/unit/check-functions.test
++++ b/test-data/unit/check-functions.test
+@@ -2064,8 +2064,8 @@ def f() -> None:
+ def g(x: int) -> None:
+     pass
+ h = f if bool() else g
+-reveal_type(h) # E: Revealed type is 'builtins.function'
+-h(7) # E: Cannot call function of unknown type
++reveal_type(h) # E: Revealed type is 'Union[def (), def (x: builtins.int)]'
++h(7) # E: Too many arguments for "f"
+ [builtins fixtures/bool.pyi]
+ 
+ -- Positional-only arguments
+@@ -2212,7 +2212,7 @@ foo(y=2)  # E: Missing positional arguments
+ def dec(f): pass
+ 
+ @dec
+-def test(a: str) -> (str,): # E: Invalid tuple literal type # N: Suggestion: Is there a spurious trailing comma?
++def test(a: str) -> (str,): # E: Syntax error in type annotation # N: Suggestion: Is there a spurious trailing comma?
+     return None
+ 
+ [case testReturnTypeLineNumberNewLine]
+@@ -2302,3 +2302,24 @@ f = lambda: 5
+ reveal_type(f)
+ [out]
+ main:2: error: Revealed type is 'def () -> builtins.int'
++
++[case testRevealLocalsFunction]
++a = 1.0
++
++def f(a: int, b: int) -> int:
++    reveal_locals()
++    c = a + b
++    reveal_locals()
++    return c
++
++reveal_locals()
++[out]
++main:4: error: Revealed local types are:
++main:4: error: a: builtins.int
++main:4: error: b: builtins.int
++main:6: error: Revealed local types are:
++main:6: error: a: builtins.int
++main:6: error: b: builtins.int
++main:6: error: c: builtins.int
++main:9: error: Revealed local types are:
++main:9: error: a: builtins.float
+diff --git a/test-data/unit/check-modules.test b/test-data/unit/check-modules.test
+index 100556d558..6186664a74 100644
+--- a/test-data/unit/check-modules.test
++++ b/test-data/unit/check-modules.test
+@@ -1001,6 +1001,48 @@ from foo import bar
+ [file foo/bar.py]
+ pass
+ 
++[case testImportReExportFromChildrenInCycle1]
++# cmd: mypy -m project.root project.study.a project.neighbor
++[file project/__init__.py]
++from project.study import CustomType
++x = 10
++[file project/root.py]
++[file project/study/__init__.py]
++from project.study.a import CustomType
++[file project/study/a.py]
++from project import root
++# TODO (#4498): This test is basically testing the `all_are_submodules` logic
++# in build, which skips generating a dependenecy to a module if
++# everything in it is a submodule. But that is still all just a
++# workaround for bugs in cycle handling. If we uncomment the next
++# line, we'll still break:
++# from project import x
++CustomType = str
++[file project/neighbor/__init__.py]
++from project.study import CustomType
++def m(arg: CustomType) -> str:
++    return 'test'
++
++[case testImportReExportFromChildrenInCycle2]
++# cmd: mypy -m project project.b project.ba project.c
++# See comments in above test about this being a workaround.
++[file foo.py]
++def get_foo() -> int: return 12
++
++[file project/ba.py]
++from . import b
++b.FOO
++
++[file project/b.py]
++import foo
++from . import c
++FOO = foo.get_foo()
++
++[file project/c.py]
++
++[file project/__init__.py]
++from . import ba
++
+ [case testSuperclassInImportCycle]
+ import a
+ import d
+diff --git a/test-data/unit/check-optional.test b/test-data/unit/check-optional.test
+index d2f699dd0c..ea347a1b86 100644
+--- a/test-data/unit/check-optional.test
++++ b/test-data/unit/check-optional.test
+@@ -385,7 +385,7 @@ def lookup_field(name, obj):
+         attr = None
+ 
+ [case testTernaryWithNone]
+-reveal_type(None if bool() else 0)  # E: Revealed type is 'Union[builtins.int, builtins.None]'
++reveal_type(None if bool() else 0)  # E: Revealed type is 'Union[builtins.None, builtins.int]'
+ [builtins fixtures/bool.pyi]
+ 
+ [case testListWithNone]
+diff --git a/test-data/unit/check-statements.test b/test-data/unit/check-statements.test
+index 41d31e6877..82fce87e24 100644
+--- a/test-data/unit/check-statements.test
++++ b/test-data/unit/check-statements.test
+@@ -182,7 +182,7 @@ for z in x:  # type: int
+ for w in x:  # type: Union[int, str]
+     reveal_type(w)  # E: Revealed type is 'Union[builtins.int, builtins.str]'
+ 
+-for v in x:  # type: int, int  # E: Invalid tuple literal type
++for v in x:  # type: int, int  # E: Syntax error in type annotation # N: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+     pass
+ [builtins fixtures/list.pyi]
+ 
+@@ -191,7 +191,7 @@ for v in x:  # type: int, int  # E: Invalid tuple literal type
+ from typing import List, Tuple
+ x = []  # type: List[Tuple[int, int]]
+ 
+-for y in x:  # type: int, int  # E: Invalid tuple literal type
++for y in x:  # type: int, int  # E: Syntax error in type annotation # N: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+     pass
+ 
+ for z in x:  # type: Tuple[int, int]
+@@ -1331,7 +1331,7 @@ with A() as a:  # type: int
+ with A() as b:  # type: str  # E: Incompatible types in assignment (expression has type "int", variable has type "str")
+     pass
+ 
+-with A() as c:  # type: int, int  # E: Invalid tuple literal type
++with A() as c:  # type: int, int  # E: Syntax error in type annotation # N: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+     pass
+ 
+ with A() as d:  # type: Union[int, str]
+@@ -1386,7 +1386,7 @@ with A() as a, A() as (b, c), B() as d:  # type: Tuple[int, int], (int, int), st
+ with A() as e, A() as (f, g), B() as h:  # type: Tuple[int, int], Tuple[int, int], str
+     pass
+ 
+-with A() as i, A() as (j, k), B() as l:  # type: (int, int), (int, int), str  # E: Invalid tuple literal type
++with A() as i, A() as (j, k), B() as l:  # type: (int, int), (int, int), str  # E: Syntax error in type annotation # N: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+     pass
+ 
+ with A(), A(), B() as m, A() as n, B(), B() as o:  # type: int, Tuple[int, int]  # E: Incompatible number of types for `with` targets
+@@ -1615,4 +1615,3 @@ N = TypedDict('N', {'x': int})
+ [builtins fixtures/dict.pyi]
+ [typing fixtures/typing-full.pyi]
+ [out]
+-
+diff --git a/test-data/unit/fine-grained.test b/test-data/unit/fine-grained.test
+index f4a3e9411f..3e071ff4b4 100644
+--- a/test-data/unit/fine-grained.test
++++ b/test-data/unit/fine-grained.test
+@@ -3872,9 +3872,11 @@ def inner():
+     # type: () -> (str, int)
+     return 'lol', 10
+ [out]
+-a.py:1: error: Invalid tuple literal type
++a.py:1: error: Syntax error in type annotation
++a.py:1: note: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+ ==
+-a.py:2: error: Invalid tuple literal type
++a.py:2: error: Syntax error in type annotation
++a.py:2: note: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+ 
+ [case testImplicitTuple3]
+ import a
+diff --git a/test-data/unit/fixtures/typing-full.pyi b/test-data/unit/fixtures/typing-full.pyi
+index 8da040176c..ace390cbde 100644
+--- a/test-data/unit/fixtures/typing-full.pyi
++++ b/test-data/unit/fixtures/typing-full.pyi
+@@ -101,7 +101,7 @@ class Awaitable(Protocol[T]):
+ class AwaitableGenerator(Generator[T, U, V], Awaitable[V], Generic[T, U, V, S]):
+     pass
+ 
+-class Coroutine(Awaitable[T], Generic[T, U, V]):
++class Coroutine(Awaitable[V], Generic[T, U, V]):
+     @abstractmethod
+     def send(self, value: U) -> T: pass
+ 
+diff --git a/test-data/unit/semanal-types.test b/test-data/unit/semanal-types.test
+index b55e34da06..bce290b862 100644
+--- a/test-data/unit/semanal-types.test
++++ b/test-data/unit/semanal-types.test
+@@ -1474,7 +1474,8 @@ MypyFile:1(
+ [case testTupleExpressionAsType]
+ def f(x: (int, int)) -> None: pass
+ [out]
+-main:1: error: Invalid tuple literal type
++main:1: error: Syntax error in type annotation
++main:1: note: Suggestion: Use Tuple[T1, ..., Tn] instead of (T1, ..., Tn)
+ 
+ [case tesQualifiedTypeNameBasedOnAny]
+ from typing import Any

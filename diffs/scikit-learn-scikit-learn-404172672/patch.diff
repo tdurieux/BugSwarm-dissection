@@ -1,0 +1,125 @@
+diff --git a/doc/index.rst b/doc/index.rst
+index cfcaedc38017..dadab9aa86b1 100644
+--- a/doc/index.rst
++++ b/doc/index.rst
+@@ -207,6 +207,8 @@
+                     <li><em>On-going development:</em>
+                     <a href="/dev/whats_new.html"><em>What's new</em> (Changelog)</a>
+                     </li>
++                    <li><em>July 2018.</em> scikit-learn 0.19.2 is available for download (<a href="whats_new.html#version-0-19">Changelog</a>).
++                    </li>
+                     <li><em>October 2017.</em> scikit-learn 0.19.1 is available for download (<a href="whats_new.html#version-0-19">Changelog</a>).
+                     </li>
+                     <li><em>July 2017.</em> scikit-learn 0.19.0 is available for download (<a href="whats_new/v0.19.html#version-0-19">Changelog</a>).
+diff --git a/doc/whats_new/v0.19.rst b/doc/whats_new/v0.19.rst
+index c28199716528..9b83278209ea 100644
+--- a/doc/whats_new/v0.19.rst
++++ b/doc/whats_new/v0.19.rst
+@@ -4,6 +4,23 @@
+ 
+ .. _changes_0_19:
+ 
++Version 0.19.2
++==============
++
++**October, 2018**
++
++This release is exclusively in order to support Python 3.7.
++
++Related changes
++---------------
++
++- ``n_iter_`` may vary from previous releases in
++  :class:`linear_model.LogisticRegression` with ``solver='lbfgs'`` and
++  :class:`linear_model.HuberRegressor`.  For Scipy <= 1.0.0, the optimizer could
++  perform more than the requested maximum number of iterations. Now both
++  estimators will report at most ``max_iter`` iterations even if more were
++  performed. :issue:`10723` by `Joel Nothman`_.
++
+ Version 0.19.1
+ ==============
+ 
+diff --git a/setup.cfg b/setup.cfg
+index b02383bae3b5..c854deb9d821 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -11,22 +11,10 @@ addopts =
+ 
+ [wheelhouse_uploader]
+ artifact_indexes=
+-    # OSX wheels built by travis (only for specific tags):
++    # Wheels built by travis (only for specific tags):
+     # https://github.com/MacPython/scikit-learn-wheels
+     http://wheels.scipy.org
+-    # Windows wheels built by:
+-    # https://ci.appveyor.com/project/sklearn-ci/scikit-learn/
+-    http://windows-wheels.scikit-learn.org/
+ 
+ [flake8]
+ # Default flake8 3.5 ignored flags
+ ignore=E121,E123,E126,E226,E24,E704,W503,W504
+-
+-# Uncomment the following under windows to build using:
+-# http://sourceforge.net/projects/mingw/
+-
+-#[build_ext]
+-#compiler=mingw32
+-#
+-#[build]
+-#compiler=mingw32
+diff --git a/sklearn/discriminant_analysis.py b/sklearn/discriminant_analysis.py
+index b25ca138ccfa..b9ba5234585d 100644
+--- a/sklearn/discriminant_analysis.py
++++ b/sklearn/discriminant_analysis.py
+@@ -429,6 +429,7 @@ def fit(self, X, y):
+         y : array, shape (n_samples,)
+             Target values.
+         """
++        # FIXME: Future warning to be removed in 0.22
+         X, y = check_X_y(X, y, ensure_min_samples=2, estimator=self)
+         self.classes_ = unique_labels(y)
+ 
+@@ -461,6 +462,12 @@ def fit(self, X, y):
+                     "n_classes - 1) = min(%d, %d - 1) = %d components."
+                     % (X.shape[1], len(self.classes_), max_components),
+                     ChangedBehaviorWarning)
++                future_msg = ("In version 0.22, invalid values for "
++                              " the n_components argument will raise a "
++                              "ValueError. You should set n_components to None"
++                              " (default), or a value smaller than "
++                              "min(n_features, n_classes - 1).")
++                warnings.warn(future_msg, FutureWarning)
+                 self._max_components = max_components
+             else:
+                 self._max_components = self.n_components
+diff --git a/sklearn/tests/test_discriminant_analysis.py b/sklearn/tests/test_discriminant_analysis.py
+index 0f3f15a2310d..43af403de632 100644
+--- a/sklearn/tests/test_discriminant_analysis.py
++++ b/sklearn/tests/test_discriminant_analysis.py
+@@ -263,6 +263,7 @@ def test_lda_store_covariance():
+ @pytest.mark.parametrize('n_features', [3, 5])
+ @pytest.mark.parametrize('n_classes', [5, 3])
+ def test_lda_dimension_warning(n_classes, n_features):
++    # FIXME: Future warning to be removed in 0.22
+     rng = check_random_state(0)
+     n_samples = 10
+     X = rng.randn(n_samples, n_features)
+@@ -280,11 +281,17 @@ def test_lda_dimension_warning(n_classes, n_features):
+                          max(n_features, n_classes - 1) + 1]:
+         # if n_components > min(n_classes - 1, n_features), raise warning
+         lda = LinearDiscriminantAnalysis(n_components=n_components)
+-        msg = ("n_components cannot be superior to min(n_features, "
++        msg = ("n_components cannot be larger than min(n_features, "
+                "n_classes - 1). Using min(n_features, "
+                "n_classes - 1) = min(%d, %d - 1) = %d components." %
+                (n_features, n_classes, max_components))
+         assert_warns_message(ChangedBehaviorWarning, msg, lda.fit, X, y)
++        future_msg = ("In version 0.22, invalid values for "
++                      " the n_components argument will raise a "
++                      "ValueError. You should set n_components to None"
++                      " (default), or a value smaller than "
++                      "min(n_features, n_classes - 1).")
++        assert_warns_message(FutureWarning, future_msg, lda.fit, X, y)
+ 
+ 
+ def test_qda():

@@ -1,0 +1,335 @@
+diff --git a/owner-assembly/pom.xml b/owner-assembly/pom.xml
+index de389356..cd2d338e 100644
+--- a/owner-assembly/pom.xml
++++ b/owner-assembly/pom.xml
+@@ -28,7 +28,7 @@
+             <dependencies>
+                 <dependency>
+                     <groupId>org.aeonbits.owner</groupId>
+-                    <artifactId>owner-java8</artifactId>
++                    <artifactId>owner-java8-extras</artifactId>
+                     <version>1.0.10-SNAPSHOT</version>
+                 </dependency>
+             </dependencies>
+diff --git a/owner-assembly/src/main/assemblies/bin.xml b/owner-assembly/src/main/assemblies/bin.xml
+index a1f2461b..87d53694 100644
+--- a/owner-assembly/src/main/assemblies/bin.xml
++++ b/owner-assembly/src/main/assemblies/bin.xml
+@@ -51,6 +51,13 @@
+                 <include>*.jar</include>
+             </includes>
+         </fileSet>
++        <fileSet>
++            <directory>${project.parent.basedir}/owner-java8-extras/target</directory>
++            <outputDirectory>/</outputDirectory>
++            <includes>
++                <include>*.jar</include>
++            </includes>
++        </fileSet>
+         <fileSet>
+             <directory>${project.parent.basedir}/owner-examples</directory>
+             <outputDirectory>/examples</outputDirectory>
+diff --git a/owner-extras/pom.xml b/owner-extras/pom.xml
+index ed5fb211..e190883b 100644
+--- a/owner-extras/pom.xml
++++ b/owner-extras/pom.xml
+@@ -15,9 +15,9 @@
+         <version>1.0.10-SNAPSHOT</version>
+     </parent>
+ 
+-    <name>OWNER :: Third Party Extras</name>
++    <name>OWNER :: Extras</name>
+     <artifactId>owner-extras</artifactId>
+-    <description>Third Party Extras for OWNER library</description>
++    <description>Extras for OWNER library</description>
+     <packaging>jar</packaging>
+ 
+     <dependencies>
+diff --git a/owner-java8-extras/pom.xml b/owner-java8-extras/pom.xml
+new file mode 100644
+index 00000000..42bd1b72
+--- /dev/null
++++ b/owner-java8-extras/pom.xml
+@@ -0,0 +1,70 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++  ~ Copyright (c) 2012-2015, Luigi R. Viggiano
++  ~ All rights reserved.
++  ~
++  ~ This software is distributable under the BSD license.
++  ~ See the terms of the BSD license in the documentation provided with this software.
++  -->
++
++<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++    <modelVersion>4.0.0</modelVersion>
++
++    <parent>
++        <artifactId>owner-parent</artifactId>
++        <groupId>org.aeonbits.owner</groupId>
++        <version>1.0.10-SNAPSHOT</version>
++    </parent>
++
++    <groupId>org.aeonbits.owner</groupId>
++    <artifactId>owner-java8-extras</artifactId>
++    <name>OWNER :: Java 8 Extras</name>
++    <version>1.0.10-SNAPSHOT</version>
++    <packaging>jar</packaging>
++
++    <build>
++        <plugins>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-compiler-plugin</artifactId>
++                <configuration>
++                    <source>1.8</source>
++                    <target>1.8</target>
++                </configuration>
++            </plugin>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-source-plugin</artifactId>
++            </plugin>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-javadoc-plugin</artifactId>
++            </plugin>
++            <plugin>
++                <groupId>org.eluder.coveralls</groupId>
++                <artifactId>coveralls-maven-plugin</artifactId>
++            </plugin>
++            <plugin>
++                <groupId>org.codehaus.mojo</groupId>
++                <artifactId>cobertura-maven-plugin</artifactId>
++            </plugin>
++            <plugin>
++                <groupId>org.apache.felix</groupId>
++                <artifactId>maven-bundle-plugin</artifactId>
++            </plugin>
++        </plugins>
++    </build>
++
++    <dependencies>
++        <dependency>
++            <groupId>org.aeonbits.owner</groupId>
++            <artifactId>owner-java8</artifactId>
++            <version>1.0.10-SNAPSHOT</version>
++        </dependency>
++        <dependency>
++            <groupId>junit</groupId>
++            <artifactId>junit</artifactId>
++        </dependency>
++    </dependencies>
++
++</project>
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java
+similarity index 80%
+rename from owner-java8/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java
+index fcbecf76..54cbaf56 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ByteSizeConverter.java
+@@ -1,9 +1,16 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.converters;
+ 
+ import org.aeonbits.owner.util.bytesize.ByteSize;
+ import org.aeonbits.owner.util.bytesize.ByteSizeUnit;
+ import org.aeonbits.owner.Converter;
+-import org.aeonbits.owner.util.converters.ConverterUtil;
+ 
+ import java.lang.reflect.Method;
+ import java.math.BigDecimal;
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/util/converters/ConverterUtil.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ConverterUtil.java
+similarity index 80%
+rename from owner-java8/src/main/java/org/aeonbits/owner/util/converters/ConverterUtil.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ConverterUtil.java
+index 95d30715..f310c745 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/util/converters/ConverterUtil.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/ConverterUtil.java
+@@ -1,11 +1,19 @@
+-package org.aeonbits.owner.util.converters;
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
++package org.aeonbits.owner.converters;
+ 
+ /**
+  * A utility class for converters.
+  *
+  * @author Stefan Freyr Stefansson
+  */
+-public class ConverterUtil {
++class ConverterUtil {
+     /**
+      * Splits a string into a numeric part and a character part. The input string should conform to the format
+      * <code>[numeric_part][char_part]</code> with an optional whitespace between the two parts.
+@@ -20,7 +28,7 @@
+      *
+      * @return an array of two strings.
+      */
+-    public static String[] splitNumericAndChar(String input){
++    static String[] splitNumericAndChar(String input){
+         // ATTN: String.trim() may not trim all UTF-8 whitespace characters properly.
+         // The original implementation used its own unicodeTrim() method that I decided not to include until the need
+         // arises. For more information, see:
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/converters/DurationConverter.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/DurationConverter.java
+similarity index 95%
+rename from owner-java8/src/main/java/org/aeonbits/owner/converters/DurationConverter.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/converters/DurationConverter.java
+index 89771b66..eaad2420 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/converters/DurationConverter.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/converters/DurationConverter.java
+@@ -1,7 +1,14 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.converters;
+ 
+ import org.aeonbits.owner.Converter;
+-import org.aeonbits.owner.util.converters.ConverterUtil;
+ 
+ import java.lang.reflect.Method;
+ import java.time.Duration;
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java
+similarity index 95%
+rename from owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java
+index b6618796..9c16f1f7 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSize.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.util.bytesize;
+ 
+ import java.math.BigDecimal;
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java
+similarity index 76%
+rename from owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java
+index b52342e1..0320dd0c 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeStandard.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.util.bytesize;
+ 
+ /**
+diff --git a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java
+similarity index 97%
+rename from owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java
+rename to owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java
+index a1d5cb9a..d6cd1e1f 100644
+--- a/owner-java8/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java
++++ b/owner-java8-extras/src/main/java/org/aeonbits/owner/util/bytesize/ByteSizeUnit.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.util.bytesize;
+ 
+ import java.math.BigDecimal;
+diff --git a/owner-java8/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java b/owner-java8-extras/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java
+similarity index 93%
+rename from owner-java8/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java
+rename to owner-java8-extras/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java
+index fd2c04be..7d7240b8 100644
+--- a/owner-java8/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java
++++ b/owner-java8-extras/src/test/java/org/aeonbits/owner/converters/ByteSizeConverterTest.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.converters;
+ 
+ import org.aeonbits.owner.Config;
+diff --git a/owner-java8/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java b/owner-java8-extras/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java
+similarity index 96%
+rename from owner-java8/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java
+rename to owner-java8-extras/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java
+index a8847328..51046a26 100644
+--- a/owner-java8/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java
++++ b/owner-java8-extras/src/test/java/org/aeonbits/owner/converters/DurationConverterTest.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.converters;
+ 
+ import org.aeonbits.owner.Config;
+diff --git a/owner-java8/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java b/owner-java8-extras/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java
+similarity index 89%
+rename from owner-java8/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java
+rename to owner-java8-extras/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java
+index 909fe971..36c2d0e7 100644
+--- a/owner-java8/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java
++++ b/owner-java8-extras/src/test/java/org/aeonbits/owner/util/bytesize/ByteSizeTest.java
+@@ -1,3 +1,11 @@
++/*
++ * Copyright (c) 2012-2016, Luigi R. Viggiano
++ * All rights reserved.
++ *
++ * This software is distributable under the BSD license.
++ * See the terms of the BSD license in the documentation provided with this software.
++ */
++
+ package org.aeonbits.owner.util.bytesize;
+ 
+ import org.junit.Test;
+diff --git a/pom.xml b/pom.xml
+index 52001dba..6d2ae407 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -138,6 +138,7 @@
+             </activation>
+             <modules>
+                 <module>owner-java8</module>
++                <module>owner-java8-extras</module>
+             </modules>
+         </profile>
+         <profile>

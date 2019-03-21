@@ -1,0 +1,104 @@
+diff --git a/doc/changelog.rst b/doc/changelog.rst
+index d25ca785..8020175a 100644
+--- a/doc/changelog.rst
++++ b/doc/changelog.rst
+@@ -1,6 +1,8 @@
+ Changelog
+ =========
+ 
++* :release:`1.6.4 <19-7-2018>`
++* :bug:`820` Fix error handling when capturing distilled tracebacks
+ * :release:`1.6.3 <15-7-2018>`
+ * :release:`1.6.1 <1-7-2018>`
+ * :bug:`-` Fix support for Python 3.7
+diff --git a/slash/utils/traceback_utils.py b/slash/utils/traceback_utils.py
+index 4e253c9b..f50108d5 100644
+--- a/slash/utils/traceback_utils.py
++++ b/slash/utils/traceback_utils.py
+@@ -207,11 +207,11 @@ def _capture_locals(self, frame):
+         return dict((local_name, {"value": _safe_repr(local_value, self._repr_blacklisted_types)})
+                     for key, value in frame.f_locals.items()
+                     if "@" not in key
+-                    for local_name, local_value in self._unwrap_local(key, value))
++                    for local_name, local_value in self._unwrap_local(key, value, self._repr_blacklisted_types))
+ 
+-    def _unwrap_local(self, local_name, local_value):
++    def _unwrap_local(self, local_name, local_value, repr_blacklisted_types):
+         yield local_name, local_value
+-        if local_name != 'self':
++        if local_name != 'self' or isinstance(local_value, repr_blacklisted_types):
+             return
+ 
+         for attr, value in iter_distilled_object_attributes(local_value):
+@@ -224,17 +224,18 @@ def to_string(self, include_vars=False):
+         returned = '  {0.filename}, line {0.lineno}:\n'.format(self)
+         returned += '    {.code_line}'.format(self)
+         if include_vars and self.python_frame is not None:
+-            for name, value in _unwrap_self_locals(self.python_frame.f_locals.items()):
++            for name, value in _unwrap_self_locals(self.python_frame.f_locals.items(), self._repr_blacklisted_types):
+                 returned += '\n\t- {}: {}'.format(name, _safe_repr(value, self._repr_blacklisted_types, truncate=False))
+             returned += '\n'
+         return returned
+ 
+ 
+-def _unwrap_self_locals(local_pairs):
++def _unwrap_self_locals(local_pairs, blacklisted_types):
+     for name, value in local_pairs:
++
+         yield name, value
+-        if name == 'self':
+-            for attr_name, attr_value in getattr(value, '__dict__', {}).items():
++        if name == 'self' and not isinstance(value, blacklisted_types):
++            for attr_name, attr_value in iter_distilled_object_attributes(value):
+                 yield 'self.{}'.format(attr_name), attr_value
+ 
+ 
+@@ -265,7 +266,7 @@ def distill_object_attributes(obj, truncate=True):
+ 
+ def _safe_repr(value, blacklisted_types, truncate=True):
+     if blacklisted_types and isinstance(value, blacklisted_types):
+-        returned = "<{!r} object {:x}>".format(type(value).__name__, id(value))
++        returned = _format_repr_skip_string(value)
+     else:
+         try:
+             returned = repr(value)
+@@ -275,3 +276,7 @@ def _safe_repr(value, blacklisted_types, truncate=True):
+     if truncate and len(returned) > _MAX_VARIABLE_VALUE_LENGTH:
+         returned = returned[:_MAX_VARIABLE_VALUE_LENGTH - 3] + '...'
+     return returned
++
++
++def _format_repr_skip_string(value):
++    return "<{!r} object {:x}>".format(type(value).__name__, id(value))
+diff --git a/tests/test_traceback_utils.py b/tests/test_traceback_utils.py
+index e5630672..d05edbbe 100644
+--- a/tests/test_traceback_utils.py
++++ b/tests/test_traceback_utils.py
+@@ -117,3 +117,27 @@ def test_safe_repr_for_non_repable_object():
+ 
+     returned = traceback_utils._safe_repr(obj, blacklisted_types=(NonReprable,))
+     assert 'unprintable' not in returned.lower()
++
++
++class NonDictable(object):
++
++    def __getattribute__(self, attr):
++        if attr == '__dict__':
++            raise Exception('dict error')
++        return super(NonDictable, self).__getattribute__(attr)
++
++    def method(self):
++        1/0 # pylint: disable=pointless-statement
++
++
++def test_dict_getting_raises_exception():
++
++    def func():
++        x = NonDictable()
++        x.method()
++
++    try:
++        func()
++    except ZeroDivisionError:
++        error_string = Error(exc_info=sys.exc_info()).traceback.to_string(include_vars=True)
++    assert 'self:' in error_string

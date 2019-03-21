@@ -1,0 +1,2578 @@
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+index 2255dd8f6..7cd24fa70 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+@@ -1623,7 +1623,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
+ 
+   private RecordedResponse executeSynchronously(Request request) throws IOException {
+     Response response = client.newCall(request).execute();
+-    return new RecordedResponse(request, response, response.body().string(), null);
++    return new RecordedResponse(request, response, null, response.body().string(), null);
+   }
+ 
+   /**
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
+index aa233773b..a342830fd 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
+@@ -15,6 +15,7 @@
+  */
+ package com.squareup.okhttp;
+ 
++import com.squareup.okhttp.internal.ws.WebSocket;
+ import java.io.IOException;
+ import java.net.URL;
+ import java.util.Arrays;
+@@ -28,15 +29,18 @@
+ /**
+  * A received response or failure recorded by the response recorder.
+  */
+-public class RecordedResponse {
++public final class RecordedResponse {
+   public final Request request;
+   public final Response response;
++  public final WebSocket webSocket;
+   public final String body;
+   public final IOException failure;
+ 
+-  RecordedResponse(Request request, Response response, String body, IOException failure) {
++  public RecordedResponse(Request request, Response response, WebSocket webSocket, String body,
++      IOException failure) {
+     this.request = request;
+     this.response = response;
++    this.webSocket = webSocket;
+     this.body = body;
+     this.failure = failure;
+   }
+@@ -66,6 +70,11 @@ public RecordedResponse assertSuccessful() {
+     return this;
+   }
+ 
++  public RecordedResponse assertSwitchingProtocols(String product) {
++    assertEquals(101, response.code());
++    return assertHeader("Upgrade", product);
++  }
++
+   public RecordedResponse assertNotSuccessful() {
+     assertFalse(response.isSuccessful());
+     return this;
+@@ -99,7 +108,7 @@ public RecordedResponse priorResponse() {
+     Response priorResponse = response.priorResponse();
+     assertNotNull(priorResponse);
+     assertNull(priorResponse.body());
+-    return new RecordedResponse(priorResponse.request(), priorResponse, null, null);
++    return new RecordedResponse(priorResponse.request(), priorResponse, null, null, null);
+   }
+ 
+   /**
+@@ -110,7 +119,7 @@ public RecordedResponse networkResponse() {
+     Response networkResponse = response.networkResponse();
+     assertNotNull(networkResponse);
+     assertNull(networkResponse.body());
+-    return new RecordedResponse(networkResponse.request(), networkResponse, null, null);
++    return new RecordedResponse(networkResponse.request(), networkResponse, null, null, null);
+   }
+ 
+   /** Asserts that the current response didn't use the network. */
+@@ -133,7 +142,7 @@ public RecordedResponse cacheResponse() {
+     Response cacheResponse = response.cacheResponse();
+     assertNotNull(cacheResponse);
+     assertNull(cacheResponse.body());
+-    return new RecordedResponse(cacheResponse.request(), cacheResponse, null, null);
++    return new RecordedResponse(cacheResponse.request(), cacheResponse, null, null, null);
+   }
+ 
+   public void assertFailure(String... messages) {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
+index 040c15652..73e38f0e9 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
+@@ -32,7 +32,7 @@
+   private final List<RecordedResponse> responses = new ArrayList<>();
+ 
+   @Override public synchronized void onFailure(Request request, IOException e) {
+-    responses.add(new RecordedResponse(request, null, null, e));
++    responses.add(new RecordedResponse(request, null, null, null, e));
+     notifyAll();
+   }
+ 
+@@ -41,7 +41,7 @@
+     ResponseBody body = response.body();
+     body.source().readAll(buffer);
+ 
+-    responses.add(new RecordedResponse(response.request(), response, buffer.readUtf8(), null));
++    responses.add(new RecordedResponse(response.request(), response, null, buffer.readUtf8(), null));
+     notifyAll();
+   }
+ 
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java
+new file mode 100644
+index 000000000..178b49fc2
+--- /dev/null
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java
+@@ -0,0 +1,278 @@
++/*
++ * Copyright (C) 2014 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.okhttp.internal.ws;
++
++import java.io.IOException;
++import java.net.ProtocolException;
++import java.util.Random;
++import okio.Buffer;
++import okio.BufferedSink;
++import okio.ByteString;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++
++import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.BINARY;
++import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.TEXT;
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.fail;
++
++public final class RealWebSocketTest {
++  // NOTE: Types are named 'client' and 'server' for cognitive simplicity. This differentiation has
++  // zero effect on the behavior of the WebSocket API which is why tests are only written once
++  // from the perspective of a single peer.
++
++  private RealWebSocket client;
++  private boolean clientConnectionClosed;
++  private final Buffer client2Server = new Buffer();
++  private final WebSocketRecorder clientListener = new WebSocketRecorder();
++
++  private RealWebSocket server;
++  private final Buffer server2client = new Buffer();
++  private final WebSocketRecorder serverListener = new WebSocketRecorder();
++
++  @Before public void setUp() {
++    Random random = new Random(0);
++
++    client = new RealWebSocket(true, server2client, client2Server, random, clientListener) {
++      @Override protected void closeConnection() throws IOException {
++        clientConnectionClosed = true;
++      }
++    };
++    server = new RealWebSocket(false, client2Server, server2client, random, serverListener) {
++      @Override protected void closeConnection() throws IOException {
++      }
++    };
++  }
++
++  @After public void tearDown() {
++    clientListener.assertExhausted();
++    serverListener.assertExhausted();
++  }
++
++  @Test public void textMessage() throws IOException {
++    client.sendMessage(TEXT, new Buffer().writeUtf8("Hello!"));
++    server.readMessage();
++    serverListener.assertTextMessage("Hello!");
++  }
++
++  @Test public void binaryMessage() throws IOException {
++    client.sendMessage(BINARY, new Buffer().writeUtf8("Hello!"));
++    server.readMessage();
++    serverListener.assertBinaryMessage(new byte[] { 'H', 'e', 'l', 'l', 'o', '!' });
++  }
++
++  @Test public void streamingMessage() throws IOException {
++    BufferedSink sink = client.newMessageSink(TEXT);
++    sink.writeUtf8("Hel").flush();
++    sink.writeUtf8("lo!").flush();
++    sink.close();
++    server.readMessage();
++    serverListener.assertTextMessage("Hello!");
++  }
++
++  @Test public void streamingMessageCanInterleavePing() throws IOException, InterruptedException {
++    BufferedSink sink = client.newMessageSink(TEXT);
++    sink.writeUtf8("Hel").flush();
++    client.sendPing(new Buffer().writeUtf8("Pong?"));
++    sink.writeUtf8("lo!").flush();
++    sink.close();
++    server.readMessage();
++    serverListener.assertTextMessage("Hello!");
++    Thread.sleep(1000); // Wait for pong to be written.
++    client.readMessage();
++    clientListener.assertPong(new Buffer().writeUtf8("Pong?"));
++  }
++
++  @Test public void pingWritesPong() throws IOException, InterruptedException {
++    client.sendPing(new Buffer().writeUtf8("Hello!"));
++    server.readMessage(); // Read the ping, enqueue the pong.
++    Thread.sleep(1000); // Wait for pong to be written.
++    client.readMessage();
++    clientListener.assertPong(new Buffer().writeUtf8("Hello!"));
++  }
++
++  @Test public void unsolicitedPong() throws IOException {
++    client.sendPong(new Buffer().writeUtf8("Hello!"));
++    server.readMessage();
++    serverListener.assertPong(new Buffer().writeUtf8("Hello!"));
++  }
++
++  @Test public void close() throws IOException {
++    client.close(1000, "Hello!");
++    server.readMessage(); // This will trigger a close response.
++    serverListener.assertClose(1000, "Hello!");
++    client.readMessage();
++    clientListener.assertClose(1000, "Hello!");
++  }
++
++  @Test public void clientCloseThenMethodsThrow() throws IOException {
++    client.close(1000, "Hello!");
++
++    try {
++      client.sendPing(new Buffer().writeUtf8("Pong?"));
++      fail();
++    } catch (IllegalStateException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      client.close(1000, "Hello!");
++      fail();
++    } catch (IllegalStateException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      client.sendMessage(TEXT, new Buffer().writeUtf8("Hello!"));
++      fail();
++    } catch (IllegalStateException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      client.newMessageSink(TEXT);
++      fail();
++    } catch (IllegalStateException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++  }
++
++  @Test public void serverCloseThenWritingThrows() throws IOException {
++    server.close(1000, "Hello!");
++    client.readMessage();
++    clientListener.assertClose(1000, "Hello!");
++
++    try {
++      client.sendPing(new Buffer().writeUtf8("Pong?"));
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      client.sendMessage(TEXT, new Buffer().writeUtf8("Hi!"));
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      client.close(1000, "Bye!");
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++  }
++
++  @Test public void serverCloseWhileWritingThrows() throws IOException {
++    // Start writing data.
++    BufferedSink sink = client.newMessageSink(TEXT);
++    sink.writeUtf8("Hel").flush();
++
++    server.close(1000, "Hello!");
++    client.readMessage();
++    clientListener.assertClose(1000, "Hello!");
++
++    try {
++      sink.writeUtf8("lo!").emit(); // No writing to the underlying sink.
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++      sink.buffer().clear();
++    }
++    try {
++      sink.flush(); // No flushing.
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++    try {
++      sink.close(); // No closing because this requires writing a frame.
++      fail();
++    } catch (IOException e) {
++      assertEquals("Closed", e.getMessage());
++    }
++  }
++
++  @Test public void clientCloseClosesConnection() throws IOException {
++    client.close(1000, "Hello!");
++    assertFalse(clientConnectionClosed);
++    server.readMessage(); // Read client close, send server close.
++    serverListener.assertClose(1000, "Hello!");
++
++    client.readMessage();
++    assertTrue(clientConnectionClosed);
++    clientListener.assertClose(1000, "Hello!");
++  }
++
++  @Test public void serverCloseClosesConnection() throws IOException {
++    server.close(1000, "Hello!");
++
++    client.readMessage(); // Read server close, send client close, close connection.
++    clientListener.assertClose(1000, "Hello!");
++    assertTrue(clientConnectionClosed);
++
++    server.readMessage();
++    serverListener.assertClose(1000, "Hello!");
++  }
++
++  @Test public void clientAndServerCloseClosesConnection() throws IOException {
++    // Send close from both sides at the same time.
++    server.close(1000, "Hello!");
++    client.close(1000, "Hi!");
++    assertFalse(clientConnectionClosed);
++
++    client.readMessage(); // Read close, should NOT send close.
++    assertTrue(clientConnectionClosed);
++    clientListener.assertClose(1000, "Hello!");
++
++    server.readMessage();
++    serverListener.assertClose(1000, "Hi!");
++
++    serverListener.assertExhausted(); // Client should not have sent second close.
++    clientListener.assertExhausted(); // Server should not have sent second close.
++  }
++
++  @Test public void serverCloseBreaksReadMessageLoop() throws IOException {
++    server.sendMessage(TEXT, new Buffer().writeUtf8("Hello!"));
++    server.close(1000, "Bye!");
++    assertTrue(client.readMessage());
++    clientListener.assertTextMessage("Hello!");
++    assertFalse(client.readMessage());
++    clientListener.assertClose(1000, "Bye!");
++  }
++
++  @Test public void protocolErrorBeforeCloseSendsClose() {
++    server2client.write(ByteString.decodeHex("0a00")); // Invalid non-final ping frame.
++
++    client.readMessage(); // Detects error, send close.
++    clientListener.assertFailure(ProtocolException.class, "Control frames must be final.");
++    assertTrue(clientConnectionClosed);
++
++    server.readMessage();
++    serverListener.assertClose(1002, "");
++  }
++
++  @Test public void protocolErrorAfterCloseDoesNotSendClose() throws IOException {
++    client.close(1000, "Hello!");
++    server2client.write(ByteString.decodeHex("0a00")); // Invalid non-final ping frame.
++
++    client.readMessage();
++    clientListener.assertFailure(ProtocolException.class, "Control frames must be final.");
++    assertTrue(clientConnectionClosed);
++
++    server.readMessage();
++    serverListener.assertClose(1000, "Hello!");
++  }
++}
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingReaderFrameCallback.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingReaderFrameCallback.java
+deleted file mode 100644
+index 135ba00c8..000000000
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingReaderFrameCallback.java
++++ /dev/null
+@@ -1,61 +0,0 @@
+-/*
+- * Copyright (C) 2014 Square, Inc.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.squareup.okhttp.internal.ws;
+-
+-import java.io.IOException;
+-import java.util.ArrayDeque;
+-import java.util.Deque;
+-import okio.Buffer;
+-
+-import static org.junit.Assert.assertEquals;
+-
+-public final class RecordingReaderFrameCallback implements WebSocketReader.FrameCallback {
+-  private static class Ping {
+-    public final Buffer buffer;
+-
+-    private Ping(Buffer buffer) {
+-      this.buffer = buffer;
+-    }
+-  }
+-
+-  private static class Close {
+-    public final Buffer buffer;
+-
+-    private Close(Buffer buffer) {
+-      this.buffer = buffer;
+-    }
+-  }
+-
+-  private final Deque<Object> events = new ArrayDeque<>();
+-
+-  @Override public void onPing(Buffer buffer) {
+-    events.add(new Ping(buffer));
+-  }
+-
+-  @Override public void onClose(Buffer buffer) throws IOException {
+-    events.add(new Close(buffer));
+-  }
+-
+-  public void assertPing(Buffer payload) {
+-    Ping ping = (Ping) events.removeFirst();
+-    assertEquals(payload, ping.buffer);
+-  }
+-
+-  public void assertClose(Buffer payload) {
+-    Close close = (Close) events.removeFirst();
+-    assertEquals(payload, close.buffer);
+-  }
+-}
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingWebSocketListener.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingWebSocketListener.java
+deleted file mode 100644
+index 5d8c533a0..000000000
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/RecordingWebSocketListener.java
++++ /dev/null
+@@ -1,89 +0,0 @@
+-/*
+- * Copyright (C) 2014 Square, Inc.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.squareup.okhttp.internal.ws;
+-
+-import java.io.IOException;
+-import java.util.ArrayDeque;
+-import java.util.Deque;
+-import okio.Buffer;
+-import okio.BufferedSource;
+-
+-import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType;
+-import static org.junit.Assert.assertEquals;
+-
+-public final class RecordingWebSocketListener implements WebSocketListener {
+-  public interface MessageDelegate {
+-    void onMessage(BufferedSource payload, PayloadType type) throws IOException;
+-  }
+-
+-  public static class Message {
+-    public final Buffer buffer = new Buffer();
+-    public final PayloadType type;
+-
+-    public Message(PayloadType type) {
+-      this.type = type;
+-    }
+-  }
+-
+-  public static class Close {
+-    public final int code;
+-    public final String reason;
+-
+-    public Close(int code, String reason) {
+-      this.code = code;
+-      this.reason = reason;
+-    }
+-  }
+-
+-  private final Deque<Object> events = new ArrayDeque<>();
+-
+-  private MessageDelegate delegate;
+-
+-  /** Sets a delegate for the next call to {@link #onMessage}. Cleared after invoked. */
+-  public void setNextMessageDelegate(MessageDelegate delegate) {
+-    this.delegate = delegate;
+-  }
+-
+-  @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+-    if (delegate != null) {
+-      delegate.onMessage(payload, type);
+-      delegate = null;
+-    } else {
+-      Message message = new Message(type);
+-      payload.readAll(message.buffer);
+-      payload.close();
+-      events.add(message);
+-    }
+-  }
+-
+-  @Override public void onClose(int code, String reason) {
+-    events.add(new Close(code, reason));
+-  }
+-
+-  @Override public void onFailure(IOException e) {
+-    events.add(e);
+-  }
+-
+-  public void assertTextMessage(String payload) throws IOException {
+-    Message message = (Message) events.removeFirst();
+-    assertEquals(payload, message.buffer.readUtf8());
+-  }
+-
+-  public void assertBinaryMessage(byte[] payload) {
+-    Message message = (Message) events.removeFirst();
+-    assertEquals(new Buffer().write(payload), message.buffer);
+-  }
+-}
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketCallTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketCallTest.java
+new file mode 100644
+index 000000000..666629f98
+--- /dev/null
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketCallTest.java
+@@ -0,0 +1,107 @@
++/*
++ * Copyright (C) 2014 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.okhttp.internal.ws;
++
++import com.squareup.okhttp.OkHttpClient;
++import com.squareup.okhttp.RecordedResponse;
++import com.squareup.okhttp.Request;
++import com.squareup.okhttp.Response;
++import com.squareup.okhttp.mockwebserver.MockResponse;
++import com.squareup.okhttp.mockwebserver.rule.MockWebServerRule;
++import java.io.IOException;
++import java.net.ProtocolException;
++import java.util.Random;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++import okio.Buffer;
++import okio.BufferedSource;
++import org.junit.After;
++import org.junit.Rule;
++import org.junit.Test;
++
++public final class WebSocketCallTest {
++  @Rule public final MockWebServerRule server = new MockWebServerRule();
++
++  private final WebSocketRecorder listener = new WebSocketRecorder();
++  private final OkHttpClient client = new OkHttpClient();
++  private final Random random = new Random(0);
++
++  @After public void tearDown() {
++    listener.assertExhausted();
++  }
++
++  @Test public void okButNotOk() {
++    server.enqueue(new MockResponse());
++    awaitCall();
++    listener.assertFailure(ProtocolException.class, "Expected HTTP 101 response but was: 200 OK");
++  }
++
++  @Test public void notFound() {
++    server.enqueue(new MockResponse().setStatus("HTTP/1.1 404 Not Found"));
++    awaitCall();
++    listener.assertFailure(ProtocolException.class,
++        "Expected HTTP 101 response but was: 404 Not Found");
++  }
++
++  private RecordedResponse awaitCall() {
++    Request request = new Request.Builder().get().url(server.getUrl("/")).build();
++    WebSocketCall call = new WebSocketCall(client, request, random);
++
++    final AtomicReference<Response> responseRef = new AtomicReference<>();
++    final AtomicReference<WebSocket> webSocketRef = new AtomicReference<>();
++    final AtomicReference<IOException> failureRef = new AtomicReference<>();
++    final CountDownLatch latch = new CountDownLatch(1);
++    call.enqueue(new WebSocketListener() {
++      @Override public void onOpen(WebSocket webSocket, Request request, Response response) throws IOException {
++        webSocketRef.set(webSocket);
++        responseRef.set(response);
++        latch.countDown();
++      }
++
++      @Override public void onMessage(BufferedSource payload, WebSocket.PayloadType type)
++          throws IOException {
++        listener.onMessage(payload, type);
++      }
++
++      @Override public void onPong(Buffer payload) {
++        listener.onPong(payload);
++      }
++
++      @Override public void onClose(int code, String reason) {
++        listener.onClose(code, reason);
++      }
++
++      @Override public void onFailure(IOException e) {
++        listener.onFailure(e);
++        failureRef.set(e);
++        latch.countDown();
++      }
++    });
++
++    try {
++      latch.await(10, TimeUnit.SECONDS);
++    } catch (InterruptedException e) {
++      throw new AssertionError(e);
++    }
++    if (latch.getCount() > 0) {
++      throw new AssertionError("Timed out.");
++    }
++
++    return new RecordedResponse(request, responseRef.get(), webSocketRef.get(), null,
++        failureRef.get());
++  }
++}
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketReaderTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketReaderTest.java
+index 00e7f604e..2f9dda8be 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketReaderTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketReaderTest.java
+@@ -23,28 +23,32 @@
+ import okio.Buffer;
+ import okio.BufferedSource;
+ import okio.ByteString;
++import org.junit.After;
+ import org.junit.Test;
+ 
+ import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType;
+-import static com.squareup.okhttp.internal.ws.RecordingWebSocketListener.MessageDelegate;
++import static com.squareup.okhttp.internal.ws.WebSocketRecorder.MessageDelegate;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.fail;
+ 
+ public class WebSocketReaderTest {
+   private final Buffer data = new Buffer();
+-  private final RecordingWebSocketListener listener = new RecordingWebSocketListener();
+-  private final RecordingReaderFrameCallback callback = new RecordingReaderFrameCallback();
++  private final WebSocketRecorder callback = new WebSocketRecorder();
+   private final Random random = new Random(0);
+ 
+   // Mutually exclusive. Use the one corresponding to the peer whose behavior you wish to test.
+-  private final WebSocketReader serverReader = new WebSocketReader(false, data, listener, callback);
+-  private final WebSocketReader clientReader = new WebSocketReader(true, data, listener, callback);
++  private final WebSocketReader serverReader = new WebSocketReader(false, data, callback);
++  private final WebSocketReader clientReader = new WebSocketReader(true, data, callback);
++
++  @After public void tearDown() {
++    callback.assertExhausted();
++  }
+ 
+   @Test public void controlFramesMustBeFinal() throws IOException {
+     data.write(ByteString.decodeHex("0a00")); // Empty ping.
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Control frames must be final.", e.getMessage());
+@@ -54,7 +58,7 @@
+   @Test public void reservedFlagsAreUnsupported() throws IOException {
+     data.write(ByteString.decodeHex("9a00")); // Empty ping, flag 1 set.
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Reserved flags are unsupported.", e.getMessage());
+@@ -62,7 +66,7 @@
+     data.clear();
+     data.write(ByteString.decodeHex("aa00")); // Empty ping, flag 2 set.
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Reserved flags are unsupported.", e.getMessage());
+@@ -70,7 +74,7 @@
+     data.clear();
+     data.write(ByteString.decodeHex("ca00")); // Empty ping, flag 3 set.
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Reserved flags are unsupported.", e.getMessage());
+@@ -80,7 +84,7 @@
+   @Test public void clientSentFramesMustBeMasked() throws IOException {
+     data.write(ByteString.decodeHex("8100"));
+     try {
+-      serverReader.readMessage();
++      serverReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Client-sent frames must be masked. Server sent must not.", e.getMessage());
+@@ -90,7 +94,7 @@
+   @Test public void serverSentFramesMustNotBeMasked() throws IOException {
+     data.write(ByteString.decodeHex("8180"));
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Client-sent frames must be masked. Server sent must not.", e.getMessage());
+@@ -100,7 +104,7 @@
+   @Test public void controlFramePayloadMax() throws IOException {
+     data.write(ByteString.decodeHex("8a7e007e"));
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Control frame must be less than 125B.", e.getMessage());
+@@ -109,21 +113,21 @@
+ 
+   @Test public void clientSimpleHello() throws IOException {
+     data.write(ByteString.decodeHex("810548656c6c6f")); // Hello
+-    clientReader.readMessage();
+-    listener.assertTextMessage("Hello");
++    clientReader.processNextFrame();
++    callback.assertTextMessage("Hello");
+   }
+ 
+   @Test public void serverSimpleHello() throws IOException {
+     data.write(ByteString.decodeHex("818537fa213d7f9f4d5158")); // Hello
+-    serverReader.readMessage();
+-    listener.assertTextMessage("Hello");
++    serverReader.processNextFrame();
++    callback.assertTextMessage("Hello");
+   }
+ 
+   @Test public void serverHelloTwoChunks() throws IOException {
+     data.write(ByteString.decodeHex("818537fa213d7f9f4d")); // Hel
+ 
+     final Buffer sink = new Buffer();
+-    listener.setNextMessageDelegate(new MessageDelegate() {
++    callback.setNextMessageDelegate(new MessageDelegate() {
+       @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+         payload.readFully(sink, 3); // Read "Hel"
+         data.write(ByteString.decodeHex("5158")); // lo
+@@ -131,7 +135,7 @@
+         payload.close();
+       }
+     });
+-    serverReader.readMessage();
++    serverReader.processNextFrame();
+ 
+     assertEquals("Hello", sink.readUtf8());
+   }
+@@ -139,8 +143,8 @@
+   @Test public void clientTwoFrameHello() throws IOException {
+     data.write(ByteString.decodeHex("010348656c")); // Hel
+     data.write(ByteString.decodeHex("80026c6f")); // lo
+-    clientReader.readMessage();
+-    listener.assertTextMessage("Hello");
++    clientReader.processNextFrame();
++    callback.assertTextMessage("Hello");
+   }
+ 
+   @Test public void clientTwoFrameHelloWithPongs() throws IOException {
+@@ -150,14 +154,18 @@
+     data.write(ByteString.decodeHex("8a00")); // Pong
+     data.write(ByteString.decodeHex("8a00")); // Pong
+     data.write(ByteString.decodeHex("80026c6f")); // lo
+-    clientReader.readMessage();
+-    listener.assertTextMessage("Hello");
++    clientReader.processNextFrame();
++    callback.assertPong(null);
++    callback.assertPong(null);
++    callback.assertPong(null);
++    callback.assertPong(null);
++    callback.assertTextMessage("Hello");
+   }
+ 
+   @Test public void clientIncompleteMessageBodyThrows() throws IOException {
+     data.write(ByteString.decodeHex("810548656c")); // Length = 5, "Hel"
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (EOFException ignored) {
+     }
+@@ -166,7 +174,7 @@
+   @Test public void clientIncompleteControlFrameBodyThrows() throws IOException {
+     data.write(ByteString.decodeHex("8a0548656c")); // Length = 5, "Hel"
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (EOFException ignored) {
+     }
+@@ -175,7 +183,7 @@
+   @Test public void serverIncompleteMessageBodyThrows() throws IOException {
+     data.write(ByteString.decodeHex("818537fa213d7f9f4d")); // Length = 5, "Hel"
+     try {
+-      serverReader.readMessage();
++      serverReader.processNextFrame();
+       fail();
+     } catch (EOFException ignored) {
+     }
+@@ -184,7 +192,7 @@
+   @Test public void serverIncompleteControlFrameBodyThrows() throws IOException {
+     data.write(ByteString.decodeHex("8a8537fa213d7f9f4d")); // Length = 5, "Hel"
+     try {
+-      serverReader.readMessage();
++      serverReader.processNextFrame();
+       fail();
+     } catch (EOFException ignored) {
+     }
+@@ -193,16 +201,16 @@
+   @Test public void clientSimpleBinary() throws IOException {
+     byte[] bytes = binaryData(256);
+     data.write(ByteString.decodeHex("827E0100")).write(bytes);
+-    clientReader.readMessage();
+-    listener.assertBinaryMessage(bytes);
++    clientReader.processNextFrame();
++    callback.assertBinaryMessage(bytes);
+   }
+ 
+   @Test public void clientTwoFrameBinary() throws IOException {
+     byte[] bytes = binaryData(200);
+     data.write(ByteString.decodeHex("0264")).write(bytes, 0, 100);
+     data.write(ByteString.decodeHex("8064")).write(bytes, 100, 100);
+-    clientReader.readMessage();
+-    listener.assertBinaryMessage(bytes);
++    clientReader.processNextFrame();
++    callback.assertBinaryMessage(bytes);
+   }
+ 
+   @Test public void twoFrameNotContinuation() throws IOException {
+@@ -210,7 +218,7 @@
+     data.write(ByteString.decodeHex("0264")).write(bytes, 0, 100);
+     data.write(ByteString.decodeHex("8264")).write(bytes, 100, 100);
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (ProtocolException e) {
+       assertEquals("Expected continuation opcode. Got: 2", e.getMessage());
+@@ -219,13 +227,13 @@
+ 
+   @Test public void noCloseErrors() throws IOException {
+     data.write(ByteString.decodeHex("810548656c6c6f")); // Hello
+-    listener.setNextMessageDelegate(new MessageDelegate() {
++    callback.setNextMessageDelegate(new MessageDelegate() {
+       @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+         payload.readAll(new Buffer());
+       }
+     });
+     try {
+-      clientReader.readMessage();
++      clientReader.processNextFrame();
+       fail();
+     } catch (IllegalStateException e) {
+       assertEquals("Listener failed to call close on message payload.", e.getMessage());
+@@ -237,18 +245,18 @@
+     data.write(ByteString.decodeHex("810448657921")); // Hey!
+ 
+     final Buffer sink = new Buffer();
+-    listener.setNextMessageDelegate(new MessageDelegate() {
++    callback.setNextMessageDelegate(new MessageDelegate() {
+       @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+         payload.read(sink, 3);
+         payload.close();
+       }
+     });
+ 
+-    clientReader.readMessage();
++    clientReader.processNextFrame();
+     assertEquals("Hel", sink.readUtf8());
+ 
+-    clientReader.readMessage();
+-    listener.assertTextMessage("Hey!");
++    clientReader.processNextFrame();
++    callback.assertTextMessage("Hey!");
+   }
+ 
+   @Test public void closeExhaustsMessageOverControlFrames() throws IOException {
+@@ -259,25 +267,27 @@
+     data.write(ByteString.decodeHex("810448657921")); // Hey!
+ 
+     final Buffer sink = new Buffer();
+-    listener.setNextMessageDelegate(new MessageDelegate() {
++    callback.setNextMessageDelegate(new MessageDelegate() {
+       @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+         payload.read(sink, 2);
+         payload.close();
+       }
+     });
+ 
+-    clientReader.readMessage();
++    clientReader.processNextFrame();
+     assertEquals("He", sink.readUtf8());
++    callback.assertPong(null);
++    callback.assertPong(null);
+ 
+-    clientReader.readMessage();
+-    listener.assertTextMessage("Hey!");
++    clientReader.processNextFrame();
++    callback.assertTextMessage("Hey!");
+   }
+ 
+   @Test public void closedMessageSourceThrows() throws IOException {
+     data.write(ByteString.decodeHex("810548656c6c6f")); // Hello
+ 
+     final AtomicReference<Exception> exception = new AtomicReference<>();
+-    listener.setNextMessageDelegate(new MessageDelegate() {
++    callback.setNextMessageDelegate(new MessageDelegate() {
+       @Override public void onMessage(BufferedSource payload, PayloadType type) throws IOException {
+         payload.close();
+         try {
+@@ -288,39 +298,33 @@
+         }
+       }
+     });
+-    clientReader.readMessage();
++    clientReader.processNextFrame();
+ 
+     assertNotNull(exception.get());
+   }
+ 
+   @Test public void emptyPingCallsCallback() throws IOException {
+     data.write(ByteString.decodeHex("8900")); // Empty ping
+-    data.write(ByteString.decodeHex("810548656c6c6f")); // Hello
+-    clientReader.readMessage();
++    clientReader.processNextFrame();
+     callback.assertPing(null);
+-    listener.assertTextMessage("Hello");
+   }
+ 
+   @Test public void pingCallsCallback() throws IOException {
+     data.write(ByteString.decodeHex("890548656c6c6f")); // Ping with "Hello"
+-    data.write(ByteString.decodeHex("810548656c6c6f")); // Hello
+-    clientReader.readMessage();
++    clientReader.processNextFrame();
+     callback.assertPing(new Buffer().writeUtf8("Hello"));
+-    listener.assertTextMessage("Hello");
+   }
+ 
+   @Test public void emptyCloseCallsCallback() throws IOException {
+     data.write(ByteString.decodeHex("8800")); // Empty close
+-    clientReader.readMessage();
+-    callback.assertClose(null);
+-    listener.onClose(0, "");
++    clientReader.processNextFrame();
++    callback.assertClose(0, "");
+   }
+ 
+   @Test public void closeCallsCallback() throws IOException {
+     data.write(ByteString.decodeHex("880703e848656c6c6f")); // Close with code and reason
+-    clientReader.readMessage();
+-    callback.assertClose(new Buffer().writeShort(1000).writeUtf8("Hello"));
+-    listener.onClose(1000, "Hello");
++    clientReader.processNextFrame();
++    callback.assertClose(1000, "Hello");
+   }
+ 
+   private byte[] binaryData(int length) {
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketRecorder.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketRecorder.java
+new file mode 100644
+index 000000000..c2000d488
+--- /dev/null
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketRecorder.java
+@@ -0,0 +1,213 @@
++/*
++ * Copyright (C) 2014 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.okhttp.internal.ws;
++
++import com.squareup.okhttp.Request;
++import com.squareup.okhttp.Response;
++import java.io.IOException;
++import java.util.ArrayDeque;
++import java.util.Deque;
++import okio.Buffer;
++import okio.BufferedSource;
++
++import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.BINARY;
++import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.TEXT;
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
++
++final class WebSocketRecorder implements WebSocketReader.FrameCallback, WebSocketListener {
++  public interface MessageDelegate {
++    void onMessage(BufferedSource payload, WebSocket.PayloadType type) throws IOException;
++  }
++
++  private final Deque<Object> events = new ArrayDeque<>();
++  private MessageDelegate delegate;
++
++  /** Sets a delegate for the next call to {@link #onMessage}. Cleared after invoked. */
++  public void setNextMessageDelegate(MessageDelegate delegate) {
++    this.delegate = delegate;
++  }
++
++  @Override public void onOpen(WebSocket webSocket, Request request, Response response) {
++    throw new AssertionError();
++  }
++
++  @Override public void onMessage(BufferedSource source, WebSocket.PayloadType type)
++      throws IOException {
++    if (delegate != null) {
++      delegate.onMessage(source, type);
++      delegate = null;
++    } else {
++      Message message = new Message(type);
++      source.readAll(message.buffer);
++      source.close();
++      events.add(message);
++    }
++  }
++
++  @Override public void onPing(Buffer buffer) {
++    events.add(new Ping(buffer));
++  }
++
++  @Override public void onPong(Buffer buffer) {
++    events.add(new Pong(buffer));
++  }
++
++  @Override public void onClose(int code, String reason) {
++    events.add(new Close(code, reason));
++  }
++
++  @Override public void onFailure(IOException e) {
++    events.add(e);
++  }
++
++  public void assertTextMessage(String payload) {
++    Message message = new Message(TEXT);
++    message.buffer.writeUtf8(payload);
++    assertEquals(message, events.pollFirst());
++  }
++
++  public void assertBinaryMessage(byte[] payload) {
++    Message message = new Message(BINARY);
++    message.buffer.write(payload);
++    assertEquals(message, events.pollFirst());
++  }
++
++  public void assertPing(Buffer payload) {
++    assertEquals(new Ping(payload), events.pollFirst());
++  }
++
++  public void assertPong(Buffer payload) {
++    assertEquals(new Pong(payload), events.pollFirst());
++  }
++
++  public void assertClose(int code, String reason) {
++    assertEquals(new Close(code, reason), events.pollFirst());
++  }
++
++  public void assertFailure(Class<? extends IOException> cls, String message) {
++    Object event = events.pollFirst();
++    String errorMessage =
++        "Expected [" + cls.getName() + ": " + message + "] but was [" + event + "].";
++    assertNotNull(errorMessage, event);
++    assertEquals(errorMessage, cls, event.getClass());
++    assertEquals(errorMessage, cls.cast(event).getMessage(), message);
++  }
++
++  public void assertExhausted() {
++    assertTrue("Remaining events: " + events, events.isEmpty());
++  }
++
++  private static class Message {
++    public final WebSocket.PayloadType type;
++    public final Buffer buffer = new Buffer();
++
++    private Message(WebSocket.PayloadType type) {
++      this.type = type;
++    }
++
++    @Override public String toString() {
++      return "Message[" + type + " " + buffer + "]";
++    }
++
++    @Override public int hashCode() {
++      return type.hashCode() * 37 + buffer.hashCode();
++    }
++
++    @Override public boolean equals(Object obj) {
++      if (obj instanceof Message) {
++        Message other = (Message) obj;
++        return type == other.type && buffer.equals(other.buffer);
++      }
++      return false;
++    }
++  }
++
++  private static class Ping {
++    public final Buffer buffer;
++
++    private Ping(Buffer buffer) {
++      this.buffer = buffer;
++    }
++
++    @Override public String toString() {
++      return "Ping[" + buffer + "]";
++    }
++
++    @Override public int hashCode() {
++      return buffer.hashCode();
++    }
++
++    @Override public boolean equals(Object obj) {
++      if (obj instanceof Ping) {
++        Ping other = (Ping) obj;
++        return buffer == null ? other.buffer == null : buffer.equals(other.buffer);
++      }
++      return false;
++    }
++  }
++
++  private static class Pong {
++    public final Buffer buffer;
++
++    private Pong(Buffer buffer) {
++      this.buffer = buffer;
++    }
++
++    @Override public String toString() {
++      return "Pong[" + buffer + "]";
++    }
++
++    @Override public int hashCode() {
++      return buffer.hashCode();
++    }
++
++    @Override public boolean equals(Object obj) {
++      if (obj instanceof Pong) {
++        Pong other = (Pong) obj;
++        return buffer == null ? other.buffer == null : buffer.equals(other.buffer);
++      }
++      return false;
++    }
++  }
++
++  private static class Close {
++    public final int code;
++    public final String reason;
++
++    private Close(int code, String reason) {
++      this.code = code;
++      this.reason = reason;
++    }
++
++    @Override public String toString() {
++      return "Close[" + code + " " + reason + "]";
++    }
++
++    @Override public int hashCode() {
++      return code * 37 + reason.hashCode();
++    }
++
++    @Override public boolean equals(Object obj) {
++      if (obj instanceof Close) {
++        Close other = (Close) obj;
++        return code == other.code && reason.equals(other.reason);
++      }
++      return false;
++    }
++  }
++}
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
+index 502734ac6..1134e4515 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
+@@ -25,9 +25,9 @@
+ import org.junit.After;
+ import org.junit.Test;
+ 
++import static com.squareup.okhttp.internal.ws.Protocol.toggleMask;
+ import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.BINARY;
+ import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType.TEXT;
+-import static com.squareup.okhttp.internal.ws.Protocol.toggleMask;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.fail;
+ 
+@@ -263,12 +263,31 @@
+     assertData("8a8560b420bb28d14cd70f");
+   }
+ 
+-  @Test public void controlFrameTooLongThrows() throws IOException {
++  @Test public void pingTooLongThrows() throws IOException {
+     try {
+       serverWriter.writePing(new Buffer().write(binaryData(1000)));
+       fail();
+     } catch (IllegalArgumentException e) {
+-      assertEquals("Control frame payload must be less than 125B.", e.getMessage());
++      assertEquals("Payload size must be less than or equal to 125", e.getMessage());
++    }
++  }
++
++  @Test public void pongTooLongThrows() throws IOException {
++    try {
++      serverWriter.writePong(new Buffer().write(binaryData(1000)));
++      fail();
++    } catch (IllegalArgumentException e) {
++      assertEquals("Payload size must be less than or equal to 125", e.getMessage());
++    }
++  }
++
++  @Test public void closeTooLongThrows() throws IOException {
++    try {
++      String longString = ByteString.of(binaryData(75)).hex();
++      serverWriter.writeClose(1000, longString);
++      fail();
++    } catch (IllegalArgumentException e) {
++      assertEquals("Payload size must be less than or equal to 125", e.getMessage());
+     }
+   }
+ 
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/Call.java b/okhttp/src/main/java/com/squareup/okhttp/Call.java
+index b0118d313..c4742c279 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/Call.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/Call.java
+@@ -76,7 +76,7 @@ public Response execute() throws IOException {
+     }
+     try {
+       client.getDispatcher().executed(this);
+-      Response result = getResponseWithInterceptorChain();
++      Response result = getResponseWithInterceptorChain(false);
+       if (result == null) throw new IOException("Canceled");
+       return result;
+     } finally {
+@@ -102,11 +102,15 @@ Object tag() {
+    * @throws IllegalStateException when the call has already been executed.
+    */
+   public void enqueue(Callback responseCallback) {
++    enqueue(responseCallback, false);
++  }
++
++  void enqueue(Callback responseCallback, boolean forWebSocket) {
+     synchronized (this) {
+       if (executed) throw new IllegalStateException("Already Executed");
+       executed = true;
+     }
+-    client.getDispatcher().enqueue(new AsyncCall(responseCallback));
++    client.getDispatcher().enqueue(new AsyncCall(responseCallback, forWebSocket));
+   }
+ 
+   /**
+@@ -124,10 +128,12 @@ public boolean isCanceled() {
+ 
+   final class AsyncCall extends NamedRunnable {
+     private final Callback responseCallback;
++    private final boolean forWebSocket;
+ 
+-    private AsyncCall(Callback responseCallback) {
++    private AsyncCall(Callback responseCallback, boolean forWebSocket) {
+       super("OkHttp %s", originalRequest.urlString());
+       this.responseCallback = responseCallback;
++      this.forWebSocket = forWebSocket;
+     }
+ 
+     String host() {
+@@ -153,7 +159,7 @@ Call get() {
+     @Override protected void execute() {
+       boolean signalledCallback = false;
+       try {
+-        Response response = getResponseWithInterceptorChain();
++        Response response = getResponseWithInterceptorChain(forWebSocket);
+         if (canceled) {
+           signalledCallback = true;
+           responseCallback.onFailure(originalRequest, new IOException("Canceled"));
+@@ -188,17 +194,20 @@ private String toLoggableString() {
+     }
+   }
+ 
+-  private Response getResponseWithInterceptorChain() throws IOException {
+-    return new ApplicationInterceptorChain(0, originalRequest).proceed(originalRequest);
++  private Response getResponseWithInterceptorChain(boolean forWebSocket) throws IOException {
++    Interceptor.Chain chain = new ApplicationInterceptorChain(0, originalRequest, forWebSocket);
++    return chain.proceed(originalRequest);
+   }
+ 
+   class ApplicationInterceptorChain implements Interceptor.Chain {
+     private final int index;
+     private final Request request;
++    private final boolean forWebSocket;
+ 
+-    ApplicationInterceptorChain(int index, Request request) {
++    ApplicationInterceptorChain(int index, Request request, boolean forWebSocket) {
+       this.index = index;
+       this.request = request;
++      this.forWebSocket = forWebSocket;
+     }
+ 
+     @Override public Connection connection() {
+@@ -212,11 +221,11 @@ private Response getResponseWithInterceptorChain() throws IOException {
+     @Override public Response proceed(Request request) throws IOException {
+       if (index < client.interceptors().size()) {
+         // There's another interceptor in the chain. Call that.
+-        ApplicationInterceptorChain chain = new ApplicationInterceptorChain(index + 1, request);
++        Interceptor.Chain chain = new ApplicationInterceptorChain(index + 1, request, forWebSocket);
+         return client.interceptors().get(index).intercept(chain);
+       } else {
+         // No more interceptors. Do HTTP.
+-        return getResponse(request, false);
++        return getResponse(request, forWebSocket);
+       }
+     }
+   }
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java b/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
+index 71e646097..d476946da 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
+@@ -120,13 +120,9 @@
+         connection.connectAndSetOwner(client, owner, request);
+       }
+ 
+-      @Override public Call newCall(OkHttpClient client, Request request) {
+-        return new Call(client, request);
+-      }
+-
+-      @Override public Response callGetResponse(Call call, boolean forWebSocket)
+-          throws IOException {
+-        return call.getResponse(call.originalRequest, forWebSocket);
++      @Override
++      public void callEnqueue(Call call, Callback responseCallback, boolean forWebSocket) {
++        call.enqueue(responseCallback, forWebSocket);
+       }
+ 
+       @Override public void callEngineReleaseConnection(Call call) throws IOException {
+@@ -137,18 +133,9 @@
+         return call.engine.getConnection();
+       }
+ 
+-      @Override public boolean connectionClearOwner(Connection connection) {
+-        return connection.clearOwner();
+-      }
+-
+       @Override public void connectionSetOwner(Connection connection, Object owner) {
+         connection.setOwner(owner);
+       }
+-
+-      @Override public void connectionCloseIfOwnedBy(Connection connection, Object owner)
+-          throws IOException {
+-        connection.closeIfOwnedBy(owner);
+-      }
+     };
+   }
+ 
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java b/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
+index 04573307b..3b70b8092 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
+@@ -16,13 +16,13 @@
+ package com.squareup.okhttp.internal;
+ 
+ import com.squareup.okhttp.Call;
++import com.squareup.okhttp.Callback;
+ import com.squareup.okhttp.Connection;
+ import com.squareup.okhttp.ConnectionPool;
+ import com.squareup.okhttp.Headers;
+ import com.squareup.okhttp.OkHttpClient;
+ import com.squareup.okhttp.Protocol;
+ import com.squareup.okhttp.Request;
+-import com.squareup.okhttp.Response;
+ import com.squareup.okhttp.internal.http.HttpEngine;
+ import com.squareup.okhttp.internal.http.Transport;
+ import java.io.IOException;
+@@ -70,12 +70,8 @@ public abstract void connectAndSetOwner(OkHttpClient client, Connection connecti
+       HttpEngine owner, Request request) throws IOException;
+ 
+   // TODO delete the following when web sockets move into the main package.
+-  public abstract Call newCall(OkHttpClient client, Request request);
+-  public abstract Response callGetResponse(Call call, boolean forWebSocket) throws IOException;
++  public abstract void callEnqueue(Call call, Callback responseCallback, boolean forWebSocket);
+   public abstract void callEngineReleaseConnection(Call call) throws IOException;
+   public abstract Connection callEngineGetConnection(Call call);
+-  public abstract boolean connectionClearOwner(Connection connection);
+   public abstract void connectionSetOwner(Connection connection, Object owner);
+-  public abstract void connectionCloseIfOwnedBy(Connection connection, Object owner)
+-      throws IOException;
+ }
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/RealWebSocket.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/RealWebSocket.java
+new file mode 100644
+index 000000000..118af3f42
+--- /dev/null
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/RealWebSocket.java
+@@ -0,0 +1,185 @@
++/*
++ * Copyright (C) 2014 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.okhttp.internal.ws;
++
++import com.squareup.okhttp.internal.NamedRunnable;
++import java.io.IOException;
++import java.net.ProtocolException;
++import java.util.Random;
++import java.util.concurrent.LinkedBlockingDeque;
++import java.util.concurrent.ThreadPoolExecutor;
++import okio.Buffer;
++import okio.BufferedSink;
++import okio.BufferedSource;
++
++import static com.squareup.okhttp.internal.ws.WebSocketReader.FrameCallback;
++import static java.util.concurrent.TimeUnit.SECONDS;
++
++public abstract class RealWebSocket implements WebSocket {
++  /** A close code which indicates that the peer encountered a protocol exception. */
++  private static final int CLOSE_PROTOCOL_EXCEPTION = 1002;
++
++  private final WebSocketWriter writer;
++  private final WebSocketReader reader;
++  private final WebSocketListener listener;
++
++  /** True after calling {@link #close(int, String)}. No writes are allowed afterward. */
++  private volatile boolean writerSentClose;
++  /** True after a close frame was read by the reader. No frames will follow it. */
++  private volatile boolean readerSentClose;
++  /** Lock required to negotiate closing the connection. */
++  private final Object closeLock = new Object();
++
++  public RealWebSocket(boolean isClient, BufferedSource source, BufferedSink sink, Random random,
++      final WebSocketListener listener) {
++    this.listener = listener;
++
++    // Pings come in on the reader thread. This executor contends with callers for writing pongs.
++    final ThreadPoolExecutor pongExecutor =
++        new ThreadPoolExecutor(1, 1, 1, SECONDS, new LinkedBlockingDeque<Runnable>());
++    pongExecutor.allowCoreThreadTimeOut(true);
++
++    writer = new WebSocketWriter(isClient, sink, random);
++    reader = new WebSocketReader(isClient, source, new FrameCallback() {
++      @Override public void onMessage(BufferedSource source, PayloadType type) throws IOException {
++        listener.onMessage(source, type);
++      }
++
++      @Override public void onPing(final Buffer buffer) {
++        pongExecutor.execute(new NamedRunnable("WebSocket PongWriter") {
++          @Override protected void execute() {
++            try {
++              writer.writePong(buffer);
++            } catch (IOException ignored) {
++            }
++          }
++        });
++      }
++
++      @Override public void onPong(Buffer buffer) {
++        listener.onPong(buffer);
++      }
++
++      @Override public void onClose(int code, String reason) throws IOException {
++        peerClose(code, reason);
++      }
++    });
++  }
++
++  /**
++   * Read a single message from the web socket and deliver it to the listener. This method should
++   * be called in a loop with the return value indicating whether looping should continue.
++   */
++  boolean readMessage() {
++    try {
++      reader.processNextFrame();
++      return !readerSentClose;
++    } catch (IOException e) {
++      readerErrorClose(e, listener);
++      return false;
++    }
++  }
++
++  @Override public BufferedSink newMessageSink(PayloadType type) {
++    if (writerSentClose) throw new IllegalStateException("Closed");
++    return writer.newMessageSink(type);
++  }
++
++  @Override public void sendMessage(PayloadType type, Buffer payload) throws IOException {
++    if (writerSentClose) throw new IllegalStateException("Closed");
++    writer.sendMessage(type, payload);
++  }
++
++  @Override public void sendPing(Buffer payload) throws IOException {
++    if (writerSentClose) throw new IllegalStateException("Closed");
++    writer.writePing(payload);
++  }
++
++  /** Send an unsolicited pong with the specified payload. */
++  public void sendPong(Buffer payload) throws IOException {
++    if (writerSentClose) throw new IllegalStateException("Closed");
++    writer.writePong(payload);
++  }
++
++  @Override public void close(int code, String reason) throws IOException {
++    if (writerSentClose) throw new IllegalStateException("Closed");
++
++    boolean closeConnection;
++    synchronized (closeLock) {
++      writerSentClose = true;
++
++      // If the reader has also indicated a desire to close we will close the connection.
++      closeConnection = readerSentClose;
++    }
++
++    writer.writeClose(code, reason);
++
++    if (closeConnection) {
++      closeConnection();
++    }
++  }
++
++  /** Called on the reader thread when a close frame is encountered. */
++  private void peerClose(int code, String reason) throws IOException {
++    boolean writeCloseResponse;
++    synchronized (closeLock) {
++      readerSentClose = true;
++
++      // If the writer has not indicated a desire to close we will write a close response.
++      writeCloseResponse = !writerSentClose;
++    }
++
++    if (writeCloseResponse) {
++      // The reader thread will read no more frames so use it to send the response.
++      writer.writeClose(code, reason);
++    }
++
++    closeConnection();
++
++    listener.onClose(code, reason);
++  }
++
++  /** Called on the reader thread when an error occurs. */
++  private void readerErrorClose(IOException e, WebSocketListener listener) {
++    boolean writeCloseResponse;
++    synchronized (closeLock) {
++      readerSentClose = true;
++
++      // If the writer has not closed we will close the connection.
++      writeCloseResponse = !writerSentClose;
++    }
++
++    if (writeCloseResponse) {
++      if (e instanceof ProtocolException) {
++        // For protocol exceptions, try to inform the server of such.
++        try {
++          writer.writeClose(CLOSE_PROTOCOL_EXCEPTION, null);
++        } catch (IOException ignored) {
++        }
++      }
++    }
++
++    try {
++      closeConnection();
++    } catch (IOException ignored) {
++    }
++
++    listener.onFailure(e);
++  }
++
++  /** Perform any tear-down work on the connection (close the socket, recycle, etc.). */
++  protected abstract void closeConnection() throws IOException;
++}
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocket.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocket.java
+index 9f4565370..3be790d01 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocket.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocket.java
+@@ -15,211 +15,21 @@
+  */
+ package com.squareup.okhttp.internal.ws;
+ 
+-import com.squareup.okhttp.Call;
+-import com.squareup.okhttp.Connection;
+-import com.squareup.okhttp.OkHttpClient;
+-import com.squareup.okhttp.Request;
+-import com.squareup.okhttp.Response;
+-import com.squareup.okhttp.internal.Internal;
+-import com.squareup.okhttp.internal.NamedRunnable;
+-import com.squareup.okhttp.internal.Util;
+ import java.io.IOException;
+-import java.net.ProtocolException;
+-import java.net.Socket;
+-import java.security.SecureRandom;
+-import java.util.Collections;
+-import java.util.Random;
+-import java.util.concurrent.Executor;
+-import java.util.concurrent.LinkedBlockingDeque;
+-import java.util.concurrent.ThreadPoolExecutor;
+ import okio.Buffer;
+ import okio.BufferedSink;
+-import okio.BufferedSource;
+-import okio.ByteString;
+-import okio.Okio;
+-
+-import static com.squareup.okhttp.internal.ws.WebSocketReader.FrameCallback;
+-import static java.util.concurrent.TimeUnit.SECONDS;
+ 
++// TODO move to public API!
+ /** Blocking interface to connect and write to a web socket. */
+-public final class WebSocket {
+-  /** Magic value which must be appended to the {@link #key} in a response header. */
+-  private static final String ACCEPT_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+-  /** A close code which indicates that the peer encountered a protocol exception. */
+-  private static final int CLOSE_PROTOCOL_EXCEPTION = 1002;
+-
+-  /**
+-   * Prepares the {@code request} to create a web socket at some point in the future.
+-   * <p>
+-   * TODO Move to OkHttpClient as non-static once web sockets are finalized!
+-   */
+-  public static WebSocket newWebSocket(OkHttpClient client, Request request) {
+-    // Copy the client. Otherwise changes (socket factory, redirect policy,
+-    // etc.) may incorrectly be reflected in the request when it is executed.
+-    client = client.clone();
+-    // Force HTTP/1.1 until the WebSocket over SPDY/HTTP2 spec is finalized.
+-    client.setProtocols(Collections.singletonList(com.squareup.okhttp.Protocol.HTTP_1_1));
+-
+-    return new WebSocket(client, request, new SecureRandom());
+-  }
+-
++public interface WebSocket {
+   /** The format of a message payload. */
+-  public enum PayloadType {
++  enum PayloadType {
+     /** UTF8-encoded text data. */
+     TEXT,
+     /** Arbitrary binary data. */
+     BINARY
+   }
+ 
+-  private final OkHttpClient client;
+-  private final Request request;
+-  private final Random random;
+-  private final String key;
+-
+-  /** Pings come in on the reader thread. This executor contends with callers for writing pongs. */
+-  private final Executor pongExecutor;
+-
+-  /** True after calling {@link #close(int, String)}. No writes are allowed afterward. */
+-  private volatile boolean writerClosed;
+-  /** True after a close frame was read by the reader. No frames will follow it. */
+-  private volatile boolean readerClosed;
+-  /** Lock required to close the connection. */
+-  private final Object closeLock = new Object();
+-
+-  private boolean connected;
+-  private Connection connection;
+-
+-  private WebSocketWriter writer;
+-
+-  WebSocket(OkHttpClient client, Request request, Random random) {
+-    this.client = client;
+-    this.random = random;
+-
+-    ThreadPoolExecutor pongExecutor =
+-        new ThreadPoolExecutor(1, 1, 1, SECONDS, new LinkedBlockingDeque<Runnable>());
+-    pongExecutor.allowCoreThreadTimeOut(true);
+-    this.pongExecutor = pongExecutor;
+-
+-    if (!"GET".equals(request.method())) {
+-      throw new IllegalArgumentException("Request must be GET: " + request.method());
+-    }
+-    String url = request.urlString();
+-    String httpUrl;
+-    if (url.startsWith("ws://")) {
+-      httpUrl = "http://" + url.substring(5);
+-    } else if (url.startsWith("wss://")) {
+-      httpUrl = "https://" + url.substring(6);
+-    } else if (url.startsWith("http://") || url.startsWith("https://")) {
+-      httpUrl = url;
+-    } else {
+-      throw new IllegalArgumentException(
+-          "Request url must use 'ws', 'wss', 'http', or 'https' scheme: " + url);
+-    }
+-
+-    byte[] nonce = new byte[16];
+-    random.nextBytes(nonce);
+-    key = ByteString.of(nonce).base64();
+-
+-    this.request = request.newBuilder()
+-        .url(httpUrl)
+-        .header("Upgrade", "websocket")
+-        .header("Connection", "Upgrade")
+-        .header("Sec-WebSocket-Key", key)
+-        .header("Sec-WebSocket-Version", "13")
+-        .build();
+-  }
+-
+-  /** The HTTP request which initiated this web socket. */
+-  public Request request() {
+-    return request;
+-  }
+-
+-  /**
+-   * Connects the web socket and blocks until the response can be processed. Once connected all
+-   * messages from the server are sent to the {@code listener}.
+-   * <p>
+-   * Note that transport-layer success (receiving a HTTP response code,
+-   * headers and body) does not necessarily indicate application-layer success:
+-   * {@code response} may still indicate an unhappy HTTP response code like 404
+-   * or 500.
+-   *
+-   * @throws IOException if the request could not be executed due to
+-   *     a connectivity problem or timeout. Because networks can
+-   *     fail during an exchange, it is possible that the remote server
+-   *     accepted the request before the failure.
+-   *
+-   * @throws IllegalStateException when the web socket has already been connected.
+-   */
+-  public Response connect(WebSocketListener listener) throws IOException {
+-    if (connected) throw new IllegalStateException("Already connected");
+-    if (writerClosed) throw new IllegalStateException("Closed");
+-
+-    // TODO Call call = new Call(client, request);
+-    Call call = Internal.instance.newCall(client, request);
+-    // TODO Response response = call.getResponse(true);
+-    Response response = Internal.instance.callGetResponse(call, true);
+-    if (response.code() != 101) {
+-      // TODO call.engine.releaseConnection();
+-      Internal.instance.callEngineReleaseConnection(call);
+-    } else {
+-      String headerConnection = response.header("Connection");
+-      if (!"Upgrade".equalsIgnoreCase(headerConnection)) {
+-        throw new ProtocolException(
+-            "Expected 'Connection' header value 'Upgrade' but was: " + headerConnection);
+-      }
+-      String headerUpgrade = response.header("Upgrade");
+-      if (!"websocket".equalsIgnoreCase(headerUpgrade)) {
+-        throw new ProtocolException(
+-            "Expected 'Upgrade' header value 'websocket' but was: " + headerUpgrade);
+-      }
+-      String headerAccept = response.header("Sec-WebSocket-Accept");
+-      String acceptExpected = Util.shaBase64(key + ACCEPT_MAGIC);
+-      if (!acceptExpected.equals(headerAccept)) {
+-        throw new ProtocolException("Expected 'Sec-WebSocket-Accept' header value '"
+-            + acceptExpected
+-            + "' but was: "
+-            + headerAccept);
+-      }
+-
+-      // TODO connection = call.engine.getConnection();
+-      connection = Internal.instance.callEngineGetConnection(call);
+-      // TODO if (!connection.clearOwner()) {
+-      if (!Internal.instance.connectionClearOwner(connection)) {
+-        throw new IllegalStateException("Unable to take ownership of connection.");
+-      }
+-      // TODO connection.setOwner(this);
+-      Internal.instance.connectionSetOwner(connection, this);
+-      connected = true;
+-
+-      Socket socket = connection.getSocket();
+-
+-      BufferedSink sink = Okio.buffer(Okio.sink(socket));
+-      writer = new WebSocketWriter(true, sink, random);
+-
+-      BufferedSource source = Okio.buffer(Okio.source(socket));
+-      WebSocketReader reader = new WebSocketReader(true, source, listener, new FrameCallback() {
+-        @Override public void onPing(final Buffer buffer) {
+-          pongExecutor.execute(new NamedRunnable("WebSocket PongWriter") {
+-            @Override protected void execute() {
+-              try {
+-                writer.writePong(buffer);
+-              } catch (IOException ignored) {
+-              }
+-            }
+-          });
+-        }
+-
+-        @Override public void onClose(Buffer buffer) throws IOException {
+-          peerClose(buffer);
+-        }
+-      });
+-
+-      ReaderRunnable readerRunnable = new ReaderRunnable(request.urlString(), reader, listener);
+-      new Thread(readerRunnable).start();
+-    }
+-    return response;
+-  }
+-
+   /**
+    * Stream a message payload to the server of the specified {code type}.
+    * <p>
+@@ -228,24 +38,21 @@ public Response connect(WebSocketListener listener) throws IOException {
+    *
+    * @throws IllegalStateException if not connected, already closed, or another writer is active.
+    */
+-  public BufferedSink newMessageSink(PayloadType type) {
+-    if (writerClosed) throw new IllegalStateException("Closed");
+-    if (!connected) throw new IllegalStateException("Not connected");
+-
+-    return writer.newMessageSink(type);
+-  }
++  BufferedSink newMessageSink(WebSocket.PayloadType type);
+ 
+   /**
+-   * Send a message payload the server of the specified {@code type}.
++   * Send a message payload to the server of the specified {@code type}.
+    *
+    * @throws IllegalStateException if not connected, already closed, or another writer is active.
+    */
+-  public void sendMessage(PayloadType type, Buffer payload) throws IOException {
+-    if (writerClosed) throw new IllegalStateException("Closed");
+-    if (!connected) throw new IllegalStateException("Not connected");
++  void sendMessage(WebSocket.PayloadType type, Buffer payload) throws IOException;
+ 
+-    writer.sendMessage(type, payload);
+-  }
++  /**
++   * Send a ping to the server with optional payload.
++   *
++   * @throws IllegalStateException if already closed.
++   */
++  void sendPing(Buffer payload) throws IOException;
+ 
+   /**
+    * Send a close frame to the server.
+@@ -255,109 +62,8 @@ public void sendMessage(PayloadType type, Buffer payload) throws IOException {
+    * <p>
+    * It is an error to call this method before calling close on an active writer. Calling this
+    * method more than once has no effect.
++   *
++   * @throws IllegalStateException if already closed.
+    */
+-  public void close(int code, String reason) throws IOException {
+-    boolean closeConnection;
+-    synchronized (closeLock) {
+-      if (writerClosed) return;
+-      writerClosed = true;
+-
+-      // If the reader has also indicated a desire to close we will close the connection.
+-      closeConnection = readerClosed;
+-    }
+-
+-    writer.writeClose(code, reason);
+-    writer = null;
+-
+-    if (closeConnection) {
+-      closeConnection();
+-    }
+-  }
+-
+-  /** Called on the reader thread when a close frame is encountered. */
+-  private void peerClose(Buffer buffer) throws IOException {
+-    boolean closeConnection;
+-    synchronized (closeLock) {
+-      readerClosed = true;
+-
+-      // If the writer has already indicated a desire to close we will close the connection.
+-      closeConnection = writerClosed;
+-      writerClosed = true;
+-    }
+-
+-    if (closeConnection) {
+-      closeConnection();
+-    } else {
+-      // The reader thread will read no more frames so use it to send the response.
+-      writer.writeClose(buffer);
+-    }
+-  }
+-
+-  /** Called on the reader thread when an error occurs. */
+-  private void readerErrorClose(IOException e, WebSocketListener listener) {
+-    boolean closeConnection;
+-    synchronized (closeLock) {
+-      readerClosed = true;
+-
+-      // If the writer has not closed we will close the connection.
+-      closeConnection = !writerClosed;
+-      writerClosed = true;
+-    }
+-
+-    if (closeConnection) {
+-      if (e instanceof ProtocolException) {
+-        // For protocol exceptions, try to inform the server of such.
+-        try {
+-          writer.writeClose(CLOSE_PROTOCOL_EXCEPTION, null);
+-        } catch (IOException ignored) {
+-        }
+-      }
+-
+-      try {
+-        closeConnection();
+-      } catch (IOException ignored) {
+-      }
+-    }
+-
+-    listener.onFailure(e);
+-  }
+-
+-  private void closeConnection() throws IOException {
+-    // TODO connection.closeIfOwnedBy(this);
+-    Internal.instance.connectionCloseIfOwnedBy(connection, this);
+-    connection = null;
+-  }
+-
+-  /**
+-   * True if this web socket is closed and can no longer be written to.
+-   * <p>
+-   * Note: Due to the asynchronous nature of a websocket, a {@code true} value from method does not
+-   * guarantee that the connection will be open or even that you will be able to write in a
+-   * subsequent call.
+-   */
+-  public boolean isClosed() {
+-    return writerClosed;
+-  }
+-
+-  private class ReaderRunnable extends NamedRunnable {
+-    private final WebSocketReader reader;
+-    private final WebSocketListener listener;
+-
+-    public ReaderRunnable(String url, WebSocketReader reader, WebSocketListener listener) {
+-      super("WebSocketReader " + url);
+-      this.reader = reader;
+-      this.listener = listener;
+-    }
+-
+-    @Override protected void execute() {
+-      while (!readerClosed) {
+-        try {
+-          reader.readMessage();
+-        } catch (IOException e) {
+-          readerErrorClose(e, listener);
+-          return;
+-        }
+-      }
+-    }
+-  }
++  void close(int code, String reason) throws IOException;
+ }
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketCall.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketCall.java
+new file mode 100644
+index 000000000..717bb01a8
+--- /dev/null
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketCall.java
+@@ -0,0 +1,208 @@
++/*
++ * Copyright (C) 2014 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.okhttp.internal.ws;
++
++import com.squareup.okhttp.Call;
++import com.squareup.okhttp.Callback;
++import com.squareup.okhttp.Connection;
++import com.squareup.okhttp.OkHttpClient;
++import com.squareup.okhttp.Request;
++import com.squareup.okhttp.Response;
++import com.squareup.okhttp.internal.Internal;
++import com.squareup.okhttp.internal.NamedRunnable;
++import com.squareup.okhttp.internal.Util;
++import java.io.IOException;
++import java.net.ProtocolException;
++import java.net.Socket;
++import java.security.SecureRandom;
++import java.util.Collections;
++import java.util.Random;
++import okio.BufferedSink;
++import okio.BufferedSource;
++import okio.ByteString;
++import okio.Okio;
++
++// TODO move to public API!
++public class WebSocketCall {
++  /** Magic value which must be appended to the {@link #key} in a response header. */
++  private static final String ACCEPT_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
++
++  /**
++   * Prepares the {@code request} to create a web socket at some point in the future.
++   * <p>
++   * TODO Move to OkHttpClient as non-static once web sockets are finalized!
++   */
++  public static WebSocketCall newWebSocketCall(OkHttpClient client, Request request) {
++    return new WebSocketCall(client, request);
++  }
++
++  private final Request request;
++  private final Call call;
++  private final Random random;
++  private final String key;
++
++  protected WebSocketCall(OkHttpClient client, Request request) {
++    this(client, request, new SecureRandom());
++  }
++
++  WebSocketCall(OkHttpClient client, Request request, Random random) {
++    if (!"GET".equals(request.method())) {
++      throw new IllegalArgumentException("Request must be GET: " + request.method());
++    }
++    String url = request.urlString();
++    String httpUrl;
++    if (url.startsWith("ws://")) {
++      httpUrl = "http://" + url.substring(5);
++    } else if (url.startsWith("wss://")) {
++      httpUrl = "https://" + url.substring(6);
++    } else if (url.startsWith("http://") || url.startsWith("https://")) {
++      httpUrl = url;
++    } else {
++      throw new IllegalArgumentException(
++          "Request url must use 'ws', 'wss', 'http', or 'https' scheme: " + url);
++    }
++
++    this.random = random;
++
++    byte[] nonce = new byte[16];
++    random.nextBytes(nonce);
++    key = ByteString.of(nonce).base64();
++
++    // Copy the client. Otherwise changes (socket factory, redirect policy,
++    // etc.) may incorrectly be reflected in the request when it is executed.
++    client = client.clone();
++    // Force HTTP/1.1 until the WebSocket over HTTP/2 version is finalized.
++    client.setProtocols(Collections.singletonList(com.squareup.okhttp.Protocol.HTTP_1_1));
++
++    request = request.newBuilder()
++        .url(httpUrl)
++        .header("Upgrade", "websocket")
++        .header("Connection", "Upgrade")
++        .header("Sec-WebSocket-Key", key)
++        .header("Sec-WebSocket-Version", "13")
++        .build();
++    this.request = request;
++
++    call = client.newCall(request);
++  }
++
++  /**
++   * Schedules the request to be executed at some point in the future.
++   *
++   * <p>The {@link OkHttpClient#getDispatcher dispatcher} defines when the request will run:
++   * usually immediately unless there are several other requests currently being executed.
++   *
++   * <p>This client will later call back {@code responseCallback} with either an HTTP response or a
++   * failure exception. If you {@link #cancel} a request before it completes the callback will not
++   * be invoked.
++   *
++   * @throws IllegalStateException when the call has already been executed.
++   */
++  public void enqueue(final WebSocketListener listener) {
++    Callback responseCallback = new Callback() {
++      @Override public void onResponse(Response response) throws IOException {
++        try {
++          createWebSocket(response, listener);
++        } catch (IOException e) {
++          listener.onFailure(e);
++        }
++      }
++
++      @Override public void onFailure(Request request, IOException e) {
++        listener.onFailure(e);
++      }
++    };
++    // TODO call.enqueue(responseCallback, true);
++    Internal.instance.callEnqueue(call, responseCallback, true);
++  }
++
++  /** Cancels the request, if possible. Requests that are already complete cannot be canceled. */
++  public void cancel() {
++    call.cancel();
++  }
++
++  private void createWebSocket(Response response, WebSocketListener listener)
++      throws IOException {
++    if (response.code() != 101) {
++      // TODO call.engine.releaseConnection();
++      Internal.instance.callEngineReleaseConnection(call);
++      throw new ProtocolException(
++          "Expected HTTP 101 response but was: " + response.code() + " " + response.message());
++    }
++
++    String headerConnection = response.header("Connection");
++    if (!"Upgrade".equalsIgnoreCase(headerConnection)) {
++      throw new ProtocolException(
++          "Expected 'Connection' header value 'Upgrade' but was: " + headerConnection);
++    }
++    String headerUpgrade = response.header("Upgrade");
++    if (!"websocket".equalsIgnoreCase(headerUpgrade)) {
++      throw new ProtocolException(
++          "Expected 'Upgrade' header value 'websocket' but was: " + headerUpgrade);
++    }
++    String headerAccept = response.header("Sec-WebSocket-Accept");
++    String acceptExpected = Util.shaBase64(key + ACCEPT_MAGIC);
++    if (!acceptExpected.equals(headerAccept)) {
++      throw new ProtocolException("Expected 'Sec-WebSocket-Accept' header value '"
++          + acceptExpected
++          + "' but was: "
++          + headerAccept);
++    }
++
++    // TODO connection = call.engine.getConnection();
++    Connection connection = Internal.instance.callEngineGetConnection(call);
++    // TODO if (!connection.clearOwner()) {
++    if (!Internal.instance.clearOwner(connection)) {
++      throw new IllegalStateException("Unable to take ownership of connection.");
++    }
++
++    Socket socket = connection.getSocket();
++    BufferedSource source = Okio.buffer(Okio.source(socket));
++    BufferedSink sink = Okio.buffer(Okio.sink(socket));
++
++    final RealWebSocket webSocket =
++        new ConnectionWebSocket(connection, source, sink, random, listener);
++
++    // Start a dedicated thread for reading the web socket.
++    new Thread(new NamedRunnable("WebSocketReader " + request.urlString()) {
++      @Override protected void execute() {
++        while (webSocket.readMessage()) {
++        }
++      }
++    }).start();
++
++    // TODO connection.setOwner(webSocket);
++    Internal.instance.connectionSetOwner(connection, webSocket);
++
++    listener.onOpen(webSocket, request, response);
++  }
++
++  // Keep static so that the WebSocketCall instance can be garbage collected.
++  private static class ConnectionWebSocket extends RealWebSocket {
++    private final Connection connection;
++
++    public ConnectionWebSocket(Connection connection, BufferedSource source, BufferedSink sink,
++        Random random, WebSocketListener listener) {
++      super(true /* is client */, source, sink, random, listener);
++      this.connection = connection;
++    }
++
++    @Override protected void closeConnection() throws IOException {
++      // TODO connection.closeIfOwnedBy(this);
++      Internal.instance.closeIfOwnedBy(connection, this);
++    }
++  }
++}
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketListener.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketListener.java
+index d990b699f..84f7cc0d7 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketListener.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketListener.java
+@@ -15,19 +15,31 @@
+  */
+ package com.squareup.okhttp.internal.ws;
+ 
++import com.squareup.okhttp.Request;
++import com.squareup.okhttp.Response;
+ import java.io.IOException;
++import okio.Buffer;
+ import okio.BufferedSource;
+ 
+ import static com.squareup.okhttp.internal.ws.WebSocket.PayloadType;
+ 
++// TODO move to public API!
+ /** Listener for server-initiated messages on a connected {@link WebSocket}. */
+ public interface WebSocketListener {
++  void onOpen(WebSocket webSocket, Request request, Response response) throws IOException;
++
+   /**
+    * Called when a server message is received. The {@code type} indicates whether the
+    * {@code payload} should be interpreted as UTF-8 text or binary data.
+    */
+   void onMessage(BufferedSource payload, PayloadType type) throws IOException;
+ 
++  /**
++   * Called when a server pong is received. This is usually a result of calling {@link
++   * WebSocket#sendPing(Buffer)} but might also be unsolicited.
++   */
++  void onPong(Buffer payload);
++
+   /**
+    * Called when the server sends a close message. This may have been initiated
+    * from a call to {@link WebSocket#close(int, String) close()} or as an unprompted
+@@ -39,9 +51,6 @@
+    */
+   void onClose(int code, String reason);
+ 
+-  /**
+-   * Called when the transport-layer of this web socket errors during
+-   * communication.
+-   */
++  /** Called when the transport or protocol layer of this web socket errors during communication. */
+   void onFailure(IOException e);
+ }
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketReader.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketReader.java
+index 80efee78d..b9fb2a86a 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketReader.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketReader.java
+@@ -50,13 +50,14 @@
+  */
+ public final class WebSocketReader {
+   public interface FrameCallback {
++    void onMessage(BufferedSource source, PayloadType type) throws IOException;
+     void onPing(Buffer buffer);
+-    void onClose(Buffer buffer) throws IOException;
++    void onPong(Buffer buffer);
++    void onClose(int code, String reason) throws IOException;
+   }
+ 
+   private final boolean isClient;
+   private final BufferedSource source;
+-  private final WebSocketListener listener;
+   private final FrameCallback frameCallback;
+ 
+   private final Source framedMessageSource = new FramedMessageSource();
+@@ -75,57 +76,34 @@
+   private final byte[] maskKey = new byte[4];
+   private final byte[] maskBuffer = new byte[2048];
+ 
+-  public WebSocketReader(boolean isClient, BufferedSource source, WebSocketListener listener,
+-      FrameCallback frameCallback) {
++  public WebSocketReader(boolean isClient, BufferedSource source, FrameCallback frameCallback) {
+     if (source == null) throw new NullPointerException("source");
+-    if (listener == null) throw new NullPointerException("listener");
+     if (frameCallback == null) throw new NullPointerException("frameCallback");
+     this.isClient = isClient;
+     this.source = source;
+-    this.listener = listener;
+     this.frameCallback = frameCallback;
+   }
+ 
+   /**
+-   * Reads one message from source consuming any control frames that precede or are interleaved
+-   * between frame fragments. This will result in one call to {@link WebSocketListener#onMessage}.
++   * Process the next protocol frame.
++   * <ul>
++   * <li>If it is a control frame this will result in a single call to {@link FrameCallback}.</li>
++   * <li>If it is a message frame this will result in a single call to {@link
++   * WebSocketListener#onMessage}. If the message spans multiple frames, each interleaved control
++   * frame will result in a corresponding call to {@link FrameCallback}.
++   * </ul>
+    */
+-  public void readMessage() throws IOException {
+-    readUntilNonControlFrame();
+-    if (closed) return;
+-
+-    PayloadType type;
+-    switch (opcode) {
+-      case OPCODE_TEXT:
+-        type = PayloadType.TEXT;
+-        break;
+-      case OPCODE_BINARY:
+-        type = PayloadType.BINARY;
+-        break;
+-      default:
+-        throw new IllegalStateException("Unknown opcode: " + toHexString(opcode));
+-    }
+-
+-    messageClosed = false;
+-    listener.onMessage(Okio.buffer(framedMessageSource), type);
+-    if (!messageClosed) {
+-      throw new IllegalStateException("Listener failed to call close on message payload.");
+-    }
+-  }
+-
+-  /** Read headers and process any control frames until we reach a non-control frame. */
+-  private void readUntilNonControlFrame() throws IOException {
+-    while (!closed) {
+-      readHeader();
+-      if (!isControlFrame) {
+-        break;
+-      }
++  public void processNextFrame() throws IOException {
++    readHeader();
++    if (isControlFrame) {
+       readControlFrame();
++    } else {
++      readMessageFrame();
+     }
+   }
+ 
+   private void readHeader() throws IOException {
+-    if (closed) throw new IllegalStateException("Closed");
++    if (closed) throw new IOException("Closed");
+ 
+     int b0 = source.readByte() & 0xff;
+ 
+@@ -197,26 +175,54 @@ private void readControlFrame() throws IOException {
+         frameCallback.onPing(buffer);
+         break;
+       case OPCODE_CONTROL_PONG:
+-        // Thanks for the pong!
++        frameCallback.onPong(buffer);
+         break;
+       case OPCODE_CONTROL_CLOSE:
+-        // If we have one, hand a cloned buffer to the frame callback since we also need to read it.
+-        frameCallback.onClose(buffer != null ? buffer.clone() : null);
+-        closed = true;
+-
+         int code = 0;
+         String reason = "";
+         if (buffer != null) {
+           code = buffer.readShort();
+           reason = buffer.readUtf8();
+         }
+-        listener.onClose(code, reason);
++        frameCallback.onClose(code, reason);
++        closed = true;
+         break;
+       default:
+         throw new IllegalStateException("Unknown control opcode: " + toHexString(opcode));
+     }
+   }
+ 
++  private void readMessageFrame() throws IOException {
++    PayloadType type;
++    switch (opcode) {
++      case OPCODE_TEXT:
++        type = PayloadType.TEXT;
++        break;
++      case OPCODE_BINARY:
++        type = PayloadType.BINARY;
++        break;
++      default:
++        throw new IllegalStateException("Unknown opcode: " + toHexString(opcode));
++    }
++
++    messageClosed = false;
++    frameCallback.onMessage(Okio.buffer(framedMessageSource), type);
++    if (!messageClosed) {
++      throw new IllegalStateException("Listener failed to call close on message payload.");
++    }
++  }
++
++  /** Read headers and process any control frames until we reach a non-control frame. */
++  private void readUntilNonControlFrame() throws IOException {
++    while (!closed) {
++      readHeader();
++      if (!isControlFrame) {
++        break;
++      }
++      readControlFrame();
++    }
++  }
++
+   /**
+    * A special source which knows how to read a message body across one or more frames. Control
+    * frames that occur between fragments will be processed. If the message payload is masked this
+@@ -234,6 +240,9 @@ private void readControlFrame() throws IOException {
+         if (opcode != OPCODE_CONTINUATION) {
+           throw new ProtocolException("Expected continuation opcode. Got: " + toHexString(opcode));
+         }
++        if (isFinalFrame && frameLength == 0) {
++          return -1; // Fast-path for empty final frame.
++        }
+       }
+ 
+       long toRead = Math.min(byteCount, frameLength - frameBytesRead);
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
+index 716d27a94..afaec046b 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
+@@ -73,14 +73,8 @@ public WebSocketWriter(boolean isClient, BufferedSink sink, Random random) {
+     maskBuffer = isClient ? new byte[2048] : null;
+   }
+ 
+-  public boolean isClosed() {
+-    return closed;
+-  }
+-
+   /** Send a ping with the supplied {@code payload}. Payload may be {@code null} */
+   public void writePing(Buffer payload) throws IOException {
+-    if (closed) throw new IllegalStateException("Closed");
+-
+     synchronized (sink) {
+       writeControlFrame(OPCODE_CONTROL_PING, payload);
+     }
+@@ -88,8 +82,6 @@ public void writePing(Buffer payload) throws IOException {
+ 
+   /** Send a pong with the supplied {@code payload}. Payload may be {@code null} */
+   public void writePong(Buffer payload) throws IOException {
+-    if (closed) throw new IllegalStateException("Closed");
+-
+     synchronized (sink) {
+       writeControlFrame(OPCODE_CONTROL_PONG, payload);
+     }
+@@ -104,8 +96,6 @@ public void writePong(Buffer payload) throws IOException {
+    * @param reason Reason for shutting down or {@code null}. {@code code} is required if set.
+    */
+   public void writeClose(int code, String reason) throws IOException {
+-    if (closed) throw new IllegalStateException("Closed");
+-
+     Buffer payload = null;
+     if (code != 0) {
+       if (code < 1000 || code >= 5000) {
+@@ -119,14 +109,7 @@ public void writeClose(int code, String reason) throws IOException {
+     } else if (reason != null) {
+       throw new IllegalArgumentException("Code required to include reason.");
+     }
+-    writeClose(payload);
+-  }
+ 
+-  /**
+-   * Send a close frame with optional payload. This is used when echoing a close and its
+-   * payload back to the other peer.
+-   */
+-  public void writeClose(Buffer payload) throws IOException {
+     synchronized (sink) {
+       writeControlFrame(OPCODE_CONTROL_CLOSE, payload);
+       closed = true;
+@@ -134,12 +117,14 @@ public void writeClose(Buffer payload) throws IOException {
+   }
+ 
+   private void writeControlFrame(int opcode, Buffer payload) throws IOException {
++    if (closed) throw new IOException("Closed");
++
+     int length = 0;
+     if (payload != null) {
+       length = (int) payload.size();
+       if (length > PAYLOAD_MAX) {
+         throw new IllegalArgumentException(
+-            "Control frame payload must be less than " + PAYLOAD_MAX + "B.");
++            "Payload size must be less than or equal to " + PAYLOAD_MAX);
+       }
+     }
+ 
+@@ -174,7 +159,6 @@ private void writeControlFrame(int opcode, Buffer payload) throws IOException {
+    */
+   public BufferedSink newMessageSink(PayloadType type) {
+     if (type == null) throw new NullPointerException("type == null");
+-    if (closed) throw new IllegalStateException("Closed");
+     if (activeWriter) {
+       throw new IllegalStateException("Another message writer is active. Did you call close()?");
+     }
+@@ -192,7 +176,6 @@ public BufferedSink newMessageSink(PayloadType type) {
+   public void sendMessage(PayloadType type, Buffer payload) throws IOException {
+     if (type == null) throw new NullPointerException("type == null");
+     if (payload == null) throw new NullPointerException("payload == null");
+-    if (closed) throw new IllegalStateException("Closed");
+     if (activeWriter) {
+       throw new IllegalStateException("A message writer is active. Did you call close()?");
+     }
+@@ -201,6 +184,8 @@ public void sendMessage(PayloadType type, Buffer payload) throws IOException {
+ 
+   private void writeFrame(PayloadType payloadType, Buffer source, long byteCount,
+       boolean isFirstFrame, boolean isFinal) throws IOException {
++    if (closed) throw new IOException("Closed");
++
+     int opcode = OPCODE_CONTINUATION;
+     if (isFirstFrame) {
+       switch (payloadType) {
+@@ -273,6 +258,8 @@ private void writeAllMasked(BufferedSource source, long byteCount) throws IOExce
+     }
+ 
+     @Override public void flush() throws IOException {
++      if (closed) throw new IOException("Closed");
++
+       synchronized (sink) {
+         sink.flush();
+       }
+@@ -284,6 +271,8 @@ private void writeAllMasked(BufferedSource source, long byteCount) throws IOExce
+ 
+     @SuppressWarnings("PointlessBitwiseExpression")
+     @Override public void close() throws IOException {
++      if (closed) throw new IOException("Closed");
++
+       int length = 0;
+ 
+       synchronized (sink) {
+diff --git a/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java b/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java
+index c15cc6f67..738191a9b 100644
+--- a/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java
++++ b/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java
+@@ -4,6 +4,7 @@
+ import com.squareup.okhttp.Request;
+ import com.squareup.okhttp.Response;
+ import com.squareup.okhttp.internal.ws.WebSocket;
++import com.squareup.okhttp.internal.ws.WebSocketCall;
+ import com.squareup.okhttp.internal.ws.WebSocketListener;
+ import java.io.IOException;
+ import okio.Buffer;
+@@ -23,14 +24,14 @@ private void run() throws IOException {
+     Request request = new Request.Builder()
+         .url("ws://echo.websocket.org")
+         .build();
+-    WebSocket webSocket = WebSocket.newWebSocket(client, request);
+-    Response response = webSocket.connect(this);
+-    if (response.code() != 101) {
+-      System.err.println("Unable to connect: " + response.code() + " " + response.message());
+-      System.err.println(response.body().string());
+-      return;
+-    }
++    WebSocketCall.newWebSocketCall(client, request).enqueue(this);
++
++    // Trigger shutdown of the dispatcher's executor so this process can exit cleanly.
++    client.getDispatcher().getExecutorService().shutdown();
++  }
+ 
++  @Override public void onOpen(WebSocket webSocket, Request request, Response response)
++      throws IOException {
+     webSocket.sendMessage(TEXT, new Buffer().writeUtf8("Hello..."));
+     webSocket.sendMessage(TEXT, new Buffer().writeUtf8("...World!"));
+     webSocket.sendMessage(BINARY, new Buffer().writeInt(0xdeadbeef));
+@@ -51,6 +52,10 @@ private void run() throws IOException {
+     payload.close();
+   }
+ 
++  @Override public void onPong(Buffer payload) {
++    System.out.println("PONG: " + payload.readUtf8());
++  }
++
+   @Override public void onClose(int code, String reason) {
+     System.out.println("CLOSE: " + code + " " + reason);
+   }

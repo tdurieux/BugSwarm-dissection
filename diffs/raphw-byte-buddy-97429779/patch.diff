@@ -1,0 +1,971 @@
+diff --git a/byte-buddy-agent/src/test/java/net/bytebuddy/agent/ByteBuddyAgentAttachmentProviderTest.java b/byte-buddy-agent/src/test/java/net/bytebuddy/agent/ByteBuddyAgentAttachmentProviderTest.java
+index f132e40e39..744f8fc35a 100644
+--- a/byte-buddy-agent/src/test/java/net/bytebuddy/agent/ByteBuddyAgentAttachmentProviderTest.java
++++ b/byte-buddy-agent/src/test/java/net/bytebuddy/agent/ByteBuddyAgentAttachmentProviderTest.java
+@@ -1,13 +1,13 @@
+ package net.bytebuddy.agent;
+ 
+ import net.bytebuddy.test.utility.ObjectPropertyAssertion;
++import org.hamcrest.CoreMatchers;
+ import org.junit.Test;
+ 
+ import java.util.Arrays;
+ import java.util.Iterator;
+ 
+ import static org.hamcrest.CoreMatchers.is;
+-import static org.hamcrest.CoreMatchers.isA;
+ import static org.hamcrest.MatcherAssert.assertThat;
+ 
+ public class ByteBuddyAgentAttachmentProviderTest {
+@@ -15,11 +15,10 @@
+     private static final String FOO = "foo";
+ 
+     @Test
+-    @SuppressWarnings("unchecked")
+     public void testSimpleAccessor() throws Exception {
+         ByteBuddyAgent.AttachmentProvider.Accessor accessor = new ByteBuddyAgent.AttachmentProvider.Accessor.Simple(Void.class, FOO);
+         assertThat(accessor.isAvailable(), is(true));
+-        assertThat(accessor.getVirtualMachineType(), isA((Class) Void.class));
++        assertThat(accessor.getVirtualMachineType(), CoreMatchers.<Class<?>>is(Void.class));
+         assertThat(accessor.getProcessId(), is(FOO));
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
+index 051bd46ede..aef66b81d9 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/annotation/AbstractAnnotationDescriptionTest.java
+@@ -153,12 +153,12 @@ public void setUp() throws Exception {
+ 
+     @Test
+     public void testPrecondition() throws Exception {
+-        assertThat(describe(first), equalTo(describe(first)));
+-        assertThat(describe(second), equalTo(describe(second)));
+-        assertThat(describe(first), not(equalTo(describe(second))));
+-        assertThat(describe(first).getAnnotationType(), equalTo(describe(second).getAnnotationType()));
+-        assertThat(describe(first).getAnnotationType(), not(equalTo((TypeDescription) new TypeDescription.ForLoadedType(Other.class))));
+-        assertThat(describe(second).getAnnotationType(), not(equalTo((TypeDescription) new TypeDescription.ForLoadedType(Other.class))));
++        assertThat(describe(first), is(describe(first)));
++        assertThat(describe(second), is(describe(second)));
++        assertThat(describe(first), not(describe(second)));
++        assertThat(describe(first).getAnnotationType(), is(describe(second).getAnnotationType()));
++        assertThat(describe(first).getAnnotationType(), not((TypeDescription) new TypeDescription.ForLoadedType(Other.class)));
++        assertThat(describe(second).getAnnotationType(), not((TypeDescription) new TypeDescription.ForLoadedType(Other.class)));
+         assertThat(describe(first).getAnnotationType().represents(first.annotationType()), is(true));
+         assertThat(describe(second).getAnnotationType().represents(second.annotationType()), is(true));
+     }
+@@ -181,13 +181,13 @@ private void assertToString(String actual, Annotation loaded) throws Exception {
+     public void testHashCode() throws Exception {
+         assertThat(describe(first).hashCode(), is(describe(first).hashCode()));
+         assertThat(describe(second).hashCode(), is(describe(second).hashCode()));
+-        assertThat(describe(first).hashCode(), not(is(describe(second).hashCode())));
++        assertThat(describe(first).hashCode(), not(describe(second).hashCode()));
+     }
+ 
+     @Test
+     public void testEquals() throws Exception {
+         AnnotationDescription identical = describe(first);
+-        assertThat(identical, equalTo(identical));
++        assertThat(identical, is(identical));
+         AnnotationDescription equalFirst = mock(AnnotationDescription.class);
+         when(equalFirst.getAnnotationType()).thenReturn(new TypeDescription.ForLoadedType(first.annotationType()));
+         when(equalFirst.getValue(Mockito.any(MethodDescription.InDefinedShape.class))).then(new Answer<Object>() {
+@@ -197,7 +197,7 @@ public Object answer(InvocationOnMock invocation) throws Throwable {
+                 return AnnotationDescription.ForLoadedAnnotation.of(first).getValue(method);
+             }
+         });
+-        assertThat(describe(first), equalTo(equalFirst));
++        assertThat(describe(first), is(equalFirst));
+         AnnotationDescription equalSecond = mock(AnnotationDescription.class);
+         when(equalSecond.getAnnotationType()).thenReturn(new TypeDescription.ForLoadedType(first.annotationType()));
+         when(equalSecond.getValue(Mockito.any(MethodDescription.InDefinedShape.class))).then(new Answer<Object>() {
+@@ -207,7 +207,7 @@ public Object answer(InvocationOnMock invocation) throws Throwable {
+                 return AnnotationDescription.ForLoadedAnnotation.of(second).getValue(method);
+             }
+         });
+-        assertThat(describe(second), equalTo(equalSecond));
++        assertThat(describe(second), is(equalSecond));
+         AnnotationDescription equalFirstTypeOnly = mock(AnnotationDescription.class);
+         when(equalFirstTypeOnly.getAnnotationType()).thenReturn(new TypeDescription.ForLoadedType(Other.class));
+         when(equalFirstTypeOnly.getValue(Mockito.any(MethodDescription.InDefinedShape.class))).then(new Answer<Object>() {
+@@ -217,13 +217,13 @@ public Object answer(InvocationOnMock invocation) throws Throwable {
+                 return AnnotationDescription.ForLoadedAnnotation.of(first).getValue(method);
+             }
+         });
+-        assertThat(describe(first), not(equalTo(equalFirstTypeOnly)));
++        assertThat(describe(first), not(equalFirstTypeOnly));
+         AnnotationDescription equalFirstNameOnly = mock(AnnotationDescription.class);
+         when(equalFirstNameOnly.getAnnotationType()).thenReturn(new TypeDescription.ForLoadedType(first.annotationType()));
+         when(equalFirstNameOnly.getValue(Mockito.any(MethodDescription.InDefinedShape.class))).thenReturn(null);
+-        assertThat(describe(first), not(equalTo(equalFirstNameOnly)));
+-        assertThat(describe(first), not(equalTo(equalSecond)));
+-        assertThat(describe(first), not(equalTo(new Object())));
++        assertThat(describe(first), not(equalFirstNameOnly));
++        assertThat(describe(first), not(equalSecond));
++        assertThat(describe(first), not(new Object()));
+         assertThat(describe(first), not(equalTo(null)));
+     }
+ 
+@@ -234,18 +234,18 @@ public void testIllegalMethod() throws Exception {
+ 
+     @Test
+     public void testLoadedEquals() throws Exception {
+-        assertThat(describe(first).prepare(Sample.class).load(), equalTo(first));
+-        assertThat(describe(first).prepare(Sample.class).load(), equalTo(describe(first).prepare(Sample.class).load()));
+-        assertThat(describe(first).prepare(Sample.class).load(), not(equalTo(describe(second).prepare(Sample.class).load())));
+-        assertThat(describe(second).prepare(Sample.class).load(), equalTo(second));
+-        assertThat(describe(first).prepare(Sample.class).load(), not(equalTo(second)));
++        assertThat(describe(first).prepare(Sample.class).load(), is(first));
++        assertThat(describe(first).prepare(Sample.class).load(), is(describe(first).prepare(Sample.class).load()));
++        assertThat(describe(first).prepare(Sample.class).load(), not(describe(second).prepare(Sample.class).load()));
++        assertThat(describe(second).prepare(Sample.class).load(), is(second));
++        assertThat(describe(first).prepare(Sample.class).load(), not(second));
+     }
+ 
+     @Test
+     public void testLoadedHashCode() throws Exception {
+-        assertThat(describe(first).prepare(Sample.class).load().hashCode(), equalTo(first.hashCode()));
+-        assertThat(describe(second).prepare(Sample.class).load().hashCode(), equalTo(second.hashCode()));
+-        assertThat(describe(first).prepare(Sample.class).load().hashCode(), not(equalTo(second.hashCode())));
++        assertThat(describe(first).prepare(Sample.class).load().hashCode(), is(first.hashCode()));
++        assertThat(describe(second).prepare(Sample.class).load().hashCode(), is(second.hashCode()));
++        assertThat(describe(first).prepare(Sample.class).load().hashCode(), not(second.hashCode()));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/enumeration/AbstractEnumerationDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/enumeration/AbstractEnumerationDescriptionTest.java
+index eb1688ee0a..aa634e32c3 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/enumeration/AbstractEnumerationDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/enumeration/AbstractEnumerationDescriptionTest.java
+@@ -54,39 +54,39 @@ public void assertToString() throws Exception {
+ 
+     @Test
+     public void assertType() throws Exception {
+-        assertThat(describe(Sample.FIRST).getEnumerationType(), equalTo((TypeDescription) new TypeDescription.ForLoadedType(Sample.class)));
+-        assertThat(describe(Sample.SECOND).getEnumerationType(), equalTo((TypeDescription) new TypeDescription.ForLoadedType(Sample.class)));
++        assertThat(describe(Sample.FIRST).getEnumerationType(), is((TypeDescription) new TypeDescription.ForLoadedType(Sample.class)));
++        assertThat(describe(Sample.SECOND).getEnumerationType(), is((TypeDescription) new TypeDescription.ForLoadedType(Sample.class)));
+     }
+ 
+     @Test
+     public void assertHashCode() throws Exception {
+         assertThat(describe(Sample.FIRST).hashCode(), is(Sample.FIRST.name().hashCode() + 31 * new TypeDescription.ForLoadedType(Sample.class).hashCode()));
+         assertThat(describe(Sample.SECOND).hashCode(), is(Sample.SECOND.name().hashCode() + 31 * new TypeDescription.ForLoadedType(Sample.class).hashCode()));
+-        assertThat(describe(Sample.FIRST).hashCode(), not(is(describe(Sample.SECOND).hashCode())));
++        assertThat(describe(Sample.FIRST).hashCode(), not(describe(Sample.SECOND).hashCode()));
+     }
+ 
+     @Test
+     public void assertEquals() throws Exception {
+         EnumerationDescription identical = describe(Sample.FIRST);
+-        assertThat(identical, equalTo(identical));
++        assertThat(identical, is(identical));
+         EnumerationDescription equalFirst = mock(EnumerationDescription.class);
+         when(equalFirst.getValue()).thenReturn(Sample.FIRST.name());
+         when(equalFirst.getEnumerationType()).thenReturn(new TypeDescription.ForLoadedType(Sample.class));
+-        assertThat(describe(Sample.FIRST), equalTo(equalFirst));
++        assertThat(describe(Sample.FIRST), is(equalFirst));
+         EnumerationDescription equalSecond = mock(EnumerationDescription.class);
+         when(equalSecond.getValue()).thenReturn(Sample.SECOND.name());
+         when(equalSecond.getEnumerationType()).thenReturn(new TypeDescription.ForLoadedType(Sample.class));
+-        assertThat(describe(Sample.SECOND), equalTo(equalSecond));
++        assertThat(describe(Sample.SECOND), is(equalSecond));
+         EnumerationDescription equalFirstTypeOnly = mock(EnumerationDescription.class);
+         when(equalFirstTypeOnly.getValue()).thenReturn(Sample.SECOND.name());
+         when(equalFirstTypeOnly.getEnumerationType()).thenReturn(new TypeDescription.ForLoadedType(Sample.class));
+-        assertThat(describe(Sample.FIRST), not(equalTo(equalFirstTypeOnly)));
++        assertThat(describe(Sample.FIRST), not(equalFirstTypeOnly));
+         EnumerationDescription equalFirstNameOnly = mock(EnumerationDescription.class);
+         when(equalFirstNameOnly.getValue()).thenReturn(Sample.FIRST.name());
+         when(equalFirstNameOnly.getEnumerationType()).thenReturn(new TypeDescription.ForLoadedType(Other.class));
+-        assertThat(describe(Sample.FIRST), not(equalTo(equalFirstNameOnly)));
+-        assertThat(describe(Sample.FIRST), not(equalTo(equalSecond)));
+-        assertThat(describe(Sample.FIRST), not(equalTo(new Object())));
++        assertThat(describe(Sample.FIRST), not(equalFirstNameOnly));
++        assertThat(describe(Sample.FIRST), not(equalSecond));
++        assertThat(describe(Sample.FIRST), not(new Object()));
+         assertThat(describe(Sample.FIRST), not(equalTo(null)));
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/field/AbstractFieldDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/field/AbstractFieldDescriptionTest.java
+index 74e6f04fac..b7b8704c4f 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/field/AbstractFieldDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/field/AbstractFieldDescriptionTest.java
+@@ -33,9 +33,9 @@ public void setUp() throws Exception {
+ 
+     @Test
+     public void testPrecondition() throws Exception {
+-        assertThat(describe(first), not(equalTo(describe(second))));
+-        assertThat(describe(first), equalTo(describe(first)));
+-        assertThat(describe(second), equalTo(describe(second)));
++        assertThat(describe(first), not(describe(second)));
++        assertThat(describe(first), is(describe(first)));
++        assertThat(describe(second), is(describe(second)));
+         assertThat(describe(first), is((FieldDescription) new FieldDescription.ForLoadedField(first)));
+         assertThat(describe(second), is((FieldDescription) new FieldDescription.ForLoadedField(second)));
+     }
+@@ -78,31 +78,31 @@ public void testHashCode() throws Exception {
+         assertThat(describe(second).hashCode(), is(new TypeDescription.ForLoadedType(SecondSample.class).hashCode() + 31 * second.getName().hashCode()));
+         assertThat(describe(first).hashCode(), is(describe(first).hashCode()));
+         assertThat(describe(second).hashCode(), is(describe(second).hashCode()));
+-        assertThat(describe(first).hashCode(), not(is(describe(second).hashCode())));
++        assertThat(describe(first).hashCode(), not(describe(second).hashCode()));
+     }
+ 
+     @Test
+     public void testEquals() throws Exception {
+         FieldDescription identical = describe(first);
+-        assertThat(identical, equalTo(identical));
++        assertThat(identical, is(identical));
+         FieldDescription equalFirst = mock(FieldDescription.class);
+         when(equalFirst.getName()).thenReturn(first.getName());
+         when(equalFirst.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(FirstSample.class));
+-        assertThat(describe(first), equalTo(equalFirst));
++        assertThat(describe(first), is(equalFirst));
+         FieldDescription equalSecond = mock(FieldDescription.class);
+         when(equalSecond.getName()).thenReturn(second.getName());
+         when(equalSecond.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(SecondSample.class));
+-        assertThat(describe(second), equalTo(equalSecond));
++        assertThat(describe(second), is(equalSecond));
+         FieldDescription equalFirstTypeOnly = mock(FieldDescription.class);
+         when(equalFirstTypeOnly.getName()).thenReturn(second.getName());
+         when(equalFirstTypeOnly.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(FirstSample.class));
+-        assertThat(describe(first), not(equalTo(equalFirstTypeOnly)));
++        assertThat(describe(first), not(equalFirstTypeOnly));
+         FieldDescription equalFirstNameOnly = mock(FieldDescription.class);
+         when(equalFirstNameOnly.getName()).thenReturn(first.getName());
+         when(equalFirstNameOnly.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(SecondSample.class));
+-        assertThat(describe(first), not(equalTo(equalFirstNameOnly)));
+-        assertThat(describe(first), not(equalTo(equalSecond)));
+-        assertThat(describe(first), not(equalTo(new Object())));
++        assertThat(describe(first), not(equalFirstNameOnly));
++        assertThat(describe(first), not(equalSecond));
++        assertThat(describe(first), not(new Object()));
+         assertThat(describe(first), not(equalTo(null)));
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/method/AbstractMethodDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/method/AbstractMethodDescriptionTest.java
+index a51fece1af..1c4c8a40a0 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/method/AbstractMethodDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/method/AbstractMethodDescriptionTest.java
+@@ -65,17 +65,17 @@ public void setUp() throws Exception {
+ 
+     @Test
+     public void testPrecondition() throws Exception {
+-        assertThat(describe(firstMethod), not(equalTo(describe(secondMethod))));
+-        assertThat(describe(firstMethod), not(equalTo(describe(thirdMethod))));
+-        assertThat(describe(firstMethod), equalTo(describe(firstMethod)));
+-        assertThat(describe(secondMethod), equalTo(describe(secondMethod)));
+-        assertThat(describe(thirdMethod), equalTo(describe(thirdMethod)));
++        assertThat(describe(firstMethod), not(describe(secondMethod)));
++        assertThat(describe(firstMethod), not(describe(thirdMethod)));
++        assertThat(describe(firstMethod), is(describe(firstMethod)));
++        assertThat(describe(secondMethod), is(describe(secondMethod)));
++        assertThat(describe(thirdMethod), is(describe(thirdMethod)));
+         assertThat(describe(firstMethod), is((MethodDescription) new MethodDescription.ForLoadedMethod(firstMethod)));
+         assertThat(describe(secondMethod), is((MethodDescription) new MethodDescription.ForLoadedMethod(secondMethod)));
+         assertThat(describe(thirdMethod), is((MethodDescription) new MethodDescription.ForLoadedMethod(thirdMethod)));
+-        assertThat(describe(firstConstructor), not(equalTo(describe(secondConstructor))));
+-        assertThat(describe(firstConstructor), equalTo(describe(firstConstructor)));
+-        assertThat(describe(secondConstructor), equalTo(describe(secondConstructor)));
++        assertThat(describe(firstConstructor), not(describe(secondConstructor)));
++        assertThat(describe(firstConstructor), is(describe(firstConstructor)));
++        assertThat(describe(secondConstructor), is(describe(secondConstructor)));
+         assertThat(describe(firstConstructor), is((MethodDescription) new MethodDescription.ForLoadedConstructor(firstConstructor)));
+         assertThat(describe(secondConstructor), is((MethodDescription) new MethodDescription.ForLoadedConstructor(secondConstructor)));
+     }
+@@ -144,121 +144,121 @@ public void testHashCode() throws Exception {
+         assertThat(describe(firstMethod).hashCode(), is(hashCode(firstMethod)));
+         assertThat(describe(secondMethod).hashCode(), is(hashCode(secondMethod)));
+         assertThat(describe(thirdMethod).hashCode(), is(hashCode(thirdMethod)));
+-        assertThat(describe(firstMethod).hashCode(), not(is(hashCode(secondMethod))));
+-        assertThat(describe(firstMethod).hashCode(), not(is(hashCode(thirdMethod))));
+-        assertThat(describe(firstMethod).hashCode(), not(is(hashCode(firstConstructor))));
+-        assertThat(describe(firstMethod).hashCode(), not(is(hashCode(secondConstructor))));
++        assertThat(describe(firstMethod).hashCode(), not(hashCode(secondMethod)));
++        assertThat(describe(firstMethod).hashCode(), not(hashCode(thirdMethod)));
++        assertThat(describe(firstMethod).hashCode(), not(hashCode(firstConstructor)));
++        assertThat(describe(firstMethod).hashCode(), not(hashCode(secondConstructor)));
+         assertThat(describe(firstConstructor).hashCode(), is(hashCode(firstConstructor)));
+         assertThat(describe(secondConstructor).hashCode(), is(hashCode(secondConstructor)));
+-        assertThat(describe(firstConstructor).hashCode(), not(is(hashCode(firstMethod))));
+-        assertThat(describe(firstConstructor).hashCode(), not(is(hashCode(secondMethod))));
+-        assertThat(describe(firstConstructor).hashCode(), not(is(hashCode(thirdMethod))));
+-        assertThat(describe(firstConstructor).hashCode(), not(is(hashCode(secondConstructor))));
++        assertThat(describe(firstConstructor).hashCode(), not(hashCode(firstMethod)));
++        assertThat(describe(firstConstructor).hashCode(), not(hashCode(secondMethod)));
++        assertThat(describe(firstConstructor).hashCode(), not(hashCode(thirdMethod)));
++        assertThat(describe(firstConstructor).hashCode(), not(hashCode(secondConstructor)));
+     }
+ 
+     @Test
+     public void testEqualsMethod() throws Exception {
+         MethodDescription identical = describe(firstMethod);
+-        assertThat(identical, equalTo(identical));
+-        assertThat(describe(firstMethod), equalTo(describe(firstMethod)));
+-        assertThat(describe(firstMethod), not(equalTo(describe(secondMethod))));
+-        assertThat(describe(firstMethod), not(equalTo(describe(thirdMethod))));
+-        assertThat(describe(firstMethod), not(equalTo(describe(firstConstructor))));
+-        assertThat(describe(firstMethod), not(equalTo(describe(secondConstructor))));
+-        assertThat(describe(firstMethod), equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(firstMethod)));
+-        assertThat(describe(firstMethod), not(equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(secondMethod))));
+-        assertThat(describe(firstMethod), not(equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(thirdMethod))));
+-        assertThat(describe(firstMethod), not(equalTo((MethodDescription) new MethodDescription.ForLoadedConstructor(firstConstructor))));
+-        assertThat(describe(firstMethod), not(equalTo((MethodDescription) new MethodDescription.ForLoadedConstructor(secondConstructor))));
++        assertThat(identical, is(identical));
++        assertThat(describe(firstMethod), is(describe(firstMethod)));
++        assertThat(describe(firstMethod), not(describe(secondMethod)));
++        assertThat(describe(firstMethod), not(describe(thirdMethod)));
++        assertThat(describe(firstMethod), not(describe(firstConstructor)));
++        assertThat(describe(firstMethod), not(describe(secondConstructor)));
++        assertThat(describe(firstMethod), is((MethodDescription) new MethodDescription.ForLoadedMethod(firstMethod)));
++        assertThat(describe(firstMethod), not((MethodDescription) new MethodDescription.ForLoadedMethod(secondMethod)));
++        assertThat(describe(firstMethod), not((MethodDescription) new MethodDescription.ForLoadedMethod(thirdMethod)));
++        assertThat(describe(firstMethod), not((MethodDescription) new MethodDescription.ForLoadedConstructor(firstConstructor)));
++        assertThat(describe(firstMethod), not((MethodDescription) new MethodDescription.ForLoadedConstructor(secondConstructor)));
+         MethodDescription.InDefinedShape equalMethod = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethod.getInternalName()).thenReturn(firstMethod.getName());
+         when(equalMethod.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getDeclaringClass()));
+         when(equalMethod.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getReturnType()));
+         when(equalMethod.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethod,
+                 new GenericTypeList.ForLoadedType(firstMethod.getParameterTypes())));
+-        assertThat(describe(firstMethod), equalTo(equalMethod));
++        assertThat(describe(firstMethod), is(equalMethod));
+         MethodDescription.InDefinedShape equalMethodButName = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButName.getInternalName()).thenReturn(secondMethod.getName());
+         when(equalMethodButName.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getDeclaringClass()));
+         when(equalMethodButName.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getReturnType()));
+         when(equalMethodButName.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButName,
+                 new GenericTypeList.ForLoadedType(firstMethod.getParameterTypes())));
+-        assertThat(describe(firstMethod), not(equalTo(equalMethodButName)));
++        assertThat(describe(firstMethod), not(equalMethodButName));
+         MethodDescription.InDefinedShape equalMethodButReturnType = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButReturnType.getInternalName()).thenReturn(firstMethod.getName());
+         when(equalMethodButReturnType.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(Object.class));
+         when(equalMethodButReturnType.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getReturnType()));
+         when(equalMethodButReturnType.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButReturnType,
+                 new GenericTypeList.ForLoadedType(firstMethod.getParameterTypes())));
+-        assertThat(describe(firstMethod), not(equalTo(equalMethodButReturnType)));
++        assertThat(describe(firstMethod), not(equalMethodButReturnType));
+         MethodDescription.InDefinedShape equalMethodButDeclaringType = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButDeclaringType.getInternalName()).thenReturn(firstMethod.getName());
+         when(equalMethodButDeclaringType.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getDeclaringClass()));
+         when(equalMethodButDeclaringType.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(secondMethod.getReturnType()));
+         when(equalMethodButDeclaringType.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButDeclaringType,
+                 new GenericTypeList.ForLoadedType(firstMethod.getParameterTypes())));
+-        assertThat(describe(firstMethod), not(equalTo(equalMethodButDeclaringType)));
++        assertThat(describe(firstMethod), not(equalMethodButDeclaringType));
+         MethodDescription.InDefinedShape equalMethodButParameterTypes = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButParameterTypes.getInternalName()).thenReturn(firstMethod.getName());
+         when(equalMethodButParameterTypes.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getDeclaringClass()));
+         when(equalMethodButParameterTypes.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(firstMethod.getReturnType()));
+         when(equalMethodButParameterTypes.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButParameterTypes,
+                 new GenericTypeList.ForLoadedType(secondMethod.getParameterTypes())));
+-        assertThat(describe(firstMethod), not(equalTo(equalMethodButParameterTypes)));
+-        assertThat(describe(firstMethod), not(equalTo(new Object())));
++        assertThat(describe(firstMethod), not(equalMethodButParameterTypes));
++        assertThat(describe(firstMethod), not(new Object()));
+         assertThat(describe(firstMethod), not(equalTo(null)));
+     }
+ 
+     @Test
+     public void testEqualsConstructor() throws Exception {
+         MethodDescription identical = describe(firstConstructor);
+-        assertThat(identical, equalTo(identical));
+-        assertThat(describe(firstConstructor), equalTo(describe(firstConstructor)));
+-        assertThat(describe(firstConstructor), not(equalTo(describe(secondConstructor))));
+-        assertThat(describe(firstConstructor), not(equalTo(describe(firstMethod))));
+-        assertThat(describe(firstConstructor), not(equalTo(describe(secondMethod))));
+-        assertThat(describe(firstConstructor), not(equalTo(describe(thirdMethod))));
+-        assertThat(describe(firstConstructor), equalTo((MethodDescription) new MethodDescription.ForLoadedConstructor(firstConstructor)));
+-        assertThat(describe(firstConstructor), not(equalTo((MethodDescription) new MethodDescription.ForLoadedConstructor(secondConstructor))));
+-        assertThat(describe(firstConstructor), not(equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(firstMethod))));
+-        assertThat(describe(firstConstructor), not(equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(secondMethod))));
+-        assertThat(describe(firstConstructor), not(equalTo((MethodDescription) new MethodDescription.ForLoadedMethod(thirdMethod))));
++        assertThat(identical, is(identical));
++        assertThat(describe(firstConstructor), is(describe(firstConstructor)));
++        assertThat(describe(firstConstructor), not(describe(secondConstructor)));
++        assertThat(describe(firstConstructor), not(describe(firstMethod)));
++        assertThat(describe(firstConstructor), not(describe(secondMethod)));
++        assertThat(describe(firstConstructor), not(describe(thirdMethod)));
++        assertThat(describe(firstConstructor), is((MethodDescription) new MethodDescription.ForLoadedConstructor(firstConstructor)));
++        assertThat(describe(firstConstructor), not((MethodDescription) new MethodDescription.ForLoadedConstructor(secondConstructor)));
++        assertThat(describe(firstConstructor), not((MethodDescription) new MethodDescription.ForLoadedMethod(firstMethod)));
++        assertThat(describe(firstConstructor), not((MethodDescription) new MethodDescription.ForLoadedMethod(secondMethod)));
++        assertThat(describe(firstConstructor), not((MethodDescription) new MethodDescription.ForLoadedMethod(thirdMethod)));
+         MethodDescription.InDefinedShape equalMethod = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethod.getInternalName()).thenReturn(MethodDescription.CONSTRUCTOR_INTERNAL_NAME);
+         when(equalMethod.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstConstructor.getDeclaringClass()));
+         when(equalMethod.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(void.class));
+         when(equalMethod.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethod,
+                 new TypeList.ForLoadedType(firstConstructor.getParameterTypes())));
+-        assertThat(describe(firstConstructor), equalTo(equalMethod));
++        assertThat(describe(firstConstructor), is(equalMethod));
+         MethodDescription.InDefinedShape equalMethodButName = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButName.getInternalName()).thenReturn(firstMethod.getName());
+         when(equalMethodButName.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstConstructor.getDeclaringClass()));
+         when(equalMethodButName.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(void.class));
+         when(equalMethodButName.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButName,
+                 new TypeList.ForLoadedType(firstConstructor.getParameterTypes())));
+-        assertThat(describe(firstConstructor), not(equalTo(equalMethodButName)));
++        assertThat(describe(firstConstructor), not(equalMethodButName));
+         MethodDescription.InDefinedShape equalMethodButReturnType = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButReturnType.getInternalName()).thenReturn(MethodDescription.CONSTRUCTOR_INTERNAL_NAME);
+         when(equalMethodButReturnType.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(Object.class));
+         when(equalMethodButReturnType.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(void.class));
+         when(equalMethodButReturnType.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButReturnType,
+                 new TypeList.ForLoadedType(firstConstructor.getParameterTypes())));
+-        assertThat(describe(firstConstructor), not(equalTo(equalMethodButReturnType)));
++        assertThat(describe(firstConstructor), not(equalMethodButReturnType));
+         MethodDescription.InDefinedShape equalMethodButDeclaringType = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButDeclaringType.getInternalName()).thenReturn(MethodDescription.CONSTRUCTOR_INTERNAL_NAME);
+         when(equalMethodButDeclaringType.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstConstructor.getDeclaringClass()));
+         when(equalMethodButDeclaringType.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(Object.class));
+         when(equalMethodButDeclaringType.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButDeclaringType,
+                 new TypeList.ForLoadedType(firstConstructor.getParameterTypes())));
+-        assertThat(describe(firstConstructor), not(equalTo(equalMethodButDeclaringType)));
++        assertThat(describe(firstConstructor), not(equalMethodButDeclaringType));
+         MethodDescription.InDefinedShape equalMethodButParameterTypes = mock(MethodDescription.InDefinedShape.class);
+         when(equalMethodButParameterTypes.getInternalName()).thenReturn(MethodDescription.CONSTRUCTOR_INTERNAL_NAME);
+         when(equalMethodButParameterTypes.getDeclaringType()).thenReturn(new TypeDescription.ForLoadedType(firstConstructor.getDeclaringClass()));
+         when(equalMethodButParameterTypes.getReturnType()).thenReturn(new TypeDescription.ForLoadedType(void.class));
+         when(equalMethodButParameterTypes.getParameters()).thenReturn(new ParameterList.Explicit.ForTypes(equalMethodButParameterTypes,
+                 new TypeList.ForLoadedType(secondConstructor.getParameterTypes())));
+-        assertThat(describe(firstConstructor), not(equalTo(equalMethodButParameterTypes)));
+-        assertThat(describe(firstConstructor), not(equalTo(new Object())));
++        assertThat(describe(firstConstructor), not(equalMethodButParameterTypes));
++        assertThat(describe(firstConstructor), not(new Object()));
+         assertThat(describe(firstConstructor), not(equalTo(null)));
+     }
+ 
+@@ -275,22 +275,22 @@ public void testToString() throws Exception {
+     @JavaVersionRule.Enforce(8)
+     public void testEqualsParameter() throws Exception {
+         ParameterDescription identical = describe(secondMethod).getParameters().get(0);
+-        assertThat(identical, equalTo(identical));
+-        assertThat(identical, not(equalTo(new Object())));
++        assertThat(identical, is(identical));
++        assertThat(identical, not(new Object()));
+         assertThat(identical, not(equalTo(null)));
+         assertThat(describe(secondMethod).getParameters().get(0), is(describe(secondMethod).getParameters().get(0)));
+         ParameterDescription equal = mock(ParameterDescription.class);
+         when(equal.getDeclaringMethod()).thenReturn(describe(secondMethod));
+         when(equal.getIndex()).thenReturn(0);
+-        assertThat(describe(secondMethod).getParameters().get(0), equalTo(equal));
++        assertThat(describe(secondMethod).getParameters().get(0), is(equal));
+         ParameterDescription notEqualMethod = mock(ParameterDescription.class);
+         when(equal.getDeclaringMethod()).thenReturn(mock(MethodDescription.class));
+         when(equal.getIndex()).thenReturn(0);
+-        assertThat(describe(secondMethod).getParameters().get(0), not(equalTo(notEqualMethod)));
++        assertThat(describe(secondMethod).getParameters().get(0), not(notEqualMethod));
+         ParameterDescription notEqualMethodIndex = mock(ParameterDescription.class);
+         when(equal.getDeclaringMethod()).thenReturn(describe(secondMethod));
+         when(equal.getIndex()).thenReturn(1);
+-        assertThat(describe(secondMethod).getParameters().get(0), not(equalTo(notEqualMethodIndex)));
++        assertThat(describe(secondMethod).getParameters().get(0), not(notEqualMethodIndex));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractPackageDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractPackageDescriptionTest.java
+index fd374924c9..12195f306e 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractPackageDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractPackageDescriptionTest.java
+@@ -35,29 +35,29 @@ public void testPackageContains() throws Exception {
+     public void testHashCode() throws Exception {
+         assertThat(describe(Child.class).hashCode(), is(Child.class.getPackage().hashCode()));
+         assertThat(describe(Child.class).hashCode(), is(describe(Child.class).hashCode()));
+-        assertThat(describe(Child.class).hashCode(), not(is(describe(Sample.class).hashCode())));
++        assertThat(describe(Child.class).hashCode(), not(describe(Sample.class).hashCode()));
+         assertThat(describe(Sample.class).hashCode(), is(Sample.class.getPackage().hashCode()));
+         assertThat(describe(Sample.class).hashCode(), is(describe(Sample.class).hashCode()));
+-        assertThat(describe(Sample.class).hashCode(), not(is(describe(Child.class).hashCode())));
++        assertThat(describe(Sample.class).hashCode(), not(describe(Child.class).hashCode()));
+     }
+ 
+     @Test
+     public void testEquals() throws Exception {
+         assertThat(describe(Child.class).toString(), not(equalTo(null)));
+-        assertThat(describe(Child.class).toString(), not(equalTo(new Object())));
+-        assertThat(describe(Child.class).toString(), equalTo(describe(Child.class).toString()));
+-        assertThat(describe(Child.class).toString(), not(equalTo(describe(Sample.class).toString())));
+-        assertThat(describe(Sample.class).toString(), equalTo(describe(Sample.class).toString()));
+-        assertThat(describe(Sample.class).toString(), not(equalTo(describe(Child.class).toString())));
++        assertThat(describe(Child.class).toString(), not(new Object()));
++        assertThat(describe(Child.class).toString(), is(describe(Child.class).toString()));
++        assertThat(describe(Child.class).toString(), not(describe(Sample.class).toString()));
++        assertThat(describe(Sample.class).toString(), is(describe(Sample.class).toString()));
++        assertThat(describe(Sample.class).toString(), not(describe(Child.class).toString()));
+     }
+ 
+     @Test
+     public void testToString() throws Exception {
+         assertThat(describe(Child.class).toString(), is(Child.class.getPackage().toString()));
+         assertThat(describe(Child.class).toString(), is(describe(Child.class).toString()));
+-        assertThat(describe(Child.class).toString(), not(is(describe(Sample.class).toString())));
++        assertThat(describe(Child.class).toString(), not(describe(Sample.class).toString()));
+         assertThat(describe(Sample.class).toString(), is(Sample.class.getPackage().toString()));
+         assertThat(describe(Sample.class).toString(), is(describe(Sample.class).toString()));
+-        assertThat(describe(Sample.class).toString(), not(is(describe(Child.class).toString())));
++        assertThat(describe(Sample.class).toString(), not(describe(Child.class).toString()));
+     }
+ }
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
+index b7ff79d7ca..6c83614114 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
+@@ -90,11 +90,11 @@ public void testNoSymbol() throws Exception {
+ 
+     @Test
+     public void testPrecondition() throws Exception {
+-        assertThat(describe(SampleClass.class), not(equalTo(describe(SampleInterface.class))));
+-        assertThat(describe(SampleClass.class), not(equalTo(describe(SampleAnnotation.class))));
+-        assertThat(describe(SampleClass.class), equalTo(describe(SampleClass.class)));
+-        assertThat(describe(SampleInterface.class), equalTo(describe(SampleInterface.class)));
+-        assertThat(describe(SampleAnnotation.class), equalTo(describe(SampleAnnotation.class)));
++        assertThat(describe(SampleClass.class), not(describe(SampleInterface.class)));
++        assertThat(describe(SampleClass.class), not(describe(SampleAnnotation.class)));
++        assertThat(describe(SampleClass.class), is(describe(SampleClass.class)));
++        assertThat(describe(SampleInterface.class), is(describe(SampleInterface.class)));
++        assertThat(describe(SampleAnnotation.class), is(describe(SampleAnnotation.class)));
+         assertThat(describe(SampleClass.class), is((TypeDescription) new TypeDescription.ForLoadedType(SampleClass.class)));
+         assertThat(describe(SampleInterface.class), is((TypeDescription) new TypeDescription.ForLoadedType(SampleInterface.class)));
+         assertThat(describe(SampleAnnotation.class), is((TypeDescription) new TypeDescription.ForLoadedType(SampleAnnotation.class)));
+@@ -233,31 +233,31 @@ public void testHashCode() throws Exception {
+         assertThat(describe(SampleInterface.class).hashCode(), is(Type.getInternalName(SampleInterface.class).hashCode()));
+         assertThat(describe(SampleAnnotation.class).hashCode(), is(Type.getInternalName(SampleAnnotation.class).hashCode()));
+         assertThat(describe(SampleClass.class).hashCode(), is(describe(SampleClass.class).hashCode()));
+-        assertThat(describe(SampleClass.class).hashCode(), not(is(describe(SampleInterface.class).hashCode())));
+-        assertThat(describe(SampleClass.class).hashCode(), not(is(describe(SampleAnnotation.class).hashCode())));
++        assertThat(describe(SampleClass.class).hashCode(), not(describe(SampleInterface.class).hashCode()));
++        assertThat(describe(SampleClass.class).hashCode(), not(describe(SampleAnnotation.class).hashCode()));
+         assertThat(describe(Object[].class).hashCode(), is(describe(Object[].class).hashCode()));
+-        assertThat(describe(Object[].class).hashCode(), not(is(describe(Object.class).hashCode())));
++        assertThat(describe(Object[].class).hashCode(), not(describe(Object.class).hashCode()));
+         assertThat(describe(void.class).hashCode(), is(Type.getInternalName(void.class).hashCode()));
+     }
+ 
+     @Test
+     public void testEquals() throws Exception {
+         TypeDescription identical = describe(SampleClass.class);
+-        assertThat(identical, equalTo(identical));
++        assertThat(identical, is(identical));
+         TypeDescription equalFirst = mock(TypeDescription.class);
+         when(equalFirst.getSort()).thenReturn(GenericTypeDescription.Sort.NON_GENERIC);
+         when(equalFirst.asErasure()).thenReturn(equalFirst);
+         when(equalFirst.getInternalName()).thenReturn(Type.getInternalName(SampleClass.class));
+-        assertThat(describe(SampleClass.class), equalTo(equalFirst));
+-        assertThat(describe(SampleClass.class), not(equalTo(describe(SampleInterface.class))));
+-        assertThat(describe(SampleClass.class), not(equalTo((TypeDescription) new TypeDescription.ForLoadedType(SampleInterface.class))));
++        assertThat(describe(SampleClass.class), is(equalFirst));
++        assertThat(describe(SampleClass.class), not(describe(SampleInterface.class)));
++        assertThat(describe(SampleClass.class), not((TypeDescription) new TypeDescription.ForLoadedType(SampleInterface.class)));
+         GenericTypeDescription nonRawType = mock(GenericTypeDescription.class);
+         when(nonRawType.getSort()).thenReturn(GenericTypeDescription.Sort.VARIABLE);
+-        assertThat(describe(SampleClass.class), not(equalTo(nonRawType)));
+-        assertThat(describe(SampleClass.class), not(equalTo(new Object())));
++        assertThat(describe(SampleClass.class), not(nonRawType));
++        assertThat(describe(SampleClass.class), not(new Object()));
+         assertThat(describe(SampleClass.class), not(equalTo(null)));
+-        assertThat(describe(Object[].class), equalTo((TypeDescription) new TypeDescription.ForLoadedType(Object[].class)));
+-        assertThat(describe(Object[].class), not(equalTo((TypeDescription) new TypeDescription.ForLoadedType(Object.class))));
++        assertThat(describe(Object[].class), is((TypeDescription) new TypeDescription.ForLoadedType(Object[].class)));
++        assertThat(describe(Object[].class), not((TypeDescription) new TypeDescription.ForLoadedType(Object.class)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeTest.java
+index 59e524db19..b53bde9633 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/InstrumentedTypeTest.java
+@@ -272,7 +272,7 @@ public void testEquals() throws Exception {
+         when(other.getInternalName()).thenReturn(instrumentedType.getInternalName());
+         when(other.getSort()).thenReturn(GenericTypeDescription.Sort.NON_GENERIC);
+         when(other.asErasure()).thenReturn(other);
+-        assertThat(instrumentedType, equalTo(other));
++        assertThat(instrumentedType, is(other));
+         verify(other, atLeast(1)).getInternalName();
+     }
+ 
+@@ -310,8 +310,8 @@ public void testRepresents() {
+     @Test
+     public void testSuperType() {
+         assertThat(makePlainInstrumentedType().getSuperType(), is((GenericTypeDescription) new TypeDescription.ForLoadedType(Object.class)));
+-        assertThat(makePlainInstrumentedType().getSuperType(), not(is((GenericTypeDescription) new TypeDescription.ForLoadedType(Integer.class))));
+-        assertThat(makePlainInstrumentedType().getSuperType(), not(is((GenericTypeDescription) new TypeDescription.ForLoadedType(Serializable.class))));
++        assertThat(makePlainInstrumentedType().getSuperType(), not((GenericTypeDescription) new TypeDescription.ForLoadedType(Integer.class)));
++        assertThat(makePlainInstrumentedType().getSuperType(), not((GenericTypeDescription) new TypeDescription.ForLoadedType(Serializable.class)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/MethodGraphCompilerDefaultTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/MethodGraphCompilerDefaultTest.java
+index e35be67fe5..def51dec09 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/MethodGraphCompilerDefaultTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/MethodGraphCompilerDefaultTest.java
+@@ -101,7 +101,7 @@ public void testClassInheritance() throws Exception {
+         assertThat(methodNode.getRepresentative(), is(method));
+         assertThat(methodGraph.listNodes().contains(methodNode), is(true));
+         MethodGraph.Node baseNode = methodGraph.getSuperGraph().locate(method.asToken());
+-        assertThat(methodNode, not(is(baseNode)));
++        assertThat(methodNode, not(baseNode));
+         assertThat(baseNode.getRepresentative(), is(typeDescription.getSuperType().getDeclaredMethods().filter(representedBy(method.asToken())).getOnly()));
+     }
+ 
+@@ -159,7 +159,7 @@ public void testClassAndInterfaceDominantInheritance() throws Exception {
+         assertThat(methodNode.getMethodTypes().contains(method.asTypeToken()), is(true));
+         assertThat(methodNode.getRepresentative(), is(method));
+         MethodGraph.Node baseNode = methodGraph.getInterfaceGraph(new TypeDescription.ForLoadedType(InterfaceBase.class)).locate(method.asToken());
+-        assertThat(methodNode, not(is(baseNode)));
++        assertThat(methodNode, not(baseNode));
+         assertThat(baseNode.getRepresentative(), is(typeDescription.getInterfaces().getOnly().getDeclaredMethods().getOnly()));
+     }
+ 
+@@ -181,10 +181,10 @@ public void testMultipleAmbiguousClassInheritance() throws Exception {
+         assertThat(methodNode.getRepresentative(), not(second));
+         assertThat(methodNode, is(methodGraph.locate(second.asToken())));
+         MethodGraph.Node firstBaseNode = methodGraph.getInterfaceGraph(new TypeDescription.ForLoadedType(InterfaceBase.class)).locate(first.asToken());
+-        assertThat(methodNode, not(is(firstBaseNode)));
++        assertThat(methodNode, not(firstBaseNode));
+         assertThat(firstBaseNode.getRepresentative(), is(first));
+         MethodGraph.Node secondBaseNode = methodGraph.getInterfaceGraph(new TypeDescription.ForLoadedType(InterfaceBase.class)).locate(second.asToken());
+-        assertThat(methodNode, not(is(secondBaseNode)));
++        assertThat(methodNode, not(secondBaseNode));
+         assertThat(secondBaseNode.getRepresentative(), is(first));
+     }
+ 
+@@ -206,10 +206,10 @@ public void testMultipleAmbiguousInterfaceInheritance() throws Exception {
+         assertThat(methodNode.getRepresentative(), not(second));
+         assertThat(methodNode, is(methodGraph.locate(second.asToken())));
+         MethodGraph.Node firstBaseNode = methodGraph.getInterfaceGraph(new TypeDescription.ForLoadedType(InterfaceBase.class)).locate(first.asToken());
+-        assertThat(methodNode, not(is(firstBaseNode)));
++        assertThat(methodNode, not(firstBaseNode));
+         assertThat(firstBaseNode.getRepresentative(), is(first));
+         MethodGraph.Node secondBaseNode = methodGraph.getInterfaceGraph(new TypeDescription.ForLoadedType(InterfaceBase.class)).locate(second.asToken());
+-        assertThat(methodNode, not(is(secondBaseNode)));
++        assertThat(methodNode, not(secondBaseNode));
+         assertThat(secondBaseNode.getRepresentative(), is(first));
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FieldAccessorObjectPropertiesTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FieldAccessorObjectPropertiesTest.java
+index d29e20286f..8c5640b5e3 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FieldAccessorObjectPropertiesTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FieldAccessorObjectPropertiesTest.java
+@@ -30,28 +30,28 @@ public void testBeanPropertyFieldAccessor() throws Exception {
+         assertThat(FieldAccessor.ofBeanProperty(), is(FieldAccessor.ofBeanProperty()));
+         assertThat(FieldAccessor.ofBeanProperty().in(first).hashCode(), is(FieldAccessor.ofBeanProperty().in(first).hashCode()));
+         assertThat(FieldAccessor.ofBeanProperty().in(first), is(FieldAccessor.ofBeanProperty().in(first)));
+-        assertThat(FieldAccessor.ofBeanProperty().in(first).hashCode(), not(is(FieldAccessor.ofBeanProperty().hashCode())));
+-        assertThat((FieldAccessor) FieldAccessor.ofBeanProperty().in(first), not(is((FieldAccessor) FieldAccessor.ofBeanProperty())));
+-        assertThat(FieldAccessor.ofBeanProperty().in(first).hashCode(), not(is(FieldAccessor.ofBeanProperty().in(second).hashCode())));
+-        assertThat(FieldAccessor.ofBeanProperty().in(first), not(is(FieldAccessor.ofBeanProperty().in(second))));
++        assertThat(FieldAccessor.ofBeanProperty().in(first).hashCode(), not(FieldAccessor.ofBeanProperty().hashCode()));
++        assertThat((FieldAccessor) FieldAccessor.ofBeanProperty().in(first), not((FieldAccessor) FieldAccessor.ofBeanProperty()));
++        assertThat(FieldAccessor.ofBeanProperty().in(first).hashCode(), not(FieldAccessor.ofBeanProperty().in(second).hashCode()));
++        assertThat(FieldAccessor.ofBeanProperty().in(first), not(FieldAccessor.ofBeanProperty().in(second)));
+     }
+ 
+     @Test
+     public void testExplicitFieldAccessor() throws Exception {
+         assertThat(FieldAccessor.ofField(FOO).hashCode(), is(FieldAccessor.ofField(FOO).hashCode()));
+         assertThat(FieldAccessor.ofField(FOO), is(FieldAccessor.ofField(FOO)));
+-        assertThat(FieldAccessor.ofField(FOO).hashCode(), not(is(FieldAccessor.ofField(BAR).hashCode())));
+-        assertThat(FieldAccessor.ofField(FOO), not(is(FieldAccessor.ofField(BAR))));
++        assertThat(FieldAccessor.ofField(FOO).hashCode(), not(FieldAccessor.ofField(BAR).hashCode()));
++        assertThat(FieldAccessor.ofField(FOO), not(FieldAccessor.ofField(BAR)));
+         assertThat(FieldAccessor.ofField(FOO).in(first).hashCode(), is(FieldAccessor.ofField(FOO).in(first).hashCode()));
+         assertThat(FieldAccessor.ofField(FOO).in(first), is(FieldAccessor.ofField(FOO).in(first)));
+-        assertThat(FieldAccessor.ofField(FOO).in(first).hashCode(), not(is(FieldAccessor.ofField(FOO).hashCode())));
+-        assertThat((FieldAccessor) FieldAccessor.ofField(FOO).in(first), not(is((FieldAccessor) FieldAccessor.ofField(FOO))));
+-        assertThat(FieldAccessor.ofField(FOO).in(first).hashCode(), not(is(FieldAccessor.ofField(FOO).in(second).hashCode())));
+-        assertThat(FieldAccessor.ofField(FOO).in(first), not(is(FieldAccessor.ofField(FOO).in(second))));
++        assertThat(FieldAccessor.ofField(FOO).in(first).hashCode(), not(FieldAccessor.ofField(FOO).hashCode()));
++        assertThat((FieldAccessor) FieldAccessor.ofField(FOO).in(first), not((FieldAccessor) FieldAccessor.ofField(FOO)));
++        assertThat(FieldAccessor.ofField(FOO).in(first).hashCode(), not(FieldAccessor.ofField(FOO).in(second).hashCode()));
++        assertThat(FieldAccessor.ofField(FOO).in(first), not(FieldAccessor.ofField(FOO).in(second)));
+         assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE).hashCode(), is(FieldAccessor.ofField(FOO).defineAs(TYPE).hashCode()));
+         assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE), is(FieldAccessor.ofField(FOO).defineAs(TYPE)));
+-        assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE).hashCode(), not(is(FieldAccessor.ofField(FOO).defineAs(OTHER_TYPE).hashCode())));
+-        assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE), not(is(FieldAccessor.ofField(FOO).defineAs(OTHER_TYPE))));
++        assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE).hashCode(), not(FieldAccessor.ofField(FOO).defineAs(OTHER_TYPE).hashCode()));
++        assertThat(FieldAccessor.ofField(FOO).defineAs(TYPE), not(FieldAccessor.ofField(FOO).defineAs(OTHER_TYPE)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FixedValueObjectPropertiesTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FixedValueObjectPropertiesTest.java
+index c132f9a280..21aae6d27a 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FixedValueObjectPropertiesTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/FixedValueObjectPropertiesTest.java
+@@ -15,28 +15,28 @@
+     public void testConstantPoolValue() throws Exception {
+         assertThat(FixedValue.value(FOO).hashCode(), is(FixedValue.value(FOO).hashCode()));
+         assertThat(FixedValue.value(FOO), is(FixedValue.value(FOO)));
+-        assertThat(FixedValue.value(FOO).hashCode(), not(is(FixedValue.value(BAR).hashCode())));
+-        assertThat(FixedValue.value(FOO), not(is(FixedValue.value(BAR))));
+-        assertThat(FixedValue.value(FOO).hashCode(), not(is(FixedValue.reference(FOO).hashCode())));
+-        assertThat(FixedValue.value(FOO), not(is(FixedValue.reference(FOO))));
++        assertThat(FixedValue.value(FOO).hashCode(), not(FixedValue.value(BAR).hashCode()));
++        assertThat(FixedValue.value(FOO), not(FixedValue.value(BAR)));
++        assertThat(FixedValue.value(FOO).hashCode(), not(FixedValue.reference(FOO).hashCode()));
++        assertThat(FixedValue.value(FOO), not(FixedValue.reference(FOO)));
+     }
+ 
+     @Test
+     public void testReferenceValue() throws Exception {
+         assertThat(FixedValue.reference(FOO).hashCode(), is(FixedValue.reference(FOO).hashCode()));
+         assertThat(FixedValue.reference(FOO), is(FixedValue.reference(FOO)));
+-        assertThat(FixedValue.reference(FOO).hashCode(), not(is(FixedValue.value(FOO).hashCode())));
+-        assertThat(FixedValue.reference(FOO), not(is(FixedValue.value(FOO))));
+-        assertThat(FixedValue.reference(FOO).hashCode(), not(is(FixedValue.reference(BAR).hashCode())));
+-        assertThat(FixedValue.reference(FOO), not(is(FixedValue.reference(BAR))));
++        assertThat(FixedValue.reference(FOO).hashCode(), not(FixedValue.value(FOO).hashCode()));
++        assertThat(FixedValue.reference(FOO), not(FixedValue.value(FOO)));
++        assertThat(FixedValue.reference(FOO).hashCode(), not(FixedValue.reference(BAR).hashCode()));
++        assertThat(FixedValue.reference(FOO), not(FixedValue.reference(BAR)));
+     }
+ 
+     @Test
+     public void testReferenceValueWithExplicitFieldName() throws Exception {
+         assertThat(FixedValue.reference(FOO, QUX).hashCode(), is(FixedValue.reference(FOO, QUX).hashCode()));
+         assertThat(FixedValue.reference(FOO, QUX), is(FixedValue.reference(FOO, QUX)));
+-        assertThat(FixedValue.reference(FOO, QUX).hashCode(), not(is(FixedValue.reference(BAR, QUX).hashCode())));
+-        assertThat(FixedValue.reference(FOO, QUX), not(is(FixedValue.reference(BAR, QUX))));
++        assertThat(FixedValue.reference(FOO, QUX).hashCode(), not(FixedValue.reference(BAR, QUX).hashCode()));
++        assertThat(FixedValue.reference(FOO, QUX), not(FixedValue.reference(BAR, QUX)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/InvocationHandlerAdapterTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/InvocationHandlerAdapterTest.java
+index bec249e02a..b120bb3500 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/InvocationHandlerAdapterTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/InvocationHandlerAdapterTest.java
+@@ -110,22 +110,22 @@ public void testInstanceAdapterWithMethodCache() throws Exception {
+     public void testEqualsHashCodeStaticAdapter() throws Exception {
+         assertThat(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode(), is(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode()));
+         assertThat(InvocationHandlerAdapter.of(new Foo(FOO)), is(InvocationHandlerAdapter.of(new Foo(FOO))));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode(), not(is(InvocationHandlerAdapter.of(new Foo(BAR)).hashCode())));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)), not(is(InvocationHandlerAdapter.of(new Foo(BAR)))));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode(), not(is(InvocationHandlerAdapter.of(new Foo(FOO), QUX).hashCode())));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)), not(is(InvocationHandlerAdapter.of(new Foo(FOO), QUX))));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO), QUX).hashCode(), not(is(InvocationHandlerAdapter.toInstanceField(QUX).hashCode())));
+-        assertThat(InvocationHandlerAdapter.of(new Foo(FOO), QUX), not(is(InvocationHandlerAdapter.toInstanceField(QUX))));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode(), not(InvocationHandlerAdapter.of(new Foo(BAR)).hashCode()));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)), not(InvocationHandlerAdapter.of(new Foo(BAR))));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)).hashCode(), not(InvocationHandlerAdapter.of(new Foo(FOO), QUX).hashCode()));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO)), not(InvocationHandlerAdapter.of(new Foo(FOO), QUX)));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO), QUX).hashCode(), not(InvocationHandlerAdapter.toInstanceField(QUX).hashCode()));
++        assertThat(InvocationHandlerAdapter.of(new Foo(FOO), QUX), not(InvocationHandlerAdapter.toInstanceField(QUX)));
+     }
+ 
+     @Test
+     public void testEqualsHashCodeInstanceAdapter() throws Exception {
+         assertThat(InvocationHandlerAdapter.toInstanceField(QUX).hashCode(), is(InvocationHandlerAdapter.toInstanceField(QUX).hashCode()));
+         assertThat(InvocationHandlerAdapter.toInstanceField(QUX), is(InvocationHandlerAdapter.toInstanceField(QUX)));
+-        assertThat(InvocationHandlerAdapter.toInstanceField(QUX).hashCode(), not(is(InvocationHandlerAdapter.toInstanceField(FOO).hashCode())));
+-        assertThat(InvocationHandlerAdapter.toInstanceField(QUX), not(is(InvocationHandlerAdapter.toInstanceField(FOO))));
+-        assertThat(InvocationHandlerAdapter.toInstanceField(QUX).hashCode(), not(is(InvocationHandlerAdapter.of(new Foo(BAR), QUX).hashCode())));
+-        assertThat(InvocationHandlerAdapter.toInstanceField(QUX), not(is(InvocationHandlerAdapter.of(new Foo(BAR), QUX))));
++        assertThat(InvocationHandlerAdapter.toInstanceField(QUX).hashCode(), not(InvocationHandlerAdapter.toInstanceField(FOO).hashCode()));
++        assertThat(InvocationHandlerAdapter.toInstanceField(QUX), not(InvocationHandlerAdapter.toInstanceField(FOO)));
++        assertThat(InvocationHandlerAdapter.toInstanceField(QUX).hashCode(), not(InvocationHandlerAdapter.of(new Foo(BAR), QUX).hashCode()));
++        assertThat(InvocationHandlerAdapter.toInstanceField(QUX), not(InvocationHandlerAdapter.of(new Foo(BAR), QUX)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
+index fffe2d8325..2e0c2119df 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
+@@ -34,42 +34,42 @@ public void testDelegationWithIllegalType() throws Exception {
+     public void testStaticMethodDelegation() throws Exception {
+         assertThat(MethodDelegation.to(Foo.class).hashCode(), is(MethodDelegation.to(Foo.class).hashCode()));
+         assertThat(MethodDelegation.to(Foo.class), is(MethodDelegation.to(Foo.class)));
+-        assertThat(MethodDelegation.to(Foo.class).hashCode(), not(is(MethodDelegation.to(Bar.class).hashCode())));
+-        assertThat(MethodDelegation.to(Foo.class), not(is(MethodDelegation.to(Bar.class))));
++        assertThat(MethodDelegation.to(Foo.class).hashCode(), not(MethodDelegation.to(Bar.class).hashCode()));
++        assertThat(MethodDelegation.to(Foo.class), not(MethodDelegation.to(Bar.class)));
+     }
+ 
+     @Test
+     public void testStaticInstanceDelegation() throws Exception {
+         assertThat(MethodDelegation.to(new Foo()).hashCode(), is(MethodDelegation.to(new Foo()).hashCode()));
+         assertThat(MethodDelegation.to(new Foo()), is(MethodDelegation.to(new Foo())));
+-        assertThat(MethodDelegation.to(new Foo()).hashCode(), not(is(MethodDelegation.to(new Bar()).hashCode())));
+-        assertThat(MethodDelegation.to(new Foo()), not(is(MethodDelegation.to(new Bar()))));
++        assertThat(MethodDelegation.to(new Foo()).hashCode(), not(MethodDelegation.to(new Bar()).hashCode()));
++        assertThat(MethodDelegation.to(new Foo()), not(MethodDelegation.to(new Bar())));
+     }
+ 
+     @Test
+     public void testStaticInstanceDelegationWithFieldName() throws Exception {
+         assertThat(MethodDelegation.to(new Foo(), FOO).hashCode(), is(MethodDelegation.to(new Foo(), FOO).hashCode()));
+         assertThat(MethodDelegation.to(new Foo(), FOO), is(MethodDelegation.to(new Foo(), FOO)));
+-        assertThat(MethodDelegation.to(new Foo(), FOO).hashCode(), not(is(MethodDelegation.to(new Foo(), BAR).hashCode())));
+-        assertThat(MethodDelegation.to(new Foo()), not(is(MethodDelegation.to(new Foo(), BAR))));
++        assertThat(MethodDelegation.to(new Foo(), FOO).hashCode(), not(MethodDelegation.to(new Foo(), BAR).hashCode()));
++        assertThat(MethodDelegation.to(new Foo()), not(MethodDelegation.to(new Foo(), BAR)));
+     }
+ 
+     @Test
+     public void testInstanceFieldDelegation() throws Exception {
+         assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), is(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode()));
+         assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), is(MethodDelegation.toInstanceField(Foo.class, FOO)));
+-        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(is(MethodDelegation.toInstanceField(Bar.class, FOO).hashCode())));
+-        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(is(MethodDelegation.toInstanceField(Bar.class, FOO))));
+-        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(is(MethodDelegation.toInstanceField(Foo.class, BAR).hashCode())));
+-        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(is(MethodDelegation.toInstanceField(Foo.class, BAR))));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(MethodDelegation.toInstanceField(Bar.class, FOO).hashCode()));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(MethodDelegation.toInstanceField(Bar.class, FOO)));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(MethodDelegation.toInstanceField(Foo.class, BAR).hashCode()));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(MethodDelegation.toInstanceField(Foo.class, BAR)));
+     }
+ 
+     @Test
+     public void testConstructorDelegation() throws Exception {
+         assertThat(MethodDelegation.toConstructor(Foo.class).hashCode(), is(MethodDelegation.toConstructor(Foo.class).hashCode()));
+         assertThat(MethodDelegation.toConstructor(Foo.class), is(MethodDelegation.toConstructor(Foo.class)));
+-        assertThat(MethodDelegation.toConstructor(Foo.class).hashCode(), not(is(MethodDelegation.toConstructor(Bar.class).hashCode())));
+-        assertThat(MethodDelegation.toConstructor(Foo.class), not(is(MethodDelegation.toConstructor(Bar.class))));
++        assertThat(MethodDelegation.toConstructor(Foo.class).hashCode(), not(MethodDelegation.toConstructor(Bar.class).hashCode()));
++        assertThat(MethodDelegation.toConstructor(Foo.class), not(MethodDelegation.toConstructor(Bar.class)));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/MethodBindingBuilderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/MethodBindingBuilderTest.java
+index 7bc74d15b0..de4ed06aab 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/MethodBindingBuilderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/MethodBindingBuilderTest.java
+@@ -160,8 +160,8 @@ public void testBuildHashCodeEquals() throws Exception {
+         assertThat(methodBinding.hashCode(), is(equalMethodBinding.hashCode()));
+         assertThat(methodBinding, is(equalMethodBinding));
+         MethodDelegationBinder.MethodBinding unequalMethodBinding = builder.build(mock(StackManipulation.class));
+-        assertThat(methodBinding.hashCode(), not(is(unequalMethodBinding.hashCode())));
+-        assertThat(methodBinding, not(is(unequalMethodBinding)));
++        assertThat(methodBinding.hashCode(), not(unequalMethodBinding.hashCode()));
++        assertThat(methodBinding, not(unequalMethodBinding));
+     }
+ 
+     private static class Key {
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/ArgumentBinderTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/ArgumentBinderTest.java
+index 03c0211d42..76f61da55d 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/ArgumentBinderTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bind/annotation/ArgumentBinderTest.java
+@@ -17,9 +17,9 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-import static org.hamcrest.CoreMatchers.*;
++import static org.hamcrest.CoreMatchers.is;
++import static org.hamcrest.CoreMatchers.not;
+ import static org.hamcrest.MatcherAssert.assertThat;
+-import static org.mockito.Mockito.any;
+ import static org.mockito.Mockito.*;
+ 
+ public class ArgumentBinderTest extends AbstractAnnotationBinderTest<Argument> {
+@@ -95,11 +95,11 @@ private void assertBinding(boolean dynamicallyTyped,
+         assertThat(parameterBinding.isValid(), is(true));
+         Object expectedToken = new ArgumentTypeResolver.ParameterIndexToken(sourceIndex);
+         if (bindingMechanic == Argument.BindingMechanic.UNIQUE) {
+-            assertThat(parameterBinding.getIdentificationToken(), equalTo(expectedToken));
+-            assertThat(parameterBinding.getIdentificationToken().hashCode(), equalTo(expectedToken.hashCode()));
++            assertThat(parameterBinding.getIdentificationToken(), is(expectedToken));
++            assertThat(parameterBinding.getIdentificationToken().hashCode(), is(expectedToken.hashCode()));
+         } else {
+-            assertThat(parameterBinding.getIdentificationToken(), not(equalTo(expectedToken)));
+-            assertThat(parameterBinding.getIdentificationToken().hashCode(), not(equalTo(expectedToken.hashCode())));
++            assertThat(parameterBinding.getIdentificationToken(), not(expectedToken));
++            assertThat(parameterBinding.getIdentificationToken().hashCode(), not(expectedToken.hashCode()));
+         }
+         verify(annotation, atLeast(1)).value();
+         verify(source, atLeast(1)).getParameters();
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bytecode/ByteCodeAppenderSizeTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bytecode/ByteCodeAppenderSizeTest.java
+index ecae86e160..64668cbdeb 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bytecode/ByteCodeAppenderSizeTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bytecode/ByteCodeAppenderSizeTest.java
+@@ -3,7 +3,6 @@
+ import net.bytebuddy.test.utility.ObjectPropertyAssertion;
+ import org.junit.Test;
+ 
+-import static org.hamcrest.CoreMatchers.equalTo;
+ import static org.hamcrest.CoreMatchers.is;
+ import static org.hamcrest.MatcherAssert.assertThat;
+ 
+@@ -17,7 +16,7 @@ public void testMerge() throws Exception {
+         ByteCodeAppender.Size right = new ByteCodeAppender.Size(BIGGER, LOWER);
+         ByteCodeAppender.Size mergedLeft = left.merge(right);
+         ByteCodeAppender.Size mergedRight = right.merge(left);
+-        assertThat(mergedLeft, equalTo(mergedRight));
++        assertThat(mergedLeft, is(mergedRight));
+         assertThat(mergedLeft.getOperandStackSize(), is(BIGGER));
+         assertThat(mergedLeft.getLocalVariableSize(), is(BIGGER));
+     }
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/pool/TypePoolResolutionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/pool/TypePoolResolutionTest.java
+index 48c8c61bdb..5b9b9252e3 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/pool/TypePoolResolutionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/pool/TypePoolResolutionTest.java
+@@ -40,7 +40,7 @@ public void testArrayResolutionPositiveArity() throws Exception {
+         TypePool.Resolution resolution = mock(TypePool.Resolution.class);
+         when(resolution.isResolved()).thenReturn(true);
+         when(resolution.resolve()).thenReturn(mock(TypeDescription.class));
+-        assertThat(TypePool.Default.ArrayTypeResolution.of(resolution, 1), not(is(resolution)));
++        assertThat(TypePool.Default.ArrayTypeResolution.of(resolution, 1), not(resolution));
+         TypeDescription typeDescription = TypePool.Default.ArrayTypeResolution.of(resolution, 1).resolve();
+         assertThat(typeDescription.isArray(), is(true));
+     }
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/CallTraceable.java b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/CallTraceable.java
+index 9daa09405a..b88e3d3446 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/CallTraceable.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/CallTraceable.java
+@@ -4,7 +4,6 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-import static org.hamcrest.CoreMatchers.equalTo;
+ import static org.hamcrest.CoreMatchers.is;
+ import static org.hamcrest.MatcherAssert.assertThat;
+ 
+@@ -23,7 +22,7 @@ public void register(String name, Object... arguments) {
+     public void assertOnlyCall(String name, Object... arguments) {
+         assertThat(methodCalls.size(), is(1));
+         assertThat(methodCalls.get(0).name, is(name));
+-        assertThat(methodCalls.get(0).arguments, equalTo(arguments));
++        assertThat(methodCalls.get(0).arguments, is(arguments));
+     }
+ 
+     public void assertZeroCalls() {
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/ObjectPropertyAssertion.java b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/ObjectPropertyAssertion.java
+index 08b883fb92..6e37becee2 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/ObjectPropertyAssertion.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/ObjectPropertyAssertion.java
+@@ -152,8 +152,8 @@ public void apply() throws IllegalAccessException, InvocationTargetException, In
+             @SuppressWarnings("unchecked")
+             T instance = (T) constructor.newInstance(actualArguments);
+             assertThat(instance, is(instance));
+-            assertThat(instance, not(is((Object) null)));
+-            assertThat(instance, not(is(new Object())));
++            assertThat(instance, not(equalTo(null)));
++            assertThat(instance, not(new Object()));
+             Object similarInstance = constructor.newInstance(actualArguments);
+             assertThat(instance.hashCode(), is(similarInstance.hashCode()));
+             assertThat(instance, is(similarInstance));
+@@ -176,8 +176,8 @@ public void apply() throws IllegalAccessException, InvocationTargetException, In
+                     argumentIndex++;
+                 }
+                 Object unlikeInstance = constructor.newInstance(compareArguments);
+-                assertThat(instance.hashCode(), not(is(unlikeInstance)));
+-                assertThat(instance, not(is(unlikeInstance)));
++                assertThat(instance.hashCode(), not(unlikeInstance));
++                assertThat(instance, not(unlikeInstance));
+                 testIndex++;
+             }
+         }
+@@ -214,9 +214,9 @@ public void applyBasic() throws IllegalAccessException, InvocationTargetExceptio
+             T instance = (T) constructor.newInstance(actualArguments);
+             checkString(instance);
+             assertThat(instance, is(instance));
+-            assertThat(instance, not(is((Object) null)));
+-            assertThat(instance, not(is(new Object())));
+-            assertThat(instance, not(is(constructor.newInstance(otherArguments))));
++            assertThat(instance, not(equalTo(null)));
++            assertThat(instance, not(new Object()));
++            assertThat(instance, not(constructor.newInstance(otherArguments)));
+         }
+     }
+ 

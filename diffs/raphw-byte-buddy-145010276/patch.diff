@@ -1,0 +1,94 @@
+diff --git a/byte-buddy-android-test/pom.xml b/byte-buddy-android-test/pom.xml
+index 6c4627c0ba..62b014125f 100644
+--- a/byte-buddy-android-test/pom.xml
++++ b/byte-buddy-android-test/pom.xml
+@@ -8,7 +8,7 @@
+         <groupId>net.bytebuddy</groupId>
+         <artifactId>byte-buddy-parent</artifactId>
+         <!-- The version number is not updated by the release plugin as this artifact is not released! -->
+-        <version>1.4.7-SNAPSHOT</version>
++        <version>1.4.12-SNAPSHOT</version>
+     </parent>
+ 
+     <artifactId>byte-buddy-android-test</artifactId>
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
+index 58e0e98db3..9a85a5aad2 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
+@@ -1625,6 +1625,9 @@ public String toString() {
+              */
+             protected final Label returnHandler;
+ 
++            /**
++             * {@code true} if the advice method ever returns non-exceptionally.
++             */
+             protected boolean doesReturn;
+ 
+             /**
+@@ -1802,6 +1805,7 @@ protected void onExitAdviceReturn() {
+                 public String toString() {
+                     return "Advice.AdviceVisitor.WithExitAdvice.WithoutExceptionHandling{" +
+                             "instrumentedMethod=" + instrumentedMethod +
++                            ", doesReturn=" + doesReturn +
+                             "}";
+                 }
+             }
+@@ -1931,6 +1935,7 @@ public String toString() {
+                     return "Advice.AdviceVisitor.WithExitAdvice.WithExceptionHandling{" +
+                             "instrumentedMethod=" + instrumentedMethod +
+                             ", triggeringThrowable=" + triggeringThrowable +
++                            ", doesReturn=" + doesReturn +
+                             "}";
+                 }
+             }
+@@ -6446,6 +6451,11 @@ public void visitIincInsn(int offset, int increment) {
+                  */
+                 protected static class ForMethodEnter extends CodeTranslationVisitor {
+ 
++                    /**
++                     * {@code true} if the method can return non-exceptionally.
++                     */
++                    private boolean doesReturn;
++
+                     /**
+                      * Creates a code translation visitor for translating exit advice.
+                      *
+@@ -6465,6 +6475,7 @@ protected ForMethodEnter(MethodVisitor methodVisitor,
+                                              Map<Integer, Resolved.OffsetMapping.Target> offsetMappings,
+                                              SuppressionHandler.Bound suppressionHandler) {
+                         super(methodVisitor, methodSizeHandler, stackMapFrameHandler, instrumentedMethod, adviceMethod, offsetMappings, suppressionHandler);
++                        doesReturn = false;
+                     }
+ 
+                     @Override
+@@ -6493,6 +6504,7 @@ public void visitInsn(int opcode) {
+                                 return;
+                         }
+                         mv.visitJumpInsn(Opcodes.GOTO, endOfMethod);
++                        doesReturn = true;
+                     }
+ 
+                     @Override
+@@ -6517,12 +6529,13 @@ public void onDefaultValue(MethodVisitor methodVisitor) {
+                         } else if (!adviceMethod.getReturnType().represents(void.class)) {
+                             methodVisitor.visitInsn(Opcodes.ACONST_NULL);
+                         }
++                        doesReturn = true;
+                     }
+ 
+                     @Override
+                     protected void onMethodReturn() {
+                         Type returnType = Type.getType(adviceMethod.getReturnType().asErasure().getDescriptor());
+-                        if (!returnType.equals(Type.VOID_TYPE)) {
++                        if (doesReturn && !returnType.equals(Type.VOID_TYPE)) {
+                             stackMapFrameHandler.injectReturnFrame(methodVisitor);
+                             methodVisitor.visitVarInsn(returnType.getOpcode(Opcodes.ISTORE), instrumentedMethod.getStackSize());
+                         }
+@@ -6533,6 +6546,7 @@ public String toString() {
+                         return "Advice.Dispatcher.Inlining.CodeTranslationVisitor.ForMethodEnter{" +
+                                 "instrumentedMethod=" + instrumentedMethod +
+                                 ", adviceMethod=" + adviceMethod +
++                                ", doesReturn=" + doesReturn +
+                                 '}';
+                     }
+                 }

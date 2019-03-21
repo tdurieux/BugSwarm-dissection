@@ -1,0 +1,95 @@
+diff --git a/mypy/dmypy_server.py b/mypy/dmypy_server.py
+index faa4f9c827..c05d43eced 100644
+--- a/mypy/dmypy_server.py
++++ b/mypy/dmypy_server.py
+@@ -86,13 +86,11 @@ class Server:
+     def __init__(self, flags: List[str]) -> None:
+         """Initialize the server with the desired mypy flags."""
+         self.saved_cache = {}  # type: mypy.build.SavedCache
+-        if '--experimental' in flags:
+-            self.fine_grained = True
+-            self.fine_grained_initialized = False
+-            flags.remove('--experimental')
+-        else:
+-            self.fine_grained = False
+-        sources, options = mypy.main.process_options(['-i'] + flags, False)
++        self.fine_grained_initialized = False
++        sources, options = mypy.main.process_options(['-i'] + flags,
++                                                     require_targets=False,
++                                                     server_options=True)
++        self.fine_grained = options.fine_grained_incremental
+         if sources:
+             sys.exit("dmypy: start/restart does not accept sources")
+         if options.report_dirs:
+diff --git a/mypy/main.py b/mypy/main.py
+index 90b1285abc..b64dcccd3f 100644
+--- a/mypy/main.py
++++ b/mypy/main.py
+@@ -206,7 +206,8 @@ def invert_flag_name(flag: str) -> str:
+ 
+ 
+ def process_options(args: List[str],
+-                    require_targets: bool = True
++                    require_targets: bool = True,
++                    server_options: bool = False,
+                     ) -> Tuple[List[BuildSource], Options]:
+     """Parse command line arguments."""
+ 
+@@ -389,6 +390,9 @@ def add_invertible_flag(flag: str,
+     parser.add_argument('--no-fast-parser', action='store_true',
+                         dest='special-opts:no_fast_parser',
+                         help=argparse.SUPPRESS)
++    if server_options:
++        parser.add_argument('--experimental', action='store_true', dest='fine_grained_incremental',
++                            help="enable fine-grained incremental mode")
+ 
+     report_group = parser.add_argument_group(
+         title='report generation',
+diff --git a/mypy/nodes.py b/mypy/nodes.py
+index 4f75e4863c..227a34dda0 100644
+--- a/mypy/nodes.py
++++ b/mypy/nodes.py
+@@ -4,9 +4,13 @@
+ from abc import abstractmethod
+ from collections import OrderedDict, defaultdict
+ from typing import (
+-    Any, TypeVar, List, Tuple, cast, Set, Dict, Union, Optional, Callable, Sequence, DefaultDict
++    Any, TypeVar, List, Tuple, cast, Set, Dict, Union, Optional, Callable, Sequence
+ )
+ 
++MYPY = False
++if MYPY:
++    from typing import DefaultDict
++
+ import mypy.strconv
+ from mypy.util import short_type
+ from mypy.visitor import NodeVisitor, StatementVisitor, ExpressionVisitor
+diff --git a/mypy/options.py b/mypy/options.py
+index 91160f5770..f05253d034 100644
+--- a/mypy/options.py
++++ b/mypy/options.py
+@@ -141,6 +141,7 @@ def __init__(self) -> None:
+         self.debug_cache = False
+         self.quick_and_dirty = False
+         self.skip_version_check = False
++        self.fine_grained_incremental = False
+ 
+         # Paths of user plugins
+         self.plugins = []  # type: List[str]
+diff --git a/mypy/server/deps.py b/mypy/server/deps.py
+index 6d944f47ff..151eb6c135 100644
+--- a/mypy/server/deps.py
++++ b/mypy/server/deps.py
+@@ -79,7 +79,11 @@ class 'mod.Cls'. This can also refer to an attribute inherited from a
+ Test cases for this module live in 'test-data/unit/deps*.test'.
+ """
+ 
+-from typing import Dict, List, Set, Optional, Tuple, Union, DefaultDict
++from typing import Dict, List, Set, Optional, Tuple, Union
++
++MYPY = False
++if MYPY:
++    from typing import DefaultDict
+ 
+ from mypy.checkmember import bind_self
+ from mypy.nodes import (

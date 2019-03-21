@@ -1,0 +1,65 @@
+diff --git a/check-license-compliance.sh b/check-license-compliance.sh
+new file mode 100755
+index 0000000000..5bfe6caddd
+--- /dev/null
++++ b/check-license-compliance.sh
+@@ -0,0 +1,6 @@
++#!/bin/bash
++set -euo pipefail
++
++# See https://xtranet.sonarsource.com/display/DEV/Open+Source+Licenses
++
++mvn org.codehaus.mojo:license-maven-plugin:aggregate-add-third-party -Dlicense.aggregateMissingLicensesFile=$(pwd)/missing-dep-licenses.properties -DuseMissingFile
+diff --git a/missing-dep-licenses.properties b/missing-dep-licenses.properties
+new file mode 100644
+index 0000000000..1adb77faba
+--- /dev/null
++++ b/missing-dep-licenses.properties
+@@ -0,0 +1,6 @@
++# List the licenses which are not defined on third-party dependencies.
++# See check-license-compatibility.sh
++
++classworlds--classworlds--1.1-alpha-2=apache_v2
++org.codehaus.plexus--plexus-container-default--1.0-alpha-9-stable-1=apache_v2
++org.slf4j--slf4j-api--1.5.6=mit
+diff --git a/pom.xml b/pom.xml
+index ba5eea6d6b..53a906cdd7 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -5,7 +5,7 @@
+   <parent>
+     <groupId>org.sonarsource.parent</groupId>
+     <artifactId>parent</artifactId>
+-    <version>44</version>
++    <version>45</version>
+   </parent>
+ 
+   <groupId>org.sonarsource.java</groupId>
+diff --git a/third-party-licenses.sh b/third-party-licenses.sh
+deleted file mode 100644
+index 6728f1de06..0000000000
+--- a/third-party-licenses.sh
++++ /dev/null
+@@ -1,4 +0,0 @@
+-#!/bin/sh
+-mvn org.codehaus.mojo:license-maven-plugin:aggregate-add-third-party -Dlicense.includedScopes=compile
+-
+-cat target/generated-sources/license/THIRD-PARTY.txt
+diff --git a/travis.sh b/travis.sh
+index 3c8b9d22d6..1eebaa8468 100755
+--- a/travis.sh
++++ b/travis.sh
+@@ -1,5 +1,4 @@
+ #!/bin/bash
+-
+ set -euo pipefail
+ 
+ function configureTravis {
+@@ -16,6 +15,7 @@ case "$TEST" in
+ CI)
+   export DEPLOY_PULL_REQUEST=true
+   regular_mvn_build_deploy_analyze
++  ./check-license-compliance.sh
+   ;;
+ 
+ *)

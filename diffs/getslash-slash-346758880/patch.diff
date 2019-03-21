@@ -1,0 +1,62 @@
+diff --git a/slash/utils/python.py b/slash/utils/python.py
+index ff945729..67f53539 100644
+--- a/slash/utils/python.py
++++ b/slash/utils/python.py
+@@ -16,7 +16,7 @@ def check_duplicate_functions(path):
+         code = f.read()
+     with warnings.catch_warnings():
+         warnings.simplefilter('ignore')
+-        root = ast.parse(code)
++        root = ast.parse(code, filename=path)
+     func_names = set()
+     duplicates = set()
+     for node in root.body:
+diff --git a/slash/warnings.py b/slash/warnings.py
+index 9fce6c64..30324137 100644
+--- a/slash/warnings.py
++++ b/slash/warnings.py
+@@ -34,7 +34,7 @@ def _capture_native_warning(self, message, category, filename, lineno, file=None
+         warning = RecordedWarning.from_native_warning(message, category, filename, lineno)
+         self.add(warning)
+         if not issubclass(category, LogbookWarning):
+-            _native_logger.warning('{!r}', warning)
++            _native_logger.warning('{filename}:{lineno}: {warning!r}', filename=filename, lineno=lineno, warning=warning)
+ 
+     def add(self, warning):
+         hooks.warning_added(warning=warning) # pylint: disable=no-member
+diff --git a/tests/test_warnings.py b/tests/test_warnings.py
+index 8e43e98e..f8b6c9d8 100644
+--- a/tests/test_warnings.py
++++ b/tests/test_warnings.py
+@@ -7,6 +7,7 @@
+ 
+ import logbook
+ import pytest
++import inspect
+ 
+ import slash
+ 
+@@ -49,13 +50,22 @@ def warning_added(warning):
+     assert warning_type == 'LogbookWarning'
+ 
+ 
++def _get_current_line_info():
++    frame = inspect.currentframe().f_back
++    return frame.f_code.co_filename, frame.f_lineno
++
++
+ def test_native_warnings(message):
+ 
+     def test_example():
+         with logbook.TestHandler() as handler:
++            filename, line_no = _get_current_line_info()
+             warnings.warn(message)
+         assert len(handler.records) == 1
+-        assert handler.records[0].message == message
++        rec_message = handler.records[0].message
++        assert rec_message.endswith(message)
++        assert filename in rec_message
++        assert str(line_no + 1) in rec_message
+ 
+     s = run_tests_assert_success(test_example)
+ 

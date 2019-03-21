@@ -1,0 +1,655 @@
+diff --git a/doc/source/reference/c-api.generalized-ufuncs.rst b/doc/source/reference/c-api.generalized-ufuncs.rst
+index d34a9d4d4f6..a53228cb54a 100644
+--- a/doc/source/reference/c-api.generalized-ufuncs.rst
++++ b/doc/source/reference/c-api.generalized-ufuncs.rst
+@@ -1,3 +1,5 @@
++.. _c-api.generalized-ufuncs:
++
+ ==================================
+ Generalized Universal Function API
+ ==================================
+diff --git a/doc/source/reference/routines.functional.rst b/doc/source/reference/routines.functional.rst
+index e4aababddce..83fd1755a32 100644
+--- a/doc/source/reference/routines.functional.rst
++++ b/doc/source/reference/routines.functional.rst
+@@ -9,5 +9,6 @@ Functional programming
+    apply_along_axis
+    apply_over_axes
+    vectorize
++   guvectorize
+    frompyfunc
+    piecewise
+diff --git a/doc/source/user/quickstart.rst b/doc/source/user/quickstart.rst
+index 5ab8cdad759..6a74dc7fdda 100644
+--- a/doc/source/user/quickstart.rst
++++ b/doc/source/user/quickstart.rst
+@@ -420,6 +420,7 @@ operate elementwise on an array, producing an array as output.
+     `diff`,
+     `dot`,
+     `floor`,
++    `guvectorize`,
+     `inner`,
+     `inv`,
+     `lexsort`,
+diff --git a/numpy/lib/function_base.py b/numpy/lib/function_base.py
+index cb1a04f47b5..1e331dc8992 100644
+--- a/numpy/lib/function_base.py
++++ b/numpy/lib/function_base.py
+@@ -1,9 +1,10 @@
+ from __future__ import division, absolute_import, print_function
+ 
+-import warnings
+-import sys
+ import collections
+ import operator
++import re
++import sys
++import warnings
+ 
+ import numpy as np
+ import numpy.core.numeric as _nx
+@@ -24,7 +25,7 @@
+ from numpy.lib.twodim_base import diag
+ from .utils import deprecate
+ from numpy.core.multiarray import (
+-    _insert, add_docstring, digitize, bincount, 
++    _insert, add_docstring, digitize, bincount,
+     interp as compiled_interp, interp_complex as compiled_interp_complex
+     )
+ from numpy.core.umath import _add_newdoc_ufunc as add_newdoc_ufunc
+@@ -39,11 +40,12 @@
+ __all__ = [
+     'select', 'piecewise', 'trim_zeros', 'copy', 'iterable', 'percentile',
+     'diff', 'gradient', 'angle', 'unwrap', 'sort_complex', 'disp', 'flip',
+-    'rot90', 'extract', 'place', 'vectorize', 'asarray_chkfinite', 'average',
+-    'histogram', 'histogramdd', 'bincount', 'digitize', 'cov', 'corrcoef',
+-    'msort', 'median', 'sinc', 'hamming', 'hanning', 'bartlett',
+-    'blackman', 'kaiser', 'trapz', 'i0', 'add_newdoc', 'add_docstring',
+-    'meshgrid', 'delete', 'insert', 'append', 'interp', 'add_newdoc_ufunc'
++    'rot90', 'extract', 'place', 'vectorize', 'guvectorize',
++    'asarray_chkfinite', 'average', 'histogram', 'histogramdd', 'bincount',
++    'digitize', 'cov', 'corrcoef', 'msort', 'median', 'sinc', 'hamming',
++    'hanning', 'bartlett', 'blackman', 'kaiser', 'trapz', 'i0', 'add_newdoc',
++    'add_docstring', 'meshgrid', 'delete', 'insert', 'append', 'interp',
++    'add_newdoc_ufunc'
+     ]
+ 
+ 
+@@ -1792,7 +1794,7 @@ def interp(x, xp, fp, left=None, right=None, period=None):
+ 
+     Returns
+     -------
+-    y : float or complex (corresponding to fp) or ndarray 
++    y : float or complex (corresponding to fp) or ndarray
+         The interpolated values, same shape as `x`.
+ 
+     Raises
+@@ -1899,7 +1901,7 @@ def interp(x, xp, fp, left=None, right=None, period=None):
+             return interp_func(x, xp, fp, left, right)
+         else:
+             return interp_func(x, xp, fp, left, right).item()
+-                
++
+ def angle(z, deg=0):
+     """
+     Return the angle of the complex argument.
+@@ -2242,11 +2244,25 @@ def disp(mesg, device=None, linefeed=True):
+     return
+ 
+ 
++def _validate_otypes(otypes):
++    if isinstance(otypes, str):
++        for char in otypes:
++            if char not in typecodes['All']:
++                raise ValueError(
++                    "Invalid otype specified: %s" % (char,))
++    elif iterable(otypes):
++        otypes = ''.join([_nx.dtype(x).char for x in otypes])
++    elif otypes is not None:
++        raise ValueError(
++            "Invalid otype specification")
++    return otypes
++
++
+ class vectorize(object):
+     """
+-    vectorize(pyfunc, otypes='', doc=None, excluded=None, cache=False)
++    vectorize(pyfunc, otypes=None, doc=None, excluded=None, cache=False)
+ 
+-    Generalized function class.
++    Vectorize a function written for scalar values.
+ 
+     Define a vectorized function which takes a nested sequence
+     of objects or numpy arrays as inputs and returns a
+@@ -2343,6 +2359,7 @@ class vectorize(object):
+     See Also
+     --------
+     frompyfunc : Takes an arbitrary Python function and returns a ufunc
++    guvectorize : Vectorize a function with core dimensions.
+ 
+     Notes
+     -----
+@@ -2361,7 +2378,7 @@ class vectorize(object):
+ 
+     """
+ 
+-    def __init__(self, pyfunc, otypes='', doc=None, excluded=None,
++    def __init__(self, pyfunc, otypes=None, doc=None, excluded=None,
+                  cache=False):
+         self.pyfunc = pyfunc
+         self.cache = cache
+@@ -2372,17 +2389,7 @@ def __init__(self, pyfunc, otypes='', doc=None, excluded=None,
+         else:
+             self.__doc__ = doc
+ 
+-        if isinstance(otypes, str):
+-            self.otypes = otypes
+-            for char in self.otypes:
+-                if char not in typecodes['All']:
+-                    raise ValueError(
+-                        "Invalid otype specified: %s" % (char,))
+-        elif iterable(otypes):
+-            self.otypes = ''.join([_nx.dtype(x).char for x in otypes])
+-        else:
+-            raise ValueError(
+-                "Invalid otype specification")
++        self.otypes = _validate_otypes(otypes)
+ 
+         # Excluded variable support
+         if excluded is None:
+@@ -2425,7 +2432,7 @@ def _get_ufunc_and_otypes(self, func, args):
+         if not args:
+             raise ValueError('args can not be empty')
+ 
+-        if self.otypes:
++        if self.otypes is not None:
+             otypes = self.otypes
+             nout = len(otypes)
+ 
+@@ -2497,6 +2504,232 @@ def _vectorize_call(self, func, args):
+         return _res
+ 
+ 
++# See http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
++_DIMENSION_NAME = r'\w+'
++_CORE_DIMENSION_LIST = '(?:%s(?:,%s)*)?' % (_DIMENSION_NAME, _DIMENSION_NAME)
++_ARGUMENT = r'\(%s\)' % _CORE_DIMENSION_LIST
++_ARGUMENT_LIST = '%s(?:,%s)*' % (_ARGUMENT, _ARGUMENT)
++_SIGNATURE = '^%s->%s$' % (_ARGUMENT_LIST, _ARGUMENT_LIST)
++
++
++def _parse_gufunc_signature(signature):
++    """
++    Parse function signature for a generalized-ufunc.
++
++    Arguments
++    ---------
++    signature : string
++        Generalized universal function signature, e.g., ``(m,n),(n,p)->(m,p)``
++        for ``np.matmul``.
++
++    Returns
++    -------
++    Tuple of input and output core dimensions parsed from the signature, each
++    of the form List[Tuple[str, ...]].
++    """
++    if not re.match(_SIGNATURE, signature):
++        raise ValueError(
++            'not a valid gufunc signature: {}'.format(signature))
++    return tuple([tuple(re.findall(_DIMENSION_NAME, arg))
++                  for arg in re.findall(_ARGUMENT, arg_list)]
++                 for arg_list in signature.split('->'))
++
++
++def _update_dim_sizes(dim_sizes, arg, core_dims):
++    """
++    Incrementally check and update core dimension sizes for a single argument.
++
++    Arguments
++    ---------
++    dim_sizes : Dict[str, int]
++        Sizes of existing core dimensions. Will be updated in-place.
++    arg : ndarray
++        Argument to examine.
++    core_dims : Tuple[str, ...]
++        Core dimensions for this argument.
++    """
++    if core_dims:
++        num_core_dims = len(core_dims)
++        if arg.ndim < num_core_dims:
++            raise ValueError(
++                '%d-dimensional argument does not have enough '
++                'dimensions for all core dimensions %r'
++                % (arg.ndim, core_dims))
++        core_shape = arg.shape[-num_core_dims:]
++        for dim, size in zip(core_dims, core_shape):
++            if dim in dim_sizes:
++                if size != dim_sizes[dim]:
++                    raise ValueError(
++                        'inconsistent size for core dimension %r: %r vs %r'
++                        % (dim, size, dim_sizes[dim]))
++            else:
++                dim_sizes[dim] = size
++
++
++def _parse_input_dimensions(args, input_core_dims):
++    """
++    Parse broadcast and core dimensions for guvectorize.
++
++    Arguments
++    ---------
++    args : Tuple[ndarray, ...]
++        Tuple of input arguments to examine.
++    input_core_dims : List[Tuple[str, ...]]
++        List of core dimensions corresponding to each input.
++
++    Returns
++    -------
++    broadcast_shape : Tuple[int, ...]
++        Common shape to broadcast all non-core dimensions to.
++    dim_sizes : Dict[str, int]
++        Common sizes for named core dimensions.
++    """
++    broadcast_args = []
++    dim_sizes = {}
++    for arg, core_dims in zip(args, input_core_dims):
++        _update_dim_sizes(dim_sizes, arg, core_dims)
++        broadcast_args.append(arg[(Ellipsis,) + len(core_dims) * (0,)])
++    broadcast_shape = np.lib.stride_tricks._broadcast_shape(*broadcast_args)
++    return broadcast_shape, dim_sizes
++
++
++def _calculate_shapes(broadcast_shape, dim_sizes, list_of_core_dims):
++    return [broadcast_shape + tuple(dim_sizes[dim] for dim in core_dims)
++            for core_dims in list_of_core_dims]
++
++
++class guvectorize(object):
++    """
++    guvectorize(pyfunc, signature, otypes=None, doc=None)
++
++    Vectorize a function written for non-scalar values.
++
++    Like vectorize, but defines a vectorized function that can include core
++    dimensions excluded from broadcasting in the style of generalized universal
++    functions.
++
++    The data type of the output of `vectorized` is determined by calling
++    the function with the first element of the input. This can be avoided
++    by specifying the `otypes` argument.
++
++    Parameters
++    ----------
++    pyfunc : callable
++        A python function or method.
++    signature : string
++        Generalized universal function signature, e.g., ``(m,n),(n,p)->(m,p)``
++        for ``np.matmul``.
++    otypes : str or list of dtypes, optional
++        The output data type. It must be specified as either a string of
++        typecode characters or a list of data type specifiers. There should
++        be one data type specifier for each output.
++    doc : str, optional
++        The docstring for the function. If `None`, the docstring will be the
++        ``pyfunc.__doc__``.
++
++    Returns
++    -------
++    vectorized : callable
++        Vectorized function. Positional arguments used to call `vectorized` are
++        vectorized, and must appear in `signature`. Keyword arguments are
++        passed unchanged to `pyfunc`.
++
++    Examples
++    --------
++
++    Vectorized calculation of Pearson correlation coefficient and its p-value:
++
++    >>> import scipy.stats
++    >>> pearsonr = np.guvectorize(scipy.stats.pearsonr, '(n),(n)->(),()')
++    >>> pearsonr([[0, 1, 2, 3]], [[1, 2, 3, 4], [4, 3, 2, 1]])
++    (array([ 1., -1.]), array([ 0.,  0.]))
++
++    Vectorized convolution:
++
++    >>> convolve = np.guvectorize(np.convolve, '(n),(m)->(k)')
++    >>> convolve(np.eye(4), [1, 2, 1])
++    array([[ 1.,  2.,  1.,  0.,  0.,  0.],
++           [ 0.,  1.,  2.,  1.,  0.,  0.],
++           [ 0.,  0.,  1.,  2.,  1.,  0.],
++           [ 0.,  0.,  0.,  1.,  2.,  1.]])
++
++    See Also
++    --------
++    vectorize : Vectorize a function over scalar values.
++    """
++    def __init__(self, pyfunc, signature, otypes=None, doc=None):
++        self.pyfunc = pyfunc
++        self.signature = signature
++
++        if not re.match(_SIGNATURE, signature):
++            raise ValueError(
++                'not a valid gufunc signature: {}'.format(signature))
++        all_core_dimensions = [[tuple(re.findall(_DIMENSION_NAME, arg))
++                                for arg in re.findall(_ARGUMENT, arg_list)]
++                               for arg_list in signature.split('->')]
++        self._input_core_dims, self._output_core_dims = all_core_dimensions
++
++        if doc is None:
++            self.__doc__ = pyfunc.__doc__
++        else:
++            self.__doc__ = doc
++
++        self.otypes = _validate_otypes(otypes)
++
++    def __call__(self, *args, **kwargs):
++        input_core_dims = self._input_core_dims
++        output_core_dims = self._output_core_dims
++
++        if len(args) != len(input_core_dims):
++            raise TypeError('wrong number of positional arguments: '
++                            'expected %r, got %r'
++                            % (len(input_core_dims), len(args)))
++        args = tuple(asanyarray(arg) for arg in args)
++
++        # consider checking for size 0 inputs?
++        broadcast_shape, dim_sizes = _parse_input_dimensions(
++            args, input_core_dims)
++        input_shapes = _calculate_shapes(broadcast_shape, dim_sizes,
++                                         input_core_dims)
++        args = [np.broadcast_to(arg, shape, subok=True)
++                for arg, shape in zip(args, input_shapes)]
++
++        outputs = None
++        otypes = self.otypes
++        nout = len(output_core_dims)
++
++        for index in np.ndindex(*broadcast_shape):
++            results = self.pyfunc(*(arg[index] for arg in args), **kwargs)
++
++            n_results = len(results) if isinstance(results, tuple) else 1
++
++            if nout != n_results:
++                raise ValueError(
++                    'wrong number of outputs from pyfunc: expected %r, got %r'
++                    % (nout, n_results))
++
++            if nout == 1:
++                results = (results,)
++
++            if outputs is None:
++                for result, core_dims in zip(results, output_core_dims):
++                    _update_dim_sizes(dim_sizes, result, core_dims)
++
++                output_shapes = _calculate_shapes(
++                    broadcast_shape, dim_sizes, output_core_dims)
++
++                if otypes is None:
++                    otypes = [asarray(result).dtype for result in results]
++
++                outputs = tuple(np.empty(shape, dtype=dtype)
++                                for shape, dtype in zip(output_shapes, otypes))
++
++            for output, result in zip(outputs, results):
++                output[index] = result
++
++        return outputs[0] if nout == 1 else outputs
++
++
+ def cov(m, y=None, rowvar=True, bias=False, ddof=None, fweights=None,
+         aweights=None):
+     """
+diff --git a/numpy/lib/tests/test_function_base.py b/numpy/lib/tests/test_function_base.py
+index 4535c1e7feb..2a201a87c0b 100644
+--- a/numpy/lib/tests/test_function_base.py
++++ b/numpy/lib/tests/test_function_base.py
+@@ -1,5 +1,6 @@
+ from __future__ import division, absolute_import, print_function
+ 
++import operator
+ import warnings
+ import sys
+ 
+@@ -18,7 +19,7 @@
+     delete, diff, digitize, extract, flipud, gradient, hamming, hanning,
+     histogram, histogramdd, i0, insert, interp, kaiser, meshgrid, msort,
+     piecewise, place, rot90, select, setxor1d, sinc, split, trapz, trim_zeros,
+-    unwrap, unique, vectorize
++    unwrap, unique, vectorize, guvectorize
+ )
+ 
+ from numpy.compat import long
+@@ -1070,6 +1071,144 @@ def test_otypes(self):
+         assert_array_equal(f(x), x)
+ 
+ 
++class TestGUVectorize(TestCase):
++
++    def test_parse_gufunc_signature(self):
++        assert_equal(nfb._parse_gufunc_signature('(x)->()'), ([('x',)], [()]))
++        assert_equal(nfb._parse_gufunc_signature('(x,y)->()'),
++                     ([('x', 'y')], [()]))
++        assert_equal(nfb._parse_gufunc_signature('(x),(y)->()'),
++                     ([('x',), ('y',)], [()]))
++        assert_equal(nfb._parse_gufunc_signature('(x)->(y)'),
++                     ([('x',)], [('y',)]))
++        assert_equal(nfb._parse_gufunc_signature('(x)->(y),()'),
++                     ([('x',)], [('y',), ()]))
++        assert_equal(nfb._parse_gufunc_signature('(),(a,b,c),(d)->(d,e)'),
++                     ([(), ('a', 'b', 'c'), ('d',)], [('d', 'e')]))
++        with assert_raises(ValueError):
++            nfb._parse_gufunc_signature('(x)(y)->()')
++        with assert_raises(ValueError):
++            nfb._parse_gufunc_signature('(x),(y)->')
++        with assert_raises(ValueError):
++            nfb._parse_gufunc_signature('((x))->(x)')
++
++    def test_simple(self):
++        def addsubtract(a, b):
++            if a > b:
++                return a - b
++            else:
++                return a + b
++
++        f = guvectorize(addsubtract, '(),()->()')
++        r = f([0, 3, 6, 9], [1, 3, 5, 7])
++        assert_array_equal(r, [1, 6, 1, 2])
++
++    def test_mean_last(self):
++        def mean(a):
++            return a.mean()
++
++        f = guvectorize(mean, '(n)->()')
++        r = f([[1, 3], [2, 4]])
++        assert_array_equal(r, [2, 3])
++
++    def test_center(self):
++        def center(a):
++            return a - a.mean()
++
++        f = guvectorize(center, '(n)->(n)')
++        r = f([[1, 3], [2, 4]])
++        assert_array_equal(r, [[-1, 1], [-1, 1]])
++
++    def test_two_outputs(self):
++        f = guvectorize(lambda x: (x, x), '()->(),()')
++        r = f([1, 2, 3])
++        assert_(isinstance(r, tuple) and len(r) == 2)
++        assert_array_equal(r[0], [1, 2, 3])
++        assert_array_equal(r[1], [1, 2, 3])
++
++    def test_outer(self):
++        f = guvectorize(np.outer, '(a),(b)->(a,b)')
++        r = f([1, 2], [1, 2, 3])
++        assert_array_equal(r, [[1, 2, 3], [2, 4, 6]])
++
++        r = f([[[1, 2]]], [1, 2, 3])
++        assert_array_equal(r, [[[[1, 2, 3], [2, 4, 6]]]])
++
++        r = f([[1, 0], [2, 0]], [1, 2, 3])
++        assert_array_equal(r, [[[1, 2, 3], [0, 0, 0]],
++                               [[2, 4, 6], [0, 0, 0]]])
++
++        r = f([1, 2], [[1, 2, 3], [0, 0, 0]])
++        assert_array_equal(r, [[[1, 2, 3], [2, 4, 6]],
++                               [[0, 0, 0], [0, 0, 0]]])
++
++    def test_computed_size(self):
++        f = guvectorize(lambda x: x[:-1], '(n)->(m)')
++        r = f([1, 2, 3])
++        assert_array_equal(r, [1, 2])
++
++        r = f([[1, 2, 3], [2, 3, 4]])
++        assert_array_equal(r, [[1, 2], [2, 3]])
++
++    def test_keywords(self):
++
++        def foo(a, b=1):
++            return a + b
++
++        f = guvectorize(foo, '()->()')
++        assert_array_equal(f([1, 2, 3]), [2, 3, 4])
++        assert_array_equal(f([1, 2, 3], b=0), [1, 2, 3])
++
++    def test_otypes(self):
++        f = guvectorize(lambda x: x, '(n)->(n)', otypes=['float64'])
++        r = f([1, 2, 3])
++        assert_equal(r.dtype, np.dtype('float64'))
++        assert_array_equal(r, [1, 2, 3])
++
++    def test_doc(self):
++        def f(x):
++            """Foo"""
++            return x
++
++        g = guvectorize(f, '()->()')
++        if f.__doc__ is not None:
++            # disable test if using -PYTHONOPTIMIZE
++            assert_equal(g.__doc__, 'Foo')
++
++        h = guvectorize(f, '()->()', doc='Bar')
++        assert_equal(h.__doc__, 'Bar')
++
++    def test_invalid_inputs(self):
++        f = guvectorize(operator.add, '(n),(n)->(n)')
++        with assert_raises_regex(TypeError, 'wrong number of positional'):
++            f([1, 2])
++        with assert_raises_regex(
++                ValueError, 'does not have enough dimensions'):
++            f(1, 2)
++        with assert_raises_regex(
++                ValueError, 'inconsistent size for core dimension'):
++            f([1, 2], [1, 2, 3])
++
++    def test_invalid_outputs(self):
++
++        f = guvectorize(lambda x: x[:-1], '(n)->(n)')
++        with assert_raises_regex(
++                ValueError, 'inconsistent size for core dimension'):
++            f([1, 2, 3])
++
++        f = guvectorize(lambda x: x, '()->(),()')
++        with assert_raises_regex(ValueError, 'wrong number of outputs'):
++            f(1)
++
++        f = guvectorize(lambda x: (x, x), '()->()')
++        with assert_raises_regex(ValueError, 'wrong number of outputs'):
++            f([1, 2])
++
++        f = guvectorize(lambda x: x, '()->(),()')
++        with assert_raises_regex(ValueError, 'wrong number of outputs'):
++            f(1)
++
++
+ class TestDigitize(TestCase):
+ 
+     def test_forward(self):
+diff --git a/numpy/lib/tests/test_utils.py b/numpy/lib/tests/test_utils.py
+index 8fbd1c4457d..92bcdc238dd 100644
+--- a/numpy/lib/tests/test_utils.py
++++ b/numpy/lib/tests/test_utils.py
+@@ -3,7 +3,7 @@
+ import sys
+ from numpy.core import arange
+ from numpy.testing import (
+-    run_module_suite, assert_, assert_equal, dec
++    run_module_suite, assert_, assert_equal, assert_raises_regex, dec
+     )
+ from numpy.lib import deprecate
+ import numpy.lib.utils as utils
+@@ -62,5 +62,10 @@ def test_byte_bounds():
+     assert_equal(high - low, a.size * a.itemsize)
+ 
+ 
++def test_assert_raises_regex_context_manager():
++    with assert_raises_regex(ValueError, 'no deprecation warning'):
++        raise ValueError('no deprecation warning')
++
++
+ if __name__ == "__main__":
+     run_module_suite()
+diff --git a/numpy/testing/utils.py b/numpy/testing/utils.py
+index cb39a9b4a26..599e73cb0b8 100644
+--- a/numpy/testing/utils.py
++++ b/numpy/testing/utils.py
+@@ -1149,9 +1149,10 @@ def raises(*args,**kwargs):
+     return nose.tools.raises(*args,**kwargs)
+ 
+ 
+-def assert_raises(*args,**kwargs):
++def assert_raises(*args, **kwargs):
+     """
+     assert_raises(exception_class, callable, *args, **kwargs)
++    assert_raises(exception_class)
+ 
+     Fail unless an exception of class exception_class is thrown
+     by callable when invoked with arguments args and keyword
+@@ -1164,12 +1165,12 @@ def assert_raises(*args,**kwargs):
+ 
+     >>> from numpy.testing import assert_raises
+     >>> with assert_raises(ZeroDivisionError):
+-    ...   1 / 0
++    ...     1 / 0
+ 
+     is equivalent to
+ 
+     >>> def div(x, y):
+-    ...    return x / y
++    ...     return x / y
+     >>> assert_raises(ZeroDivisionError, div, 1, 0)
+ 
+     """
+@@ -1178,13 +1179,18 @@ def assert_raises(*args,**kwargs):
+     return nose.tools.assert_raises(*args,**kwargs)
+ 
+ 
+-def assert_raises_regex(exception_class, expected_regexp,
+-                        callable_obj=None, *args, **kwargs):
++def assert_raises_regex(exception_class, expected_regexp, *args, **kwargs):
+     """
++    assert_raises_regex(exception_class, expected_regexp, callable, *args,
++                        **kwargs)
++    assert_raises_regex(exception_class, expected_regexp)
++
+     Fail unless an exception of class exception_class and with message that
+     matches expected_regexp is thrown by callable when invoked with arguments
+     args and keyword arguments kwargs.
+ 
++    Alternatively, can be used as a context manager like `assert_raises`.
++
+     Name of this function adheres to Python 3.2+ reference, but should work in
+     all versions down to 2.6.
+ 
+@@ -1200,10 +1206,9 @@ def assert_raises_regex(exception_class, expected_regexp,
+         funcname = nose.tools.assert_raises_regex
+     else:
+         # Only present in Python 2.7, missing from unittest in 2.6
+-            funcname = nose.tools.assert_raises_regexp
++        funcname = nose.tools.assert_raises_regexp
+ 
+-    return funcname(exception_class, expected_regexp, callable_obj,
+-                    *args, **kwargs)
++    return funcname(exception_class, expected_regexp, *args, **kwargs)
+ 
+ 
+ def decorate_methods(cls, decorator, testmatch=None):

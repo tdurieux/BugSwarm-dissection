@@ -1,0 +1,4335 @@
+diff --git a/build.gradle b/build.gradle
+index 05a7a213a..8e7140c48 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -59,6 +59,7 @@ subprojects { subproject ->
+ 	apply plugin: 'checkstyle'
+ 
+ 	apply from:   "${rootDir}/src/checkstyle/fixHeaders.gradle"
++	apply from:   "${rootDir}/src/checkstyle/fixThis.gradle"
+ 
+ 	if (project.hasProperty('platformVersion')) {
+ 		apply plugin: 'spring-io'
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/AbstractExchange.java b/spring-amqp/src/main/java/org/springframework/amqp/core/AbstractExchange.java
+index 7cbedcc71..08dfef717 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/AbstractExchange.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/AbstractExchange.java
+@@ -120,11 +120,11 @@ public void setDelayed(boolean delayed) {
+ 
+ 	@Override
+ 	public String toString() {
+-		return "Exchange [name=" + name +
+-						 ", type=" + this.getType() +
+-						 ", durable=" + durable +
+-						 ", autoDelete=" + autoDelete +
+-						 ", arguments="	+ arguments + "]";
++		return "Exchange [name=" + this.name +
++						 ", type=" + getType() +
++						 ", durable=" + this.durable +
++						 ", autoDelete=" + this.autoDelete +
++						 ", arguments="	+ this.arguments + "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/Address.java b/spring-amqp/src/main/java/org/springframework/amqp/core/Address.java
+index 52a5eef98..5db0957a2 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/Address.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/Address.java
+@@ -148,8 +148,8 @@ public boolean equals(Object o) {
+ 
+ 	@Override
+ 	public int hashCode() {
+-		int result = exchangeName != null ? exchangeName.hashCode() : 0;
+-		result = 31 * result + (routingKey != null ? routingKey.hashCode() : 0);
++		int result = this.exchangeName != null ? this.exchangeName.hashCode() : 0;
++		result = 31 * result + (this.routingKey != null ? this.routingKey.hashCode() : 0);
+ 		return result;
+ 	}
+ 
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpMessageReturnedException.java b/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpMessageReturnedException.java
+index b8636a4eb..06c35255c 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpMessageReturnedException.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpMessageReturnedException.java
+@@ -51,31 +51,32 @@ public AmqpMessageReturnedException(String message, Message returnedMessage, int
+ 	}
+ 
+ 	public Message getReturnedMessage() {
+-		return returnedMessage;
++		return this.returnedMessage;
+ 	}
+ 
+ 	public int getReplyCode() {
+-		return replyCode;
++		return this.replyCode;
+ 	}
+ 
+ 	public String getReplyText() {
+-		return replyText;
++		return this.replyText;
+ 	}
+ 
+ 	public String getExchange() {
+-		return exchange;
++		return this.exchange;
+ 	}
+ 
+ 	public String getRoutingKey() {
+-		return routingKey;
++		return this.routingKey;
+ 	}
+ 
+ 	@Override
+ 	public String toString() {
+ 		return "AmqpMessageReturnedException: "
+ 				+ getMessage()
+-				+ "[returnedMessage=" + returnedMessage + ", replyCode=" + replyCode
+-				+ ", replyText=" + replyText + ", exchange=" + exchange + ", routingKey=" + routingKey + "]";
++				+ "[returnedMessage=" + this.returnedMessage + ", replyCode=" + this.replyCode
++				+ ", replyText=" + this.replyText + ", exchange=" + this.exchange + ", routingKey=" + this.routingKey
++				+ "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpReplyTimeoutException.java b/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpReplyTimeoutException.java
+index 789a4dd05..12249238d 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpReplyTimeoutException.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/AmqpReplyTimeoutException.java
+@@ -37,12 +37,12 @@ public AmqpReplyTimeoutException(String message, Message requestMessage) {
+ 	}
+ 
+ 	public Message getRequestMessage() {
+-		return requestMessage;
++		return this.requestMessage;
+ 	}
+ 
+ 	@Override
+ 	public String toString() {
+-		return "AmqpReplyTimeoutException [" + getMessage() + ", requestMessage=" + requestMessage + "]";
++		return "AmqpReplyTimeoutException [" + getMessage() + ", requestMessage=" + this.requestMessage + "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/Binding.java b/spring-amqp/src/main/java/org/springframework/amqp/core/Binding.java
+index 159478077..c8d8f3149 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/Binding.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/Binding.java
+@@ -76,12 +76,13 @@ public String getRoutingKey() {
+ 	}
+ 
+ 	public boolean isDestinationQueue() {
+-		return DestinationType.QUEUE.equals(destinationType);
++		return DestinationType.QUEUE.equals(this.destinationType);
+ 	}
+ 
+ 	@Override
+ 	public String toString() {
+-		return "Binding [destination=" + destination + ", exchange=" + exchange + ", routingKey=" + routingKey + "]";
++		return "Binding [destination=" + this.destination + ", exchange=" + this.exchange + ", routingKey="
++					+ this.routingKey + "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/BindingBuilder.java b/spring-amqp/src/main/java/org/springframework/amqp/core/BindingBuilder.java
+index 65dffb1ba..1f69135e4 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/BindingBuilder.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/BindingBuilder.java
+@@ -112,14 +112,17 @@ private HeadersExchangeSingleValueBindingCreator(String key) {
+ 			}
+ 
+ 			public Binding exists() {
+-				return new Binding(destination.name, destination.type, exchange.getName(), "",
+-						createMapForKeys(this.key));
++				return new Binding(HeadersExchangeMapConfigurer.this.destination.name,
++						HeadersExchangeMapConfigurer.this.destination.type,
++						HeadersExchangeMapConfigurer.this.exchange.getName(), "", createMapForKeys(this.key));
+ 			}
+ 
+ 			public Binding matches(Object value) {
+ 				Map<String, Object> map = new HashMap<String, Object>();
+-				map.put(key, value);
+-				return new Binding(destination.name, destination.type, exchange.getName(), "", map);
++				map.put(this.key, value);
++				return new Binding(HeadersExchangeMapConfigurer.this.destination.name,
++						HeadersExchangeMapConfigurer.this.destination.type,
++						HeadersExchangeMapConfigurer.this.exchange.getName(), "", map);
+ 			}
+ 		}
+ 
+@@ -134,7 +137,9 @@ private HeadersExchangeKeysBindingCreator(String[] headerKeys, boolean matchAll)
+ 			}
+ 
+ 			public Binding exist() {
+-				return new Binding(destination.name, destination.type, exchange.getName(), "", this.headerMap);
++				return new Binding(HeadersExchangeMapConfigurer.this.destination.name,
++						HeadersExchangeMapConfigurer.this.destination.type,
++						HeadersExchangeMapConfigurer.this.exchange.getName(), "", this.headerMap);
+ 			}
+ 		}
+ 
+@@ -149,7 +154,9 @@ private HeadersExchangeMapBindingCreator(Map<String, Object> headerMap, boolean
+ 			}
+ 
+ 			public Binding match() {
+-				return new Binding(destination.name, destination.type, exchange.getName(), "", this.headerMap);
++				return new Binding(HeadersExchangeMapConfigurer.this.destination.name,
++						HeadersExchangeMapConfigurer.this.destination.type,
++						HeadersExchangeMapConfigurer.this.exchange.getName(), "", this.headerMap);
+ 			}
+ 		}
+ 	}
+@@ -210,13 +217,13 @@ public GenericArgumentsConfigurer(GenericExchangeRoutingKeyConfigurer configurer
+ 		}
+ 
+ 		public Binding and(Map<String, Object> map) {
+-			return new Binding(configurer.destination.name, configurer.destination.type, configurer.exchange,
+-					routingKey, map);
++			return new Binding(this.configurer.destination.name, this.configurer.destination.type, this.configurer.exchange,
++					this.routingKey, map);
+ 		}
+ 
+ 		public Binding noargs() {
+-			return new Binding(configurer.destination.name, configurer.destination.type, configurer.exchange,
+-					routingKey, Collections.<String, Object> emptyMap());
++			return new Binding(this.configurer.destination.name, this.configurer.destination.type, this.configurer.exchange,
++					this.routingKey, Collections.<String, Object> emptyMap());
+ 		}
+ 
+ 	}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/Message.java b/spring-amqp/src/main/java/org/springframework/amqp/core/Message.java
+index ca4fdb8f5..8d7251ff6 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/Message.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/Message.java
+@@ -63,42 +63,42 @@ public String toString() {
+ 		StringBuffer buffer = new StringBuffer();
+ 		buffer.append("(");
+ 		buffer.append("Body:'" + this.getBodyContentAsString() + "'");
+-		if (messageProperties != null) {
+-			buffer.append(" ").append(messageProperties.toString());
++		if (this.messageProperties != null) {
++			buffer.append(" ").append(this.messageProperties.toString());
+ 		}
+ 		buffer.append(")");
+ 		return buffer.toString();
+ 	}
+ 
+ 	private String getBodyContentAsString() {
+-		if (body == null) {
++		if (this.body == null) {
+ 			return null;
+ 		}
+ 		try {
+-			String contentType = (messageProperties != null) ? messageProperties.getContentType() : null;
++			String contentType = (this.messageProperties != null) ? this.messageProperties.getContentType() : null;
+ 			if (MessageProperties.CONTENT_TYPE_SERIALIZED_OBJECT.equals(contentType)) {
+-				return SerializationUtils.deserialize(body).toString();
++				return SerializationUtils.deserialize(this.body).toString();
+ 			}
+ 			if (MessageProperties.CONTENT_TYPE_TEXT_PLAIN.equals(contentType)
+ 					|| MessageProperties.CONTENT_TYPE_JSON.equals(contentType)
+ 					|| MessageProperties.CONTENT_TYPE_JSON_ALT.equals(contentType)
+ 					|| MessageProperties.CONTENT_TYPE_XML.equals(contentType)) {
+-				return new String(body, ENCODING);
++				return new String(this.body, ENCODING);
+ 			}
+ 		}
+ 		catch (Exception e) {
+ 			// ignore
+ 		}
+ 		// Comes out as '[B@....b' (so harmless)
+-		return body.toString()+"(byte["+body.length+"])";//NOSONAR
++		return this.body.toString()+"(byte["+this.body.length+"])";//NOSONAR
+ 	}
+ 
+ 	@Override
+ 	public int hashCode() {
+ 		final int prime = 31;
+ 		int result = 1;
+-		result = prime * result + Arrays.hashCode(body);
+-		result = prime * result + ((messageProperties == null) ? 0 : messageProperties.hashCode());
++		result = prime * result + Arrays.hashCode(this.body);
++		result = prime * result + ((this.messageProperties == null) ? 0 : this.messageProperties.hashCode());
+ 		return result;
+ 	}
+ 
+@@ -114,15 +114,15 @@ public boolean equals(Object obj) {
+ 			return false;
+ 		}
+ 		Message other = (Message) obj;
+-		if (!Arrays.equals(body, other.body)) {
++		if (!Arrays.equals(this.body, other.body)) {
+ 			return false;
+ 		}
+-		if (messageProperties == null) {
++		if (this.messageProperties == null) {
+ 			if (other.messageProperties != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!messageProperties.equals(other.messageProperties)) {
++		else if (!this.messageProperties.equals(other.messageProperties)) {
+ 			return false;
+ 		}
+ 		return true;
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/MessageBuilderSupport.java b/spring-amqp/src/main/java/org/springframework/amqp/core/MessageBuilderSupport.java
+index 082d88167..678a7d1d5 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/MessageBuilderSupport.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/MessageBuilderSupport.java
+@@ -155,7 +155,7 @@ protected void setProperties(MessageProperties properties) {
+ 	 */
+ 
+ 	public MessageBuilderSupport<T> setHeaderIfAbsent(String key, Object value) {
+-		if (properties.getHeaders().get(key) == null) {
++		if (this.properties.getHeaders().get(key) == null) {
+ 			this.properties.setHeader(key, value);
+ 		}
+ 		return this;
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/MessageProperties.java b/spring-amqp/src/main/java/org/springframework/amqp/core/MessageProperties.java
+index 12c565911..6c3a87cdf 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/MessageProperties.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/MessageProperties.java
+@@ -113,6 +113,8 @@
+ 
+ 	private volatile Integer receivedDelay;
+ 
++	private volatile MessageDeliveryMode receivedDeliveryMode;
++
+ 	public void setHeader(String key, Object value) {
+ 		this.headers.put(key, value);
+ 	}
+@@ -190,7 +192,7 @@ public void setCorrelationId(byte[] correlationId) {//NOSONAR
+ 	}
+ 
+ 	public String getCorrelationIdString() {
+-		return correlationIdString;
++		return this.correlationIdString;
+ 	}
+ 
+ 	public void setCorrelationIdString(String correlationIdString) {
+@@ -250,6 +252,14 @@ public MessageDeliveryMode getDeliveryMode() {
+ 		return this.deliveryMode;
+ 	}
+ 
++	public MessageDeliveryMode getReceivedDeliveryMode() {
++		return this.receivedDeliveryMode;
++	}
++
++	public void setReceivedDeliveryMode(MessageDeliveryMode receivedDeliveryMode) {
++		this.receivedDeliveryMode = receivedDeliveryMode;
++	}
++
+ 	// why not a Date or long?
+ 	public void setExpiration(String expiration) {
+ 		this.expiration = expiration;
+@@ -392,26 +402,26 @@ public void setDelay(Integer delay) {
+ 	public int hashCode() {
+ 		final int prime = 31;
+ 		int result = 1;
+-		result = prime * result + ((appId == null) ? 0 : appId.hashCode());
+-		result = prime * result + ((clusterId == null) ? 0 : clusterId.hashCode());
+-		result = prime * result + ((contentEncoding == null) ? 0 : contentEncoding.hashCode());
+-		result = prime * result + (int) (contentLength ^ (contentLength >>> 32));
+-		result = prime * result + ((contentType == null) ? 0 : contentType.hashCode());
+-		result = prime * result + Arrays.hashCode(correlationId);
+-		result = prime * result + ((deliveryMode == null) ? 0 : deliveryMode.hashCode());
+-		result = prime * result + (int) (deliveryTag ^ (deliveryTag >>> 32));
+-		result = prime * result + ((expiration == null) ? 0 : expiration.hashCode());
+-		result = prime * result + ((headers == null) ? 0 : headers.hashCode());
+-		result = prime * result + ((messageCount == null) ? 0 : messageCount.hashCode());
+-		result = prime * result + ((messageId == null) ? 0 : messageId.hashCode());
+-		result = prime * result + ((priority == null) ? 0 : priority.hashCode());
+-		result = prime * result + ((receivedExchange == null) ? 0 : receivedExchange.hashCode());
+-		result = prime * result + ((receivedRoutingKey == null) ? 0 : receivedRoutingKey.hashCode());
+-		result = prime * result + ((redelivered == null) ? 0 : redelivered.hashCode());
+-		result = prime * result + ((replyTo == null) ? 0 : replyTo.hashCode());
+-		result = prime * result + ((timestamp == null) ? 0 : timestamp.hashCode());
+-		result = prime * result + ((type == null) ? 0 : type.hashCode());
+-		result = prime * result + ((userId == null) ? 0 : userId.hashCode());
++		result = prime * result + ((this.appId == null) ? 0 : this.appId.hashCode());
++		result = prime * result + ((this.clusterId == null) ? 0 : this.clusterId.hashCode());
++		result = prime * result + ((this.contentEncoding == null) ? 0 : this.contentEncoding.hashCode());
++		result = prime * result + (int) (this.contentLength ^ (this.contentLength >>> 32));
++		result = prime * result + ((this.contentType == null) ? 0 : this.contentType.hashCode());
++		result = prime * result + Arrays.hashCode(this.correlationId);
++		result = prime * result + ((this.deliveryMode == null) ? 0 : this.deliveryMode.hashCode());
++		result = prime * result + (int) (this.deliveryTag ^ (this.deliveryTag >>> 32));
++		result = prime * result + ((this.expiration == null) ? 0 : this.expiration.hashCode());
++		result = prime * result + ((this.headers == null) ? 0 : this.headers.hashCode());
++		result = prime * result + ((this.messageCount == null) ? 0 : this.messageCount.hashCode());
++		result = prime * result + ((this.messageId == null) ? 0 : this.messageId.hashCode());
++		result = prime * result + ((this.priority == null) ? 0 : this.priority.hashCode());
++		result = prime * result + ((this.receivedExchange == null) ? 0 : this.receivedExchange.hashCode());
++		result = prime * result + ((this.receivedRoutingKey == null) ? 0 : this.receivedRoutingKey.hashCode());
++		result = prime * result + ((this.redelivered == null) ? 0 : this.redelivered.hashCode());
++		result = prime * result + ((this.replyTo == null) ? 0 : this.replyTo.hashCode());
++		result = prime * result + ((this.timestamp == null) ? 0 : this.timestamp.hashCode());
++		result = prime * result + ((this.type == null) ? 0 : this.type.hashCode());
++		result = prime * result + ((this.userId == null) ? 0 : this.userId.hashCode());
+ 		return result;
+ 	}
+ 
+@@ -427,144 +437,144 @@ public boolean equals(Object obj) {
+ 			return false;
+ 		}
+ 		MessageProperties other = (MessageProperties) obj;
+-		if (appId == null) {
++		if (this.appId == null) {
+ 			if (other.appId != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!appId.equals(other.appId)) {
++		else if (!this.appId.equals(other.appId)) {
+ 			return false;
+ 		}
+-		if (clusterId == null) {
++		if (this.clusterId == null) {
+ 			if (other.clusterId != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!clusterId.equals(other.clusterId)) {
++		else if (!this.clusterId.equals(other.clusterId)) {
+ 			return false;
+ 		}
+-		if (contentEncoding == null) {
++		if (this.contentEncoding == null) {
+ 			if (other.contentEncoding != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!contentEncoding.equals(other.contentEncoding)) {
++		else if (!this.contentEncoding.equals(other.contentEncoding)) {
+ 			return false;
+ 		}
+-		if (contentLength != other.contentLength) {
++		if (this.contentLength != other.contentLength) {
+ 			return false;
+ 		}
+-		if (contentType == null) {
++		if (this.contentType == null) {
+ 			if (other.contentType != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!contentType.equals(other.contentType)) {
++		else if (!this.contentType.equals(other.contentType)) {
+ 			return false;
+ 		}
+-		if (!Arrays.equals(correlationId, other.correlationId)) {
++		if (!Arrays.equals(this.correlationId, other.correlationId)) {
+ 			return false;
+ 		}
+-		if (deliveryMode != other.deliveryMode) {
++		if (this.deliveryMode != other.deliveryMode) {
+ 			return false;
+ 		}
+-		if (deliveryTag != other.deliveryTag) {
++		if (this.deliveryTag != other.deliveryTag) {
+ 			return false;
+ 		}
+-		if (expiration == null) {
++		if (this.expiration == null) {
+ 			if (other.expiration != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!expiration.equals(other.expiration)) {
++		else if (!this.expiration.equals(other.expiration)) {
+ 			return false;
+ 		}
+-		if (headers == null) {
++		if (this.headers == null) {
+ 			if (other.headers != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!headers.equals(other.headers)) {
++		else if (!this.headers.equals(other.headers)) {
+ 			return false;
+ 		}
+-		if (messageCount == null) {
++		if (this.messageCount == null) {
+ 			if (other.messageCount != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!messageCount.equals(other.messageCount)) {
++		else if (!this.messageCount.equals(other.messageCount)) {
+ 			return false;
+ 		}
+-		if (messageId == null) {
++		if (this.messageId == null) {
+ 			if (other.messageId != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!messageId.equals(other.messageId)) {
++		else if (!this.messageId.equals(other.messageId)) {
+ 			return false;
+ 		}
+-		if (priority == null) {
++		if (this.priority == null) {
+ 			if (other.priority != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!priority.equals(other.priority)) {
++		else if (!this.priority.equals(other.priority)) {
+ 			return false;
+ 		}
+-		if (receivedExchange == null) {
++		if (this.receivedExchange == null) {
+ 			if (other.receivedExchange != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!receivedExchange.equals(other.receivedExchange)) {
++		else if (!this.receivedExchange.equals(other.receivedExchange)) {
+ 			return false;
+ 		}
+-		if (receivedRoutingKey == null) {
++		if (this.receivedRoutingKey == null) {
+ 			if (other.receivedRoutingKey != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!receivedRoutingKey.equals(other.receivedRoutingKey)) {
++		else if (!this.receivedRoutingKey.equals(other.receivedRoutingKey)) {
+ 			return false;
+ 		}
+-		if (redelivered == null) {
++		if (this.redelivered == null) {
+ 			if (other.redelivered != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!redelivered.equals(other.redelivered)) {
++		else if (!this.redelivered.equals(other.redelivered)) {
+ 			return false;
+ 		}
+-		if (replyTo == null) {
++		if (this.replyTo == null) {
+ 			if (other.replyTo != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!replyTo.equals(other.replyTo)) {
++		else if (!this.replyTo.equals(other.replyTo)) {
+ 			return false;
+ 		}
+-		if (timestamp == null) {
++		if (this.timestamp == null) {
+ 			if (other.timestamp != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!timestamp.equals(other.timestamp)) {
++		else if (!this.timestamp.equals(other.timestamp)) {
+ 			return false;
+ 		}
+-		if (type == null) {
++		if (this.type == null) {
+ 			if (other.type != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!type.equals(other.type)) {
++		else if (!this.type.equals(other.type)) {
+ 			return false;
+ 		}
+-		if (userId == null) {
++		if (this.userId == null) {
+ 			if (other.userId != null) {
+ 				return false;
+ 			}
+ 		}
+-		else if (!userId.equals(other.userId)) {
++		else if (!this.userId.equals(other.userId)) {
+ 			return false;
+ 		}
+ 		return true;
+@@ -572,13 +582,13 @@ else if (!userId.equals(other.userId)) {
+ 
+ 	@Override
+ 	public String toString() {
+-		return "MessageProperties [headers=" + headers + ", timestamp=" + timestamp + ", messageId=" + messageId
+-				+ ", userId=" + userId + ", appId=" + appId + ", clusterId=" + clusterId + ", type=" + type
+-				+ ", correlationId=" + Arrays.toString(correlationId) + ", replyTo=" + replyTo + ", contentType="
+-				+ contentType + ", contentEncoding=" + contentEncoding + ", contentLength=" + contentLength
+-				+ ", deliveryMode=" + deliveryMode + ", expiration=" + expiration + ", priority=" + priority
+-				+ ", redelivered=" + redelivered + ", receivedExchange=" + receivedExchange + ", receivedRoutingKey="
+-				+ receivedRoutingKey + ", deliveryTag=" + deliveryTag + ", messageCount=" + messageCount + "]";
++		return "MessageProperties [headers=" + this.headers + ", timestamp=" + this.timestamp + ", messageId=" + this.messageId
++				+ ", userId=" + this.userId + ", appId=" + this.appId + ", clusterId=" + this.clusterId + ", type=" + this.type
++				+ ", correlationId=" + Arrays.toString(this.correlationId) + ", replyTo=" + this.replyTo + ", contentType="
++				+ this.contentType + ", contentEncoding=" + this.contentEncoding + ", contentLength=" + this.contentLength
++				+ ", deliveryMode=" + this.deliveryMode + ", expiration=" + this.expiration + ", priority=" + this.priority
++				+ ", redelivered=" + this.redelivered + ", receivedExchange=" + this.receivedExchange + ", receivedRoutingKey="
++				+ this.receivedRoutingKey + ", deliveryTag=" + this.deliveryTag + ", messageCount=" + this.messageCount + "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/core/Queue.java b/spring-amqp/src/main/java/org/springframework/amqp/core/Queue.java
+index cadb374cb..8da2e39f2 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/core/Queue.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/core/Queue.java
+@@ -126,8 +126,8 @@ public boolean isAutoDelete() {
+ 
+ 	@Override
+ 	public String toString() {
+-		return "Queue [name=" + name + ", durable=" + durable + ", autoDelete=" + autoDelete + ", exclusive="
+-				+ exclusive + ", arguments=" + arguments + "]";
++		return "Queue [name=" + this.name + ", durable=" + this.durable + ", autoDelete=" + this.autoDelete
++				+ ", exclusive=" + this.exclusive + ", arguments=" + this.arguments + "]";
+ 	}
+ 
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/remoting/client/AmqpClientInterceptor.java b/spring-amqp/src/main/java/org/springframework/amqp/remoting/client/AmqpClientInterceptor.java
+index 888e1709f..8699182b4 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/remoting/client/AmqpClientInterceptor.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/remoting/client/AmqpClientInterceptor.java
+@@ -55,10 +55,10 @@ public Object invoke(MethodInvocation invocation) throws Throwable {
+ 		Object rawResult;
+ 		if (getRoutingKey() == null) {
+ 			// Use the template's default routing key
+-			rawResult = amqpTemplate.convertSendAndReceive(remoteInvocation);
++			rawResult = this.amqpTemplate.convertSendAndReceive(remoteInvocation);
+ 		}
+ 		else {
+-			rawResult = amqpTemplate.convertSendAndReceive(routingKey, remoteInvocation);
++			rawResult = this.amqpTemplate.convertSendAndReceive(this.routingKey, remoteInvocation);
+ 		}
+ 
+ 		if (rawResult == null) {
+@@ -79,7 +79,7 @@ else if (!(rawResult instanceof RemoteInvocationResult)) {
+ 	}
+ 
+ 	public AmqpTemplate getAmqpTemplate() {
+-		return amqpTemplate;
++		return this.amqpTemplate;
+ 	}
+ 
+ 	/**
+@@ -95,7 +95,7 @@ public void setAmqpTemplate(AmqpTemplate amqpTemplate) {
+ 	}
+ 
+ 	public String getRoutingKey() {
+-		return routingKey;
++		return this.routingKey;
+ 	}
+ 
+ 	/**
+@@ -111,7 +111,7 @@ public void setRoutingKey(String routingKey) {
+ 	}
+ 
+ 	public RemoteInvocationFactory getRemoteInvocationFactory() {
+-		return remoteInvocationFactory;
++		return this.remoteInvocationFactory;
+ 	}
+ 
+ 	/**
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/remoting/service/AmqpInvokerServiceExporter.java b/spring-amqp/src/main/java/org/springframework/amqp/remoting/service/AmqpInvokerServiceExporter.java
+index 3e6267830..64dd7f41c 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/remoting/service/AmqpInvokerServiceExporter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/remoting/service/AmqpInvokerServiceExporter.java
+@@ -68,7 +68,7 @@ public void onMessage(Message message) {
+ 			throw new AmqpRejectAndDontRequeueException("No replyToAddress in inbound AMQP Message");
+ 		}
+ 
+-		Object invocationRaw = messageConverter.fromMessage(message);
++		Object invocationRaw = this.messageConverter.fromMessage(message);
+ 
+ 		RemoteInvocationResult remoteInvocationResult;
+ 		if (invocationRaw == null || !(invocationRaw instanceof RemoteInvocation)) {
+@@ -83,13 +83,13 @@ public void onMessage(Message message) {
+ 	}
+ 
+ 	private void send(Object object, Address replyToAddress) {
+-		Message message = messageConverter.toMessage(object, new MessageProperties());
++		Message message = this.messageConverter.toMessage(object, new MessageProperties());
+ 
+ 		getAmqpTemplate().send(replyToAddress.getExchangeName(), replyToAddress.getRoutingKey(), message);
+ 	}
+ 
+ 	public AmqpTemplate getAmqpTemplate() {
+-		return amqpTemplate;
++		return this.amqpTemplate;
+ 	}
+ 
+ 	/**
+@@ -110,7 +110,7 @@ public void setAmqpTemplate(AmqpTemplate amqpTemplate) {
+ 	}
+ 
+ 	public MessageConverter getMessageConverter() {
+-		return messageConverter;
++		return this.messageConverter;
+ 	}
+ 
+ 	/**
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpHeaders.java b/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpHeaders.java
+index d03a27872..654327f77 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpHeaders.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpHeaders.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright 2002-2014 the original author or authors.
++ * Copyright 2002-2016 the original author or authors.
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+@@ -24,6 +24,7 @@
+  * Message} Headers.
+  *
+  * @author Mark Fisher
++ * @author Gary Russell
+  * @since 1.4
+  */
+ public abstract class AmqpHeaders {
+@@ -64,6 +65,8 @@
+ 
+ 	public static final String RECEIVED_DELAY = PREFIX + "receivedDelay";
+ 
++	public final static String RECEIVED_DELIVERY_MODE = PREFIX + "receivedDeliveryMode";
++
+ 	public static final String RECEIVED_EXCHANGE = PREFIX + "receivedExchange";
+ 
+ 	public static final String RECEIVED_ROUTING_KEY = PREFIX + "receivedRoutingKey";
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpMessageHeaderAccessor.java b/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpMessageHeaderAccessor.java
+index 54e77c846..257e09eef 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpMessageHeaderAccessor.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/AmqpMessageHeaderAccessor.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright 2014 the original author or authors.
++ * Copyright 2014-2016 the original author or authors.
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+@@ -102,6 +102,10 @@ public MessageDeliveryMode getDeliveryMode() {
+ 		return (MessageDeliveryMode) getHeader(AmqpHeaders.DELIVERY_MODE);
+ 	}
+ 
++	public MessageDeliveryMode getReceivedDeliveryMode() {
++		return (MessageDeliveryMode) getHeader(AmqpHeaders.RECEIVED_DELIVERY_MODE);
++	}
++
+ 	public Long getDeliveryTag() {
+ 		return (Long) getHeader(AmqpHeaders.DELIVERY_TAG);
+ 	}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/SimpleAmqpHeaderMapper.java b/spring-amqp/src/main/java/org/springframework/amqp/support/SimpleAmqpHeaderMapper.java
+index 111e8afa0..88770014d 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/SimpleAmqpHeaderMapper.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/SimpleAmqpHeaderMapper.java
+@@ -185,9 +185,9 @@ public MessageHeaders toHeaders(MessageProperties amqpMessageProperties) {
+ 			if (correlationId != null && correlationId.length > 0) {
+ 				headers.put(AmqpHeaders.CORRELATION_ID, correlationId);
+ 			}
+-			MessageDeliveryMode deliveryMode = amqpMessageProperties.getDeliveryMode();
+-			if (deliveryMode != null) {
+-				headers.put(AmqpHeaders.DELIVERY_MODE, deliveryMode);
++			MessageDeliveryMode receivedDeliveryMode = amqpMessageProperties.getReceivedDeliveryMode();
++			if (receivedDeliveryMode != null) {
++				headers.put(AmqpHeaders.RECEIVED_DELIVERY_MODE, receivedDeliveryMode);
+ 			}
+ 			long deliveryTag = amqpMessageProperties.getDeliveryTag();
+ 			if (deliveryTag > 0) {
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJavaTypeMapper.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJavaTypeMapper.java
+index 096655e61..f11f75853 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJavaTypeMapper.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJavaTypeMapper.java
+@@ -54,8 +54,8 @@ public void setIdClassMapping(Map<String, Class<?>> idClassMapping) {
+ 
+     protected void addHeader(MessageProperties properties, String headerName,
+                            Class<?> clazz) {
+-        if (classIdMapping.containsKey(clazz)) {
+-            properties.getHeaders().put(headerName, classIdMapping.get(clazz));
++        if (this.classIdMapping.containsKey(clazz)) {
++            properties.getHeaders().put(headerName, this.classIdMapping.get(clazz));
+         }
+         else {
+             properties.getHeaders().put(headerName, clazz.getName());
+@@ -80,17 +80,17 @@ protected String retrieveHeader(MessageProperties properties,
+ 
+     private void validateIdTypeMapping() {
+         Map<String, Class<?>> finalIdClassMapping = new HashMap<String, Class<?>>();
+-        for (Map.Entry<String, Class<?>> entry : idClassMapping.entrySet()) {
++        for (Map.Entry<String, Class<?>> entry : this.idClassMapping.entrySet()) {
+             String id = entry.getKey();
+             Class<?> clazz = entry.getValue();
+             finalIdClassMapping.put(id, clazz);
+-            classIdMapping.put(clazz, id);
++            this.classIdMapping.put(clazz, id);
+         }
+         this.idClassMapping = finalIdClassMapping;
+     }
+ 
+     public Map<String, Class<?>> getIdClassMapping() {
+-        return Collections.unmodifiableMap(idClassMapping);
++        return Collections.unmodifiableMap(this.idClassMapping);
+     }
+ 
+     @Override
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJsonMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJsonMessageConverter.java
+index 388c4b03c..24402633f 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJsonMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractJsonMessageConverter.java
+@@ -32,7 +32,7 @@
+ 	private ClassMapper classMapper = null;
+ 
+ 	public ClassMapper getClassMapper() {
+-		return classMapper;
++		return this.classMapper;
+ 
+ 	}
+ 
+@@ -52,6 +52,6 @@ public void setDefaultCharset(String defaultCharset) {
+ 	}
+ 
+     public String getDefaultCharset() {
+-        return defaultCharset;
++        return this.defaultCharset;
+     }
+ }
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractMessageConverter.java
+index 476cccb5c..ee6f98061 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/AbstractMessageConverter.java
+@@ -44,7 +44,7 @@ public void setCreateMessageIds(boolean createMessageIds) {
+ 	 * @return the flag value
+ 	 */
+ 	protected boolean isCreateMessageIds() {
+-		return createMessageIds;
++		return this.createMessageIds;
+ 	}
+ 
+ 	@Override
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/DefaultClassMapper.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/DefaultClassMapper.java
+index 31276e84c..ac3a6931b 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/DefaultClassMapper.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/DefaultClassMapper.java
+@@ -71,8 +71,8 @@ public void setIdClassMapping(Map<String, Class<?>> idClassMapping) {
+ 	}
+ 
+ 	private String fromClass(Class<?> classOfObjectToConvert) {
+-		if (classIdMapping.containsKey(classOfObjectToConvert)) {
+-			return classIdMapping.get(classOfObjectToConvert);
++		if (this.classIdMapping.containsKey(classOfObjectToConvert)) {
++			return this.classIdMapping.get(classOfObjectToConvert);
+ 		}
+ 		if (Map.class.isAssignableFrom(classOfObjectToConvert)) {
+ 			return DEFAULT_HASHTABLE_TYPE_ID;
+@@ -82,7 +82,7 @@ private String fromClass(Class<?> classOfObjectToConvert) {
+ 
+ 	private Class<?> toClass(String classId) {
+ 		if (this.idClassMapping.containsKey(classId)) {
+-			return idClassMapping.get(classId);
++			return this.idClassMapping.get(classId);
+ 		}
+ 		if (classId.equals(DEFAULT_HASHTABLE_TYPE_ID)) {
+ 			return this.defaultHashtableClass;
+@@ -105,11 +105,11 @@ public void afterPropertiesSet() throws Exception {
+ 
+ 	private void validateIdTypeMapping() {
+ 		Map<String, Class<?>> finalIdClassMapping = new HashMap<String, Class<?>>();
+-		for (Entry<String, Class<?>> entry : idClassMapping.entrySet()) {
++		for (Entry<String, Class<?>> entry : this.idClassMapping.entrySet()) {
+ 			String id = entry.getKey();
+ 			Class<?> clazz = entry.getValue();
+ 			finalIdClassMapping.put(id, clazz);
+-			classIdMapping.put(clazz, id);
++			this.classIdMapping.put(clazz, id);
+ 		}
+ 		this.idClassMapping = finalIdClassMapping;
+ 	}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/Jackson2JsonMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/Jackson2JsonMessageConverter.java
+index 63eca7375..0f9881683 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/Jackson2JsonMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/Jackson2JsonMessageConverter.java
+@@ -53,7 +53,7 @@ public Jackson2JsonMessageConverter() {
+ 	}
+ 
+ 	public Jackson2JavaTypeMapper getJavaTypeMapper() {
+-		return javaTypeMapper;
++		return this.javaTypeMapper;
+ 	}
+ 
+ 	public void setJavaTypeMapper(Jackson2JavaTypeMapper javaTypeMapper) {
+@@ -76,7 +76,7 @@ public void setJsonObjectMapper(ObjectMapper jsonObjectMapper) {
+ 	 * Subclass and override to customize.
+ 	 */
+ 	protected void initializeJsonObjectMapper() {
+-		jsonObjectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
++		this.jsonObjectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+ 	}
+ 
+ 	@Override
+@@ -126,14 +126,14 @@ private Object convertBytesToObject(byte[] body, String encoding,
+ 			JavaType targetJavaType) throws JsonParseException,
+ 			JsonMappingException, IOException {
+ 		String contentAsString = new String(body, encoding);
+-		return jsonObjectMapper.readValue(contentAsString, targetJavaType);
++		return this.jsonObjectMapper.readValue(contentAsString, targetJavaType);
+ 	}
+ 
+ 	private Object convertBytesToObject(byte[] body, String encoding,
+ 			Class<?> targetClass) throws JsonParseException,
+ 			JsonMappingException, IOException {
+ 		String contentAsString = new String(body, encoding);
+-		return jsonObjectMapper.readValue(contentAsString, jsonObjectMapper.constructType(targetClass));
++		return this.jsonObjectMapper.readValue(contentAsString, this.jsonObjectMapper.constructType(targetClass));
+ 	}
+ 
+ 	@Override
+@@ -142,7 +142,7 @@ protected Message createMessage(Object objectToConvert,
+ 			throws MessageConversionException {
+ 		byte[] bytes = null;
+ 		try {
+-			String jsonString = jsonObjectMapper
++			String jsonString = this.jsonObjectMapper
+ 					.writeValueAsString(objectToConvert);
+ 			bytes = jsonString.getBytes(getDefaultCharset());
+ 		}
+@@ -157,7 +157,7 @@ protected Message createMessage(Object objectToConvert,
+ 		}
+ 
+ 		if (getClassMapper() == null) {
+-			getJavaTypeMapper().fromJavaType(jsonObjectMapper.constructType(objectToConvert.getClass()),
++			getJavaTypeMapper().fromJavaType(this.jsonObjectMapper.constructType(objectToConvert.getClass()),
+ 					messageProperties);
+ 
+ 		}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/JsonMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/JsonMessageConverter.java
+index ee08384e1..0be0a872a 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/JsonMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/JsonMessageConverter.java
+@@ -52,7 +52,7 @@ public JsonMessageConverter() {
+ 	}
+ 
+ 	public JavaTypeMapper getJavaTypeMapper() {
+-		return javaTypeMapper;
++		return this.javaTypeMapper;
+ 	}
+ 
+ 	public void setJavaTypeMapper(JavaTypeMapper javaTypeMapper) {
+@@ -75,7 +75,7 @@ public void setJsonObjectMapper(ObjectMapper jsonObjectMapper) {
+ 	 * Subclass and override to customize.
+ 	 */
+ 	protected void initializeJsonObjectMapper() {
+-		jsonObjectMapper
++		this.jsonObjectMapper
+ 				.configure(
+ 						DeserializationConfig.Feature.FAIL_ON_UNKNOWN_PROPERTIES,
+ 						false);
+@@ -128,14 +128,14 @@ private Object convertBytesToObject(byte[] body, String encoding,
+ 			JavaType targetJavaType) throws JsonParseException,
+ 			JsonMappingException, IOException {
+ 		String contentAsString = new String(body, encoding);
+-		return jsonObjectMapper.readValue(contentAsString, targetJavaType);
++		return this.jsonObjectMapper.readValue(contentAsString, targetJavaType);
+ 	}
+ 
+ 	private Object convertBytesToObject(byte[] body, String encoding,
+ 			Class<?> targetClass) throws JsonParseException,
+ 			JsonMappingException, IOException {
+ 		String contentAsString = new String(body, encoding);
+-		return jsonObjectMapper.readValue(contentAsString, jsonObjectMapper.constructType(targetClass));
++		return this.jsonObjectMapper.readValue(contentAsString, this.jsonObjectMapper.constructType(targetClass));
+ 	}
+ 
+ 	@Override
+@@ -144,7 +144,7 @@ protected Message createMessage(Object objectToConvert,
+ 			throws MessageConversionException {
+ 		byte[] bytes = null;
+ 		try {
+-			String jsonString = jsonObjectMapper
++			String jsonString = this.jsonObjectMapper
+ 					.writeValueAsString(objectToConvert);
+ 			bytes = jsonString.getBytes(getDefaultCharset());
+ 		}
+@@ -159,7 +159,7 @@ protected Message createMessage(Object objectToConvert,
+ 		}
+ 
+ 		if (getClassMapper() == null) {
+-			getJavaTypeMapper().fromJavaType(jsonObjectMapper.constructType(objectToConvert.getClass()),
++			getJavaTypeMapper().fromJavaType(this.jsonObjectMapper.constructType(objectToConvert.getClass()),
+ 					messageProperties);
+ 
+ 		}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/MarshallingMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/MarshallingMessageConverter.java
+index f4cf610a4..f4a4f8647 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/MarshallingMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/MarshallingMessageConverter.java
+@@ -138,12 +138,12 @@ public void afterPropertiesSet() {
+ 	@Override
+ 	protected Message createMessage(Object object, MessageProperties messageProperties) throws MessageConversionException {
+ 		try {
+-			if (contentType != null) {
+-				messageProperties.setContentType(contentType);
++			if (this.contentType != null) {
++				messageProperties.setContentType(this.contentType);
+ 			}
+ 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+ 			StreamResult streamResult = new StreamResult(bos);
+-			marshaller.marshal(object, streamResult);
++			this.marshaller.marshal(object, streamResult);
+ 			return new Message(bos.toByteArray(), messageProperties);
+ 		}
+ 		catch (XmlMappingException ex) {
+@@ -162,7 +162,7 @@ public Object fromMessage(Message message) throws MessageConversionException {
+ 		try {
+ 			ByteArrayInputStream bis = new ByteArrayInputStream(message.getBody());
+ 			StreamSource source = new StreamSource(bis);
+-			return unmarshaller.unmarshal(source);
++			return this.unmarshaller.unmarshal(source);
+ 		}
+ 		catch (IOException ex) {
+ 			throw new MessageConversionException("Could not access message content: " + message, ex);
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/SerializerMessageConverter.java b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/SerializerMessageConverter.java
+index 20f833027..27712806a 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/converter/SerializerMessageConverter.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/converter/SerializerMessageConverter.java
+@@ -95,7 +95,7 @@ public Object fromMessage(Message message) throws MessageConversionException {
+ 		MessageProperties properties = message.getMessageProperties();
+ 		if (properties != null) {
+ 			String contentType = properties.getContentType();
+-			if (contentType != null && contentType.startsWith("text") && !ignoreContentType) {
++			if (contentType != null && contentType.startsWith("text") && !this.ignoreContentType) {
+ 				String encoding = properties.getContentEncoding();
+ 				if (encoding == null) {
+ 					encoding = this.defaultCharset;
+@@ -106,9 +106,9 @@ public Object fromMessage(Message message) throws MessageConversionException {
+ 					throw new MessageConversionException("failed to convert text-based Message content", e);
+ 				}
+ 			} else if (contentType != null && contentType.equals(MessageProperties.CONTENT_TYPE_SERIALIZED_OBJECT)
+-					|| ignoreContentType) {
++					|| this.ignoreContentType) {
+ 				try {
+-					content = deserializer.deserialize(new ByteArrayInputStream(message.getBody()));
++					content = this.deserializer.deserialize(new ByteArrayInputStream(message.getBody()));
+ 				} catch (IOException e) {
+ 					throw new MessageConversionException("Could not convert message body", e);
+ 				}
+@@ -140,7 +140,7 @@ protected Message createMessage(Object object, MessageProperties messageProperti
+ 		} else {
+ 			ByteArrayOutputStream output = new ByteArrayOutputStream();
+ 			try {
+-				serializer.serialize(object, output);
++				this.serializer.serialize(object, output);
+ 			} catch (IOException e) {
+ 				throw new MessageConversionException("Cannot convert object to bytes", e);
+ 			}
+diff --git a/spring-amqp/src/main/java/org/springframework/amqp/support/postprocessor/AbstractCompressingPostProcessor.java b/spring-amqp/src/main/java/org/springframework/amqp/support/postprocessor/AbstractCompressingPostProcessor.java
+index 2fe694064..907ba54e1 100644
+--- a/spring-amqp/src/main/java/org/springframework/amqp/support/postprocessor/AbstractCompressingPostProcessor.java
++++ b/spring-amqp/src/main/java/org/springframework/amqp/support/postprocessor/AbstractCompressingPostProcessor.java
+@@ -82,8 +82,8 @@ public Message postProcessMessage(Message message) throws AmqpException {
+ 				messageProperties.setHeader(MessageProperties.SPRING_AUTO_DECOMPRESS, true);
+ 			}
+ 			byte[] compressed = zipped.toByteArray();
+-			if (logger.isTraceEnabled()) {
+-				logger.trace("Compressed " + message.getBody().length + " to " + compressed.length);
++			if (this.logger.isTraceEnabled()) {
++				this.logger.trace("Compressed " + message.getBody().length + " to " + compressed.length);
+ 			}
+ 			return new Message(compressed, messageProperties);
+ 		}
+diff --git a/spring-amqp/src/test/java/org/springframework/amqp/support/AmqpMessageHeaderAccessorTests.java b/spring-amqp/src/test/java/org/springframework/amqp/support/AmqpMessageHeaderAccessorTests.java
+index 23801ece7..39f44c7b9 100644
+--- a/spring-amqp/src/test/java/org/springframework/amqp/support/AmqpMessageHeaderAccessorTests.java
++++ b/spring-amqp/src/test/java/org/springframework/amqp/support/AmqpMessageHeaderAccessorTests.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright 2002-2014 the original author or authors.
++ * Copyright 2002-2016 the original author or authors.
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+@@ -16,6 +16,9 @@
+ 
+ package org.springframework.amqp.support;
+ 
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNull;
++
+ import java.util.Date;
+ import java.util.Map;
+ 
+@@ -29,10 +32,9 @@
+ import org.springframework.messaging.support.MessageBuilder;
+ import org.springframework.util.MimeType;
+ 
+-import static org.junit.Assert.*;
+-
+ /**
+  * @author Stephane Nicoll
++ * @author Gary Russell
+  */
+ public class AmqpMessageHeaderAccessorTests {
+ 
+@@ -51,7 +53,7 @@ public void validateAmqpHeaders() throws Exception {
+ 		properties.setContentLength(200L);
+ 		properties.setContentType("text/plain");
+ 		properties.setCorrelationId(correlationId);
+-		properties.setDeliveryMode(MessageDeliveryMode.NON_PERSISTENT);
++		properties.setReceivedDeliveryMode(MessageDeliveryMode.NON_PERSISTENT);
+ 		properties.setDeliveryTag(555L);
+ 		properties.setExpiration("expiration-1234");
+ 		properties.setMessageCount(42);
+@@ -77,7 +79,7 @@ public void validateAmqpHeaders() throws Exception {
+ 		assertEquals(Long.valueOf(200), headerAccessor.getContentLength());
+ 		assertEquals(MimeType.valueOf("text/plain"), headerAccessor.getContentType());
+ 		assertEquals(correlationId, headerAccessor.getCorrelationId());
+-		assertEquals(MessageDeliveryMode.NON_PERSISTENT, headerAccessor.getDeliveryMode());
++		assertEquals(MessageDeliveryMode.NON_PERSISTENT, headerAccessor.getReceivedDeliveryMode());
+ 		assertEquals(Long.valueOf(555), headerAccessor.getDeliveryTag());
+ 		assertEquals("expiration-1234", headerAccessor.getExpiration());
+ 		assertEquals(Integer.valueOf(42), headerAccessor.getMessageCount());
+diff --git a/spring-amqp/src/test/java/org/springframework/amqp/support/MessagePostProcessorUtilsTests.java b/spring-amqp/src/test/java/org/springframework/amqp/support/MessagePostProcessorUtilsTests.java
+index b0e278e06..2954aa03f 100644
+--- a/spring-amqp/src/test/java/org/springframework/amqp/support/MessagePostProcessorUtilsTests.java
++++ b/spring-amqp/src/test/java/org/springframework/amqp/support/MessagePostProcessorUtilsTests.java
+@@ -56,11 +56,14 @@ public void testOrderIng() {
+ 		assertEquals(2, ((POMPP) mpp).getOrder());
+ 		mpp = iterator.next();
+ 		assertThat(mpp, Matchers.instanceOf(POMPP.class));
+-		assertEquals(6, ((POMPP) mpp).getOrder());mpp = iterator.next();
++		assertEquals(6, ((POMPP) mpp).getOrder());
++		mpp = iterator.next();
+ 		assertThat(mpp, Matchers.instanceOf(OMPP.class));
+-		assertEquals(1, ((OMPP) mpp).getOrder());mpp = iterator.next();
++		assertEquals(1, ((OMPP) mpp).getOrder());
++		mpp = iterator.next();
+ 		assertThat(mpp, Matchers.instanceOf(OMPP.class));
+-		assertEquals(3, ((OMPP) mpp).getOrder());mpp = iterator.next();
++		assertEquals(3, ((OMPP) mpp).getOrder());
++		mpp = iterator.next();
+ 		assertThat(mpp, Matchers.instanceOf(MPP.class));
+ 	}
+ 
+diff --git a/spring-amqp/src/test/java/org/springframework/amqp/support/SimpleAmqpHeaderMapperTests.java b/spring-amqp/src/test/java/org/springframework/amqp/support/SimpleAmqpHeaderMapperTests.java
+index 23ac61981..a7c5488ad 100644
+--- a/spring-amqp/src/test/java/org/springframework/amqp/support/SimpleAmqpHeaderMapperTests.java
++++ b/spring-amqp/src/test/java/org/springframework/amqp/support/SimpleAmqpHeaderMapperTests.java
+@@ -122,7 +122,7 @@ public void toHeaders() {
+ 		amqpProperties.setContentType("test.contentType");
+ 		byte[] testCorrelationId = new byte[] {1, 2, 3};
+ 		amqpProperties.setCorrelationId(testCorrelationId);
+-		amqpProperties.setDeliveryMode(MessageDeliveryMode.NON_PERSISTENT);
++		amqpProperties.setReceivedDeliveryMode(MessageDeliveryMode.NON_PERSISTENT);
+ 		amqpProperties.setDeliveryTag(1234L);
+ 		amqpProperties.setExpiration("test.expiration");
+ 		amqpProperties.setMessageCount(42);
+@@ -148,7 +148,7 @@ public void toHeaders() {
+ 		assertEquals(99L, headerMap.get(AmqpHeaders.CONTENT_LENGTH));
+ 		assertEquals("test.contentType", headerMap.get(AmqpHeaders.CONTENT_TYPE));
+ 		assertEquals(testCorrelationId, headerMap.get(AmqpHeaders.CORRELATION_ID));
+-		assertEquals(MessageDeliveryMode.NON_PERSISTENT, headerMap.get(AmqpHeaders.DELIVERY_MODE));
++		assertEquals(MessageDeliveryMode.NON_PERSISTENT, headerMap.get(AmqpHeaders.RECEIVED_DELIVERY_MODE));
+ 		assertEquals(1234L, headerMap.get(AmqpHeaders.DELIVERY_TAG));
+ 		assertEquals("test.expiration", headerMap.get(AmqpHeaders.EXPIRATION));
+ 		assertEquals(42, headerMap.get(AmqpHeaders.MESSAGE_COUNT));
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/AsyncRabbitTemplate.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/AsyncRabbitTemplate.java
+index ce459e01c..240f05414 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/AsyncRabbitTemplate.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/AsyncRabbitTemplate.java
+@@ -463,8 +463,8 @@ public void onMessage(Message message) {
+ 		if (messageProperties != null) {
+ 			byte[] correlationId = messageProperties.getCorrelationId();
+ 			if (correlationId != null) {
+-				if (logger.isDebugEnabled()) {
+-					logger.debug("onMessage: " + message);
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug("onMessage: " + message);
+ 				}
+ 				RabbitFuture<?> future = this.pending.remove(new String(correlationId, this.charset));
+ 				if (future != null) {
+@@ -477,8 +477,8 @@ public void onMessage(Message message) {
+ 					}
+ 				}
+ 				else {
+-					if (logger.isWarnEnabled()) {
+-						logger.warn("No pending reply - perhaps timed out: " + message);
++					if (this.logger.isWarnEnabled()) {
++						this.logger.warn("No pending reply - perhaps timed out: " + message);
+ 					}
+ 				}
+ 			}
+@@ -500,8 +500,8 @@ public void returnedMessage(Message message, int replyCode, String replyText, St
+ 
+ 	@Override
+ 	public void confirm(CorrelationData correlationData, boolean ack, String cause) {
+-		if (logger.isDebugEnabled()) {
+-			logger.debug("Confirm: " + correlationData + ", ack=" + ack
++		if (this.logger.isDebugEnabled()) {
++			this.logger.debug("Confirm: " + correlationData + ", ack=" + ack
+ 					+ (cause == null ? "" : (", cause: " + cause)));
+ 		}
+ 		String correlationId = correlationData.getId();
+@@ -512,8 +512,8 @@ public void confirm(CorrelationData correlationData, boolean ack, String cause)
+ 				((SettableListenableFuture<Boolean>) future.getConfirm()).set(ack);
+ 			}
+ 			else {
+-				if (logger.isDebugEnabled()) {
+-					logger.debug("Confirm: " + correlationData + ", ack=" + ack
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug("Confirm: " + correlationData + ", ack=" + ack
+ 							+ (cause == null ? "" : (", cause: " + cause))
+ 							+ " no pending future - either canceled or the reply is already received");
+ 				}
+@@ -562,9 +562,9 @@ public String toString() {
+ 		public RabbitFuture(String correlationId, Message requestMessage) {
+ 			this.correlationId = correlationId;
+ 			this.requestMessage = requestMessage;
+-			if (receiveTimeout > 0) {
+-				this.cancelTask = taskScheduler.schedule(new CancelTask(),
+-						new Date(System.currentTimeMillis() + receiveTimeout));
++			if (AsyncRabbitTemplate.this.receiveTimeout > 0) {
++				this.cancelTask = AsyncRabbitTemplate.this.taskScheduler.schedule(new CancelTask(),
++						new Date(System.currentTimeMillis() + AsyncRabbitTemplate.this.receiveTimeout));
+ 			}
+ 			else {
+ 				this.cancelTask = null;
+@@ -586,7 +586,7 @@ public boolean cancel(boolean mayInterruptIfRunning) {
+ 		 * @return the future.
+ 		 */
+ 		public ListenableFuture<Boolean> getConfirm() {
+-			return confirm;
++			return this.confirm;
+ 		}
+ 
+ 		void setConfirm(ListenableFuture<Boolean> confirm) {
+@@ -599,7 +599,7 @@ void setConfirm(ListenableFuture<Boolean> confirm) {
+ 		 * @return the cause.
+ 		 */
+ 		public String getNackCause() {
+-			return nackCause;
++			return this.nackCause;
+ 		}
+ 
+ 		void setNackCause(String nackCause) {
+@@ -610,8 +610,8 @@ void setNackCause(String nackCause) {
+ 
+ 			@Override
+ 			public void run() {
+-				AsyncRabbitTemplate.this.pending.remove(correlationId);
+-				setException(new AmqpReplyTimeoutException("Reply timed out", requestMessage));
++				AsyncRabbitTemplate.this.pending.remove(RabbitFuture.this.correlationId);
++				setException(new AmqpReplyTimeoutException("Reply timed out", RabbitFuture.this.requestMessage));
+ 			}
+ 
+ 		}
+@@ -667,7 +667,7 @@ public Message postProcessMessage(Message message) throws AmqpException {
+ 			this.future = new RabbitConverterFuture<C>(correlationId, message);
+ 			if (this.correlationData != null && this.correlationData.getId() == null) {
+ 				this.correlationData.setId(correlationId);
+-				future.setConfirm(new SettableListenableFuture<Boolean>());
++				this.future.setConfirm(new SettableListenableFuture<Boolean>());
+ 			}
+ 			AsyncRabbitTemplate.this.pending.put(correlationId, this.future);
+ 			return messageToSend;
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/annotation/RabbitListenerAnnotationBeanPostProcessor.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/annotation/RabbitListenerAnnotationBeanPostProcessor.java
+index 2f2747bcb..f48c020f2 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/annotation/RabbitListenerAnnotationBeanPostProcessor.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/annotation/RabbitListenerAnnotationBeanPostProcessor.java
+@@ -391,7 +391,7 @@ private String getEndpointId(RabbitListener rabbitListener) {
+ 			return resolve(rabbitListener.id());
+ 		}
+ 		else {
+-			return "org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#" + counter.getAndIncrement();
++			return "org.springframework.amqp.rabbit.RabbitListenerEndpointContainer#" + this.counter.getAndIncrement();
+ 		}
+ 	}
+ 
+@@ -569,7 +569,7 @@ private MessageHandlerMethodFactory getMessageHandlerMethodFactory() {
+ 
+ 		private MessageHandlerMethodFactory createDefaultMessageHandlerMethodFactory() {
+ 			DefaultMessageHandlerMethodFactory defaultFactory = new DefaultMessageHandlerMethodFactory();
+-			defaultFactory.setBeanFactory(beanFactory);
++			defaultFactory.setBeanFactory(RabbitListenerAnnotationBeanPostProcessor.this.beanFactory);
+ 			defaultFactory.afterPropertiesSet();
+ 			return defaultFactory;
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/AbstractRetryOperationsInterceptorFactoryBean.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/AbstractRetryOperationsInterceptorFactoryBean.java
+index e3ab701c3..59d61e9ef 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/AbstractRetryOperationsInterceptorFactoryBean.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/AbstractRetryOperationsInterceptorFactoryBean.java
+@@ -43,11 +43,11 @@ public void setMessageRecoverer(MessageRecoverer messageRecoverer) {
+ 	}
+ 
+ 	protected RetryOperations getRetryOperations() {
+-		return retryTemplate;
++		return this.retryTemplate;
+ 	}
+ 
+ 	protected MessageRecoverer getMessageRecoverer() {
+-		return messageRecoverer;
++		return this.messageRecoverer;
+ 	}
+ 
+ 	public boolean isSingleton() {
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/BindingFactoryBean.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/BindingFactoryBean.java
+index ad49896bd..372f5a473 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/BindingFactoryBean.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/BindingFactoryBean.java
+@@ -71,14 +71,14 @@ public void setAdminsThatShouldDeclare(AmqpAdmin... adminsThatShouldDeclare) {
+ 	public Binding getObject() throws Exception {
+ 		String destination;
+ 		DestinationType destinationType;
+-		if (destinationQueue != null) {
+-			destination = destinationQueue.getName();
++		if (this.destinationQueue != null) {
++			destination = this.destinationQueue.getName();
+ 			destinationType = DestinationType.QUEUE;
+ 		} else {
+-			destination = destinationExchange.getName();
++			destination = this.destinationExchange.getName();
+ 			destinationType = DestinationType.EXCHANGE;
+ 		}
+-		Binding binding = new Binding(destination, destinationType, exchange, routingKey, arguments);
++		Binding binding = new Binding(destination, destinationType, this.exchange, this.routingKey, this.arguments);
+ 		if (this.shouldDeclare != null) {
+ 			binding.setShouldDeclare(this.shouldDeclare);
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/StatefulRetryOperationsInterceptorFactoryBean.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/StatefulRetryOperationsInterceptorFactoryBean.java
+index d3e1bd977..6ab13a9b4 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/StatefulRetryOperationsInterceptorFactoryBean.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/config/StatefulRetryOperationsInterceptorFactoryBean.java
+@@ -78,10 +78,11 @@ public StatefulRetryOperationsInterceptor getObject() {
+ 		retryInterceptor.setNewItemIdentifier(new NewMethodArgumentsIdentifier() {
+ 			public boolean isNew(Object[] args) {
+ 				Message message = (Message) args[1];
+-				if (newMessageIdentifier == null) {
++				if (StatefulRetryOperationsInterceptorFactoryBean.this.newMessageIdentifier == null) {
+ 					return !message.getMessageProperties().isRedelivered();
+-				} else {
+-					return newMessageIdentifier.isNew(message);
++				}
++				else {
++					return StatefulRetryOperationsInterceptorFactoryBean.this.newMessageIdentifier.isNew(message);
+ 				}
+ 			}
+ 		});
+@@ -105,15 +106,16 @@ public Void recover(Object[] args, Throwable cause) {
+ 		retryInterceptor.setKeyGenerator(new MethodArgumentsKeyGenerator() {
+ 			public Object getKey(Object[] args) {
+ 				Message message = (Message) args[1];
+-				if (messageKeyGenerator == null) {
++				if (StatefulRetryOperationsInterceptorFactoryBean.this.messageKeyGenerator == null) {
+ 					String messageId = message.getMessageProperties().getMessageId();
+ 					if (messageId == null) {
+ 						throw new FatalListenerExecutionException(
+ 								"Illegal null id in message. Failed to manage retry for message: " + message);
+ 					}
+ 					return messageId;
+-				} else {
+-					return messageKeyGenerator.getKey(message);
++				}
++				else {
++					return StatefulRetryOperationsInterceptorFactoryBean.this.messageKeyGenerator.getKey(message);
+ 				}
+ 			}
+ 		});
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractConnectionFactory.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractConnectionFactory.java
+index 2fa842684..8f6bc543a 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractConnectionFactory.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractConnectionFactory.java
+@@ -111,10 +111,10 @@ public void setUri(URI uri) {
+ 			this.rabbitConnectionFactory.setUri(uri);
+ 		}
+ 		catch (URISyntaxException use) {
+-			logger.info(BAD_URI, use);
++			this.logger.info(BAD_URI, use);
+ 		}
+ 		catch (GeneralSecurityException gse) {
+-			logger.info(BAD_URI, gse);
++			this.logger.info(BAD_URI, gse);
+ 		}
+ 	}
+ 
+@@ -128,10 +128,10 @@ public void setUri(String uri) {
+ 			this.rabbitConnectionFactory.setUri(uri);
+ 		}
+ 		catch (URISyntaxException use) {
+-			logger.info(BAD_URI, use);
++			this.logger.info(BAD_URI, use);
+ 		}
+ 		catch (GeneralSecurityException gse) {
+-			logger.info(BAD_URI, gse);
++			this.logger.info(BAD_URI, gse);
+ 		}
+ 	}
+ 
+@@ -146,7 +146,7 @@ public void setVirtualHost(String virtualHost) {
+ 
+ 	@Override
+ 	public String getVirtualHost() {
+-		return rabbitConnectionFactory.getVirtualHost();
++		return this.rabbitConnectionFactory.getVirtualHost();
+ 	}
+ 
+ 	public void setPort(int port) {
+@@ -179,7 +179,7 @@ public void setAddresses(String addresses) {
+ 				return;
+ 			}
+ 		}
+-		logger.info("setAddresses() called with an empty value, will be using the host+port properties for connections");
++		this.logger.info("setAddresses() called with an empty value, will be using the host+port properties for connections");
+ 		this.addresses = null;
+ 	}
+ 
+@@ -189,7 +189,7 @@ public void setAddresses(String addresses) {
+ 	 * @return the connection listener
+ 	 */
+ 	protected ConnectionListener getConnectionListener() {
+-		return connectionListener;
++		return this.connectionListener;
+ 	}
+ 
+ 	/**
+@@ -198,7 +198,7 @@ protected ConnectionListener getConnectionListener() {
+ 	 * @return the channel listener
+ 	 */
+ 	protected ChannelListener getChannelListener() {
+-		return channelListener;
++		return this.channelListener;
+ 	}
+ 
+ 	public void setConnectionListeners(List<? extends ConnectionListener> listeners) {
+@@ -248,7 +248,7 @@ public void setExecutor(Executor executor) {
+ 	}
+ 
+ 	protected ExecutorService getExecutorService() {
+-		return executorService;
++		return this.executorService;
+ 	}
+ 
+ 	/**
+@@ -262,7 +262,7 @@ public void setCloseTimeout(int closeTimeout) {
+ 	}
+ 
+ 	public int getCloseTimeout() {
+-		return closeTimeout;
++		return this.closeTimeout;
+ 	}
+ 
+ 	@Override
+@@ -281,8 +281,8 @@ protected final Connection createBareConnection() {
+ 				connection = new SimpleConnection(this.rabbitConnectionFactory.newConnection(this.executorService),
+ 									this.closeTimeout);
+ 			}
+-			if (logger.isInfoEnabled()) {
+-				logger.info("Created new connection: " + connection);
++			if (this.logger.isInfoEnabled()) {
++				this.logger.info("Created new connection: " + connection);
+ 			}
+ 			return connection;
+ 		}
+@@ -299,9 +299,9 @@ protected final  String getDefaultHostName() {
+ 		try {
+ 			InetAddress localMachine = InetAddress.getLocalHost();
+ 			temp = localMachine.getHostName();
+-			logger.debug("Using hostname [" + temp + "] for hostname.");
++			this.logger.debug("Using hostname [" + temp + "] for hostname.");
+ 		} catch (UnknownHostException e) {
+-			logger.warn("Could not get host name, using 'localhost' as default value", e);
++			this.logger.warn("Could not get host name, using 'localhost' as default value", e);
+ 			temp = "localhost";
+ 		}
+ 		return temp;
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractRoutingConnectionFactory.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractRoutingConnectionFactory.java
+index fa782631b..6cf225268 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractRoutingConnectionFactory.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/AbstractRoutingConnectionFactory.java
+@@ -89,7 +89,7 @@ public void setLenientFallback(boolean lenientFallback) {
+ 	}
+ 
+ 	public boolean isLenientFallback() {
+-		return lenientFallback;
++		return this.lenientFallback;
+ 	}
+ 
+ 	@Override
+@@ -183,7 +183,7 @@ public String getVirtualHost() {
+ 
+ 	@Override
+ 	public ConnectionFactory getTargetConnectionFactory(Object key) {
+-		return targetConnectionFactories.get(key);
++		return this.targetConnectionFactories.get(key);
+ 	}
+ 
+ 	/**
+@@ -192,7 +192,7 @@ public ConnectionFactory getTargetConnectionFactory(Object key) {
+ 	 * @param connectionFactory the {@link ConnectionFactory}
+ 	 */
+ 	protected void addTargetConnectionFactory(Object key, ConnectionFactory connectionFactory) {
+-		targetConnectionFactories.put(key, connectionFactory);
++		this.targetConnectionFactories.put(key, connectionFactory);
+ 		for(ConnectionListener listener : this.connectionListeners) {
+ 			connectionFactory.addConnectionListener(listener);
+ 		}
+@@ -204,7 +204,7 @@ protected void addTargetConnectionFactory(Object key, ConnectionFactory connecti
+ 	 * @return the {@link ConnectionFactory} that was removed
+ 	 */
+ 	protected ConnectionFactory removeTargetConnectionFactory(Object key) {
+-		return targetConnectionFactories.remove(key);
++		return this.targetConnectionFactories.remove(key);
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CachingConnectionFactory.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CachingConnectionFactory.java
+index fea2ba349..2d95666d0 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CachingConnectionFactory.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CachingConnectionFactory.java
+@@ -242,11 +242,11 @@ public int getChannelCacheSize() {
+ 	}
+ 
+ 	public CacheMode getCacheMode() {
+-		return cacheMode;
++		return this.cacheMode;
+ 	}
+ 
+ 	public void setCacheMode(CacheMode cacheMode) {
+-		Assert.isTrue(!initialized, "'cacheMode' cannot be changed after initialization.");
++		Assert.isTrue(!this.initialized, "'cacheMode' cannot be changed after initialization.");
+ 		Assert.notNull(cacheMode, "'cacheMode' must not be null.");
+ 		this.cacheMode = cacheMode;
+ 	}
+@@ -484,7 +484,7 @@ private Channel createBareChannel(ChannelCachingConnectionProxy connection, bool
+ 		}
+ 		else if (this.cacheMode == CacheMode.CONNECTION) {
+ 			if (!connection.isOpen()) {
+-				synchronized(connectionMonitor) {
++				synchronized(this.connectionMonitor) {
+ 					this.openConnectionNonTransactionalChannels.get(connection).clear();
+ 					this.openConnectionTransactionalChannels.get(connection).clear();
+ 					connection.notifyCloseIfNecessary();
+@@ -532,7 +532,7 @@ public final Connection createConnection() throws AmqpException {
+ 				if (this.connection == null) {
+ 					this.connection = new ChannelCachingConnectionProxy(super.createBareConnection());
+ 					// invoke the listener *after* this.connection is assigned
+-					getConnectionListener().onCreate(connection);
++					getConnectionListener().onCreate(this.connection);
+ 					this.checkoutPermits.put(this.connection, new Semaphore(this.channelCacheSize));
+ 				}
+ 				return this.connection;
+@@ -807,7 +807,7 @@ else if (methodName.equals("toString")) {
+ 			}
+ 			else if (methodName.equals("close")) {
+ 				// Handle close method: don't pass the call on.
+-				if (active) {
++				if (CachingConnectionFactory.this.active) {
+ 					synchronized (this.channelList) {
+ 						if (!RabbitUtils.isPhysicalCloseRequired() &&
+ 								(this.channelList.size() < getChannelCacheSize()
+@@ -844,9 +844,9 @@ else if (methodName.equals("isTransactional")) {
+ 					}
+ 					this.target = null;
+ 				}
+-				synchronized (targetMonitor) {
++				synchronized (this.targetMonitor) {
+ 					if (this.target == null) {
+-						this.target = createBareChannel(theConnection, transactional);
++						this.target = createBareChannel(this.theConnection, this.transactional);
+ 					}
+ 					return method.invoke(this.target, args);
+ 				}
+@@ -858,9 +858,9 @@ else if (methodName.equals("isTransactional")) {
+ 						logger.debug("Detected closed channel on exception.  Re-initializing: " + this.target);
+ 					}
+ 					this.target = null;
+-					synchronized (targetMonitor) {
++					synchronized (this.targetMonitor) {
+ 						if (this.target == null) {
+-							this.target = createBareChannel(theConnection, transactional);
++							this.target = createBareChannel(this.theConnection, this.transactional);
+ 						}
+ 					}
+ 				}
+@@ -882,11 +882,11 @@ private void releasePermit() {
+ 		 * @param proxy the channel to close
+ 		 */
+ 		private void logicalClose(ChannelProxy proxy) throws Exception {
+-			if (target == null) {
++			if (this.target == null) {
+ 				return;
+ 			}
+ 			if (this.target != null && !this.target.isOpen()) {
+-				synchronized (targetMonitor) {
++				synchronized (this.targetMonitor) {
+ 					if (this.target != null && !this.target.isOpen()) {
+ 						if (this.target instanceof PublisherCallbackChannel) {
+ 							this.target.close(); // emit nacks if necessary
+@@ -993,7 +993,7 @@ private ChannelCachingConnectionProxy(Connection target) {
+ 		}
+ 
+ 		private Channel createBareChannel(boolean transactional) {
+-			return target.createChannel(transactional);
++			return this.target.createChannel(transactional);
+ 		}
+ 
+ 		@Override
+@@ -1003,9 +1003,11 @@ public Channel createChannel(boolean transactional) {
+ 
+ 		@Override
+ 		public void close() {
+-			if (cacheMode == CacheMode.CONNECTION) {
+-				synchronized (connectionMonitor) {
+-					if (!this.target.isOpen() || idleConnections.size() >= connectionCacheSize) {
++			if (CachingConnectionFactory.this.cacheMode == CacheMode.CONNECTION) {
++				synchronized (CachingConnectionFactory.this.connectionMonitor) {
++					if (!this.target.isOpen()
++							|| CachingConnectionFactory.this.idleConnections.size() >=
++									CachingConnectionFactory.this.connectionCacheSize) {
+ 						if (logger.isDebugEnabled()) {
+ 							logger.debug("Completely closing connection '" + this + "'");
+ 						}
+@@ -1013,18 +1015,20 @@ public void close() {
+ 							RabbitUtils.closeConnection(this.target);
+ 						}
+ 						this.notifyCloseIfNecessary();
+-						openConnections.remove(this);
+-						openConnectionNonTransactionalChannels.remove(this);
+-						openConnectionTransactionalChannels.remove(this);
++						CachingConnectionFactory.this.openConnections.remove(this);
++						CachingConnectionFactory.this.openConnectionNonTransactionalChannels.remove(this);
++						CachingConnectionFactory.this.openConnectionTransactionalChannels.remove(this);
+ 					}
+ 					else {
+-						if (!idleConnections.contains(this)) {
++						if (!CachingConnectionFactory.this.idleConnections.contains(this)) {
+ 							if (logger.isDebugEnabled()) {
+ 								logger.debug("Returning connection '" + this + "' to cache");
+ 							}
+-							idleConnections.add(this);
+-							if (CachingConnectionFactory.this.connectionHighWaterMark.get() < idleConnections.size()) {
+-								CachingConnectionFactory.this.connectionHighWaterMark.set(idleConnections.size());
++							CachingConnectionFactory.this.idleConnections.add(this);
++							if (CachingConnectionFactory.this.connectionHighWaterMark
++									.get() < CachingConnectionFactory.this.idleConnections.size()) {
++								CachingConnectionFactory.this.connectionHighWaterMark
++										.set(CachingConnectionFactory.this.idleConnections.size());
+ 							}
+ 						}
+ 					}
+@@ -1034,10 +1038,12 @@ public void close() {
+ 
+ 		public void destroy() {
+ 			if (CachingConnectionFactory.this.cacheMode == CacheMode.CHANNEL) {
+-				reset(cachedChannelsNonTransactional, cachedChannelsTransactional);
++				reset(CachingConnectionFactory.this.cachedChannelsNonTransactional,
++						CachingConnectionFactory.this.cachedChannelsTransactional);
+ 			}
+ 			else {
+-				reset(openConnectionNonTransactionalChannels.get(this), openConnectionTransactionalChannels.get(this));
++				reset(CachingConnectionFactory.this.openConnectionNonTransactionalChannels.get(this),
++						CachingConnectionFactory.this.openConnectionTransactionalChannels.get(this));
+ 			}
+ 			if (this.target != null) {
+ 				RabbitUtils.closeConnection(this.target);
+@@ -1054,12 +1060,12 @@ private void notifyCloseIfNecessary() {
+ 
+ 		@Override
+ 		public boolean isOpen() {
+-			return target != null && target.isOpen();
++			return this.target != null && this.target.isOpen();
+ 		}
+ 
+ 		@Override
+ 		public Connection getTargetConnection() {
+-			return target;
++			return this.target;
+ 		}
+ 
+ 		@Override
+@@ -1073,7 +1079,7 @@ public int getLocalPort() {
+ 
+ 		@Override
+ 		public int hashCode() {
+-			return 31 + ((target == null) ? 0 : target.hashCode());
++			return 31 + ((this.target == null) ? 0 : this.target.hashCode());
+ 		}
+ 
+ 		@Override
+@@ -1088,11 +1094,11 @@ public boolean equals(Object obj) {
+ 				return false;
+ 			}
+ 			ChannelCachingConnectionProxy other = (ChannelCachingConnectionProxy) obj;
+-			if (target == null) {
++			if (this.target == null) {
+ 				if (other.target != null) {
+ 					return false;
+ 				}
+-			} else if (!target.equals(other.target)) {
++			} else if (!this.target.equals(other.target)) {
+ 				return false;
+ 			}
+ 			return true;
+@@ -1100,7 +1106,7 @@ public boolean equals(Object obj) {
+ 
+ 		@Override
+ 		public String toString() {
+-			return cacheMode == CacheMode.CHANNEL ? "Shared " : "Dedicated " +
++			return CachingConnectionFactory.this.cacheMode == CacheMode.CHANNEL ? "Shared " : "Dedicated " +
+ 					"Rabbit Connection: " + this.target;
+ 		}
+ 
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeChannelListener.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeChannelListener.java
+index 65758742e..31c87402e 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeChannelListener.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeChannelListener.java
+@@ -30,7 +30,7 @@
+ 	private List<ChannelListener> delegates = new ArrayList<ChannelListener>();
+ 
+ 	public void onCreate(Channel channel, boolean transactional) {
+-		for (ChannelListener delegate : delegates) {
++		for (ChannelListener delegate : this.delegates) {
+ 			delegate.onCreate(channel, transactional);
+ 		}
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeConnectionListener.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeConnectionListener.java
+index b651777c7..1829e6ab1 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeConnectionListener.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/CompositeConnectionListener.java
+@@ -29,13 +29,13 @@
+ 	private List<ConnectionListener> delegates = new CopyOnWriteArrayList<ConnectionListener>();
+ 
+ 	public void onCreate(Connection connection) {
+-		for (ConnectionListener delegate : delegates) {
++		for (ConnectionListener delegate : this.delegates) {
+ 			delegate.onCreate(connection);
+ 		}
+ 	}
+ 
+ 	public void onClose(Connection connection) {
+-		for (ConnectionListener delegate : delegates) {
++		for (ConnectionListener delegate : this.delegates) {
+ 			delegate.onClose(connection);
+ 		}
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/ConsumerChannelRegistry.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/ConsumerChannelRegistry.java
+index 47fff82d0..c752d9ed8 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/ConsumerChannelRegistry.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/ConsumerChannelRegistry.java
+@@ -111,11 +111,11 @@ private ChannelHolder(Channel channel, ConnectionFactory connectionFactory) {
+ 		}
+ 
+ 		private Channel getChannel() {
+-			return channel;
++			return this.channel;
+ 		}
+ 
+ 		private ConnectionFactory getConnectionFactory() {
+-			return connectionFactory;
++			return this.connectionFactory;
+ 		}
+ 	}
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/LocalizedQueueConnectionFactory.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/LocalizedQueueConnectionFactory.java
+index 3bc86a248..19424b4fd 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/LocalizedQueueConnectionFactory.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/LocalizedQueueConnectionFactory.java
+@@ -275,8 +275,8 @@ private ConnectionFactory determineConnectionFactory(String queue) {
+ 						if (uri != null) {
+ 							return nodeConnectionFactory(queue, node, uri);
+ 						}
+-						if (logger.isDebugEnabled()) {
+-							logger.debug("No match for node: " + node);
++						if (this.logger.isDebugEnabled()) {
++							this.logger.debug("No match for node: " + node);
+ 						}
+ 					}
+ 				}
+@@ -285,11 +285,11 @@ private ConnectionFactory determineConnectionFactory(String queue) {
+ 				}
+ 			}
+ 			catch (Exception e) {
+-				logger.warn("Failed to determine queue location for: " + queue + " at: " +
++				this.logger.warn("Failed to determine queue location for: " + queue + " at: " +
+ 						adminUri + ": " + e.getMessage());
+ 			}
+ 		}
+-		logger.warn("Failed to determine queue location for: " + queue + ", using default connection factory");
++		this.logger.warn("Failed to determine queue location for: " + queue + ", using default connection factory");
+ 		return null;
+ 	}
+ 
+@@ -309,14 +309,14 @@ protected Client createClient(String adminUri, String username, String password)
+ 
+ 	private synchronized ConnectionFactory nodeConnectionFactory(String queue, String node, String address)
+ 			throws Exception {
+-		if (logger.isInfoEnabled()) {
+-			logger.info("Queue: " + queue + " is on node: " + node + " at: " + address);
++		if (this.logger.isInfoEnabled()) {
++			this.logger.info("Queue: " + queue + " is on node: " + node + " at: " + address);
+ 		}
+ 		ConnectionFactory cf = this.nodeFactories.get(node);
+ 		if (cf == null) {
+ 			cf = createConnectionFactory(address, node);
+-			if (logger.isInfoEnabled()) {
+-				logger.info("Created new connection factory: " + cf);
++			if (this.logger.isInfoEnabled()) {
++				this.logger.info("Created new connection factory: " + cf);
+ 			}
+ 			this.nodeFactories.put(node, cf);
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitConnectionFactoryBean.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitConnectionFactoryBean.java
+index c24b47995..c98689ce5 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitConnectionFactoryBean.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitConnectionFactoryBean.java
+@@ -105,7 +105,7 @@ public void setUseSSL(boolean useSSL) {
+ 	 * @since 1.4.4.
+ 	 */
+ 	protected boolean isUseSSL() {
+-		return useSSL;
++		return this.useSSL;
+ 	}
+ 
+ 	/**
+@@ -122,7 +122,7 @@ public void setSslAlgorithm(String sslAlgorithm) {
+ 	 * @since 1.4.4
+ 	 */
+ 	protected String getSslAlgorithm() {
+-		return sslAlgorithm;
++		return this.sslAlgorithm;
+ 	}
+ 
+ 	/**
+@@ -148,7 +148,7 @@ public void setSslPropertiesLocation(Resource sslPropertiesLocation) {
+ 	 * @since 1.4.4
+ 	 */
+ 	protected Resource getSslPropertiesLocation() {
+-		return sslPropertiesLocation;
++		return this.sslPropertiesLocation;
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitResourceHolder.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitResourceHolder.java
+index 6baa2b267..5cd753de5 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitResourceHolder.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitResourceHolder.java
+@@ -96,7 +96,7 @@ public final boolean isFrozen() {
+ 	 * @return true if the resources should be released.
+ 	 */
+ 	public boolean isReleaseAfterCompletion() {
+-		return releaseAfterCompletion;
++		return this.releaseAfterCompletion;
+ 	}
+ 
+ 	public final void addConnection(Connection connection) {
+@@ -146,8 +146,8 @@ public Channel getChannel() {
+ 	public void commitAll() throws AmqpException {
+ 		try {
+ 			for (Channel channel : this.channels) {
+-				if (deliveryTags.containsKey(channel)) {
+-					for (Long deliveryTag : deliveryTags.get(channel)) {
++				if (this.deliveryTags.containsKey(channel)) {
++					for (Long deliveryTag : this.deliveryTags.get(channel)) {
+ 						channel.basicAck(deliveryTag, false);
+ 					}
+ 				}
+@@ -192,8 +192,8 @@ public void rollbackAll() {
+ 				logger.debug("Rolling back messages to channel: " + channel);
+ 			}
+ 			RabbitUtils.rollbackIfNecessary(channel);
+-			if (deliveryTags.containsKey(channel)) {
+-				for (Long deliveryTag : deliveryTags.get(channel)) {
++			if (this.deliveryTags.containsKey(channel)) {
++				for (Long deliveryTag : this.deliveryTags.get(channel)) {
+ 					try {
+ 						channel.basicReject(deliveryTag, true);
+ 					} catch (IOException ex) {
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/SimpleConnection.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/SimpleConnection.java
+index ef8f507d8..f2b218c1e 100755
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/SimpleConnection.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/SimpleConnection.java
+@@ -46,7 +46,7 @@ public SimpleConnection(com.rabbitmq.client.Connection delegate,
+ 	@Override
+ 	public Channel createChannel(boolean transactional) {
+ 		try {
+-			Channel channel = delegate.createChannel();
++			Channel channel = this.delegate.createChannel();
+ 			if (transactional) {
+ 				// Just created so we want to start the transaction
+ 				channel.txSelect();
+@@ -61,7 +61,7 @@ public Channel createChannel(boolean transactional) {
+ 	public void close() {
+ 		try {
+ 			// let the physical close time out if necessary
+-			delegate.close(closeTimeout);
++			this.delegate.close(this.closeTimeout);
+ 		} catch (IOException e) {
+ 			throw RabbitExceptionTranslator.convertRabbitAccessException(e);
+ 		}
+@@ -69,8 +69,8 @@ public void close() {
+ 
+ 	@Override
+ 	public boolean isOpen() {
+-		return delegate != null
+-				&& (delegate.isOpen() || this.delegate.getClass().getSimpleName().contains("AutorecoveringConnection"));
++		return this.delegate != null
++				&& (this.delegate.isOpen() || this.delegate.getClass().getSimpleName().contains("AutorecoveringConnection"));
+ 	}
+ 
+ 
+@@ -86,7 +86,7 @@ public int getLocalPort() {
+ 	public String toString() {
+ 		return "SimpleConnection@"
+ 				+ ObjectUtils.getIdentityHexString(this)
+-				+ " [delegate=" + delegate + ", localPort= " + getLocalPort() + "]";
++				+ " [delegate=" + this.delegate + ", localPort= " + getLocalPort() + "]";
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/DeclarationExceptionEvent.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/DeclarationExceptionEvent.java
+index 7f5c0c371..df4c43dda 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/DeclarationExceptionEvent.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/DeclarationExceptionEvent.java
+@@ -43,19 +43,19 @@ public DeclarationExceptionEvent(Object source, Declarable declarable, Throwable
+ 	 * @return the declarable - if null, we were declaring a broker-named queue.
+ 	 */
+ 	public Declarable getDeclarable() {
+-		return declarable;
++		return this.declarable;
+ 	}
+ 
+ 	/**
+ 	 * @return the throwable.
+ 	 */
+ 	public Throwable getThrowable() {
+-		return throwable;
++		return this.throwable;
+ 	}
+ 
+ 	@Override
+ 	public String toString() {
+-		return "DeclarationExceptionEvent [declarable=" + declarable + ", throwable=" + throwable + ", source="
++		return "DeclarationExceptionEvent [declarable=" + this.declarable + ", throwable=" + this.throwable + ", source="
+ 				+ getSource() + "]";
+ 	}
+ 
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitAdmin.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitAdmin.java
+index 5e78b8c77..c0fdca4fb 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitAdmin.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitAdmin.java
+@@ -141,7 +141,7 @@ public void setIgnoreDeclarationExceptions(boolean ignoreDeclarationExceptions)
+ 	 * @since 1.6
+ 	 */
+ 	public DeclarationExceptionEvent getLastDeclarationExceptionEvent() {
+-		return lastDeclarationExceptionEvent;
++		return this.lastDeclarationExceptionEvent;
+ 	}
+ 
+ 	public RabbitTemplate getRabbitTemplate() {
+@@ -303,7 +303,7 @@ public Object doInRabbit(Channel channel) throws Exception {
+ 	@Override
+ 	@ManagedOperation
+ 	public void removeBinding(final Binding binding) {
+-		rabbitTemplate.execute(new ChannelCallback<Object>() {
++		this.rabbitTemplate.execute(new ChannelCallback<Object>() {
+ 			@Override
+ 			public Object doInRabbit(Channel channel) throws Exception {
+ 				if (binding.isDestinationQueue()) {
+@@ -341,8 +341,9 @@ public Properties doInRabbit(Channel channel) throws Exception {
+ 					return props;
+ 				}
+ 				catch (IllegalArgumentException e) {
+-					if (logger.isDebugEnabled()) {
+-						logger.error("Exception while fetching Queue properties: '" + queueName + "'", e);
++					if (RabbitAdmin.this.logger.isDebugEnabled()) {
++						RabbitAdmin.this.logger.error("Exception while fetching Queue properties: '" + queueName + "'",
++								e);
+ 					}
+ 					try {
+ 						if (channel instanceof ChannelProxy) {
+@@ -354,8 +355,8 @@ public Properties doInRabbit(Channel channel) throws Exception {
+ 					return null;
+ 				}
+ 				catch (Exception e) {
+-					if (logger.isDebugEnabled()) {
+-						logger.debug("Queue '" + queueName + "' does not exist");
++					if (RabbitAdmin.this.logger.isDebugEnabled()) {
++						RabbitAdmin.this.logger.debug("Queue '" + queueName + "' does not exist");
+ 					}
+ 					return null;
+ 				}
+@@ -389,7 +390,7 @@ public void afterPropertiesSet() {
+ 
+ 			if (this.connectionFactory instanceof CachingConnectionFactory &&
+ 					((CachingConnectionFactory) this.connectionFactory).getCacheMode() == CacheMode.CONNECTION) {
+-				logger.warn("RabbitAdmin auto declaration is not supported with CacheMode.CONNECTION");
++				this.logger.warn("RabbitAdmin auto declaration is not supported with CacheMode.CONNECTION");
+ 				return;
+ 			}
+ 
+@@ -443,7 +444,7 @@ public void initialize() {
+ 			return;
+ 		}
+ 
+-		logger.debug("Initializing declarations");
++		this.logger.debug("Initializing declarations");
+ 		Collection<Exchange> contextExchanges = new LinkedList<Exchange>(this.applicationContext.getBeansOfType(Exchange.class).values());
+ 		Collection<Queue> contextQueues = new LinkedList<Queue>(this.applicationContext.getBeansOfType(Queue.class).values());
+ 		Collection<Binding> contextBindings = new LinkedList<Binding>(this.applicationContext.getBeansOfType(Binding.class).values());
+@@ -472,7 +473,7 @@ else if (declarable instanceof Binding) {
+ 
+ 		for (Exchange exchange : exchanges) {
+ 			if (!exchange.isDurable() || exchange.isAutoDelete()) {
+-				logger.info("Auto-declaring a non-durable or auto-delete Exchange ("
++				this.logger.info("Auto-declaring a non-durable or auto-delete Exchange ("
+ 						+ exchange.getName()
+ 						+ ") durable:" + exchange.isDurable() + ", auto-delete:" + exchange.isAutoDelete() + ". "
+ 						+ "It will be deleted by the broker if it shuts down, and can be redeclared by closing and "
+@@ -482,7 +483,7 @@ else if (declarable instanceof Binding) {
+ 
+ 		for (Queue queue : queues) {
+ 			if (!queue.isDurable() || queue.isAutoDelete() || queue.isExclusive()) {
+-				logger.info("Auto-declaring a non-durable, auto-delete, or exclusive Queue ("
++				this.logger.info("Auto-declaring a non-durable, auto-delete, or exclusive Queue ("
+ 						+ queue.getName()
+ 						+ ") durable:" + queue.isDurable() + ", auto-delete:" + queue.isAutoDelete() + ", exclusive:"
+ 						+ queue.isExclusive() + ". "
+@@ -491,7 +492,7 @@ else if (declarable instanceof Binding) {
+ 			}
+ 		}
+ 
+-		rabbitTemplate.execute(new ChannelCallback<Object>() {
++		this.rabbitTemplate.execute(new ChannelCallback<Object>() {
+ 			@Override
+ 			public Object doInRabbit(Channel channel) throws Exception {
+ 				declareExchanges(channel, exchanges.toArray(new Exchange[exchanges.size()]));
+@@ -500,7 +501,7 @@ public Object doInRabbit(Channel channel) throws Exception {
+ 				return null;
+ 			}
+ 		});
+-		logger.debug("Declarations finished");
++		this.logger.debug("Declarations finished");
+ 
+ 	}
+ 
+@@ -526,8 +527,8 @@ public Object doInRabbit(Channel channel) throws Exception {
+ 
+ 	private void declareExchanges(final Channel channel, final Exchange... exchanges) throws IOException {
+ 		for (final Exchange exchange : exchanges) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("declaring Exchange '" + exchange.getName() + "'");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("declaring Exchange '" + exchange.getName() + "'");
+ 			}
+ 
+ 			if (!isDeclaringDefaultExchange(exchange)) {
+@@ -561,8 +562,8 @@ private void declareExchanges(final Channel channel, final Exchange... exchanges
+ 		for (int i = 0; i < queues.length; i++) {
+ 			Queue queue = queues[i];
+ 			if (!queue.getName().startsWith("amq.")) {
+-				if (logger.isDebugEnabled()) {
+-					logger.debug("declaring Queue '" + queue.getName() + "'");
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug("declaring Queue '" + queue.getName() + "'");
+ 				}
+ 				try {
+ 					try {
+@@ -571,8 +572,8 @@ private void declareExchanges(final Channel channel, final Exchange... exchanges
+ 						declareOks.add(declareOk);
+ 					}
+ 					catch (IllegalArgumentException e) {
+-						if (logger.isDebugEnabled()) {
+-							logger.error("Exception while declaring queue: '" + queue.getName() + "'");
++						if (this.logger.isDebugEnabled()) {
++							this.logger.error("Exception while declaring queue: '" + queue.getName() + "'");
+ 						}
+ 						try {
+ 							if (channel instanceof ChannelProxy) {
+@@ -587,8 +588,8 @@ private void declareExchanges(final Channel channel, final Exchange... exchanges
+ 				catch (IOException e) {
+ 					logOrRethrowDeclarationException(queue, "queue", e);
+ 				}
+-			} else if (logger.isDebugEnabled()) {
+-				logger.debug("Queue with name that starts with 'amq.' cannot be declared.");
++			} else if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Queue with name that starts with 'amq.' cannot be declared.");
+ 			}
+ 		}
+ 		return declareOks.toArray(new DeclareOk[declareOks.size()]);
+@@ -596,8 +597,8 @@ private void declareExchanges(final Channel channel, final Exchange... exchanges
+ 
+ 	private void declareBindings(final Channel channel, final Binding... bindings) throws IOException {
+ 		for (Binding binding : bindings) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Binding destination [" + binding.getDestination() + " (" + binding.getDestinationType()
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Binding destination [" + binding.getDestination() + " (" + binding.getDestinationType()
+ 						+ ")] to exchange [" + binding.getExchange() + "] with routing key [" + binding.getRoutingKey()
+ 						+ "]");
+ 			}
+@@ -627,8 +628,8 @@ private void declareBindings(final Channel channel, final Binding... bindings) t
+ 			this.applicationEventPublisher.publishEvent(event);
+ 		}
+ 		if (this.ignoreDeclarationExceptions) {
+-			if (logger.isWarnEnabled()) {
+-				logger.warn("Failed to declare " + elementType
++			if (this.logger.isWarnEnabled()) {
++				this.logger.warn("Failed to declare " + elementType
+ 						+ (element == null ? "broker-generated" : ": " + element)
+ 						+ ", continuing...", t);
+ 			}
+@@ -640,8 +641,8 @@ private void declareBindings(final Channel channel, final Binding... bindings) t
+ 
+ 	private boolean isDeclaringDefaultExchange(Exchange exchange) {
+ 		if (isDefaultExchange(exchange.getName())) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Default exchange is pre-declared by server.");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Default exchange is pre-declared by server.");
+ 			}
+ 			return true;
+ 		}
+@@ -650,8 +651,8 @@ private boolean isDeclaringDefaultExchange(Exchange exchange) {
+ 
+ 	private boolean isDeletingDefaultExchange(String exchangeName) {
+ 		if (isDefaultExchange(exchangeName)) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Default exchange cannot be deleted.");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Default exchange cannot be deleted.");
+ 			}
+ 			return true;
+ 		}
+@@ -664,8 +665,8 @@ private boolean isDefaultExchange(String exchangeName) {
+ 
+ 	private boolean isDeclaringImplicitQueueBinding(Binding binding) {
+ 		if (isImplicitQueueBinding(binding)) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("The default exchange is implicitly bound to every queue, with a routing key equal to the queue name.");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("The default exchange is implicitly bound to every queue, with a routing key equal to the queue name.");
+ 			}
+ 			return true;
+ 		}
+@@ -674,8 +675,8 @@ private boolean isDeclaringImplicitQueueBinding(Binding binding) {
+ 
+ 	private boolean isRemovingImplicitQueueBinding(Binding binding) {
+ 		if (isImplicitQueueBinding(binding)) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Cannot remove implicit default exchange binding to queue.");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Cannot remove implicit default exchange binding to queue.");
+ 			}
+ 			return true;
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitTemplate.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitTemplate.java
+index 561b4e0ca..f15bbec3e 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitTemplate.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/RabbitTemplate.java
+@@ -671,9 +671,9 @@ public void send(final String exchange, final String routingKey,
+ 
+ 			@Override
+ 			public Object doInRabbit(Channel channel) throws Exception {
+-				doSend(channel, exchange, routingKey, message,
+-						returnCallback != null
+-								&& mandatoryExpression.getValue(evaluationContext, message, Boolean.class),
++				doSend(channel, exchange, routingKey, message, RabbitTemplate.this.returnCallback != null
++						&& RabbitTemplate.this.mandatoryExpression.getValue(
++								RabbitTemplate.this.evaluationContext, message, Boolean.class),
+ 						correlationData);
+ 				return null;
+ 			}
+@@ -942,7 +942,7 @@ public Boolean doInRabbit(Channel channel) throws Exception {
+ 				Message receiveMessage = null;
+ 				boolean channelLocallyTransacted = isChannelLocallyTransacted(channel);
+ 
+-				if (receiveTimeout == 0) {
++				if (RabbitTemplate.this.receiveTimeout == 0) {
+ 					GetResponse response = channel.basicGet(queueName, !channelTransacted);
+ 					// Response can be null in the case that there is no message on the queue.
+ 					if (response != null) {
+@@ -962,11 +962,11 @@ else if (channelTransacted) {
+ 				else {
+ 					QueueingConsumer consumer = createQueueingConsumer(queueName, channel);
+ 					Delivery delivery;
+-					if (receiveTimeout < 0) {
++					if (RabbitTemplate.this.receiveTimeout < 0) {
+ 						delivery = consumer.nextDelivery();
+ 					}
+ 					else {
+-						delivery = consumer.nextDelivery(receiveTimeout);
++						delivery = consumer.nextDelivery(RabbitTemplate.this.receiveTimeout);
+ 					}
+ 					channel.basicCancel(consumer.getConsumerTag());
+ 					if (delivery != null) {
+@@ -1035,8 +1035,8 @@ else if (channelTransacted) {
+ 								replyTo.getExchangeName(),
+ 								replyTo.getRoutingKey(),
+ 								replyMessage,
+-								returnCallback != null
+-										&& mandatoryExpression.getValue(evaluationContext, replyMessage, Boolean.class),
++								RabbitTemplate.this.returnCallback != null && RabbitTemplate.this.mandatoryExpression
++										.getValue(RabbitTemplate.this.evaluationContext, replyMessage, Boolean.class),
+ 								null);
+ 					}
+ 					else if (channelLocallyTransacted) {
+@@ -1190,7 +1190,7 @@ protected Message doSendAndReceiveWithTemporary(final String exchange, final Str
+ 			@Override
+ 			public Message doInRabbit(Channel channel) throws Exception {
+ 				final PendingReply pendingReply = new PendingReply();
+-				String messageTag = String.valueOf(messageTagProvider.incrementAndGet());
++				String messageTag = String.valueOf(RabbitTemplate.this.messageTagProvider.incrementAndGet());
+ 				RabbitTemplate.this.replyHolder.put(messageTag, pendingReply);
+ 
+ 				Assert.isNull(message.getMessageProperties().getReplyTo(),
+@@ -1211,8 +1211,8 @@ public Message doInRabbit(Channel channel) throws Exception {
+ 					@Override
+ 					public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties,
+ 											   byte[] body) throws IOException {
+-						MessageProperties messageProperties = messagePropertiesConverter.toMessageProperties(
+-								properties, envelope, encoding);
++						MessageProperties messageProperties = RabbitTemplate.this.messagePropertiesConverter
++								.toMessageProperties(properties, envelope, RabbitTemplate.this.encoding);
+ 						Message reply = new Message(body, messageProperties);
+ 						if (logger.isTraceEnabled()) {
+ 							logger.trace("Message received " + reply);
+@@ -1247,7 +1247,7 @@ protected Message doSendAndReceiveWithFixed(final String exchange, final String
+ 			@Override
+ 			public Message doInRabbit(Channel channel) throws Exception {
+ 				final PendingReply pendingReply = new PendingReply();
+-				String messageTag = String.valueOf(messageTagProvider.incrementAndGet());
++				String messageTag = String.valueOf(RabbitTemplate.this.messageTagProvider.incrementAndGet());
+ 				RabbitTemplate.this.replyHolder.put(messageTag, pendingReply);
+ 				// Save any existing replyTo and correlation data
+ 				String savedReplyTo = message.getMessageProperties().getReplyTo();
+@@ -1300,7 +1300,7 @@ private Message exchangeMessages(final String exchange, final String routingKey,
+ 			final CorrelationData correlationData, Channel channel, final PendingReply pendingReply, String messageTag)
+ 			throws Exception {
+ 		Message reply;
+-		boolean mandatory = this.mandatoryExpression.getValue(evaluationContext, message, Boolean.class);
++		boolean mandatory = this.mandatoryExpression.getValue(this.evaluationContext, message, Boolean.class);
+ 		if (mandatory && this.returnCallback == null) {
+ 			message.getMessageProperties().getHeaders().put(RETURN_CORRELATION_KEY, messageTag);
+ 		}
+@@ -1413,7 +1413,7 @@ protected void doSend(Channel channel, String exchange, String routingKey, Messa
+ 			}
+ 		}
+ 		BasicProperties convertedMessageProperties = this.messagePropertiesConverter
+-				.fromMessageProperties(messageProperties, encoding);
++				.fromMessageProperties(messageProperties, this.encoding);
+ 		channel.basicPublish(exchange, routingKey, mandatory, convertedMessageProperties, messageToUse.getBody());
+ 		// Check if commit needed
+ 		if (isChannelLocallyTransacted(channel)) {
+@@ -1574,7 +1574,7 @@ else if (logger.isWarnEnabled()) {
+ 		}
+ 		if (returnCallback != null) {
+ 			properties.getHeaders().remove(PublisherCallbackChannel.RETURN_CORRELATION_KEY);
+-			MessageProperties messageProperties = messagePropertiesConverter.toMessageProperties(
++			MessageProperties messageProperties = this.messagePropertiesConverter.toMessageProperties(
+ 					properties, null, this.encoding);
+ 			Message returnedMessage = new Message(body, messageProperties);
+ 			returnCallback.returnedMessage(returnedMessage,
+@@ -1704,7 +1704,7 @@ public void handleConsumeOk(String consumerTag) {
+ 		private final BlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(1);
+ 
+ 		public String getSavedReplyTo() {
+-			return savedReplyTo;
++			return this.savedReplyTo;
+ 		}
+ 
+ 		public void setSavedReplyTo(String savedReplyTo) {
+@@ -1712,7 +1712,7 @@ public void setSavedReplyTo(String savedReplyTo) {
+ 		}
+ 
+ 		public String getSavedCorrelation() {
+-			return savedCorrelation;
++			return this.savedCorrelation;
+ 		}
+ 
+ 		public void setSavedCorrelation(String savedCorrelation) {
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/MessageBatch.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/MessageBatch.java
+index 0755c1ecc..fa32abc31 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/MessageBatch.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/MessageBatch.java
+@@ -44,21 +44,21 @@ public MessageBatch(String exchange, String routingKey, Message message) {
+ 	 * @return the exchange
+ 	 */
+ 	public String getExchange() {
+-		return exchange;
++		return this.exchange;
+ 	}
+ 
+ 	/**
+ 	 * @return the routingKey
+ 	 */
+ 	public String getRoutingKey() {
+-		return routingKey;
++		return this.routingKey;
+ 	}
+ 
+ 	/**
+ 	 * @return the message
+ 	 */
+ 	public Message getMessage() {
+-		return message;
++		return this.message;
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/SimpleBatchingStrategy.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/SimpleBatchingStrategy.java
+index 327f36979..5d8ca2957 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/SimpleBatchingStrategy.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/core/support/SimpleBatchingStrategy.java
+@@ -87,8 +87,8 @@ public MessageBatch addToBatch(String exchange, String routingKey, Message messa
+ 			this.routingKey = routingKey;
+ 		}
+ 		this.currentSize += bufferUse;
+-		messages.add(message);
+-		if (batch == null && (messages.size() >= this.batchSize
++		this.messages.add(message);
++		if (batch == null && (this.messages.size() >= this.batchSize
+ 								|| this.currentSize >= this.bufferLimit)) {
+ 			batch = doReleaseBatch();
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractMessageListenerContainer.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractMessageListenerContainer.java
+index cf0d0242d..1d1e0918f 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractMessageListenerContainer.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractMessageListenerContainer.java
+@@ -132,7 +132,7 @@ public void setAcknowledgeMode(AcknowledgeMode acknowledgeMode) {
+ 	 * @return the acknowledgeMode
+ 	 */
+ 	public AcknowledgeMode getAcknowledgeMode() {
+-		return acknowledgeMode;
++		return this.acknowledgeMode;
+ 	}
+ 
+ 	/**
+@@ -309,7 +309,7 @@ public void setMessageConverter(MessageConverter messageConverter) {
+ 
+ 	@Override
+ 	public MessageConverter getMessageConverter() {
+-		return messageConverter;
++		return this.messageConverter;
+ 	}
+ 
+ 	/**
+@@ -382,7 +382,7 @@ protected final String getBeanName() {
+ 	}
+ 
+ 	protected final ApplicationContext getApplicationContext() {
+-		return applicationContext;
++		return this.applicationContext;
+ 	}
+ 
+ 	@Override
+@@ -422,7 +422,7 @@ public void setListenerId(String listenerId) {
+ 	public final void afterPropertiesSet() {
+ 		super.afterPropertiesSet();
+ 		Assert.state(
+-				exposeListenerChannel || !getAcknowledgeMode().isManual(),
++				this.exposeListenerChannel || !getAcknowledgeMode().isManual(),
+ 				"You cannot acknowledge messages manually if the channel is not exposed to the listener "
+ 						+ "(please check your configuration and set exposeListenerChannel=true or acknowledgeMode!=MANUAL)");
+ 		Assert.state(
+@@ -532,11 +532,11 @@ public final boolean isActive() {
+ 	 */
+ 	@Override
+ 	public void start() {
+-		if (!initialized) {
++		if (!this.initialized) {
+ 			synchronized (this.lifecycleMonitor) {
+-				if (!initialized) {
++				if (!this.initialized) {
+ 					afterPropertiesSet();
+-					initialized = true;
++					this.initialized = true;
+ 				}
+ 			}
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractRabbitListenerEndpoint.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractRabbitListenerEndpoint.java
+index 1f38f26db..0720c6805 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractRabbitListenerEndpoint.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/AbstractRabbitListenerEndpoint.java
+@@ -76,15 +76,15 @@ public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
+ 	}
+ 
+ 	protected BeanFactory getBeanFactory() {
+-		return beanFactory;
++		return this.beanFactory;
+ 	}
+ 
+ 	protected BeanExpressionResolver getResolver() {
+-		return resolver;
++		return this.resolver;
+ 	}
+ 
+ 	protected BeanExpressionContext getBeanExpressionContext() {
+-		return expressionContext;
++		return this.expressionContext;
+ 	}
+ 
+ 	public void setId(String id) {
+@@ -112,14 +112,14 @@ public void setQueues(Queue... queues) {
+ 	 * @return the queues for this endpoint.
+ 	 */
+ 	public Collection<Queue> getQueues() {
+-		return queues;
++		return this.queues;
+ 	}
+ 
+ 	/**
+ 	 * @return the queue names for this endpoint.
+ 	 */
+ 	public Collection<String> getQueueNames() {
+-		return queueNames;
++		return this.queueNames;
+ 	}
+ 
+ 	/**
+@@ -148,7 +148,7 @@ public void setExclusive(boolean exclusive) {
+ 	 * @return the exclusive {@code boolean} flag.
+ 	 */
+ 	public boolean isExclusive() {
+-		return exclusive;
++		return this.exclusive;
+ 	}
+ 
+ 	/**
+@@ -164,7 +164,7 @@ public void setPriority(Integer priority) {
+ 	 * no priority is set.
+ 	 */
+ 	public Integer getPriority() {
+-		return priority;
++		return this.priority;
+ 	}
+ 
+ 	/**
+@@ -180,7 +180,7 @@ public void setAdmin(RabbitAdmin admin) {
+ 	 * none is configured.
+ 	 */
+ 	public RabbitAdmin getAdmin() {
+-		return admin;
++		return this.admin;
+ 	}
+ 
+ 	@Override
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ActiveObjectCounter.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ActiveObjectCounter.java
+index b94c19567..028fd90f9 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ActiveObjectCounter.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ActiveObjectCounter.java
+@@ -33,11 +33,11 @@
+ 
+ 	public void add(T object) {
+ 		CountDownLatch lock = new CountDownLatch(1);
+-		locks.putIfAbsent(object, lock);
++		this.locks.putIfAbsent(object, lock);
+ 	}
+ 
+ 	public void release(T object) {
+-		CountDownLatch remove = locks.remove(object);
++		CountDownLatch remove = this.locks.remove(object);
+ 		if (remove != null) {
+ 			remove.countDown();
+ 		}
+@@ -47,18 +47,18 @@ public boolean await(Long timeout, TimeUnit timeUnit) throws InterruptedExceptio
+ 		long t0 = System.currentTimeMillis();
+ 		long t1 = t0 + TimeUnit.MILLISECONDS.convert(timeout, timeUnit);
+ 		while (System.currentTimeMillis() <= t1) {
+-			if (locks.isEmpty()) {
++			if (this.locks.isEmpty()) {
+ 				return true;
+ 			}
+-			Collection<T> objects = new HashSet<T>(locks.keySet());
++			Collection<T> objects = new HashSet<T>(this.locks.keySet());
+ 			for (T object : objects) {
+-				CountDownLatch lock = locks.get(object);
++				CountDownLatch lock = this.locks.get(object);
+ 				if (lock==null) {
+ 					continue;
+ 				}
+ 				t0 = System.currentTimeMillis();
+ 				if (lock.await(t1 - t0, TimeUnit.MILLISECONDS)) {
+-					locks.remove(object);
++					this.locks.remove(object);
+ 				}
+ 			}
+ 		}
+@@ -66,11 +66,11 @@ public boolean await(Long timeout, TimeUnit timeUnit) throws InterruptedExceptio
+ 	}
+ 
+ 	public int getCount() {
+-		return locks.size();
++		return this.locks.size();
+ 	}
+ 
+ 	public void reset() {
+-		locks.clear();
++		this.locks.clear();
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/BlockingQueueConsumer.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/BlockingQueueConsumer.java
+index 03aba8dee..178ca3038 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/BlockingQueueConsumer.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/BlockingQueueConsumer.java
+@@ -233,11 +233,11 @@ public BlockingQueueConsumer(ConnectionFactory connectionFactory,
+ 	}
+ 
+ 	public Channel getChannel() {
+-		return channel;
++		return this.channel;
+ 	}
+ 
+ 	public String getConsumerTag() {
+-		return consumer.getConsumerTag();
++		return this.consumer.getConsumerTag();
+ 	}
+ 
+ 	/**
+@@ -298,7 +298,7 @@ public void setBackOffExecution(BackOffExecution backOffExecution) {
+ 	}
+ 
+ 	public BackOffExecution getBackOffExecution() {
+-		return backOffExecution;
++		return this.backOffExecution;
+ 	}
+ 
+ 	protected void basicCancel() {
+@@ -330,8 +330,8 @@ protected boolean hasDelivery() {
+ 	 * Check if we are in shutdown mode and if so throw an exception.
+ 	 */
+ 	private void checkShutdown() {
+-		if (shutdown != null) {
+-			throw Utility.fixStackTrace(shutdown);
++		if (this.shutdown != null) {
++			throw Utility.fixStackTrace(this.shutdown);
+ 		}
+ 	}
+ 
+@@ -342,8 +342,8 @@ private void checkShutdown() {
+ 	 * @throws InterruptedException
+ 	 */
+ 	private Message handle(Delivery delivery) throws InterruptedException {
+-		if ((delivery == null && shutdown != null)) {
+-			throw shutdown;
++		if ((delivery == null && this.shutdown != null)) {
++			throw this.shutdown;
+ 		}
+ 		if (delivery == null) {
+ 			return null;
+@@ -360,7 +360,7 @@ private Message handle(Delivery delivery) throws InterruptedException {
+ 		if (logger.isDebugEnabled()) {
+ 			logger.debug("Received message: " + message);
+ 		}
+-		deliveryTags.add(messageProperties.getDeliveryTag());
++		this.deliveryTags.add(messageProperties.getDeliveryTag());
+ 		return message;
+ 	}
+ 
+@@ -372,7 +372,7 @@ private Message handle(Delivery delivery) throws InterruptedException {
+ 	 */
+ 	public Message nextMessage() throws InterruptedException, ShutdownSignalException {
+ 		logger.trace("Retrieving delivery for " + this);
+-		return handle(queue.take());
++		return handle(this.queue.take());
+ 	}
+ 
+ 	/**
+@@ -390,8 +390,8 @@ public Message nextMessage(long timeout) throws InterruptedException, ShutdownSi
+ 		if (this.missingQueues.size() > 0) {
+ 			checkMissingQueues();
+ 		}
+-		Message message = handle(queue.poll(timeout, TimeUnit.MILLISECONDS));
+-		if (message == null && cancelReceived.get()) {
++		Message message = handle(this.queue.poll(timeout, TimeUnit.MILLISECONDS));
++		if (message == null && this.cancelReceived.get()) {
+ 			throw new ConsumerCancelledException();
+ 		}
+ 		return message;
+@@ -456,13 +456,13 @@ public void start() throws AmqpException {
+ 			logger.debug("Starting consumer " + this);
+ 		}
+ 		try {
+-			this.resourceHolder = ConnectionFactoryUtils.getTransactionalResourceHolder(connectionFactory, transactional);
+-			this.channel = resourceHolder.getChannel();
++			this.resourceHolder = ConnectionFactoryUtils.getTransactionalResourceHolder(this.connectionFactory, this.transactional);
++			this.channel = this.resourceHolder.getChannel();
+ 		}
+ 		catch (AmqpAuthenticationException e) {
+ 			throw new FatalListenerStartupException("Authentication failure", e);
+ 		}
+-		this.consumer = new InternalConsumer(channel);
++		this.consumer = new InternalConsumer(this.channel);
+ 		this.deliveryTags.clear();
+ 		this.activeObjectCounter.add(this);
+ 
+@@ -477,7 +477,7 @@ public void start() throws AmqpException {
+ 				passiveDeclareRetries = 0;
+ 			}
+ 			catch (DeclarationException e) {
+-				if (passiveDeclareRetries > 0 && channel.isOpen()) {
++				if (passiveDeclareRetries > 0 && this.channel.isOpen()) {
+ 					if (logger.isWarnEnabled()) {
+ 						logger.warn("Queue declaration failed; retries left=" + (passiveDeclareRetries), e);
+ 						try {
+@@ -505,11 +505,11 @@ else if (e.getFailedQueues().size() < this.queues.length) {
+ 		}
+ 		while (passiveDeclareRetries-- > 0);
+ 
+-		if (!acknowledgeMode.isAutoAck()) {
++		if (!this.acknowledgeMode.isAutoAck()) {
+ 			// Set basicQos before calling basicConsume (otherwise if we are not acking the broker
+ 			// will send blocks of 100 messages)
+ 			try {
+-				channel.basicQos(prefetchCount);
++				this.channel.basicQos(this.prefetchCount);
+ 			}
+ 			catch (IOException e) {
+ 				this.activeObjectCounter.release(this);
+@@ -519,7 +519,7 @@ else if (e.getFailedQueues().size() < this.queues.length) {
+ 
+ 
+ 		try {
+-			for (String queueName : queues) {
++			for (String queueName : this.queues) {
+ 				if (!this.missingQueues.contains(queueName)) {
+ 					consumeFromQueue(queueName);
+ 				}
+@@ -583,7 +583,7 @@ private void attemptPassiveDeclarations() {
+ 
+ 	public void stop() {
+ 		this.cancelled.set(true);
+-		if (consumer != null && consumer.getChannel() != null && this.consumerTags.size() > 0
++		if (this.consumer != null && this.consumer.getChannel() != null && this.consumerTags.size() > 0
+ 				&& !this.cancelReceived.get()) {
+ 			try {
+ 				RabbitUtils.closeMessageConsumer(this.consumer.getChannel(), this.consumerTags.keySet(),
+@@ -596,12 +596,12 @@ public void stop() {
+ 			}
+ 		}
+ 		if (logger.isDebugEnabled()) {
+-			logger.debug("Closing Rabbit Channel: " + channel);
++			logger.debug("Closing Rabbit Channel: " + this.channel);
+ 		}
+ 		RabbitUtils.setPhysicalCloseRequired(true);
+ 		ConnectionFactoryUtils.releaseResources(this.resourceHolder);
+-		deliveryTags.clear();
+-		consumer = null;
++		this.deliveryTags.clear();
++		this.consumer = null;
+ 	}
+ 
+ 	private class InternalConsumer extends DefaultConsumer {
+@@ -628,10 +628,10 @@ public void handleShutdownSignal(String consumerTag, ShutdownSignalException sig
+ 					logger.debug("Received shutdown signal for consumer tag=" + consumerTag, sig);
+ 				}
+ 			}
+-			shutdown = sig;
++			BlockingQueueConsumer.this.shutdown = sig;
+ 			// The delivery tags will be invalid if the channel shuts down
+-			deliveryTags.clear();
+-			activeObjectCounter.release(BlockingQueueConsumer.this);
++			BlockingQueueConsumer.this.deliveryTags.clear();
++			BlockingQueueConsumer.this.activeObjectCounter.release(BlockingQueueConsumer.this);
+ 		}
+ 
+ 		@Override
+@@ -660,7 +660,7 @@ public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProp
+ 				logger.debug("Storing delivery for " + BlockingQueueConsumer.this);
+ 			}
+ 			try {
+-				queue.put(new Delivery(consumerTag, envelope, properties, body));
++				BlockingQueueConsumer.this.queue.put(new Delivery(consumerTag, envelope, properties, body));
+ 			}
+ 			catch (InterruptedException e) {
+ 				Thread.currentThread().interrupt();
+@@ -690,19 +690,19 @@ public Delivery(String consumerTag, Envelope envelope, AMQP.BasicProperties prop
+ 		}
+ 
+ 		public String getConsumerTag() {
+-			return consumerTag;
++			return this.consumerTag;
+ 		}
+ 
+ 		public Envelope getEnvelope() {
+-			return envelope;
++			return this.envelope;
+ 		}
+ 
+ 		public BasicProperties getProperties() {
+-			return properties;
++			return this.properties;
+ 		}
+ 
+ 		public byte[] getBody() {
+-			return body;
++			return this.body;
+ 		}
+ 	}
+ 
+@@ -736,8 +736,8 @@ public String getMessage() {
+ 
+ 	@Override
+ 	public String toString() {
+-		return "Consumer: tags=[" + (this.consumerTags.toString()) + "], channel=" + channel
+-				+ ", acknowledgeMode=" + acknowledgeMode + " local queue size=" + queue.size();
++		return "Consumer: tags=[" + (this.consumerTags.toString()) + "], channel=" + this.channel
++				+ ", acknowledgeMode=" + this.acknowledgeMode + " local queue size=" + this.queue.size();
+ 	}
+ 
+ 	/**
+@@ -747,13 +747,13 @@ public String toString() {
+ 	 */
+ 	public void rollbackOnExceptionIfNecessary(Throwable ex) throws Exception {
+ 
+-		boolean ackRequired = !acknowledgeMode.isAutoAck() && !acknowledgeMode.isManual();
++		boolean ackRequired = !this.acknowledgeMode.isAutoAck() && !this.acknowledgeMode.isManual();
+ 		try {
+-			if (transactional) {
++			if (this.transactional) {
+ 				if (logger.isDebugEnabled()) {
+ 					logger.debug("Initiating transaction rollback on application exception: " + ex);
+ 				}
+-				RabbitUtils.rollbackIfNecessary(channel);
++				RabbitUtils.rollbackIfNecessary(this.channel);
+ 			}
+ 			if (ackRequired) {
+ 				// We should always requeue if the container was stopping
+@@ -769,20 +769,20 @@ public void rollbackOnExceptionIfNecessary(Throwable ex) throws Exception {
+ 				if (logger.isDebugEnabled()) {
+ 					logger.debug("Rejecting messages (requeue=" + shouldRequeue + ")");
+ 				}
+-				for (Long deliveryTag : deliveryTags) {
++				for (Long deliveryTag : this.deliveryTags) {
+ 					// With newer RabbitMQ brokers could use basicNack here...
+-					channel.basicReject(deliveryTag, shouldRequeue);
++					this.channel.basicReject(deliveryTag, shouldRequeue);
+ 				}
+-				if (transactional) {
++				if (this.transactional) {
+ 					// Need to commit the reject (=nack)
+-					RabbitUtils.commitIfNecessary(channel);
++					RabbitUtils.commitIfNecessary(this.channel);
+ 				}
+ 			}
+ 		} catch (Exception e) {
+ 			logger.error("Application exception overridden by rollback exception", ex);
+ 			throw e;
+ 		} finally {
+-			deliveryTags.clear();
++			this.deliveryTags.clear();
+ 		}
+ 	}
+ 
+@@ -794,38 +794,38 @@ public void rollbackOnExceptionIfNecessary(Throwable ex) throws Exception {
+ 	 */
+ 	public boolean commitIfNecessary(boolean locallyTransacted) throws IOException {
+ 
+-		if (deliveryTags.isEmpty()) {
++		if (this.deliveryTags.isEmpty()) {
+ 			return false;
+ 		}
+ 
+ 		try {
+ 
+-			boolean ackRequired = !acknowledgeMode.isAutoAck() && !acknowledgeMode.isManual();
++			boolean ackRequired = !this.acknowledgeMode.isAutoAck() && !this.acknowledgeMode.isManual();
+ 
+ 			if (ackRequired) {
+ 
+-				if (transactional && !locallyTransacted) {
++				if (this.transactional && !locallyTransacted) {
+ 
+ 					// Not locally transacted but it is transacted so it
+ 					// could be synchronized with an external transaction
+-					for (Long deliveryTag : deliveryTags) {
+-						ConnectionFactoryUtils.registerDeliveryTag(connectionFactory, channel, deliveryTag);
++					for (Long deliveryTag : this.deliveryTags) {
++						ConnectionFactoryUtils.registerDeliveryTag(this.connectionFactory, this.channel, deliveryTag);
+ 					}
+ 
+ 				} else {
+-					long deliveryTag = new ArrayList<Long>(deliveryTags).get(deliveryTags.size() - 1);
+-					channel.basicAck(deliveryTag, true);
++					long deliveryTag = new ArrayList<Long>(this.deliveryTags).get(this.deliveryTags.size() - 1);
++					this.channel.basicAck(deliveryTag, true);
+ 				}
+ 			}
+ 
+ 			if (locallyTransacted) {
+ 				// For manual acks we still need to commit
+-				RabbitUtils.commitIfNecessary(channel);
++				RabbitUtils.commitIfNecessary(this.channel);
+ 			}
+ 
+ 		}
+ 		finally {
+-			deliveryTags.clear();
++			this.deliveryTags.clear();
+ 		}
+ 
+ 		return true;
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ConditionalRejectingErrorHandler.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ConditionalRejectingErrorHandler.java
+index ff3ff44f7..d30d48b90 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ConditionalRejectingErrorHandler.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ConditionalRejectingErrorHandler.java
+@@ -64,8 +64,8 @@ public ConditionalRejectingErrorHandler(FatalExceptionStrategy exceptionStrategy
+ 
+ 	@Override
+ 	public void handleError(Throwable t) {
+-		if (logger.isWarnEnabled()) {
+-			logger.warn("Execution of Rabbit message listener failed.", t);
++		if (this.logger.isWarnEnabled()) {
++			this.logger.warn("Execution of Rabbit message listener failed.", t);
+ 		}
+ 		if (!this.causeChainContainsARADRE(t) && this.exceptionStrategy.isFatal(t)) {
+ 			throw new AmqpRejectAndDontRequeueException("Error Handler converted exception to fatal", t);
+@@ -93,8 +93,9 @@ private boolean causeChainContainsARADRE(Throwable t) {
+ 		public boolean isFatal(Throwable t) {
+ 			if (t instanceof ListenerExecutionFailedException
+ 					&& t.getCause() instanceof MessageConversionException) {
+-				if (logger.isWarnEnabled()) {
+-					logger.warn("Fatal message conversion error; message rejected; "
++				if (ConditionalRejectingErrorHandler.this.logger.isWarnEnabled()) {
++					ConditionalRejectingErrorHandler.this.logger.warn(
++							"Fatal message conversion error; message rejected; "
+ 							+ "it will be dropped or routed to a dead letter exchange, if so configured: "
+ 							+ ((ListenerExecutionFailedException) t).getFailedMessage(), t);
+ 				}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ListenerContainerIdleEvent.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ListenerContainerIdleEvent.java
+index ef7da8e9c..1f83aeafd 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ListenerContainerIdleEvent.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/ListenerContainerIdleEvent.java
+@@ -50,7 +50,7 @@ public ListenerContainerIdleEvent(Object source, long idleTime, String id, Strin
+ 	 * @return the time in milliseconds.
+ 	 */
+ 	public long getIdleTime() {
+-		return idleTime;
++		return this.idleTime;
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MethodRabbitListenerEndpoint.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MethodRabbitListenerEndpoint.java
+index 23a7f84e4..745cb4775 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MethodRabbitListenerEndpoint.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MethodRabbitListenerEndpoint.java
+@@ -84,7 +84,7 @@ public void setMessageHandlerMethodFactory(MessageHandlerMethodFactory messageHa
+ 	 * @return the messageHandlerMethodFactory
+ 	 */
+ 	protected MessageHandlerMethodFactory getMessageHandlerMethodFactory() {
+-		return messageHandlerMethodFactory;
++		return this.messageHandlerMethodFactory;
+ 	}
+ 
+ 	@Override
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MultiMethodRabbitListenerEndpoint.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MultiMethodRabbitListenerEndpoint.java
+index b52ce73aa..d44656e23 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MultiMethodRabbitListenerEndpoint.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/MultiMethodRabbitListenerEndpoint.java
+@@ -69,8 +69,8 @@ protected MessagingMessageListenerAdapter createMessageListenerInstance() {
+ 		protected Address getReplyToAddress(Message request) throws Exception {
+ 			Address replyTo = request.getMessageProperties().getReplyToAddress();
+ 			Address defaultReplyTo = null;
+-			if (delegatingHandler != null) {
+-				defaultReplyTo = delegatingHandler.getDefaultReplyTo();
++			if (MultiMethodRabbitListenerEndpoint.this.delegatingHandler != null) {
++				defaultReplyTo = MultiMethodRabbitListenerEndpoint.this.delegatingHandler.getDefaultReplyTo();
+ 			}
+ 			if (replyTo == null && defaultReplyTo == null) {
+ 				throw new AmqpException(
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/RabbitListenerEndpointRegistry.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/RabbitListenerEndpointRegistry.java
+index 9f2ee6f33..7a1515006 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/RabbitListenerEndpointRegistry.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/RabbitListenerEndpointRegistry.java
+@@ -205,7 +205,7 @@ public void destroy() {
+ 					((DisposableBean) listenerContainer).destroy();
+ 				}
+ 				catch (Exception ex) {
+-					logger.warn("Failed to destroy message listener container", ex);
++					this.logger.warn("Failed to destroy message listener container", ex);
+ 				}
+ 			}
+ 		}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainer.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainer.java
+index d07688b13..590cdd917 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainer.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainer.java
+@@ -194,7 +194,7 @@ public void invokeListener(Channel channel, Message message) throws Exception {
+ 		}
+ 	};
+ 
+-	private ContainerDelegate proxy = delegate;
++	private ContainerDelegate proxy = this.delegate;
+ 
+ 	private Integer declarationRetries;
+ 
+@@ -276,7 +276,7 @@ public void setConcurrentConsumers(final int concurrentConsumers) {
+ 			Assert.isTrue(concurrentConsumers <= this.maxConcurrentConsumers,
+ 					"'concurrentConsumers' cannot be more than 'maxConcurrentConsumers'");
+ 		}
+-		synchronized(consumersMonitor) {
++		synchronized(this.consumersMonitor) {
+ 			if (logger.isDebugEnabled()) {
+ 				logger.debug("Changing consumers from " + this.concurrentConsumers + " to " + concurrentConsumers);
+ 			}
+@@ -284,7 +284,7 @@ public void setConcurrentConsumers(final int concurrentConsumers) {
+ 			this.concurrentConsumers = concurrentConsumers;
+ 			if (isActive() && this.consumers != null) {
+ 				if (delta > 0) {
+-					Iterator<Entry<BlockingQueueConsumer, Boolean>> entryIterator = consumers.entrySet()
++					Iterator<Entry<BlockingQueueConsumer, Boolean>> entryIterator = this.consumers.entrySet()
+ 							.iterator();
+ 					while (entryIterator.hasNext() && delta > 0) {
+ 						Entry<BlockingQueueConsumer, Boolean> entry = entryIterator.next();
+@@ -478,14 +478,14 @@ public void setDefaultRequeueRejected(boolean defaultRequeueRejected) {
+ 	}
+ 
+ 	public void setConsumerArguments(Map<String, Object> args) {
+-		synchronized(consumersMonitor) {
++		synchronized(this.consumersMonitor) {
+ 			this.consumerArgs.clear();
+ 			this.consumerArgs.putAll(args);
+ 		}
+ 	}
+ 
+ 	protected RabbitAdmin getRabbitAdmin() {
+-		return rabbitAdmin;
++		return this.rabbitAdmin;
+ 	}
+ 
+ 	/**
+@@ -686,7 +686,7 @@ protected void validateConfiguration() {
+ 		super.validateConfiguration();
+ 
+ 		Assert.state(
+-				!(getAcknowledgeMode().isAutoAck() && transactionManager != null),
++				!(getAcknowledgeMode().isAutoAck() && this.transactionManager != null),
+ 				"The acknowledgeMode is NONE (autoack in Rabbit terms) which is not consistent with having an "
+ 						+ "external transaction manager. Either use a different AcknowledgeMode or make sure " +
+ 						"the transactionManager is null.");
+@@ -703,7 +703,7 @@ protected void validateConfiguration() {
+ 	}
+ 
+ 	private void initializeProxy() {
+-		if (adviceChain.length == 0) {
++		if (this.adviceChain.length == 0) {
+ 			return;
+ 		}
+ 		ProxyFactory factory = new ProxyFactory();
+@@ -712,8 +712,8 @@ private void initializeProxy() {
+ 		}
+ 		factory.setProxyTargetClass(false);
+ 		factory.addInterface(ContainerDelegate.class);
+-		factory.setTarget(delegate);
+-		proxy = (ContainerDelegate) factory.getProxy(ContainerDelegate.class.getClassLoader());
++		factory.setTarget(this.delegate);
++		this.proxy = (ContainerDelegate) factory.getProxy(ContainerDelegate.class.getClassLoader());
+ 	}
+ 
+ 	// -------------------------------------------------------------------------
+@@ -755,7 +755,7 @@ protected void doInitialize() throws Exception {
+ 
+ 	@ManagedMetric(metricType = MetricType.GAUGE)
+ 	public int getActiveConsumerCount() {
+-		return cancellationLock.getCount();
++		return this.cancellationLock.getCount();
+ 	}
+ 
+ 	/**
+@@ -852,7 +852,7 @@ protected void doShutdown() {
+ 		}
+ 
+ 		try {
+-			synchronized (consumersMonitor) {
++			synchronized (this.consumersMonitor) {
+ 				if (this.consumers != null) {
+ 					for (BlockingQueueConsumer consumer : this.consumers.keySet()) {
+ 						consumer.basicCancel();
+@@ -860,7 +860,7 @@ protected void doShutdown() {
+ 				}
+ 			}
+ 			logger.info("Waiting for workers to finish.");
+-			boolean finished = cancellationLock.await(shutdownTimeout, TimeUnit.MILLISECONDS);
++			boolean finished = this.cancellationLock.await(this.shutdownTimeout, TimeUnit.MILLISECONDS);
+ 			if (finished) {
+ 				logger.info("Successfully waited for workers to finish.");
+ 			}
+@@ -881,7 +881,7 @@ protected void doShutdown() {
+ 
+ 	private boolean isActive(BlockingQueueConsumer consumer) {
+ 		Boolean consumerActive;
+-		synchronized(consumersMonitor) {
++		synchronized(this.consumersMonitor) {
+ 			if (this.consumers != null) {
+ 				Boolean active = this.consumers.get(consumer);
+ 				consumerActive = active != null && active;
+@@ -897,7 +897,7 @@ protected int initializeConsumers() {
+ 		int count = 0;
+ 		synchronized (this.consumersMonitor) {
+ 			if (this.consumers == null) {
+-				cancellationLock.reset();
++				this.cancellationLock.reset();
+ 				this.consumers = new HashMap<BlockingQueueConsumer, Boolean>(this.concurrentConsumers);
+ 				for (int i = 0; i < this.concurrentConsumers; i++) {
+ 					BlockingQueueConsumer consumer = createBlockingQueueConsumer();
+@@ -981,11 +981,11 @@ protected void addAndStartConsumers(int delta) {
+ 	}
+ 
+ 	private void considerAddingAConsumer() {
+-		synchronized(consumersMonitor) {
++		synchronized(this.consumersMonitor) {
+ 			if (this.consumers != null
+ 					&& this.maxConcurrentConsumers != null && this.consumers.size() < this.maxConcurrentConsumers) {
+ 				long now = System.currentTimeMillis();
+-				if (this.lastConsumerStarted + startConsumerMinInterval < now) {
++				if (this.lastConsumerStarted + this.startConsumerMinInterval < now) {
+ 					this.addAndStartConsumers(1);
+ 					this.lastConsumerStarted = now;
+ 				}
+@@ -994,8 +994,8 @@ private void considerAddingAConsumer() {
+ 	}
+ 
+ 	private void considerStoppingAConsumer(BlockingQueueConsumer consumer) {
+-		synchronized (consumersMonitor) {
+-			if (this.consumers != null && this.consumers.size() > concurrentConsumers) {
++		synchronized (this.consumersMonitor) {
++			if (this.consumers != null && this.consumers.size() > this.concurrentConsumers) {
+ 				long now = System.currentTimeMillis();
+ 				if (this.lastConsumerStopped + this.stopConsumerMinInterval < now) {
+ 					consumer.basicCancel();
+@@ -1010,7 +1010,7 @@ private void considerStoppingAConsumer(BlockingQueueConsumer consumer) {
+ 	}
+ 
+ 	private void queuesChanged() {
+-		synchronized (consumersMonitor) {
++		synchronized (this.consumersMonitor) {
+ 			if (this.consumers != null) {
+ 				int count = 0;
+ 				for (Entry<BlockingQueueConsumer, Boolean> consumer : this.consumers.entrySet()) {
+@@ -1038,8 +1038,8 @@ protected BlockingQueueConsumer createBlockingQueueConsumer() {
+ 		String[] queues = getRequiredQueueNames();
+ 		// There's no point prefetching less than the tx size, otherwise the consumer will stall because the broker
+ 		// didn't get an ack for delivered messages
+-		int actualPrefetchCount = prefetchCount > txSize ? prefetchCount : txSize;
+-		consumer = new BlockingQueueConsumer(getConnectionFactory(), this.messagePropertiesConverter, cancellationLock,
++		int actualPrefetchCount = this.prefetchCount > this.txSize ? this.prefetchCount : this.txSize;
++		consumer = new BlockingQueueConsumer(getConnectionFactory(), this.messagePropertiesConverter, this.cancellationLock,
+ 				getAcknowledgeMode(), isChannelTransacted(), actualPrefetchCount, this.defaultRequeueRejected,
+ 				this.consumerArgs, this.exclusive, queues);
+ 		if (this.declarationRetries != null) {
+@@ -1133,9 +1133,9 @@ private synchronized void redeclareElementsIfNecessary() {
+ 
+ 	private boolean receiveAndExecute(final BlockingQueueConsumer consumer) throws Throwable {
+ 
+-		if (transactionManager != null) {
++		if (this.transactionManager != null) {
+ 			try {
+-				return new TransactionTemplate(transactionManager, transactionAttribute)
++				return new TransactionTemplate(this.transactionManager, this.transactionAttribute)
+ 						.execute(new TransactionCallback<Boolean>() {
+ 							@Override
+ 							public Boolean doInTransaction(TransactionStatus status) {
+@@ -1168,10 +1168,10 @@ private boolean doReceiveAndExecute(BlockingQueueConsumer consumer) throws Throw
+ 
+ 		Channel channel = consumer.getChannel();
+ 
+-		for (int i = 0; i < txSize; i++) {
++		for (int i = 0; i < this.txSize; i++) {
+ 
+ 			logger.trace("Waiting for message from consumer.");
+-			Message message = consumer.nextMessage(receiveTimeout);
++			Message message = consumer.nextMessage(this.receiveTimeout);
+ 			if (message == null) {
+ 				break;
+ 			}
+@@ -1228,7 +1228,7 @@ private AsyncMessageProcessingConsumer(BlockingQueueConsumer consumer) {
+ 		 * @throws InterruptedException if the consumer startup is interrupted
+ 		 */
+ 		private FatalListenerStartupException getStartupException() throws TimeoutException, InterruptedException {
+-			start.await(60000L, TimeUnit.MILLISECONDS);//NOSONAR - ignore return value
++			this.start.await(60000L, TimeUnit.MILLISECONDS);//NOSONAR - ignore return value
+ 			return this.startupException;
+ 		}
+ 
+@@ -1274,7 +1274,7 @@ public void run() {
+ 					 * Register the consumer's channel so it will be used by the transaction manager
+ 					 * if it's an instance of RabbitTransactionManager.
+ 					 */
+-					ConsumerChannelRegistry.registerConsumerChannel(consumer.getChannel(), getConnectionFactory());
++					ConsumerChannelRegistry.registerConsumerChannel(this.consumer.getChannel(), getConnectionFactory());
+ 				}
+ 
+ 				while (isActive(this.consumer) || this.consumer.hasDelivery()) {
+@@ -1298,17 +1298,18 @@ public void run() {
+ 								}
+ 							}
+ 						}
+-						if (idleEventInterval != null) {
++						if (SimpleMessageListenerContainer.this.idleEventInterval != null) {
+ 							if (receivedOk) {
+-								lastReceive = System.currentTimeMillis();
++								SimpleMessageListenerContainer.this.lastReceive = System.currentTimeMillis();
+ 							}
+ 							else {
+ 								long now = System.currentTimeMillis();
+-								long lastAlertAt = lastNoMessageAlert.get();
++								long lastAlertAt = SimpleMessageListenerContainer.this.lastNoMessageAlert.get();
+ 								long lastReceive = SimpleMessageListenerContainer.this.lastReceive;
+-								if (now > lastReceive + idleEventInterval
+-										&& now > lastAlertAt + idleEventInterval
+-										&& lastNoMessageAlert.compareAndSet(lastAlertAt, now)) {
++								if (now > lastReceive + SimpleMessageListenerContainer.this.idleEventInterval
++										&& now > lastAlertAt + SimpleMessageListenerContainer.this.idleEventInterval
++										&& SimpleMessageListenerContainer.this.lastNoMessageAlert
++												.compareAndSet(lastAlertAt, now)) {
+ 									publishIdleContainerEvent(now - lastReceive);
+ 								}
+ 							}
+@@ -1371,7 +1372,8 @@ public void run() {
+ 			catch (AmqpIOException e) {
+ 				if (e.getCause() instanceof IOException && e.getCause().getCause() instanceof ShutdownSignalException
+ 						&& e.getCause().getCause().getMessage().contains("in exclusive use")) {
+-					exclusiveConsumerExceptionLogger.log(logger, "Exclusive consumer failure", e.getCause().getCause());
++					SimpleMessageListenerContainer.this.exclusiveConsumerExceptionLogger.log(logger,
++							"Exclusive consumer failure", e.getCause().getCause());
+ 					publishConsumerFailedEvent("Consumer raised exception, attempting restart", false, e);
+ 				}
+ 				else {
+@@ -1396,14 +1398,14 @@ public void run() {
+ 			}
+ 
+ 			// In all cases count down to allow container to progress beyond startup
+-			start.countDown();
++			this.start.countDown();
+ 
+-			if (!isActive(consumer) || aborted) {
++			if (!isActive(this.consumer) || aborted) {
+ 				logger.debug("Cancelling " + this.consumer);
+ 				try {
+ 					this.consumer.stop();
+ 					SimpleMessageListenerContainer.this.cancellationLock.release(this.consumer);
+-					synchronized (consumersMonitor) {
++					synchronized (SimpleMessageListenerContainer.this.consumersMonitor) {
+ 						if (SimpleMessageListenerContainer.this.consumers != null) {
+ 							SimpleMessageListenerContainer.this.consumers.remove(this.consumer);
+ 						}
+@@ -1439,15 +1441,16 @@ private void logConsumerException(Throwable t) {
+ 		}
+ 
+ 		private void publishConsumerFailedEvent(String reason, boolean fatal, Throwable t) {
+-			if (applicationEventPublisher != null) {
+-				applicationEventPublisher.publishEvent(new ListenerContainerConsumerFailedEvent(
+-						SimpleMessageListenerContainer.this, reason, t, fatal));
++			if (SimpleMessageListenerContainer.this.applicationEventPublisher != null) {
++				SimpleMessageListenerContainer.this.applicationEventPublisher
++						.publishEvent(new ListenerContainerConsumerFailedEvent(SimpleMessageListenerContainer.this,
++								reason, t, fatal));
+ 			}
+ 		}
+ 
+ 		private void publishIdleContainerEvent(long idleTime) {
+-			if (applicationEventPublisher != null) {
+-				applicationEventPublisher.publishEvent(
++			if (SimpleMessageListenerContainer.this.applicationEventPublisher != null) {
++				SimpleMessageListenerContainer.this.applicationEventPublisher.publishEvent(
+ 						new ListenerContainerIdleEvent(SimpleMessageListenerContainer.this, idleTime, getListenerId(),
+ 								getQueueNames()));
+ 			}
+@@ -1457,7 +1460,7 @@ private void publishIdleContainerEvent(long idleTime) {
+ 
+ 	@Override
+ 	protected void invokeListener(Channel channel, Message message) throws Exception {
+-		proxy.invokeListener(channel, message);
++		this.proxy.invokeListener(channel, message);
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/AbstractAdaptableMessageListener.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/AbstractAdaptableMessageListener.java
+index f5dfa2e29..2cbe9ef0a 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/AbstractAdaptableMessageListener.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/AbstractAdaptableMessageListener.java
+@@ -171,7 +171,7 @@ public void onMessage(Message message) {
+ 	 * @see #onMessage(Message)
+ 	 */
+ 	protected void handleListenerException(Throwable ex) {
+-		logger.error("Listener execution failed", ex);
++		this.logger.error("Listener execution failed", ex);
+ 	}
+ 
+ 	/**
+@@ -200,8 +200,8 @@ protected Object extractMessage(Message message) {
+ 	 */
+ 	protected void handleResult(Object result, Message request, Channel channel) throws Exception {
+ 		if (channel != null) {
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Listener method returned result [" + result + "] - generating response message for it");
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Listener method returned result [" + result + "] - generating response message for it");
+ 			}
+ 			try {
+ 				Message response = buildMessage(channel, result);
+@@ -213,8 +213,8 @@ protected void handleResult(Object result, Message request, Channel channel) thr
+ 				throw new ReplyFailureException("Failed to send reply with payload '" + result + "'", ex);
+ 			}
+ 		}
+-		else if (logger.isWarnEnabled()) {
+-			logger.warn("Listener method returned result [" + result
++		else if (this.logger.isWarnEnabled()) {
++			this.logger.warn("Listener method returned result [" + result
+ 					+ "]: not generating response message for it because of no Rabbit Channel given");
+ 		}
+ 	}
+@@ -315,10 +315,10 @@ protected void sendResponse(Channel channel, Address replyTo, Message messageIn)
+ 		postProcessChannel(channel, message);
+ 
+ 		try {
+-			logger.debug("Publishing response to exchange = [" + replyTo.getExchangeName() + "], routingKey = ["
++			this.logger.debug("Publishing response to exchange = [" + replyTo.getExchangeName() + "], routingKey = ["
+ 					+ replyTo.getRoutingKey() + "]");
+ 			channel.basicPublish(replyTo.getExchangeName(), replyTo.getRoutingKey(), this.mandatoryPublish,
+-					this.messagePropertiesConverter.fromMessageProperties(message.getMessageProperties(), encoding),
++					this.messagePropertiesConverter.fromMessageProperties(message.getMessageProperties(), this.encoding),
+ 					message.getBody());
+ 		}
+ 		catch (Exception ex) {
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/DelegatingInvocableHandler.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/DelegatingInvocableHandler.java
+index f03eea6ed..b5735843a 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/DelegatingInvocableHandler.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/adapter/DelegatingInvocableHandler.java
+@@ -85,7 +85,7 @@ public DelegatingInvocableHandler(List<InvocableHandlerMethod> handlers, Object
+ 	 * @return the bean
+ 	 */
+ 	public Object getBean() {
+-		return bean;
++		return this.bean;
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/exception/ListenerExecutionFailedException.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/exception/ListenerExecutionFailedException.java
+index 98b514b5a..8dd0a77fd 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/exception/ListenerExecutionFailedException.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/listener/exception/ListenerExecutionFailedException.java
+@@ -55,7 +55,7 @@ public ListenerExecutionFailedException(String msg, Throwable cause, Message fai
+ 	}
+ 
+ 	public Message getFailedMessage() {
+-		return failedMessage;
++		return this.failedMessage;
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j/AmqpAppender.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j/AmqpAppender.java
+index 7d302f9a1..60ee9de90 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j/AmqpAppender.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j/AmqpAppender.java
+@@ -247,7 +247,7 @@
+ 	private boolean generateId = false;
+ 
+ 	public String getHost() {
+-		return host;
++		return this.host;
+ 	}
+ 
+ 	public void setHost(String host) {
+@@ -255,7 +255,7 @@ public void setHost(String host) {
+ 	}
+ 
+ 	public int getPort() {
+-		return port;
++		return this.port;
+ 	}
+ 
+ 	public void setPort(int port) {
+@@ -263,7 +263,7 @@ public void setPort(int port) {
+ 	}
+ 
+ 	public String getVirtualHost() {
+-		return virtualHost;
++		return this.virtualHost;
+ 	}
+ 
+ 	public void setVirtualHost(String virtualHost) {
+@@ -271,7 +271,7 @@ public void setVirtualHost(String virtualHost) {
+ 	}
+ 
+ 	public String getUsername() {
+-		return username;
++		return this.username;
+ 	}
+ 
+ 	public void setUsername(String username) {
+@@ -279,7 +279,7 @@ public void setUsername(String username) {
+ 	}
+ 
+ 	public String getPassword() {
+-		return password;
++		return this.password;
+ 	}
+ 
+ 	public void setPassword(String password) {
+@@ -287,7 +287,7 @@ public void setPassword(String password) {
+ 	}
+ 
+ 	public String getExchangeName() {
+-		return exchangeName;
++		return this.exchangeName;
+ 	}
+ 
+ 	public void setExchangeName(String exchangeName) {
+@@ -295,7 +295,7 @@ public void setExchangeName(String exchangeName) {
+ 	}
+ 
+ 	public String getExchangeType() {
+-		return exchangeType;
++		return this.exchangeType;
+ 	}
+ 
+ 	public void setExchangeType(String exchangeType) {
+@@ -303,7 +303,7 @@ public void setExchangeType(String exchangeType) {
+ 	}
+ 
+ 	public String getRoutingKeyPattern() {
+-		return routingKeyPattern;
++		return this.routingKeyPattern;
+ 	}
+ 
+ 	public void setRoutingKeyPattern(String routingKeyPattern) {
+@@ -311,7 +311,7 @@ public void setRoutingKeyPattern(String routingKeyPattern) {
+ 	}
+ 
+ 	public boolean isDeclareExchange() {
+-		return declareExchange;
++		return this.declareExchange;
+ 	}
+ 
+ 	public void setDeclareExchange(boolean declareExchange) {
+@@ -319,7 +319,7 @@ public void setDeclareExchange(boolean declareExchange) {
+ 	}
+ 
+ 	public String getContentType() {
+-		return contentType;
++		return this.contentType;
+ 	}
+ 
+ 	public void setContentType(String contentType) {
+@@ -327,7 +327,7 @@ public void setContentType(String contentType) {
+ 	}
+ 
+ 	public String getContentEncoding() {
+-		return contentEncoding;
++		return this.contentEncoding;
+ 	}
+ 
+ 	public void setContentEncoding(String contentEncoding) {
+@@ -335,7 +335,7 @@ public void setContentEncoding(String contentEncoding) {
+ 	}
+ 
+ 	public String getApplicationId() {
+-		return applicationId;
++		return this.applicationId;
+ 	}
+ 
+ 	public void setApplicationId(String applicationId) {
+@@ -343,7 +343,7 @@ public void setApplicationId(String applicationId) {
+ 	}
+ 
+ 	public int getSenderPoolSize() {
+-		return senderPoolSize;
++		return this.senderPoolSize;
+ 	}
+ 
+ 	public void setSenderPoolSize(int senderPoolSize) {
+@@ -351,7 +351,7 @@ public void setSenderPoolSize(int senderPoolSize) {
+ 	}
+ 
+ 	public int getMaxSenderRetries() {
+-		return maxSenderRetries;
++		return this.maxSenderRetries;
+ 	}
+ 
+ 	public void setMaxSenderRetries(int maxSenderRetries) {
+@@ -359,7 +359,7 @@ public void setMaxSenderRetries(int maxSenderRetries) {
+ 	}
+ 
+ 	public boolean isDurable() {
+-		return durable;
++		return this.durable;
+ 	}
+ 
+ 	public void setDurable(boolean durable) {
+@@ -375,7 +375,7 @@ public void setDeliveryMode(String deliveryMode) {
+ 	}
+ 
+ 	public boolean isAutoDelete() {
+-		return autoDelete;
++		return this.autoDelete;
+ 	}
+ 
+ 	public void setAutoDelete(boolean autoDelete) {
+@@ -383,7 +383,7 @@ public void setAutoDelete(boolean autoDelete) {
+ 	}
+ 
+ 	public boolean isGenerateId() {
+-		return generateId;
++		return this.generateId;
+ 	}
+ 
+ 	public void setGenerateId(boolean generateId) {
+@@ -391,7 +391,7 @@ public void setGenerateId(boolean generateId) {
+ 	}
+ 
+ 	public String getCharset() {
+-		return charset;
++		return this.charset;
+ 	}
+ 
+ 	public void setCharset(String charset) {
+@@ -403,11 +403,11 @@ public void activateOptions() {
+ 		this.routingKeyLayout = new PatternLayout(this.routingKeyPattern
+ 				.replaceAll("%X\\{applicationId\\}", this.applicationId));
+ 		this.connectionFactory = new CachingConnectionFactory();
+-		this.connectionFactory.setHost(host);
+-		this.connectionFactory.setPort(port);
+-		this.connectionFactory.setUsername(username);
+-		this.connectionFactory.setPassword(password);
+-		this.connectionFactory.setVirtualHost(virtualHost);
++		this.connectionFactory.setHost(this.host);
++		this.connectionFactory.setPort(this.port);
++		this.connectionFactory.setUsername(this.username);
++		this.connectionFactory.setPassword(this.password);
++		this.connectionFactory.setVirtualHost(this.virtualHost);
+ 		setUpExchangeDeclaration();
+ 		startSenders();
+ 	}
+@@ -421,23 +421,23 @@ protected void maybeDeclareExchange() {
+ 	}
+ 
+ 	protected void setUpExchangeDeclaration() {
+-		RabbitAdmin admin = new RabbitAdmin(connectionFactory);
+-		if (declareExchange) {
++		RabbitAdmin admin = new RabbitAdmin(this.connectionFactory);
++		if (this.declareExchange) {
+ 			Exchange x;
+-			if ("topic".equals(exchangeType)) {
+-				x = new TopicExchange(exchangeName, durable, autoDelete);
++			if ("topic".equals(this.exchangeType)) {
++				x = new TopicExchange(this.exchangeName, this.durable, this.autoDelete);
+ 			}
+-			else if ("direct".equals(exchangeType)) {
+-				x = new DirectExchange(exchangeName, durable, autoDelete);
++			else if ("direct".equals(this.exchangeType)) {
++				x = new DirectExchange(this.exchangeName, this.durable, this.autoDelete);
+ 			}
+-			else if ("fanout".equals(exchangeType)) {
+-				x = new FanoutExchange(exchangeName, durable, autoDelete);
++			else if ("fanout".equals(this.exchangeType)) {
++				x = new FanoutExchange(this.exchangeName, this.durable, this.autoDelete);
+ 			}
+-			else if ("headers".equals(exchangeType)) {
+-				x = new HeadersExchange(exchangeType, durable, autoDelete);
++			else if ("headers".equals(this.exchangeType)) {
++				x = new HeadersExchange(this.exchangeType, this.durable, this.autoDelete);
+ 			}
+ 			else {
+-				x = new TopicExchange(exchangeName, durable, autoDelete);
++				x = new TopicExchange(this.exchangeName, this.durable, this.autoDelete);
+ 			}
+ 			this.connectionFactory.addConnectionListener(new DeclareExchangeConnectionListener(x, admin));
+ 		}
+@@ -448,8 +448,8 @@ else if ("headers".equals(exchangeType)) {
+ 	 */
+ 	protected void startSenders() {
+ 		this.senderPool = Executors.newCachedThreadPool();
+-		for (int i = 0; i < senderPoolSize; i++) {
+-			senderPool.submit(new EventSender());
++		for (int i = 0; i < this.senderPoolSize; i++) {
++			this.senderPool.submit(new EventSender());
+ 		}
+ 	}
+ 
+@@ -460,14 +460,14 @@ public void append(LoggingEvent event) {
+ 
+ 	@Override
+ 	public void close() {
+-		if (null != senderPool) {
+-			senderPool.shutdownNow();
+-			senderPool = null;
++		if (null != this.senderPool) {
++			this.senderPool.shutdownNow();
++			this.senderPool = null;
+ 		}
+-		if (null != connectionFactory) {
+-			connectionFactory.destroy();
++		if (null != this.connectionFactory) {
++			this.connectionFactory.destroy();
+ 		}
+-		retryTimer.cancel();
++		this.retryTimer.cancel();
+ 	}
+ 
+ 	@Override
+@@ -494,29 +494,29 @@ public Message postProcessMessageBeforeSend(Message message, Event event) {
+ 		@Override
+ 		public void run() {
+ 			try {
+-				RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
++				RabbitTemplate rabbitTemplate = new RabbitTemplate(AmqpAppender.this.connectionFactory);
+ 				while (true) {
+-					final Event event = events.take();
++					final Event event = AmqpAppender.this.events.take();
+ 					LoggingEvent logEvent = event.getEvent();
+ 
+ 					String name = logEvent.getLogger().getName();
+ 					Level level = logEvent.getLevel();
+ 
+ 					MessageProperties amqpProps = new MessageProperties();
+-					amqpProps.setDeliveryMode(deliveryMode);
+-					amqpProps.setContentType(contentType);
+-					if (null != contentEncoding) {
+-						amqpProps.setContentEncoding(contentEncoding);
++					amqpProps.setDeliveryMode(AmqpAppender.this.deliveryMode);
++					amqpProps.setContentType(AmqpAppender.this.contentType);
++					if (null != AmqpAppender.this.contentEncoding) {
++						amqpProps.setContentEncoding(AmqpAppender.this.contentEncoding);
+ 					}
+ 					amqpProps.setHeader(CATEGORY_NAME, name);
+ 					amqpProps.setHeader(CATEGORY_LEVEL, level.toString());
+-					if (generateId) {
++					if (AmqpAppender.this.generateId) {
+ 						amqpProps.setMessageId(UUID.randomUUID().toString());
+ 					}
+ 
+ 					// Set applicationId, if we're using one
+-					if (null != applicationId) {
+-						amqpProps.setAppId(applicationId);
++					if (null != AmqpAppender.this.applicationId) {
++						amqpProps.setAppId(AmqpAppender.this.applicationId);
+ 					}
+ 
+ 					// Set timestamp
+@@ -542,9 +542,9 @@ public void run() {
+ 
+ 					StringBuilder msgBody;
+ 					String routingKey;
+-					synchronized (layoutMutex) {
++					synchronized (AmqpAppender.this.layoutMutex) {
+ 						msgBody = new StringBuilder(layout.format(logEvent));
+-						routingKey = routingKeyLayout.format(logEvent);
++						routingKey = AmqpAppender.this.routingKeyLayout.format(logEvent);
+ 					}
+ 					if (layout.ignoresThrowable() && null != logEvent.getThrowableInformation()) {
+ 						ThrowableInformation tinfo = logEvent.getThrowableInformation();
+@@ -566,22 +566,24 @@ public void run() {
+ 							message = new Message(msgBody.toString().getBytes(), amqpProps);//NOSONAR (default charset)
+ 						}
+ 						message = postProcessMessageBeforeSend(message, event);
+-						rabbitTemplate.send(exchangeName, routingKey, message);
++						rabbitTemplate.send(AmqpAppender.this.exchangeName, routingKey, message);
+ 					}
+ 					catch (AmqpException e) {
+ 						int retries = event.incrementRetries();
+-						if (retries < maxSenderRetries) {
++						if (retries < AmqpAppender.this.maxSenderRetries) {
+ 							// Schedule a retry based on the number of times I've tried to re-send this
+-							retryTimer.schedule(new TimerTask() {
++							AmqpAppender.this.retryTimer.schedule(new TimerTask() {
+ 								@Override
+ 								public void run() {
+-									events.add(event);
++									AmqpAppender.this.events.add(event);
+ 								}
+ 							}, (long) (Math.pow(retries, Math.log(retries)) * 1000));
+ 						}
+ 						else {
+-							errorHandler.error("Could not send log message " + logEvent.getRenderedMessage()
+-									+ " after " + maxSenderRetries + " retries", e, ErrorCode.WRITE_FAILURE, logEvent);
++							errorHandler.error(
++									"Could not send log message " + logEvent.getRenderedMessage() + " after "
++											+ AmqpAppender.this.maxSenderRetries + " retries",
++									e, ErrorCode.WRITE_FAILURE, logEvent);
+ 						}
+ 					}
+ 				}
+@@ -610,15 +612,15 @@ public Event(LoggingEvent event, Map properties) {
+ 		}
+ 
+ 		public LoggingEvent getEvent() {
+-			return event;
++			return this.event;
+ 		}
+ 
+ 		public Map getProperties() {
+-			return properties;
++			return this.properties;
+ 		}
+ 
+ 		public int incrementRetries() {
+-			return retries.incrementAndGet();
++			return this.retries.incrementAndGet();
+ 		}
+ 
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j2/AmqpAppender.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j2/AmqpAppender.java
+index 989b9d22a..a3290a586 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j2/AmqpAppender.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/log4j2/AmqpAppender.java
+@@ -175,8 +175,8 @@ public static AmqpAppender createAppender(
+ 	 * Submit the required number of senders into the pool.
+ 	 */
+ 	private void startSenders() {
+-		for (int i = 0; i < manager.senderPoolSize; i++) {
+-			manager.senderPool.submit(new EventSender());
++		for (int i = 0; i < this.manager.senderPoolSize; i++) {
++			this.manager.senderPool.submit(new EventSender());
+ 		}
+ 	}
+ 
+@@ -208,7 +208,7 @@ public void run() {
+ 				RabbitTemplate rabbitTemplate = AmqpAppender.this.rabbitTemplate;
+ 				rabbitTemplate.setConnectionFactory(AmqpAppender.this.manager.connectionFactory);
+ 				while (true) {
+-					final Event event = events.take();
++					final Event event = AmqpAppender.this.events.take();
+ 					LogEvent logEvent = event.getEvent();
+ 
+ 					String name = logEvent.getLoggerName();
+@@ -321,15 +321,15 @@ public Event(LogEvent event, Map properties) {
+ 		}
+ 
+ 		public LogEvent getEvent() {
+-			return event;
++			return this.event;
+ 		}
+ 
+ 		public Map getProperties() {
+-			return properties;
++			return this.properties;
+ 		}
+ 
+ 		public int incrementRetries() {
+-			return retries.incrementAndGet();
++			return this.retries.incrementAndGet();
+ 		}
+ 
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/logback/AmqpAppender.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/logback/AmqpAppender.java
+index aa7154d52..ac959c43a 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/logback/AmqpAppender.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/logback/AmqpAppender.java
+@@ -221,7 +221,7 @@ public void setRoutingKeyPattern(String routingKeyPattern) {
+ 	}
+ 
+ 	public String getHost() {
+-		return host;
++		return this.host;
+ 	}
+ 
+ 	public void setHost(String host) {
+@@ -229,7 +229,7 @@ public void setHost(String host) {
+ 	}
+ 
+ 	public int getPort() {
+-		return port;
++		return this.port;
+ 	}
+ 
+ 	public void setPort(int port) {
+@@ -237,7 +237,7 @@ public void setPort(int port) {
+ 	}
+ 
+ 	public String getVirtualHost() {
+-		return virtualHost;
++		return this.virtualHost;
+ 	}
+ 
+ 	public void setVirtualHost(String virtualHost) {
+@@ -245,7 +245,7 @@ public void setVirtualHost(String virtualHost) {
+ 	}
+ 
+ 	public String getUsername() {
+-		return username;
++		return this.username;
+ 	}
+ 
+ 	public void setUsername(String username) {
+@@ -253,7 +253,7 @@ public void setUsername(String username) {
+ 	}
+ 
+ 	public String getPassword() {
+-		return password;
++		return this.password;
+ 	}
+ 
+ 	public void setPassword(String password) {
+@@ -261,7 +261,7 @@ public void setPassword(String password) {
+ 	}
+ 
+ 	public String getExchangeName() {
+-		return exchangeName;
++		return this.exchangeName;
+ 	}
+ 
+ 	public void setExchangeName(String exchangeName) {
+@@ -269,7 +269,7 @@ public void setExchangeName(String exchangeName) {
+ 	}
+ 
+ 	public String getExchangeType() {
+-		return exchangeType;
++		return this.exchangeType;
+ 	}
+ 
+ 	public void setExchangeType(String exchangeType) {
+@@ -281,7 +281,7 @@ public String getRoutingKeyPattern() {
+ 	}
+ 
+ 	public boolean isDeclareExchange() {
+-		return declareExchange;
++		return this.declareExchange;
+ 	}
+ 
+ 	public void setDeclareExchange(boolean declareExchange) {
+@@ -289,7 +289,7 @@ public void setDeclareExchange(boolean declareExchange) {
+ 	}
+ 
+ 	public String getContentType() {
+-		return contentType;
++		return this.contentType;
+ 	}
+ 
+ 	public void setContentType(String contentType) {
+@@ -297,7 +297,7 @@ public void setContentType(String contentType) {
+ 	}
+ 
+ 	public String getContentEncoding() {
+-		return contentEncoding;
++		return this.contentEncoding;
+ 	}
+ 
+ 	public void setContentEncoding(String contentEncoding) {
+@@ -305,7 +305,7 @@ public void setContentEncoding(String contentEncoding) {
+ 	}
+ 
+ 	public String getApplicationId() {
+-		return applicationId;
++		return this.applicationId;
+ 	}
+ 
+ 	public void setApplicationId(String applicationId) {
+@@ -313,7 +313,7 @@ public void setApplicationId(String applicationId) {
+ 	}
+ 
+ 	public int getSenderPoolSize() {
+-		return senderPoolSize;
++		return this.senderPoolSize;
+ 	}
+ 
+ 	public void setSenderPoolSize(int senderPoolSize) {
+@@ -321,7 +321,7 @@ public void setSenderPoolSize(int senderPoolSize) {
+ 	}
+ 
+ 	public int getMaxSenderRetries() {
+-		return maxSenderRetries;
++		return this.maxSenderRetries;
+ 	}
+ 
+ 	public void setMaxSenderRetries(int maxSenderRetries) {
+@@ -329,7 +329,7 @@ public void setMaxSenderRetries(int maxSenderRetries) {
+ 	}
+ 
+ 	public boolean isDurable() {
+-		return durable;
++		return this.durable;
+ 	}
+ 
+ 	public void setDurable(boolean durable) {
+@@ -345,7 +345,7 @@ public void setDeliveryMode(String deliveryMode) {
+ 	}
+ 
+ 	public boolean isAutoDelete() {
+-		return autoDelete;
++		return this.autoDelete;
+ 	}
+ 
+ 	public void setAutoDelete(boolean autoDelete) {
+@@ -353,7 +353,7 @@ public void setAutoDelete(boolean autoDelete) {
+ 	}
+ 
+ 	public boolean isGenerateId() {
+-		return generateId;
++		return this.generateId;
+ 	}
+ 
+ 	public void setGenerateId(boolean generateId) {
+@@ -361,7 +361,7 @@ public void setGenerateId(boolean generateId) {
+ 	}
+ 
+ 	public String getCharset() {
+-		return charset;
++		return this.charset;
+ 	}
+ 
+ 	public void setCharset(String charset) {
+@@ -467,23 +467,23 @@ public Message postProcessMessageBeforeSend(Message message, Event event) {
+ 		@Override
+ 		public void run() {
+ 			try {
+-				RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
++				RabbitTemplate rabbitTemplate = new RabbitTemplate(AmqpAppender.this.connectionFactory);
+ 				while (true) {
+-					final Event event = events.take();
++					final Event event = AmqpAppender.this.events.take();
+ 					ILoggingEvent logEvent = event.getEvent();
+ 
+ 					String name = logEvent.getLoggerName();
+ 					Level level = logEvent.getLevel();
+ 
+ 					MessageProperties amqpProps = new MessageProperties();
+-					amqpProps.setDeliveryMode(deliveryMode);
+-					amqpProps.setContentType(contentType);
+-					if (null != contentEncoding) {
+-						amqpProps.setContentEncoding(contentEncoding);
++					amqpProps.setDeliveryMode(AmqpAppender.this.deliveryMode);
++					amqpProps.setContentType(AmqpAppender.this.contentType);
++					if (null != AmqpAppender.this.contentEncoding) {
++						amqpProps.setContentEncoding(AmqpAppender.this.contentEncoding);
+ 					}
+ 					amqpProps.setHeader(CATEGORY_NAME, name);
+ 					amqpProps.setHeader(CATEGORY_LEVEL, level.toString());
+-					if (generateId) {
++					if (AmqpAppender.this.generateId) {
+ 						amqpProps.setMessageId(UUID.randomUUID().toString());
+ 					}
+ 
+@@ -498,26 +498,26 @@ public void run() {
+ 					for (Entry<String, String> entry : entrySet) {
+ 						amqpProps.setHeader(entry.getKey(), entry.getValue());
+ 					}
+-					String[] location = locationLayout.doLayout(logEvent).split("\\|");
++					String[] location = AmqpAppender.this.locationLayout.doLayout(logEvent).split("\\|");
+ 					if (!"?".equals(location[0])) {
+ 						amqpProps.setHeader(
+ 								"location",
+ 								String.format("%s.%s()[%s]", location[0], location[1], location[2]));
+ 					}
+ 					String msgBody;
+-					String routingKey = routingKeyLayout.doLayout(logEvent);
++					String routingKey = AmqpAppender.this.routingKeyLayout.doLayout(logEvent);
+ 					// Set applicationId, if we're using one
+-					if (applicationId != null) {
+-						amqpProps.setAppId(applicationId);
++					if (AmqpAppender.this.applicationId != null) {
++						amqpProps.setAppId(AmqpAppender.this.applicationId);
+ 					}
+ 
+-					if (abbreviator != null && logEvent instanceof LoggingEvent) {
+-						((LoggingEvent) logEvent).setLoggerName(abbreviator.abbreviate(name));
+-						msgBody = layout.doLayout(logEvent);
++					if (AmqpAppender.this.abbreviator != null && logEvent instanceof LoggingEvent) {
++						((LoggingEvent) logEvent).setLoggerName(AmqpAppender.this.abbreviator.abbreviate(name));
++						msgBody = AmqpAppender.this.layout.doLayout(logEvent);
+ 						((LoggingEvent) logEvent).setLoggerName(name);
+ 					}
+ 					else {
+-						msgBody = layout.doLayout(logEvent);
++						msgBody = AmqpAppender.this.layout.doLayout(logEvent);
+ 					}
+ 
+ 					// Send a message
+@@ -533,22 +533,22 @@ public void run() {
+ 						}
+ 
+ 						message = postProcessMessageBeforeSend(message, event);
+-						rabbitTemplate.send(exchangeName, routingKey, message);
++						rabbitTemplate.send(AmqpAppender.this.exchangeName, routingKey, message);
+ 					}
+ 					catch (AmqpException e) {
+ 						int retries = event.incrementRetries();
+-						if (retries < maxSenderRetries) {
++						if (retries < AmqpAppender.this.maxSenderRetries) {
+ 							// Schedule a retry based on the number of times I've tried to re-send this
+-							retryTimer.schedule(new TimerTask() {
++							AmqpAppender.this.retryTimer.schedule(new TimerTask() {
+ 								@Override
+ 								public void run() {
+-									events.add(event);
++									AmqpAppender.this.events.add(event);
+ 								}
+ 							}, (long) (Math.pow(retries, Math.log(retries)) * 1000));
+ 						}
+ 						else {
+ 							addError("Could not send log message " + logEvent.getMessage()
+-									+ " after " + maxSenderRetries + " retries", e);
++									+ " after " + AmqpAppender.this.maxSenderRetries + " retries", e);
+ 						}
+ 					}
+ 				}
+@@ -577,15 +577,15 @@ public Event(ILoggingEvent event) {
+ 		}
+ 
+ 		public ILoggingEvent getEvent() {
+-			return event;
++			return this.event;
+ 		}
+ 
+ 		public Map<String, String> getProperties() {
+-			return properties;
++			return this.properties;
+ 		}
+ 
+ 		public int incrementRetries() {
+-			return retries.incrementAndGet();
++			return this.retries.incrementAndGet();
+ 		}
+ 
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/MissingMessageIdAdvice.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/MissingMessageIdAdvice.java
+index fd25fbf7a..aca0dbe49 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/MissingMessageIdAdvice.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/MissingMessageIdAdvice.java
+@@ -82,7 +82,7 @@ public Object invoke(MethodInvocation invocation) throws Throwable {
+ 		}
+ 		finally {
+ 			if (id != null) {
+-				retryContextCache.remove(id);
++				this.retryContextCache.remove(id);
+ 			}
+ 		}
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RejectAndDontRequeueRecoverer.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RejectAndDontRequeueRecoverer.java
+index 799d4c5c7..b5c2eb362 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RejectAndDontRequeueRecoverer.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RejectAndDontRequeueRecoverer.java
+@@ -39,8 +39,8 @@
+ 
+ 	@Override
+ 	public void recover(Message message, Throwable cause) {
+-		if (logger.isWarnEnabled()) {
+-			logger.warn("Retries exhausted for message " + message, cause);
++		if (this.logger.isWarnEnabled()) {
++			this.logger.warn("Retries exhausted for message " + message, cause);
+ 		}
+ 		throw new ListenerExecutionFailedException("Retry Policy Exhausted",
+ 					new AmqpRejectAndDontRequeueException(cause), message);
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RepublishMessageRecoverer.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RepublishMessageRecoverer.java
+index 0263956ee..3c85a6803 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RepublishMessageRecoverer.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/retry/RepublishMessageRecoverer.java
+@@ -109,18 +109,18 @@ public void recover(Message message, Throwable cause) {
+ 			headers.putAll(additionalHeaders);
+ 		}
+ 
+-		if (null != errorExchangeName) {
+-			String routingKey = errorRoutingKey != null ? errorRoutingKey : this.prefixedOriginalRoutingKey(message);
+-			this.errorTemplate.send(errorExchangeName, routingKey, message);
+-			if (logger.isWarnEnabled()) {
+-				logger.warn("Republishing failed message to exchange " + errorExchangeName);
++		if (null != this.errorExchangeName) {
++			String routingKey = this.errorRoutingKey != null ? this.errorRoutingKey : this.prefixedOriginalRoutingKey(message);
++			this.errorTemplate.send(this.errorExchangeName, routingKey, message);
++			if (this.logger.isWarnEnabled()) {
++				this.logger.warn("Republishing failed message to exchange " + this.errorExchangeName);
+ 			}
+ 		}
+ 		else {
+ 			final String routingKey = this.prefixedOriginalRoutingKey(message);
+ 			this.errorTemplate.send(routingKey, message);
+-			if (logger.isWarnEnabled()) {
+-				logger.warn("Republishing failed message to the template's default exchange with routing key " + routingKey);
++			if (this.logger.isWarnEnabled()) {
++				this.logger.warn("Republishing failed message to the template's default exchange with routing key " + routingKey);
+ 			}
+ 		}
+ 	}
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/CorrelationData.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/CorrelationData.java
+index b6c7c5a47..b6a8eabac 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/CorrelationData.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/CorrelationData.java
+@@ -54,7 +54,7 @@ public void setId(String id) {
+ 
+ 	@Override
+ 	public String toString() {
+-		return "CorrelationData [id=" + id + "]";
++		return "CorrelationData [id=" + this.id + "]";
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverter.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverter.java
+index b7a657d34..16795c437 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverter.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverter.java
+@@ -126,10 +126,11 @@ public MessageProperties toMessageProperties(final BasicProperties source, final
+ 		target.setAppId(source.getAppId());
+ 		target.setClusterId(source.getClusterId());
+ 		target.setType(source.getType());
+-		Integer deliverMode = source.getDeliveryMode();
+-		if (deliverMode != null) {
+-			target.setDeliveryMode(MessageDeliveryMode.fromInt(deliverMode));
++		Integer deliveryMode = source.getDeliveryMode();
++		if (deliveryMode != null) {
++			target.setReceivedDeliveryMode(MessageDeliveryMode.fromInt(deliveryMode));
+ 		}
++		target.setDeliveryMode(null);
+ 		target.setExpiration(source.getExpiration());
+ 		target.setPriority(source.getPriority());
+ 		target.setContentType(source.getContentType());
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PendingConfirm.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PendingConfirm.java
+index 4cea6114b..bfac4cb50 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PendingConfirm.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PendingConfirm.java
+@@ -48,14 +48,14 @@ public PendingConfirm(CorrelationData correlationData, long timestamp) {
+ 	 * @return The correlation data.
+ 	 */
+ 	public CorrelationData getCorrelationData() {
+-		return correlationData;
++		return this.correlationData;
+ 	}
+ 
+ 	/**
+ 	 * @return The time the message was sent.
+ 	 */
+ 	public long getTimestamp() {
+-		return timestamp;
++		return this.timestamp;
+ 	}
+ 
+ 	/**
+@@ -72,12 +72,12 @@ public void setCause(String cause) {
+ 	 * @since 1.4
+ 	 */
+ 	public String getCause() {
+-		return cause;
++		return this.cause;
+ 	}
+ 
+ 	@Override
+ 	public String toString() {
+-		return "PendingConfirm [correlationData=" + correlationData + (this.cause == null ? "" : " cause=" + cause) + "]";
++		return "PendingConfirm [correlationData=" + this.correlationData + (this.cause == null ? "" : " cause=" + this.cause) + "]";
+ 	}
+ 
+ }
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PublisherCallbackChannelImpl.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PublisherCallbackChannelImpl.java
+index 21c63ddb4..7fa3514b3 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PublisherCallbackChannelImpl.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/support/PublisherCallbackChannelImpl.java
+@@ -627,7 +627,7 @@ public long messageCount(String queue) throws IOException {
+ 
+ 	@Override
+ 	public Channel getDelegate() {
+-		return delegate;
++		return this.delegate;
+ 	}
+ 
+ //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+@@ -640,8 +640,8 @@ public void close() throws IOException, TimeoutException {
+ 			this.delegate.close();
+ 		}
+ 		catch (AlreadyClosedException e) {
+-			if (logger.isTraceEnabled()) {
+-				logger.trace(this.delegate + " is already closed");
++			if (this.logger.isTraceEnabled()) {
++				this.logger.trace(this.delegate + " is already closed");
+ 			}
+ 		}
+ 		generateNacksForPendingAcks("Channel closed by application");
+@@ -652,15 +652,15 @@ private synchronized void generateNacksForPendingAcks(String cause) {
+ 			Listener listener = entry.getKey();
+ 			for (Entry<Long, PendingConfirm> confirmEntry : entry.getValue().entrySet()) {
+ 				confirmEntry.getValue().setCause(cause);
+-				if (logger.isDebugEnabled()) {
+-					logger.debug(this.toString() + " PC:Nack:(close):" + confirmEntry.getKey());
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug(this.toString() + " PC:Nack:(close):" + confirmEntry.getKey());
+ 				}
+ 				processAck(confirmEntry.getKey(), false, false, false);
+ 			}
+ 			listener.revoke(this);
+ 		}
+-		if (logger.isDebugEnabled()) {
+-			logger.debug("PendingConfirms cleared");
++		if (this.logger.isDebugEnabled()) {
++			this.logger.debug("PendingConfirms cleared");
+ 		}
+ 		this.pendingConfirms.clear();
+ 		this.listenerForSeq.clear();
+@@ -680,8 +680,8 @@ public void addListener(Listener listener) {
+ 		}
+ 		if (this.listeners.putIfAbsent(listener.getUUID(), listener) == null) {
+ 			this.pendingConfirms.put(listener, new ConcurrentSkipListMap<Long, PendingConfirm>());
+-			if (logger.isDebugEnabled()) {
+-				logger.debug("Added listener " + listener);
++			if (this.logger.isDebugEnabled()) {
++				this.logger.debug("Added listener " + listener);
+ 			}
+ 		}
+ 	}
+@@ -714,8 +714,8 @@ public void addListener(Listener listener) {
+ 	@Override
+ 	public void handleAck(long seq, boolean multiple)
+ 			throws IOException {
+-		if (logger.isDebugEnabled()) {
+-			logger.debug(this.toString() + " PC:Ack:" + seq + ":" + multiple);
++		if (this.logger.isDebugEnabled()) {
++			this.logger.debug(this.toString() + " PC:Ack:" + seq + ":" + multiple);
+ 		}
+ 		this.processAck(seq, true, multiple, true);
+ 	}
+@@ -723,8 +723,8 @@ public void handleAck(long seq, boolean multiple)
+ 	@Override
+ 	public void handleNack(long seq, boolean multiple)
+ 			throws IOException {
+-		if (logger.isDebugEnabled()) {
+-			logger.debug(this.toString() + " PC:Nack:" + seq + ":" + multiple);
++		if (this.logger.isDebugEnabled()) {
++			this.logger.debug(this.toString() + " PC:Nack:" + seq + ":" + multiple);
+ 		}
+ 		this.processAck(seq, false, multiple, true);
+ 	}
+@@ -774,8 +774,8 @@ private synchronized void processAck(long seq, boolean ack, boolean multiple, bo
+ 				}
+ 			}
+ 			else {
+-				if (logger.isDebugEnabled()) {
+-					logger.debug(this.delegate.toString() + " No listener for seq:" + seq);
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug(this.delegate.toString() + " No listener for seq:" + seq);
+ 				}
+ 			}
+ 		}
+@@ -784,14 +784,14 @@ private synchronized void processAck(long seq, boolean ack, boolean multiple, bo
+ 	private void doHandleConfirm(boolean ack, Listener listener, PendingConfirm pendingConfirm) {
+ 		try {
+ 			if (listener.isConfirmListener()) {
+-				if (logger.isDebugEnabled()) {
+-					logger.debug("Sending confirm " + pendingConfirm);
++				if (this.logger.isDebugEnabled()) {
++					this.logger.debug("Sending confirm " + pendingConfirm);
+ 				}
+ 				listener.handleConfirm(pendingConfirm, ack);
+ 			}
+ 		}
+ 		catch (Exception e) {
+-			logger.error("Exception delivering confirm", e);
++			this.logger.error("Exception delivering confirm", e);
+ 		}
+ 	}
+ 
+@@ -817,8 +817,8 @@ public void handleReturn(int replyCode,
+ 		String uuidObject = properties.getHeaders().get(RETURN_CORRELATION_KEY).toString();
+ 		Listener listener = this.listeners.get(uuidObject);
+ 		if (listener == null || !listener.isReturnListener()) {
+-			if (logger.isWarnEnabled()) {
+-				logger.warn("No Listener for returned message");
++			if (this.logger.isWarnEnabled()) {
++				this.logger.warn("No Listener for returned message");
+ 			}
+ 		}
+ 		else {
+diff --git a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/transaction/RabbitTransactionManager.java b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/transaction/RabbitTransactionManager.java
+index e6426d437..3828656bc 100644
+--- a/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/transaction/RabbitTransactionManager.java
++++ b/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/transaction/RabbitTransactionManager.java
+@@ -106,7 +106,7 @@ public void setConnectionFactory(ConnectionFactory connectionFactory) {
+ 	 * @return the connectionFactory
+ 	 */
+ 	public ConnectionFactory getConnectionFactory() {
+-		return connectionFactory;
++		return this.connectionFactory;
+ 	}
+ 
+ 	/**
+diff --git a/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainerIntegration2Tests.java b/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainerIntegration2Tests.java
+index cfd10140c..7f86464c4 100644
+--- a/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainerIntegration2Tests.java
++++ b/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/listener/SimpleMessageListenerContainerIntegration2Tests.java
+@@ -26,6 +26,7 @@
+ import static org.junit.Assert.assertTrue;
+ import static org.mockito.Matchers.any;
+ import static org.mockito.Matchers.anyBoolean;
++import static org.mockito.Mockito.atLeastOnce;
+ import static org.mockito.Mockito.doReturn;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.spy;
+@@ -292,7 +293,7 @@ public void testExclusive() throws Exception {
+ 		assertTrue(latch2.await(10, TimeUnit.SECONDS));
+ 		container2.stop();
+ 		ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+-		verify(logger).info(captor.capture());
++		verify(logger, atLeastOnce()).info(captor.capture());
+ 		assertThat(captor.getAllValues(), contains(containsString("exclusive")));
+ 		ArgumentCaptor<ListenerContainerConsumerFailedEvent> eventCaptor = ArgumentCaptor
+ 				.forClass(ListenerContainerConsumerFailedEvent.class);
+diff --git a/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverterTests.java b/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverterTests.java
+index 44c04550e..d622c68cd 100644
+--- a/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverterTests.java
++++ b/spring-rabbit/src/test/java/org/springframework/amqp/rabbit/support/DefaultMessagePropertiesConverterTests.java
+@@ -32,6 +32,7 @@
+ import org.junit.Before;
+ import org.junit.Test;
+ 
++import org.springframework.amqp.core.MessageDeliveryMode;
+ import org.springframework.amqp.core.MessageProperties;
+ 
+ import com.rabbitmq.client.AMQP.BasicProperties;
+@@ -222,4 +223,16 @@ public void testCorrelationIdAsString() {
+ 		assertEquals("bar", new String(messageProperties.getCorrelationId()));
+ 	}
+ 
++	@Test
++	public void testInboundDeliveryMode() {
++		DefaultMessagePropertiesConverter converter = new DefaultMessagePropertiesConverter();
++		MessageProperties props = new MessageProperties();
++		props.setDeliveryMode(MessageDeliveryMode.NON_PERSISTENT);
++		BasicProperties bProps = converter.fromMessageProperties(props, "UTF-8");
++		assertEquals(MessageDeliveryMode.toInt(MessageDeliveryMode.NON_PERSISTENT), bProps.getDeliveryMode().intValue());
++		props = converter.toMessageProperties(bProps, null, "UTF-8");
++		assertEquals(MessageDeliveryMode.NON_PERSISTENT, props.getReceivedDeliveryMode());
++		assertNull(props.getDeliveryMode());
++	}
++
+ }
+diff --git a/src/checkstyle/checkstyle-suppressions.xml b/src/checkstyle/checkstyle-suppressions.xml
+index 6d3dc8a2c..dcc709e4a 100644
+--- a/src/checkstyle/checkstyle-suppressions.xml
++++ b/src/checkstyle/checkstyle-suppressions.xml
+@@ -4,4 +4,5 @@
+     "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
+ <suppressions>
+ 	<suppress files="package-info\.java" checks=".*" />
++	<suppress files="[\\/]test[\\/]" checks="RequireThis" />
+ </suppressions>
+diff --git a/src/checkstyle/checkstyle.xml b/src/checkstyle/checkstyle.xml
+index df6c919da..296a5eb29 100644
+--- a/src/checkstyle/checkstyle.xml
++++ b/src/checkstyle/checkstyle.xml
+@@ -65,11 +65,11 @@
+ <!-- 		<module name="NestedTryDepth"> -->
+ <!-- 			<property name="max" value="3" /> -->
+ <!-- 		</module> -->
+-<!-- 		<module name="MultipleVariableDeclarations" /> -->
+-<!-- 		<module name="RequireThis"> -->
+-<!-- 			<property name="checkMethods" value="false" /> -->
+-<!-- 		</module> -->
+-<!-- 		<module name="OneStatementPerLine" /> -->
++		<module name="MultipleVariableDeclarations" />
++		<module name="RequireThis">
++			<property name="checkMethods" value="false" />
++		</module>
++		<module name="OneStatementPerLine" />
+ 
+ 		<!-- Imports -->
+ <!-- 		<module name="AvoidStarImport" /> -->
+diff --git a/src/checkstyle/fixThis.gradle b/src/checkstyle/fixThis.gradle
+new file mode 100644
+index 000000000..4553a666f
+--- /dev/null
++++ b/src/checkstyle/fixThis.gradle
+@@ -0,0 +1,66 @@
++task fixThis << {
++	fileTree("${buildDir}/reports/checkstyle").include('*.xml').each { report ->
++		println "processing $report"
++		def xml = new XmlParser(false, false).parse(report)
++		xml.file.each { f ->
++			// println "processing $f"
++			def errors = f.error
++			def hasThisError = false
++			def thisErrors = []
++			errors.each { error ->
++				if (error.@source == 'com.puppycrawl.tools.checkstyle.checks.coding.RequireThisCheck') {
++					thisErrors.add(error)
++					hasThisError = true
++				}
++			}
++			// println hasThisError
++			// println f.@name
++			if (hasThisError) {
++				def errorInx = 0
++				def error = thisErrors[errorInx++]
++				def lx = Integer.valueOf(error.@line)
++				println error
++				def years = now
++				def file = new File(f.@name)
++				def outSource = ''
++				def ln = 0
++				file.eachLine { line ->
++					// println line
++					ln++
++					def matcher = line =~ /Copyright (20\d\d)(?:-20\d\d)?/
++					if (matcher.count) {
++						years = matcher[0][1]
++						if (years != now) {
++							years = years + "-$now"
++						}
++						line.replaceFirst(/\{year}/, years)
++					}
++					if (error && ln == lx) {
++						// println line
++						def beforeIndex = Integer.valueOf(error.@column) - 1
++						def chars = line.toCharArray()
++						for (int i = 0; i < beforeIndex; i++) {
++							if (chars[i] == '\t') { // tabs before code == 8
++								beforeIndex -= 7;
++							}
++							else if (chars[i] != ' ') { // tabs after code start are only counted as 1
++								break;
++							}
++						}
++						line = line.substring(0, beforeIndex) + "this." + line.substring(beforeIndex)
++						// println line
++						error = thisErrors[errorInx++]
++						while (error && lx == Integer.valueOf(error.@line)) {
++							error = thisErrors[errorInx++]
++						}
++						if (error) {
++							lx = Integer.valueOf(error.@line)
++						}
++					}
++					outSource += line + '\n'
++				}
++				file.write(outSource)
++			}
++		}
++	}
++}
+diff --git a/src/reference/asciidoc/amqp.adoc b/src/reference/asciidoc/amqp.adoc
+index 94b716e3b..50f43756d 100644
+--- a/src/reference/asciidoc/amqp.adoc
++++ b/src/reference/asciidoc/amqp.adoc
+@@ -1527,6 +1527,8 @@ The `com.rabbitmq.client.Channel` on which the message was received
+ The `org.springframework.messaging.Message` representing the incoming AMQP message.
+ Note that this message holds both the custom and the standard headers (as defined by `AmqpHeaders`).
+ 
++NOTE: Starting with _version 1.6_, the inbound `deliveryMode` header is now available in the header with name
++`AmqpHeaders.RECEIVED_DELIVERY_MODE` instead of `AmqpHeaders.DELIVERY_MODE`.
+ 
+ `@Header`-annotated method arguments to extract a specific header value, including standard AMQP headers.
+ 
+@@ -2122,6 +2124,11 @@ For outbound messages:
+ - `BYTES` - just the `correlationId` property is mapped
+ - `BOTH` - Both properties will be considered, with the String property taking precedence
+ 
++Also starting with _version 1.6_, the inbound `deliveryMode` header is no longer mapped to
++`MessageProperties.deliveryMode`, it is mapped to `MessageProperties.receivedDeliveryMode` instead.
++This is to avoid unexpected propagation of this property if the same `MessageProperties` object is used for an
++outbound message.
++
+ [[post-processing]]
+ ==== Modifying Messages - Compression and More
+ 
+diff --git a/src/reference/asciidoc/whats-new.adoc b/src/reference/asciidoc/whats-new.adoc
+index e76b4fe11..ee05a9c00 100644
+--- a/src/reference/asciidoc/whats-new.adoc
++++ b/src/reference/asciidoc/whats-new.adoc
+@@ -87,6 +87,18 @@ A large incoming `LongString` is now correctly "converted" on output too.
+ 
+ See <<message-properties-converters>> for more information.
+ 
++====== Inbound Delivery Mode
++
++The `deliveryMode` header is no longer mapped to the `MessageProperties.deliveryMode`; this is to avoid unintended
++propagation if the the same `MessageProperties` object is used to send an outbound message.
++Instead, the inbound `deliveryMode` header is mapped to `MessageProperties.receivedDeliveryMode`.
++
++See <<message-properties-converters>> for more information.
++
++When using annotated endpoints, the header is provided in the header named `AmqpHeaders.RECEIVED_DELIVERY_MODE`.
++
++See <<async-annotation-driven-enable-signature>> for more information.
++
+ ===== RabbitAdmin Changes
+ 
+ ====== Declaration Failures

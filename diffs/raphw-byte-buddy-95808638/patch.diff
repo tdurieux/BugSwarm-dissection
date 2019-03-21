@@ -1,0 +1,301 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/NamedElement.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/NamedElement.java
+index ba849fe774..f6498a2504 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/NamedElement.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/NamedElement.java
+@@ -5,6 +5,11 @@
+  */
+ public interface NamedElement {
+ 
++    /**
++     * Indicates that an element is not named.
++     */
++    String NO_NAME = null;
++
+     /**
+      * Represents an element without a name in the source code.
+      */
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
+index d8aaaf0cd4..0448915ed8 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/TypeDescription.java
+@@ -196,9 +196,9 @@
+     String getSimpleName();
+ 
+     /**
+-     * Returns the canonical internalName of this type.
++     * Returns the canonical name of this type if it exists.
+      *
+-     * @return The canonical internalName of this type.
++     * @return The canonical name of this type. Might be {@code null}.
+      */
+     String getCanonicalName();
+ 
+@@ -806,16 +806,26 @@ public String getDescriptor() {
+ 
+             @Override
+             public String getCanonicalName() {
+-                return getName().replace('$', '.');
++                return isAnonymousClass() || isLocalClass()
++                        ? NO_NAME
++                        : getName().replace('$', '.');
+             }
+ 
+             @Override
+             public String getSimpleName() {
+-                int simpleNameIndex = getInternalName().lastIndexOf('$');
++                String internalName = getInternalName();
++                int simpleNameIndex = internalName.lastIndexOf('$');
+                 simpleNameIndex = simpleNameIndex == -1
+-                        ? getInternalName().lastIndexOf('/')
++                        ? internalName.lastIndexOf('/')
+                         : simpleNameIndex;
+-                return simpleNameIndex == -1 ? getInternalName() : getInternalName().substring(simpleNameIndex + 1);
++                if (simpleNameIndex == -1) {
++                    return internalName;
++                } else {
++                    while (simpleNameIndex < internalName.length() && !Character.isLetter(internalName.charAt(simpleNameIndex))) {
++                        simpleNameIndex += 1;
++                    }
++                    return internalName.substring(simpleNameIndex);
++                }
+             }
+ 
+             @Override
+@@ -935,7 +945,19 @@ public TypeList getDeclaredTypes() {
+ 
+         @Override
+         public String getSimpleName() {
+-            return type.getSimpleName();
++            String simpleName = type.getSimpleName();
++            int anonymousLoaderIndex = simpleName.indexOf('/');
++            if (anonymousLoaderIndex == -1) {
++                return simpleName;
++            } else {
++                StringBuilder normalized = new StringBuilder(simpleName.substring(0, anonymousLoaderIndex));
++                Class<?> type = this.type;
++                while (type.isArray()) {
++                    normalized.append("[]");
++                    type = type.getComponentType();
++                }
++                return normalized.toString();
++            }
+         }
+ 
+         @Override
+@@ -987,12 +1009,31 @@ public String getName() {
+ 
+         @Override
+         public String getCanonicalName() {
+-            return type.getCanonicalName();
++            String canonicalName = type.getCanonicalName();
++            if (canonicalName == null) {
++                return NO_NAME;
++            }
++            int anonymousLoaderIndex = canonicalName.indexOf('/');
++            if (anonymousLoaderIndex == -1) {
++                return canonicalName;
++            } else {
++                StringBuilder normalized = new StringBuilder(canonicalName.substring(0, anonymousLoaderIndex));
++                Class<?> type = this.type;
++                while (type.isArray()) {
++                    normalized.append("[]");
++                    type = type.getComponentType();
++                }
++                return normalized.toString();
++            }
+         }
+ 
+         @Override
+         public String getDescriptor() {
+-            return Type.getDescriptor(type);
++            String name = type.getName();
++            int anonymousLoaderIndex = name.indexOf('/');
++            return anonymousLoaderIndex == -1
++                    ? Type.getDescriptor(type)
++                    : "L" + name.substring(0, anonymousLoaderIndex).replace('.', '/') + ";";
+         }
+ 
+         @Override
+@@ -1110,7 +1151,11 @@ public String getSimpleName() {
+ 
+         @Override
+         public String getCanonicalName() {
+-            StringBuilder stringBuilder = new StringBuilder(componentType.getCanonicalName());
++            String canonicalName = componentType.getCanonicalName();
++            if (canonicalName == null) {
++                return NO_NAME;
++            }
++            StringBuilder stringBuilder = new StringBuilder(canonicalName);
+             for (int i = 0; i < arity; i++) {
+                 stringBuilder.append("[]");
+             }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+index ab8467fa5f..141cab6ca9 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/ClassFileLocator.java
+@@ -1025,14 +1025,8 @@ protected ExtractionClassFileTransformer(ClassLoader classLoader, String typeNam
+                                     Class<?> redefinedType,
+                                     ProtectionDomain protectionDomain,
+                                     byte[] classFile) throws IllegalClassFormatException {
+-                if (redefinedType != null) {
+-                    String typeName = redefinedType.getName();
+-                    int anonymousLoaderIndex = typeName.indexOf('/');
+-                    if (isChild(classLoader) && this.typeName.equals(anonymousLoaderIndex == -1
+-                            ? typeName
+-                            : typeName.substring(0, anonymousLoaderIndex))) {
+-                        this.binaryRepresentation = classFile;
+-                    }
++                if (isChild(classLoader) && typeName.equals(internalName.replace('/', '.'))) {
++                    this.binaryRepresentation = classFile;
+                 }
+                 return DO_NOT_TRANSFORM;
+             }
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
+index e205833fbe..a6eac4b9a4 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/loading/ClassReloadingStrategy.java
+@@ -97,6 +97,7 @@ protected ClassReloadingStrategy(Instrumentation instrumentation,
+      * classes will be transformed using a class redefinition.
+      *
+      * @param instrumentation The instrumentation to be used by this reloading strategy.
++     * @return A suitable class reloading strategy.
+      */
+     public static ClassReloadingStrategy of(Instrumentation instrumentation) {
+         Engine engine;
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
+index d4cb029576..b7ff79d7ca 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/description/type/AbstractTypeDescriptionTest.java
+@@ -37,26 +37,32 @@
+ 
+     private static final String FOO = "foo", BAR = "bar";
+ 
+-    @SuppressWarnings("unchecked")
+-    private static final List<Class<?>> TYPES = Arrays.asList(Object.class,
+-            SampleClass.class,
+-            void.class,
+-            byte.class,
+-            short.class,
+-            char.class,
+-            int.class,
+-            long.class,
+-            float.class,
+-            double.class,
+-            Object[].class);
++    private final List<Class<?>> standardTypes;
+ 
+     private final Class<?> constructorType;
+ 
++    @SuppressWarnings("unchecked")
+     protected AbstractTypeDescriptionTest() {
+-        class ConstructorType {
+-
++        class MemberType {
++            /* empty */
+         }
+-        constructorType = ConstructorType.class;
++        constructorType = MemberType.class;
++        standardTypes = Arrays.asList(Object.class,
++                SampleClass.class,
++                void.class,
++                byte.class,
++                short.class,
++                char.class,
++                int.class,
++                long.class,
++                float.class,
++                double.class,
++                Object[].class,
++                MemberType.class,
++                MemberType[].class,
++                new Object() {
++                    /* empty */
++                }.getClass());
+     }
+ 
+     protected abstract TypeDescription describe(Class<?> type);
+@@ -113,14 +119,14 @@ public void testStackSize() throws Exception {
+ 
+     @Test
+     public void testName() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).getName(), is(type.getName()));
+         }
+     }
+ 
+     @Test
+     public void testSourceName() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             if (type.isArray()) {
+                 assertThat(describe(type).getSourceCodeName(), is(type.getComponentType().getName() + "[]"));
+             } else {
+@@ -131,25 +137,46 @@ public void testSourceName() throws Exception {
+ 
+     @Test
+     public void testInternalName() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).getInternalName(), is(Type.getInternalName(type)));
+         }
+     }
+ 
+     @Test
+     public void testCanonicalName() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).getCanonicalName(), is(type.getCanonicalName()));
+         }
+     }
+ 
+     @Test
+     public void testSimpleName() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).getSimpleName(), is(type.getSimpleName()));
+         }
+     }
+ 
++    @Test
++    public void testIsMemberClass() throws Exception {
++        for (Class<?> type : standardTypes) {
++            assertThat(describe(type).isMemberClass(), is(type.isMemberClass()));
++        }
++    }
++
++    @Test
++    public void testIsAnonymousClass() throws Exception {
++        for (Class<?> type : standardTypes) {
++            assertThat(describe(type).isAnonymousClass(), is(type.isAnonymousClass()));
++        }
++    }
++
++    @Test
++    public void testIsLocalClass() throws Exception {
++        for (Class<?> type : standardTypes) {
++            assertThat(describe(type).isLocalClass(), is(type.isLocalClass()));
++        }
++    }
++
+     @Test
+     public void testJavaName() throws Exception {
+         assertThat(describe(Object.class).getSourceCodeName(), is(Object.class.getName()));
+@@ -178,7 +205,7 @@ public void testJavaName() throws Exception {
+ 
+     @Test
+     public void testDescriptor() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).getDescriptor(), is(Type.getDescriptor(type)));
+         }
+     }
+@@ -296,7 +323,7 @@ public void testInterfaces() throws Exception {
+ 
+     @Test
+     public void testToString() throws Exception {
+-        for (Class<?> type : TYPES) {
++        for (Class<?> type : standardTypes) {
+             assertThat(describe(type).toString(), is(type.toString()));
+         }
+     }

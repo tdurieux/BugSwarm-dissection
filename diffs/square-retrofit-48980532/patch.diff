@@ -1,0 +1,463 @@
+diff --git a/retrofit-converters/jackson/src/main/java/retrofit/converter/JacksonConverter.java b/retrofit-converters/jackson/src/main/java/retrofit/converter/JacksonConverter.java
+index f7dc8e35f..a4f5f62f8 100644
+--- a/retrofit-converters/jackson/src/main/java/retrofit/converter/JacksonConverter.java
++++ b/retrofit-converters/jackson/src/main/java/retrofit/converter/JacksonConverter.java
+@@ -1,9 +1,7 @@
+ package retrofit.converter;
+ 
+-import com.fasterxml.jackson.core.JsonParseException;
+ import com.fasterxml.jackson.core.JsonProcessingException;
+ import com.fasterxml.jackson.databind.JavaType;
+-import com.fasterxml.jackson.databind.JsonMappingException;
+ import com.fasterxml.jackson.databind.ObjectMapper;
+ import java.io.IOException;
+ import java.io.InputStream;
+@@ -31,18 +29,12 @@ public JacksonConverter(ObjectMapper objectMapper) {
+     this.objectMapper = objectMapper;
+   }
+ 
+-  @Override public Object fromBody(TypedInput body, Type type) throws ConversionException {
++  @Override public Object fromBody(TypedInput body, Type type) throws IOException {
+     InputStream in = null;
+     try {
+       JavaType javaType = objectMapper.getTypeFactory().constructType(type);
+       in = body.in();
+       return objectMapper.readValue(in, javaType);
+-    } catch (JsonParseException e) {
+-      throw new ConversionException(e);
+-    } catch (JsonMappingException e) {
+-      throw new ConversionException(e);
+-    } catch (IOException e) {
+-      throw new ConversionException(e);
+     } finally {
+       try {
+         if (in != null) {
+diff --git a/retrofit-converters/jackson/src/test/java/retrofit/converter/JacksonConverterTest.java b/retrofit-converters/jackson/src/test/java/retrofit/converter/JacksonConverterTest.java
+index 0cac65916..ab5e9ceb6 100644
+--- a/retrofit-converters/jackson/src/test/java/retrofit/converter/JacksonConverterTest.java
++++ b/retrofit-converters/jackson/src/test/java/retrofit/converter/JacksonConverterTest.java
+@@ -1,6 +1,8 @@
+ package retrofit.converter;
+ 
+ import com.fasterxml.jackson.annotation.JsonProperty;
++import com.fasterxml.jackson.databind.JsonMappingException;
++import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+ import java.io.ByteArrayOutputStream;
+ import org.junit.Test;
+ import retrofit.mime.TypedByteArray;
+@@ -28,16 +30,20 @@
+     assertThat(result).isEqualTo(OBJECT);
+   }
+ 
+-  @Test(expected = ConversionException.class)
+-  public void deserializeWrongValue() throws Exception {
++  @Test public void deserializeWrongValue() throws Exception {
+     TypedInput input = new TypedByteArray(MIME_TYPE, "{\"foo\":\"bar\"}".getBytes());
+-    converter.fromBody(input, MyObject.class);
++    try {
++      converter.fromBody(input, MyObject.class);
++    } catch (UnrecognizedPropertyException ignored) {
++    }
+   }
+ 
+-  @Test(expected = ConversionException.class)
+-  public void deserializeWrongClass() throws Exception {
++  @Test public void deserializeWrongClass() throws Exception {
+     TypedInput input = new TypedByteArray(MIME_TYPE, JSON.getBytes());
+-    converter.fromBody(input, String.class);
++    try {
++      converter.fromBody(input, String.class);
++    } catch (JsonMappingException ignored) {
++    }
+   }
+ 
+   private String asString(TypedOutput typedOutput) throws Exception {
+diff --git a/retrofit-converters/protobuf/src/main/java/retrofit/converter/ProtoConverter.java b/retrofit-converters/protobuf/src/main/java/retrofit/converter/ProtoConverter.java
+index 0c450cee4..c2935210a 100644
+--- a/retrofit-converters/protobuf/src/main/java/retrofit/converter/ProtoConverter.java
++++ b/retrofit-converters/protobuf/src/main/java/retrofit/converter/ProtoConverter.java
+@@ -15,7 +15,7 @@
+ public class ProtoConverter implements Converter {
+   private static final String MIME_TYPE = "application/x-protobuf";
+ 
+-  @Override public Object fromBody(TypedInput body, Type type) throws ConversionException {
++  @Override public Object fromBody(TypedInput body, Type type) throws IOException {
+     if (!(type instanceof Class<?>)) {
+       throw new IllegalArgumentException("Expected a raw Class<?> but was " + type);
+     }
+@@ -26,20 +26,18 @@
+ 
+     String mimeType = body.mimeType();
+     if (!MIME_TYPE.equals(mimeType)) {
+-      throw new ConversionException("Response content type was not a proto: " + mimeType);
++      throw new RuntimeException("Response content type was not a proto: " + mimeType);
+     }
+ 
+     try {
+       Method parseFrom = c.getMethod("parseFrom", InputStream.class);
+       return parseFrom.invoke(null, body.in());
+     } catch (InvocationTargetException e) {
+-      throw new ConversionException(c.getName() + ".parseFrom() failed", e.getCause());
++      throw new RuntimeException(c.getName() + ".parseFrom() failed", e.getCause());
+     } catch (NoSuchMethodException e) {
+       throw new IllegalArgumentException("Expected a protobuf message but was " + c.getName());
+     } catch (IllegalAccessException e) {
+       throw new AssertionError();
+-    } catch (IOException e) {
+-      throw new ConversionException(e);
+     }
+   }
+ 
+diff --git a/retrofit-converters/protobuf/src/test/java/retrofit/converter/ProtoConverterTest.java b/retrofit-converters/protobuf/src/test/java/retrofit/converter/ProtoConverterTest.java
+index a25f96003..828588a30 100644
+--- a/retrofit-converters/protobuf/src/test/java/retrofit/converter/ProtoConverterTest.java
++++ b/retrofit-converters/protobuf/src/test/java/retrofit/converter/ProtoConverterTest.java
+@@ -54,7 +54,7 @@
+     try {
+       protoConverter.fromBody(decodeBase64("////"), Phone.class);
+       fail();
+-    } catch (ConversionException expected) {
++    } catch (RuntimeException expected) {
+       assertThat(expected.getCause() instanceof InvalidProtocolBufferException);
+     }
+   }
+@@ -63,7 +63,7 @@
+     try {
+       protoConverter.fromBody(decodeBase64("////", "yummy/bytes"), Phone.class);
+       fail();
+-    } catch (ConversionException e) {
++    } catch (RuntimeException e) {
+       assertThat(e).hasMessage("Response content type was not a proto: yummy/bytes");
+     }
+   }
+diff --git a/retrofit-converters/simplexml/src/main/java/retrofit/converter/SimpleXMLConverter.java b/retrofit-converters/simplexml/src/main/java/retrofit/converter/SimpleXMLConverter.java
+index 3d3a6d5b0..266d35c33 100644
+--- a/retrofit-converters/simplexml/src/main/java/retrofit/converter/SimpleXMLConverter.java
++++ b/retrofit-converters/simplexml/src/main/java/retrofit/converter/SimpleXMLConverter.java
+@@ -43,11 +43,13 @@ public SimpleXMLConverter(Serializer serializer, boolean strict) {
+     this.strict = strict;
+   }
+ 
+-  @Override public Object fromBody(TypedInput body, Type type) throws ConversionException {
++  @Override public Object fromBody(TypedInput body, Type type) throws IOException {
+     try {
+       return serializer.read((Class<?>) type, body.in(), strict);
++    } catch (IOException e) {
++      throw e;
+     } catch (Exception e) {
+-      throw new ConversionException(e);
++      throw new RuntimeException(e);
+     }
+   }
+ 
+@@ -67,8 +69,7 @@ public SimpleXMLConverter(Serializer serializer, boolean strict) {
+         if (osw != null) {
+           osw.close();
+         }
+-      } catch (IOException e) {
+-        throw new AssertionError(e);
++      } catch (IOException ignored) {
+       }
+     }
+   }
+diff --git a/retrofit-converters/simplexml/src/test/java/retrofit/converter/SimpleXMLConverterTest.java b/retrofit-converters/simplexml/src/test/java/retrofit/converter/SimpleXMLConverterTest.java
+index a752d2321..cd0b3e6f2 100644
+--- a/retrofit-converters/simplexml/src/test/java/retrofit/converter/SimpleXMLConverterTest.java
++++ b/retrofit-converters/simplexml/src/test/java/retrofit/converter/SimpleXMLConverterTest.java
+@@ -46,12 +46,13 @@ public void deserialize() throws Exception {
+ 		assertThat(result).isEqualTo(obj);
+ 	}
+ 
+-	@Test(expected = ConversionException.class)
+-	public void deserializeWrongValue() throws Exception {
++	@Test public void deserializeWrongValue() throws Exception {
+ 		final TypedInput input = new TypedByteArray(MIME_TYPE,
+ 				"<myObject><foo/><bar/></myObject>".getBytes());
+-		converter.fromBody(input, MyObject.class);
+-
++    try {
++      converter.fromBody(input, MyObject.class);
++    } catch (RuntimeException ignored) {
++    }
+ 	}
+ 
+ 	@Test
+diff --git a/retrofit-converters/wire/src/main/java/retrofit/converter/WireConverter.java b/retrofit-converters/wire/src/main/java/retrofit/converter/WireConverter.java
+index 73070bfb9..c1fc1e00d 100644
+--- a/retrofit-converters/wire/src/main/java/retrofit/converter/WireConverter.java
++++ b/retrofit-converters/wire/src/main/java/retrofit/converter/WireConverter.java
+@@ -27,7 +27,7 @@ public WireConverter(Wire wire) {
+   }
+ 
+   @SuppressWarnings("unchecked") //
+-  @Override public Object fromBody(TypedInput body, Type type) throws ConversionException {
++  @Override public Object fromBody(TypedInput body, Type type) throws IOException {
+     if (!(type instanceof Class<?>)) {
+       throw new IllegalArgumentException("Expected a raw Class<?> but was " + type);
+     }
+@@ -37,15 +37,13 @@ public WireConverter(Wire wire) {
+     }
+ 
+     if (!MIME_TYPE.equalsIgnoreCase(body.mimeType())) {
+-      throw new ConversionException("Expected a proto but was: " + body.mimeType());
++      throw new IllegalStateException("Expected a proto but was: " + body.mimeType());
+     }
+ 
+     InputStream in = null;
+     try {
+       in = body.in();
+       return wire.parseFrom(in, (Class<Message>) c);
+-    } catch (IOException e) {
+-      throw new ConversionException(e);
+     } finally {
+       if (in != null) {
+         try {
+diff --git a/retrofit-converters/wire/src/test/java/retrofit/converter/WireConverterTest.java b/retrofit-converters/wire/src/test/java/retrofit/converter/WireConverterTest.java
+index dbc9cb5b7..fdd967b2f 100644
+--- a/retrofit-converters/wire/src/test/java/retrofit/converter/WireConverterTest.java
++++ b/retrofit-converters/wire/src/test/java/retrofit/converter/WireConverterTest.java
+@@ -55,8 +55,7 @@
+     try {
+       converter.fromBody(decodeBase64("////"), Person.class);
+       fail();
+-    } catch (ConversionException expected) {
+-      assertThat(expected.getCause()).isInstanceOf(IOException.class);
++    } catch (IOException ignored) {
+     }
+   }
+ 
+@@ -64,7 +63,7 @@
+     try {
+       converter.fromBody(decodeBase64("////", "yummy/bytes"), Person.class);
+       fail();
+-    } catch (ConversionException e) {
++    } catch (RuntimeException e) {
+       assertThat(e).hasMessage("Expected a proto but was: yummy/bytes");
+     }
+   }
+diff --git a/retrofit/src/main/java/retrofit/RestAdapter.java b/retrofit/src/main/java/retrofit/RestAdapter.java
+index c9c1b650f..f4a01b398 100644
+--- a/retrofit/src/main/java/retrofit/RestAdapter.java
++++ b/retrofit/src/main/java/retrofit/RestAdapter.java
+@@ -29,7 +29,6 @@
+ import retrofit.client.OkClient;
+ import retrofit.client.Request;
+ import retrofit.client.Response;
+-import retrofit.converter.ConversionException;
+ import retrofit.converter.Converter;
+ import retrofit.http.Header;
+ import retrofit.mime.TypedInput;
+@@ -304,7 +303,7 @@ private void handleAsyncResponseBody(Request request, Response response, Type ty
+       try {
+         Object convert = converter.fromBody(wrapped, type);
+         callResponse(callback, convert, response);
+-      } catch (ConversionException e) {
++      } catch (RuntimeException e) {
+         // If the underlying input stream threw an exception, propagate that rather than
+         // indicating that it was a conversion exception.
+         if (wrapped.threwException()) {
+@@ -313,8 +312,7 @@ private void handleAsyncResponseBody(Request request, Response response, Type ty
+ 
+         // The response body was partially read by the converter. Replace it with null.
+         response = Utils.replaceResponseBody(response, null);
+-
+-        throw RetrofitError.conversionError(request.getUrl(), response, converter, type, e);
++        throw RetrofitError.unexpectedError(request.getUrl(), response, converter, type, e);
+       }
+     }
+ 
+diff --git a/retrofit/src/main/java/retrofit/RetrofitError.java b/retrofit/src/main/java/retrofit/RetrofitError.java
+index 0664f1f99..f0a093708 100644
+--- a/retrofit/src/main/java/retrofit/RetrofitError.java
++++ b/retrofit/src/main/java/retrofit/RetrofitError.java
+@@ -18,7 +18,6 @@
+ import java.io.IOException;
+ import java.lang.reflect.Type;
+ import retrofit.client.Response;
+-import retrofit.converter.ConversionException;
+ import retrofit.converter.Converter;
+ import retrofit.mime.TypedInput;
+ 
+@@ -28,10 +27,10 @@ public static RetrofitError networkError(String url, IOException exception) {
+         exception);
+   }
+ 
+-  public static RetrofitError conversionError(String url, Response response, Converter converter,
+-      Type successType, ConversionException exception) {
++  public static RetrofitError unexpectedError(String url, Response response, Converter converter,
++      Type successType, Throwable exception) {
+     return new RetrofitError(exception.getMessage(), url, response, converter, successType,
+-        Kind.CONVERSION, exception);
++        Kind.UNEXPECTED, exception);
+   }
+ 
+   public static RetrofitError httpError(String url, Response response, Converter converter,
+@@ -49,8 +48,6 @@ public static RetrofitError unexpectedError(String url, Throwable exception) {
+   public enum Kind {
+     /** An {@link IOException} occurred while communicating to the server. */
+     NETWORK,
+-    /** An exception was thrown while (de)serializing a body. */
+-    CONVERSION,
+     /** A non-200 HTTP status code was received from the server. */
+     HTTP,
+     /**
+@@ -126,8 +123,8 @@ public Object getBodyAs(Type type) {
+     }
+     try {
+       return converter.fromBody(body, type);
+-    } catch (ConversionException e) {
+-      throw new RuntimeException(e);
++    } catch (IOException e) {
++      throw new RuntimeException(e); // Body is a byte[], can't be a real IO exception.
+     }
+   }
+ }
+diff --git a/retrofit/src/main/java/retrofit/converter/ConversionException.java b/retrofit/src/main/java/retrofit/converter/ConversionException.java
+deleted file mode 100644
+index 6673efc0b..000000000
+--- a/retrofit/src/main/java/retrofit/converter/ConversionException.java
++++ /dev/null
+@@ -1,32 +0,0 @@
+-/*
+- * Copyright (C) 2013 Square, Inc.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package retrofit.converter;
+-
+-/** Indicate that conversion was unable to complete successfully. */
+-@SuppressWarnings("UnusedDeclaration")
+-public class ConversionException extends Exception {
+-  public ConversionException(String message) {
+-    super(message);
+-  }
+-
+-  public ConversionException(String message, Throwable throwable) {
+-    super(message, throwable);
+-  }
+-
+-  public ConversionException(Throwable throwable) {
+-    super(throwable);
+-  }
+-}
+diff --git a/retrofit/src/main/java/retrofit/converter/Converter.java b/retrofit/src/main/java/retrofit/converter/Converter.java
+index db1693535..f038978ed 100644
+--- a/retrofit/src/main/java/retrofit/converter/Converter.java
++++ b/retrofit/src/main/java/retrofit/converter/Converter.java
+@@ -15,14 +15,13 @@
+  */
+ package retrofit.converter;
+ 
++import java.io.IOException;
+ import java.lang.reflect.Type;
+ import retrofit.mime.TypedInput;
+ import retrofit.mime.TypedOutput;
+ 
+ /**
+  * Arbiter for converting objects to and from their representation in HTTP.
+- *
+- * @author Jake Wharton (jw@squareup.com)
+  */
+ public interface Converter {
+   /**
+@@ -31,12 +30,8 @@
+    * @param body HTTP response body.
+    * @param type Target object type.
+    * @return Instance of {@code type} which will be cast by the caller.
+-   * @throws ConversionException if conversion was unable to complete. This will trigger a call to
+-   * {@link retrofit.Callback#failure(retrofit.RetrofitError)} or throw a
+-   * {@link retrofit.RetrofitError}. The exception message should report all necessary information
+-   * about its cause as the response body will be set to {@code null}.
+    */
+-  Object fromBody(TypedInput body, Type type) throws ConversionException;
++  Object fromBody(TypedInput body, Type type) throws IOException;
+ 
+   /**
+    * Convert an object to an appropriate representation for HTTP transport.
+diff --git a/retrofit/src/main/java/retrofit/converter/GsonConverter.java b/retrofit/src/main/java/retrofit/converter/GsonConverter.java
+index b2b7224df..97c27261d 100644
+--- a/retrofit/src/main/java/retrofit/converter/GsonConverter.java
++++ b/retrofit/src/main/java/retrofit/converter/GsonConverter.java
+@@ -16,7 +16,6 @@
+ package retrofit.converter;
+ 
+ import com.google.gson.Gson;
+-import com.google.gson.JsonParseException;
+ import java.io.IOException;
+ import java.io.InputStreamReader;
+ import java.io.OutputStream;
+@@ -58,7 +57,7 @@ public GsonConverter(Gson gson, String charset) {
+     this.charset = charset;
+   }
+ 
+-  @Override public Object fromBody(TypedInput body, Type type) throws ConversionException {
++  @Override public Object fromBody(TypedInput body, Type type) throws IOException {
+     String charset = this.charset;
+     if (body.mimeType() != null) {
+       charset = MimeUtil.parseCharset(body.mimeType(), charset);
+@@ -67,10 +66,6 @@ public GsonConverter(Gson gson, String charset) {
+     try {
+       isr = new InputStreamReader(body.in(), charset);
+       return gson.fromJson(isr, type);
+-    } catch (IOException e) {
+-      throw new ConversionException(e);
+-    } catch (JsonParseException e) {
+-      throw new ConversionException(e);
+     } finally {
+       if (isr != null) {
+         try {
+diff --git a/retrofit/src/test/java/retrofit/RestAdapterTest.java b/retrofit/src/test/java/retrofit/RestAdapterTest.java
+index 4197af3df..bc444fa26 100644
+--- a/retrofit/src/test/java/retrofit/RestAdapterTest.java
++++ b/retrofit/src/test/java/retrofit/RestAdapterTest.java
+@@ -1,6 +1,7 @@
+ // Copyright 2013 Square, Inc.
+ package retrofit;
+ 
++import com.google.gson.JsonParseException;
+ import java.io.ByteArrayInputStream;
+ import java.io.IOException;
+ import java.io.InputStream;
+@@ -12,7 +13,6 @@
+ import retrofit.client.MockClient;
+ import retrofit.client.Request;
+ import retrofit.client.Response;
+-import retrofit.converter.ConversionException;
+ import retrofit.http.Body;
+ import retrofit.http.GET;
+ import retrofit.http.Headers;
+@@ -126,9 +126,9 @@
+       example.something();
+       fail("RetrofitError expected on malformed response body.");
+     } catch (RetrofitError e) {
+-      assertThat(e.getKind()).isEqualTo(RetrofitError.Kind.CONVERSION);
++      assertThat(e.getKind()).isEqualTo(RetrofitError.Kind.UNEXPECTED);
+       assertThat(e.getResponse().getStatus()).isEqualTo(200);
+-      assertThat(e.getCause()).isInstanceOf(ConversionException.class);
++      assertThat(e.getCause()).isInstanceOf(JsonParseException.class);
+       assertThat(e.getResponse().getBody()).isNull();
+     }
+   }
+diff --git a/retrofit/src/test/java/retrofit/converter/GsonConverterTest.java b/retrofit/src/test/java/retrofit/converter/GsonConverterTest.java
+index bded86ddd..9a81b13e5 100644
+--- a/retrofit/src/test/java/retrofit/converter/GsonConverterTest.java
++++ b/retrofit/src/test/java/retrofit/converter/GsonConverterTest.java
+@@ -60,7 +60,7 @@
+     assertJson("{\"name\":\"value\"}", output);
+   }
+ 
+-  @Test public void deserialization() throws ConversionException {
++  @Test public void deserialization() throws IOException {
+     TypedString json = new TypedString("{\"theName\":\"value\"}");
+     Impl impl = (Impl) converter.fromBody(json, Impl.class);
+     assertEquals("value", impl.getName());

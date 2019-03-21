@@ -1,0 +1,167 @@
+diff --git a/server/app/api.py b/server/app/api.py
+index 1ae10454..82298da3 100644
+--- a/server/app/api.py
++++ b/server/app/api.py
+@@ -35,11 +35,11 @@
+ from flask import session, make_response, redirect
+ from webargs import Arg
+ from webargs.flaskparser import FlaskParser
+-from app.constants import STUDENT_ROLE, STAFF_ROLE, API_PREFIX
++from app.constants import STUDENT_ROLE, STAFF_ROLE, API_PREFIX, AUTOGRADER_URL
+ 
+ from app import models, app, analytics, utils
+ from app.needs import Need
+-from app.utils import paginate, filter_query, create_zip, add_to_zip, start_zip, finish_zip, scores_to_gcs, subms_to_gcs, make_zip_filename
++from app.utils import paginate, filter_query, create_zip, add_to_zip, start_zip, finish_zip, scores_to_gcs, subms_to_gcs, make_zip_filename, submit_to_ag
+ from app.utils import add_to_grading_queues, parse_date, assign_submission
+ from app.utils import merge_user, backup_group_file, add_to_file_contents
+ 
+@@ -864,7 +864,6 @@ def autograde(self, obj, user, data):
+         for fsub in fsubs:
+           subm_ids[fsub.submission.id()] = fsub.submission.get().backup.id()
+ 
+-        ag_url = "http://autograder.cs61a.org:5000"
+         data = {
+             'subm_ids': subm_ids,
+             'assignment': obj.autograding_key,
+@@ -872,9 +871,10 @@ def autograde(self, obj, user, data):
+         }
+ 
+         headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+-        r = requests.post(ag_url+'/api/ok/grade/batch', data=json.dumps(data), headers=headers)
++        r = requests.post(AUTOGRADER_URL+'/api/ok/grade/batch',
++            data=json.dumps(data), headers=headers)
+         if r.status_code == requests.codes.ok:
+-          return {'status_url': ag_url+'/rq', 'length': str(len(subm_ids))}
++          return {'status_url': AUTOGRADER_URL+'/rq', 'length': str(len(subm_ids))}
+         else:
+           raise BadValueError('The autograder the rejected your request')
+       else:
+@@ -942,6 +942,9 @@ def create_submission(self, user, assignment, messages, submit, submitter):
+                                created=created)
+         backup.put()
+         deferred.defer(assign_submission, backup.key.id(), submit)
++        if assignment.autograding_enabled:
++            deferred.defer(submit_to_ag, assignment.autograder_key,
++                db_messages, submitter)
+         return backup
+ 
+ 
+diff --git a/server/app/constants.py b/server/app/constants.py
+index a0f77cc4..c9e519c4 100644
+--- a/server/app/constants.py
++++ b/server/app/constants.py
+@@ -6,6 +6,7 @@
+ VALID_ROLES = [STUDENT_ROLE, STAFF_ROLE]
+ GRADES_BUCKET = 'ok_grades_bucket'
+ TIMEZONE = 'America/Los_Angeles'
++AUTOGRADER_URL = 'http://autograder.cs61a.org:5000'
+ 
+ # submission downloads
+ BATCH_SIZE = 25
+diff --git a/server/app/utils.py b/server/app/utils.py
+index f52cd308..5dbf147d 100644
+--- a/server/app/utils.py
++++ b/server/app/utils.py
+@@ -25,7 +25,7 @@
+ import cloudstorage as gcs
+ 
+ from app import app
+-from app.constants import GRADES_BUCKET
++from app.constants import GRADES_BUCKET, AUTOGRADER_URL
+ from app.exceptions import BadValueError
+ 
+ # TODO Looks like this can be removed just by relocating parse_date
+@@ -122,7 +122,7 @@ def add_to_zip(zipfile, file_contents, dir=''):
+     return zipfile
+ 
+ def create_csv_content(content):
+-    """ 
++    """
+     Return all contents in CSV file format. Content must be a list of lists.
+     """
+     scsv = StringIO()
+@@ -137,9 +137,9 @@ def create_csv_content(content):
+     return contents
+ 
+ def data_for_scores(assignment, user):
+-    """ 
++    """
+     Returns a tuple of two values a list of lists of score info for assignment.
+-    Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']] 
++    Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
+     """
+     content = [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
+     course = assignment.course.get()
+@@ -158,8 +158,8 @@ def data_for_scores(assignment, user):
+     return content
+ 
+ def create_gcs_file(gcs_filename, contents, content_type):
+-    """ 
+-    Creates a GCS csv file with contents CONTENTS. 
++    """
++    Creates a GCS csv file with contents CONTENTS.
+     """
+     try:
+         gcs_file = gcs.open(gcs_filename, 'w', content_type=content_type, options={'x-goog-acl': 'project-private'})
+@@ -409,7 +409,7 @@ def get_dup_user():
+         G.invited == dup_user_key)).fetch()
+     for group in groups:
+         group.exit(dup_user_key)
+-        
++
+     # Deactivate all enrollments
+     E = ModelProxy.Participant
+     enrolls = E.query(E.user == dup_user_key).fetch()
+@@ -505,7 +505,7 @@ def check_user(user_key):
+ 
+ 
+ def scores_to_gcs(assignment, user):
+-    """ Writes all final submission scores 
++    """ Writes all final submission scores
+     for the given assignment to GCS csv file. """
+     content = data_for_scores(assignment, user)
+     csv_contents = create_csv_content(content)
+@@ -543,9 +543,9 @@ def backup_group_file(backup, json_pretty={}):
+         order = {i: u['email'][0]
+                  for i, u in enumerate(json_data['member'])}
+         return (
+-            ('group_members_%s.json' % group.key.id(), 
++            ('group_members_%s.json' % group.key.id(),
+              str(json.dumps(order, **json_pretty))),
+-            ('group_meta_%s.json' % group.key.id(), 
++            ('group_meta_%s.json' % group.key.id(),
+              str(json.dumps(json_data, **json_pretty)))
+         )
+ 
+@@ -580,6 +580,23 @@ def subms_to_gcs(SearchAPI, subm, Submission, user, data, datetime,
+     zip_filename = make_zip_filename(user, datetime)
+     create_gcs_file(zip_filename, zip_contents, 'application/zip')
+ 
++def submit_to_ag(ag_key, messages, submitter):
++    if 'file_contents' not in messages:
++        return
++    data = {
++        'assignment': ag_key,
++        'file_contents': messages['file_contents'],
++        'submitter': submitter
++    }
++
++    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
++    r = requests.post(AUTOGRADER_URL+'/api/file/grade/continous',
++        data=json.dumps(data), headers=headers)
++    if r.status_code == requests.codes.ok:
++      return {'status': "pending"}
++    else:
++      raise BadValueError('The autograder the rejected your request')
++
+ 
+ import difflib
+ 
+@@ -589,4 +606,4 @@ def subms_to_gcs(SearchAPI, subm, Submission, user, data, datetime,
+ def diff(s1, s2):
+     lines1 = s1.split('\n')
+     lines2 = s2.split('\n')
+-    return list(differ.compare(lines1, lines2))
+\ No newline at end of file
++    return list(differ.compare(lines1, lines2))

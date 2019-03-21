@@ -1,0 +1,257 @@
+diff --git a/build.xml b/build.xml
+index 7847416a9..32016192f 100644
+--- a/build.xml
++++ b/build.xml
+@@ -1,4 +1,4 @@
+-<project name="whiley" default="build-all">
++<project name="whiley" default="test">
+   <import file="config.xml"/>
+ 
+   <!-- ============================================== -->
+@@ -17,6 +17,34 @@
+     </subant>
+   </target>
+ 
++  <!-- ============================================== -->
++  <!-- Testing Commands -->
++  <!-- ============================================== -->
++
++  <target name="test" depends="build-all">
++    <junit printsummary="yes" haltonfailure="no" includeantruntime="yes"> 
++      <classpath>
++	<pathelement path="${JUNIT_JARS}"/>
++	<pathelement location="lib/wybs-v${version}.jar"/>
++	<pathelement location="lib/wyc-v${version}.jar"/>
++	<pathelement location="lib/wyil-v${version}.jar"/>
++	<pathelement location="lib/wycs-v${version}.jar"/>
++	<pathelement location="lib/wyrl-v${version}.jar"/>
++	<pathelement location="lib/wyrt-v${version}.jar"/>
++	<pathelement location="lib/wyjc-v${version}.jar"/>
++      </classpath>     
++      <batchtest>
++	<fileset dir="modules/wyc/src">
++	  <include name="**/*Tests.java"/>
++	</fileset>
++	<fileset dir="modules/wyjc/src">
++	  <include name="**/*Tests.java"/>
++	</fileset>
++      </batchtest>
++    </junit>
++  </target>
++
++
+   <!-- ============================================== -->
+   <!-- Documenation -->
+   <!-- ============================================== -->
+diff --git a/config.xml b/config.xml
+index 409517e65..236e77272 100644
+--- a/config.xml
++++ b/config.xml
+@@ -1,4 +1,5 @@
+ <project name="BuildConfig">
+   <property name="version" value="0.3.34"/>
+   <property name="JASM_JAR" value="lib/jasm-v0.1.7.jar"/>
++  <property name="JUNIT_JARS" value="lib/junit-4.12.jar:lib/hamcrest-core-1.3.jar"/>
+ </project>
+diff --git a/lib/hamcrest-core-1.3.jar b/lib/hamcrest-core-1.3.jar
+new file mode 100644
+index 000000000..9d5fe16e3
+Binary files /dev/null and b/lib/hamcrest-core-1.3.jar differ
+diff --git a/lib/junit-4.12.jar b/lib/junit-4.12.jar
+new file mode 100644
+index 000000000..3a7fc266c
+Binary files /dev/null and b/lib/junit-4.12.jar differ
+diff --git a/modules/wyc/src/wyc/testing/AllInvalidTests.java b/modules/wyc/src/wyc/testing/AllInvalidTests.java
+index 63179a693..dc739deab 100755
+--- a/modules/wyc/src/wyc/testing/AllInvalidTests.java
++++ b/modules/wyc/src/wyc/testing/AllInvalidTests.java
+@@ -52,13 +52,13 @@
+ 	 * The directory containing the source files for each test case. Every test
+ 	 * corresponds to a file in this directory.
+ 	 */
+-	public final static String WHILEY_SRC_DIR = "../../tests/invalid".replace('/', File.separatorChar);
++	public final static String WHILEY_SRC_DIR = "tests/invalid".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The directory where compiler libraries are stored. This is necessary
+ 	 * since it will contain the Whiley Runtime.
+ 	 */
+-	public final static String WYC_LIB_DIR = "../../lib/".replace('/', File.separatorChar);
++	public final static String WYC_LIB_DIR = "lib/".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The path to the Whiley RunTime (WyRT) library. This contains the Whiley
+diff --git a/modules/wyc/src/wyc/testing/AllValidTests.java b/modules/wyc/src/wyc/testing/AllValidTests.java
+index 0a46b19de..b76a52c46 100644
+--- a/modules/wyc/src/wyc/testing/AllValidTests.java
++++ b/modules/wyc/src/wyc/testing/AllValidTests.java
+@@ -60,13 +60,13 @@
+ 	 * The directory containing the source files for each test case. Every test
+ 	 * corresponds to a file in this directory.
+ 	 */
+-	public final static String WHILEY_SRC_DIR = "../../tests/valid".replace('/', File.separatorChar);
++	public final static String WHILEY_SRC_DIR = "tests/valid".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The directory where compiler libraries are stored. This is necessary
+ 	 * since it will contain the Whiley Runtime.
+ 	 */
+-	public final static String WYC_LIB_DIR = "../../lib/".replace('/', File.separatorChar);
++	public final static String WYC_LIB_DIR = "lib/".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The path to the Whiley RunTime (WyRT) library. This contains the Whiley
+diff --git a/modules/wyc/src/wyc/testing/AllValidVerificationTests.java b/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
+index aed665cc7..888939d0b 100644
+--- a/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
++++ b/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
+@@ -50,13 +50,13 @@
+ 	 * The directory containing the source files for each test case. Every test
+ 	 * corresponds to a file in this directory.
+ 	 */
+-	public final static String WHILEY_SRC_DIR = "../../tests/valid".replace('/', File.separatorChar);
++	public final static String WHILEY_SRC_DIR = "tests/valid".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The directory where compiler libraries are stored. This is necessary
+ 	 * since it will contain the Whiley Runtime.
+ 	 */
+-	public final static String WYC_LIB_DIR = "../../lib/".replace('/', File.separatorChar);
++	public final static String WYC_LIB_DIR = "lib/".replace('/', File.separatorChar);
+ 
+ 	/**
+ 	 * The path to the Whiley RunTime (WyRT) library. This contains the Whiley
+diff --git a/modules/wyjc/src/wyjc/WyjcMain.java b/modules/wyjc/src/wyjc/WyjcMain.java
+index b0b359113..27c45f38a 100755
+--- a/modules/wyjc/src/wyjc/WyjcMain.java
++++ b/modules/wyjc/src/wyjc/WyjcMain.java
+@@ -25,6 +25,7 @@
+ 
+ package wyjc;
+ 
++import java.io.ByteArrayOutputStream;
+ import java.io.File;
+ import java.io.IOException;
+ import java.util.Arrays;
+@@ -67,6 +68,11 @@ public WyjcMain(WyjcBuildTask builder, OptArg[] options) {
+ 		super(builder, options);
+ 	}
+ 
++	public WyjcMain(WyjcBuildTask builder, OptArg[] options,
++			ByteArrayOutputStream sysout, ByteArrayOutputStream syserr) {
++		super(builder, options, sysout, syserr);
++	}
++
+ 	@Override
+ 	public void configure(Map<String, Object> values) throws IOException {
+ 		super.configure(values);
+diff --git a/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java b/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java
+index 64398131d..eef56c183 100755
+--- a/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java
++++ b/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java
+@@ -27,6 +27,7 @@
+ 
+ import static org.junit.Assert.fail;
+ 
++import java.io.ByteArrayOutputStream;
+ import java.io.File;
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
+@@ -35,6 +36,8 @@
+ 
+ import wyc.WycMain;
+ import wyc.testing.TestUtils;
++import wyc.util.WycBuildTask;
++import wycc.util.Pair;
+ import wyjc.WyjcMain;
+ import wyjc.util.WyjcBuildTask;
+ 
+@@ -54,13 +57,13 @@
+  	 * The directory containing the source files for each test case. Every test
+  	 * corresponds to a file in this directory.
+  	 */
+- 	public final static String WHILEY_SRC_DIR = "../../tests/valid";
++ 	public final static String WHILEY_SRC_DIR = "tests/valid".replace('/', File.separatorChar);;
+ 
+- 	/**
+- 	 * The directory where compiler libraries are stored. This is necessary
+- 	 * since it will contain the Whiley Runtime.
+- 	 */
+- 	public final static String WYC_LIB_DIR = "../../lib/";
++	/**
++	 * The directory where compiler libraries are stored. This is necessary
++	 * since it will contain the Whiley Runtime.
++	 */
++	public final static String WYC_LIB_DIR = "lib/".replace('/', File.separatorChar);
+ 
+  	/**
+  	 * The path to the Whiley RunTime (WyRT) library. This contains the Whiley
+@@ -73,11 +76,11 @@
+ 	 * access the JVM compiled version of the Whiley standard library, along
+ 	 * with additional runtime support classes.
+ 	 */
+- 	private static final String WYJC_CLASS_DIR="../../modules/wyjc/src/";
++ 	private static final String WYJC_CLASS_DIR="modules/wyjc/src/";
+ 
+- 	private static final String WYBS_CLASS_DIR="../../modules/wybs/src/";
++ 	private static final String WYBS_CLASS_DIR="modules/wybs/src/";
+ 
+- 	private static final String WYRL_CLASS_DIR="../../modules/wyrl/src/";
++ 	private static final String WYRL_CLASS_DIR="modules/wyrl/src/";
+ 
+ 
+  	static {
+@@ -111,12 +114,16 @@ protected void runTest(String name) {
+  		// this will need to turn on verification at some point.
+  		String filename = WHILEY_SRC_DIR + File.separatorChar + name + ".whiley";
+ 
+- 		int r = compile(
++ 		Pair<Integer,String> p = compile(
+  				"-wd", WHILEY_SRC_DIR,      // location of source directory
+  				"-cd", WHILEY_SRC_DIR,      // location where to place class files
+  				"-wp", WYRT_PATH,           // add wyrt to whileypath
+  				filename);             // name of test to compile
+ 
++ 		int r = p.first();
++
++		System.out.print(p.second());
++
+  		if (r != WycMain.SUCCESS) {
+  			fail("Test failed to compile!");
+  		} else if (r == WycMain.INTERNAL_FAILURE) {
+@@ -127,7 +134,7 @@ protected void runTest(String name) {
+ 				WYRL_CLASS_DIR, WYBS_CLASS_DIR);
+ 
+  		// Second, execute the generated Java Program.
+- 		String output = TestUtils.execClass(CLASSPATH,WHILEY_SRC_DIR,"wyjc.testing.RuntimeValidTests",name);
++ 		String output = TestUtils.execClass(CLASSPATH,".","wyjc.testing.RuntimeValidTests",name);
+  		if(!output.equals("")) {
+  			System.out.println(output);
+  			fail("unexpected output!");
+@@ -168,9 +175,15 @@ public static void main(String[] args) {
+ 	 *            Compiler.
+ 	 * @return
+ 	 */
+-	public static int compile(String... args) {
+-		return new WyjcMain(new WyjcBuildTask(), WyjcMain.DEFAULT_OPTIONS)
++	public static Pair<Integer,String> compile(String... args) {
++		ByteArrayOutputStream syserr = new ByteArrayOutputStream();
++		ByteArrayOutputStream sysout = new ByteArrayOutputStream();
++		int exitCode = new WyjcMain(new WyjcBuildTask(), WyjcMain.DEFAULT_OPTIONS, sysout, syserr)
+ 				.run(args);
++		byte[] errBytes = syserr.toByteArray();
++		byte[] outBytes = sysout.toByteArray();
++		String output = new String(errBytes) + new String(outBytes);
++		return new Pair<Integer,String>(exitCode,output);
+ 	}
+ 
+ 	/**
+@@ -187,7 +200,7 @@ public String CLASSPATH(String... components) {
+ 		boolean firstTime = true;
+ 		for (String c : components) {
+ 			if (!firstTime) {
+-				r = r + ":";
++				r = r + File.pathSeparator;
+ 			}
+ 			firstTime = false;
+ 			r = r + c;

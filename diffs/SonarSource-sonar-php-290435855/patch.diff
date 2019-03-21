@@ -1,0 +1,713 @@
+diff --git a/php-frontend/src/main/java/org/sonar/php/parser/PHPGrammar.java b/php-frontend/src/main/java/org/sonar/php/parser/PHPGrammar.java
+index fa8ea2511..f80ed2152 100644
+--- a/php-frontend/src/main/java/org/sonar/php/parser/PHPGrammar.java
++++ b/php-frontend/src/main/java/org/sonar/php/parser/PHPGrammar.java
+@@ -194,7 +194,7 @@ public VariableDeclarationTree MEMBER_CONST_DECLARATION() {
+     return b.<VariableDeclarationTree>nonterminal(PHPLexicalGrammar.MEMBER_CONST_DECLARATION).is(
+       f.memberConstDeclaration(
+         b.token(PHPLexicalGrammar.IDENTIFIER_OR_KEYWORD),
+-        b.optional(f.newTuple18(b.token(EQU), STATIC_SCALAR()))));
++        b.optional(f.newTuple(b.token(EQU), STATIC_SCALAR()))));
+   }
+ 
+   public VariableDeclarationTree CONST_VAR() {
+@@ -209,19 +209,19 @@ public VariableDeclarationTree VARIABLE_DECLARATION() {
+     return b.<VariableDeclarationTree>nonterminal(PHPLexicalGrammar.VARIABLE_DECLARATION).is(
+       f.variableDeclaration(
+         b.token(PHPLexicalGrammar.REGULAR_VAR_IDENTIFIER),
+-        b.optional(f.newTuple96(b.token(EQU), STATIC_SCALAR()))));
++        b.optional(f.newTuple(b.token(EQU), STATIC_SCALAR()))));
+   }
+ 
+   public NamespaceNameTree NAMESPACE_NAME() {
+     return b.<NamespaceNameTree>nonterminal(PHPLexicalGrammar.NAMESPACE_NAME).is(
+       b.firstOf(
+         f.namespaceName(
+-          b.oneOrMore(f.newTuple75(
++          b.oneOrMore(f.newTuple(
+             b.token(PHPPunctuator.NS_SEPARATOR),
+             b.token(PHPLexicalGrammar.IDENTIFIER)))),
+         f.namespaceName(
+           b.firstOf(b.token(PHPLexicalGrammar.IDENTIFIER), b.token(PHPKeyword.NAMESPACE)),
+-          b.zeroOrMore(f.newTuple4(
++          b.zeroOrMore(f.newTuple(
+             b.token(PHPPunctuator.NS_SEPARATOR),
+             b.token(PHPLexicalGrammar.IDENTIFIER))))));
+   }
+@@ -232,7 +232,7 @@ public UseClauseTree GROUP_USE_CLAUSE() {
+         b.optional(USE_TYPE()),
+         NAMESPACE_NAME(),
+         b.optional(
+-          f.newTuple55(
++          f.newTuple(
+             b.token(PHPKeyword.AS),
+             b.token(PHPLexicalGrammar.IDENTIFIER)))));
+   }
+@@ -250,7 +250,7 @@ public UseClauseTree USE_CLAUSE() {
+       f.useClause(
+         NAMESPACE_NAME(),
+         b.optional(
+-          f.newTuple91(
++          f.newTuple(
+             b.token(PHPKeyword.AS),
+             b.token(PHPLexicalGrammar.IDENTIFIER)))));
+   }
+@@ -261,8 +261,8 @@ public ClassDeclarationTree CLASS_DECLARATION() {
+         b.optional(b.firstOf(b.token(ABSTRACT), b.token(FINAL))),
+         b.token(CLASS),
+         NAME_IDENTIFIER(),
+-        b.optional(f.newTuple50(b.token(EXTENDS), NAMESPACE_NAME())),
+-        b.optional(f.newTuple30(b.token(IMPLEMENTS), INTERFACE_LIST())),
++        b.optional(f.newTuple(b.token(EXTENDS), NAMESPACE_NAME())),
++        b.optional(f.newTuple(b.token(IMPLEMENTS), INTERFACE_LIST())),
+         b.token(LCURLYBRACE),
+         b.zeroOrMore(CLASS_MEMBER()),
+         b.token(RCURLYBRACE)));
+@@ -283,7 +283,7 @@ public ClassDeclarationTree INTERFACE_DECLARATION() {
+       f.interfaceDeclaration(
+         b.token(INTERFACE),
+         NAME_IDENTIFIER(),
+-        b.optional(f.newTuple26(b.token(EXTENDS), INTERFACE_LIST())),
++        b.optional(f.newTuple(b.token(EXTENDS), INTERFACE_LIST())),
+         b.token(LCURLYBRACE),
+         b.zeroOrMore(CLASS_MEMBER()),
+         b.token(RCURLYBRACE)));
+@@ -305,7 +305,7 @@ public ClassPropertyDeclarationTree CLASS_CONSTANT_DECLARATION() {
+         b.optional(VISIBILITY_MODIFIER()),
+         b.token(PHPKeyword.CONST),
+         MEMBER_CONST_DECLARATION(),
+-        b.zeroOrMore(f.newTuple97(b.token(COMMA), MEMBER_CONST_DECLARATION())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), MEMBER_CONST_DECLARATION())),
+         EOS()));
+   }
+ 
+@@ -314,7 +314,7 @@ public ConstantDeclarationTree CONSTANT_DECLARATION() {
+       f.constantDeclaration(
+         b.token(PHPKeyword.CONST),
+         CONST_VAR(),
+-        b.zeroOrMore(f.newTuple28(b.token(COMMA), CONST_VAR())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), CONST_VAR())),
+         EOS()));
+   }
+ 
+@@ -325,7 +325,7 @@ public ClassPropertyDeclarationTree CLASS_VARIABLE_DECLARATION() {
+           f.singleToken(b.token(PHPKeyword.VAR)),
+           b.oneOrMore(MEMBER_MODIFIER())),
+         VARIABLE_DECLARATION(),
+-        b.zeroOrMore(f.newTuple95(b.token(COMMA), VARIABLE_DECLARATION())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), VARIABLE_DECLARATION())),
+         EOS()));
+   }
+ 
+@@ -382,10 +382,10 @@ public ParameterListTree PARAMETER_LIST() {
+       f.parameterList(
+         b.token(PHPPunctuator.LPARENTHESIS),
+         b.optional(
+-          f.newTuple94(
++          f.newTuple(
+             PARAMETER(),
+             b.zeroOrMore(
+-              f.newTuple93(
++              f.newTuple(
+                 b.token(PHPPunctuator.COMMA),
+                 PARAMETER())))),
+         b.token(PHPPunctuator.RPARENTHESIS)));
+@@ -399,7 +399,7 @@ public ParameterTree PARAMETER() {
+         b.optional(b.token(PHPPunctuator.ELIPSIS)),
+         b.token(PHPLexicalGrammar.REGULAR_VAR_IDENTIFIER),
+         b.optional(
+-          f.newTuple92(
++          f.newTuple(
+             b.token(PHPPunctuator.EQU),
+             STATIC_SCALAR()))));
+   }
+@@ -408,7 +408,7 @@ public ParameterTree PARAMETER() {
+     return b.<SeparatedListImpl<NamespaceNameTree>>nonterminal(PHPLexicalGrammar.INTERFACE_LIST).is(
+       f.interfaceList(
+         NAMESPACE_NAME(),
+-        b.zeroOrMore(f.newTuple98(b.token(COMMA), NAMESPACE_NAME()))));
++        b.zeroOrMore(f.newTuple(b.token(COMMA), NAMESPACE_NAME()))));
+   }
+ 
+   public UseTraitDeclarationTree USE_TRAIT_DECLARATION() {
+@@ -546,7 +546,7 @@ public UseStatementTree USE_STATEMENT() {
+         b.token(PHPKeyword.USE),
+         b.optional(USE_TYPE()),
+         USE_CLAUSE(),
+-        b.zeroOrMore(f.newTuple90(b.token(PHPPunctuator.COMMA), USE_CLAUSE())),
++        b.zeroOrMore(f.newTuple(b.token(PHPPunctuator.COMMA), USE_CLAUSE())),
+         EOS()));
+   }
+ 
+@@ -559,7 +559,7 @@ public UseStatementTree GROUP_USE_STATEMENT() {
+         b.token(NS_SEPARATOR),
+         b.token(LCURLYBRACE),
+         GROUP_USE_CLAUSE(),
+-        b.zeroOrMore(f.newTuple89(b.token(PHPPunctuator.COMMA), GROUP_USE_CLAUSE())),
++        b.zeroOrMore(f.newTuple(b.token(PHPPunctuator.COMMA), GROUP_USE_CLAUSE())),
+         b.optional(b.token(COMMA)),
+         b.token(RCURLYBRACE),
+         EOS()));
+@@ -607,7 +607,7 @@ public StaticStatementTree STATIC_STATEMENT() {
+       f.staticStatement(
+         b.token(STATIC),
+         STATIC_VAR(),
+-        b.zeroOrMore(f.newTuple22(b.token(COMMA), STATIC_VAR())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), STATIC_VAR())),
+         EOS()));
+   }
+ 
+@@ -615,7 +615,7 @@ public VariableDeclarationTree STATIC_VAR() {
+     return b.<VariableDeclarationTree>nonterminal(PHPLexicalGrammar.STATIC_VAR).is(
+       f.staticVar(
+         b.token(PHPLexicalGrammar.REGULAR_VAR_IDENTIFIER),
+-        b.optional(f.newTuple24(b.token(EQU), STATIC_SCALAR()))));
++        b.optional(f.newTuple(b.token(EQU), STATIC_SCALAR()))));
+   }
+ 
+   public DeclareStatementTree DECLARE_STATEMENT() {
+@@ -643,7 +643,7 @@ public DeclareStatementHead DECLARE_STATEMENT_HEAD() {
+         b.token(PHPKeyword.DECLARE),
+         b.token(LPARENTHESIS),
+         MEMBER_CONST_DECLARATION(),
+-        b.zeroOrMore(f.newTuple20(b.token(COMMA), MEMBER_CONST_DECLARATION())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), MEMBER_CONST_DECLARATION())),
+         b.token(RPARENTHESIS)));
+   }
+ 
+@@ -668,7 +668,7 @@ public GlobalStatementTree GLOBAL_STATEMENT() {
+       f.globalStatement(
+         b.token(PHPKeyword.GLOBAL),
+         GLOBAL_VAR(),
+-        b.zeroOrMore(f.newTuple16(b.token(COMMA), GLOBAL_VAR())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), GLOBAL_VAR())),
+         EOS()));
+   }
+ 
+@@ -685,7 +685,7 @@ public UnsetVariableStatementTree UNSET_VARIABLE_STATEMENT() {
+         b.token(PHPKeyword.UNSET),
+         b.token(LPARENTHESIS),
+         MEMBER_EXPRESSION(),
+-        b.zeroOrMore(f.newTuple14(b.token(COMMA), MEMBER_EXPRESSION())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), MEMBER_EXPRESSION())),
+         b.token(RPARENTHESIS),
+         EOS()));
+   }
+@@ -846,7 +846,7 @@ public ForStatementHeader FOR_STATEMENT_HEADER() {
+     return b.<SeparatedListImpl<ExpressionTree>>nonterminal(PHPLexicalGrammar.FOR_EXPR).is(
+       f.forExpr(
+         EXPRESSION(),
+-        b.zeroOrMore(f.newTuple12(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPPunctuator.COMMA),
+           EXPRESSION()))));
+   }
+@@ -868,7 +868,7 @@ public ForEachStatementHeader FOREACH_STATEMENT_HEADER() {
+       f.forEachStatementHeader(
+         b.token(PHPKeyword.FOREACH), b.token(PHPPunctuator.LPARENTHESIS),
+         EXPRESSION(), b.token(PHPKeyword.AS),
+-        b.optional(f.newTuple10(FOREACH_VARIABLE(), b.token(PHPPunctuator.DOUBLEARROW))), FOREACH_VARIABLE(),
++        b.optional(f.newTuple(FOREACH_VARIABLE(), b.token(PHPPunctuator.DOUBLEARROW))), FOREACH_VARIABLE(),
+         b.token(PHPPunctuator.RPARENTHESIS)));
+   }
+ 
+@@ -908,7 +908,7 @@ public TryStatementTree TRY_STATEMENT() {
+         b.token(PHPKeyword.TRY),
+         BLOCK(),
+         b.zeroOrMore(CATCH_BLOCK()),
+-        b.optional(f.newTuple2(b.token(PHPKeyword.FINALLY), BLOCK()))));
++        b.optional(f.newTuple(b.token(PHPKeyword.FINALLY), BLOCK()))));
+   }
+ 
+   public CatchBlockTree CATCH_BLOCK() {
+@@ -917,7 +917,7 @@ public CatchBlockTree CATCH_BLOCK() {
+         b.token(PHPKeyword.CATCH),
+         b.token(PHPPunctuator.LPARENTHESIS),
+         NAMESPACE_NAME(),
+-        b.zeroOrMore(f.newTuple76(b.token(PHPPunctuator.OR), NAMESPACE_NAME())),
++        b.zeroOrMore(f.newTuple(b.token(PHPPunctuator.OR), NAMESPACE_NAME())),
+         b.token(PHPLexicalGrammar.REGULAR_VAR_IDENTIFIER),
+         b.token(PHPPunctuator.RPARENTHESIS),
+         BLOCK()));
+@@ -945,7 +945,7 @@ public ExpressionListStatementTree EXPRESSION_LIST_STATEMENT() {
+     return b.<ExpressionListStatementTree>nonterminal(PHPLexicalGrammar.EXPRESSION_LIST_STATEMENT).is(
+       f.expressionListStatement(
+         EXPRESSION(),
+-        b.zeroOrMore(f.newTuple88(b.token(PHPPunctuator.COMMA), EXPRESSION())),
++        b.zeroOrMore(f.newTuple(b.token(PHPPunctuator.COMMA), EXPRESSION())),
+         EOS()));
+   }
+ 
+@@ -1009,7 +1009,7 @@ public ExpressionTree CONCATENATION_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.CONCATENATION).is(
+       f.concatenationExpr(
+         UNARY_EXPR(),
+-        b.zeroOrMore(f.newTuple60(
++        b.zeroOrMore(f.newTuple(
+           b.token(DOT),
+           UNARY_EXPR()))));
+   }
+@@ -1018,7 +1018,7 @@ public ExpressionTree POWER_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.POWER_EXPR).is(
+       f.powerExpr(
+         CONCATENATION_EXPR(),
+-        b.zeroOrMore(f.newTuple73(
++        b.zeroOrMore(f.newTuple(
+           b.token(STAR_STAR),
+           CONCATENATION_EXPR()))));
+   }
+@@ -1027,7 +1027,7 @@ public ExpressionTree MULTIPLICATIVE_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.MULTIPLICATIVE_EXPR).is(
+       f.multiplicativeExpr(
+         POWER_EXPR(),
+-        b.zeroOrMore(f.newTuple61(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(STAR), b.token(DIV), b.token(MOD)),
+           POWER_EXPR()))));
+   }
+@@ -1036,7 +1036,7 @@ public ExpressionTree ADDITIVE_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.ADDITIVE_EXPR).is(
+       f.additiveExpr(
+         MULTIPLICATIVE_EXPR(),
+-        b.zeroOrMore(f.newTuple62(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(PLUS), b.token(MINUS)),
+           MULTIPLICATIVE_EXPR()))));
+   }
+@@ -1045,7 +1045,7 @@ public ExpressionTree SHIFT_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.SHIFT_EXPR).is(
+       f.shiftExpr(
+         ADDITIVE_EXPR(),
+-        b.zeroOrMore(f.newTuple63(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(SL), b.token(SR)),
+           ADDITIVE_EXPR()))));
+   }
+@@ -1054,7 +1054,7 @@ public ExpressionTree RELATIONAL_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.RELATIONAL_EXPR).is(
+       f.relationalExpr(
+         SHIFT_EXPR(),
+-        b.zeroOrMore(f.newTuple64(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(LE), b.token(GE), b.token(LT), b.token(GT)),
+           SHIFT_EXPR()))));
+   }
+@@ -1063,7 +1063,7 @@ public ExpressionTree EQUALITY_EXPR() {
+     return b.<ExpressionTree>nonterminal(PHPLexicalGrammar.EQUALITY_EXPR).is(
+       f.equalityExpr(
+         RELATIONAL_EXPR(),
+-        b.zeroOrMore(f.newTuple65(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(NOTEQUAL2), b.token(NOTEQUAL), b.token(EQUAL2), b.token(EQUAL), b.token(NOTEQUALBIS), b.token(SPACESHIP)),
+           RELATIONAL_EXPR()))));
+   }
+@@ -1072,7 +1072,7 @@ public ExpressionTree BITWISE_AND_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.BITWISE_AND).is(
+       f.bitwiseAndExpr(
+         EQUALITY_EXPR(),
+-        b.zeroOrMore(f.newTuple66(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPPunctuator.AMPERSAND),
+           EQUALITY_EXPR()))));
+   }
+@@ -1081,7 +1081,7 @@ public ExpressionTree BITWISE_XOR_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.BITWISE_XOR).is(
+       f.bitwiseXorExpr(
+         BITWISE_AND_EXPR(),
+-        b.zeroOrMore(f.newTuple67(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPPunctuator.XOR),
+           BITWISE_AND_EXPR()))));
+   }
+@@ -1090,7 +1090,7 @@ public ExpressionTree BITWISE_OR_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.BITWISE_OR).is(
+       f.bitwiseOrExpr(
+         BITWISE_XOR_EXPR(),
+-        b.zeroOrMore(f.newTuple68(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPPunctuator.OR),
+           BITWISE_XOR_EXPR()))));
+   }
+@@ -1099,7 +1099,7 @@ public ExpressionTree CONDITIONAL_AND_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.CONDITIONAL_AND).is(
+       f.logicalAndExpr(
+         BITWISE_OR_EXPR(),
+-        b.zeroOrMore(f.newTuple69(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(PHPPunctuator.ANDAND), b.token(PHPKeyword.AND)),
+           BITWISE_OR_EXPR()))));
+   }
+@@ -1108,7 +1108,7 @@ public ExpressionTree CONDITIONAL_XOR_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.ALTERNATIVE_CONDITIONAL_XOR).is(
+       f.logicalXorExpr(
+         CONDITIONAL_AND_EXPR(),
+-        b.zeroOrMore(f.newTuple70(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPKeyword.XOR),
+           CONDITIONAL_AND_EXPR()))));
+   }
+@@ -1117,7 +1117,7 @@ public ExpressionTree CONDITIONAL_OR_EXPR() {
+     return b.<ExpressionTree>nonterminal(Kind.CONDITIONAL_OR).is(
+       f.logicalOrExpr(
+         CONDITIONAL_XOR_EXPR(),
+-        b.zeroOrMore(f.newTuple71(
++        b.zeroOrMore(f.newTuple(
+           b.firstOf(b.token(PHPPunctuator.OROR), b.token(PHPKeyword.OR)),
+           CONDITIONAL_XOR_EXPR()))));
+   }
+@@ -1126,7 +1126,7 @@ public ExpressionTree NULL_COALESCING_EXPRESSION() {
+     return b.<ExpressionTree>nonterminal(Kind.NULL_COALESCING_EXPRESSION).is(
+       f.nullCoalescingExpr(
+         CONDITIONAL_OR_EXPR(),
+-        b.zeroOrMore(f.newTuple72(
++        b.zeroOrMore(f.newTuple(
+           b.token(PHPPunctuator.NULL_COALESCE),
+           CONDITIONAL_OR_EXPR()))));
+   }
+@@ -1297,7 +1297,7 @@ public ListExpressionTree LIST_EXPRESSION() {
+           b.token(LIST),
+           b.token(LPARENTHESIS),
+           b.optional(LIST_ELEMENT()),
+-          b.zeroOrMore(f.newTuple3(b.token(COMMA), b.optional(LIST_ELEMENT()))),
++          b.zeroOrMore(f.newTuple(b.token(COMMA), b.optional(LIST_ELEMENT()))),
+           b.token(RPARENTHESIS))
+       );
+   }
+@@ -1423,8 +1423,8 @@ public FunctionCallTree FUNCTION_CALL_ARGUMENT_LIST() {
+ 
+   public SeparatedListImpl<ExpressionTree> ARGUMENTS() {
+     return b.<SeparatedListImpl<ExpressionTree>>nonterminal().is(
+-      f.arguments(b.optional(f.newTuple9(
+-        FUNCTION_CALL_ARGUMENT(), b.zeroOrMore(f.newTuple5(b.token(COMMA), FUNCTION_CALL_ARGUMENT())))))
++      f.arguments(b.optional(f.newTuple(
++        FUNCTION_CALL_ARGUMENT(), b.zeroOrMore(f.newTuple(b.token(COMMA), FUNCTION_CALL_ARGUMENT())))))
+     );
+   }
+ 
+@@ -1489,7 +1489,7 @@ public LexicalVariablesTree LEXICAL_VARIABLES() {
+         b.token(USE),
+         b.token(LPARENTHESIS),
+         LEXICAL_VARIABLE(),
+-        b.zeroOrMore(f.newTuple11(b.token(COMMA), LEXICAL_VARIABLE())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), LEXICAL_VARIABLE())),
+         b.token(RPARENTHESIS)));
+   }
+ 
+@@ -1510,7 +1510,7 @@ public ExpressionTree STATIC_SCALAR() {
+   public FunctionCallTree INTERNAL_FUNCTION() {
+     return b.<FunctionCallTree>nonterminal(PHPLexicalGrammar.INTERNAL_FUNCTION).is(
+       b.firstOf(
+-        f.internalFunction(b.token(PHPLexicalGrammar.ISSET), b.token(LPARENTHESIS), EXPRESSION(), b.zeroOrMore(f.newTuple15(b.token(COMMA), EXPRESSION())), b.token(RPARENTHESIS)),
++        f.internalFunction(b.token(PHPLexicalGrammar.ISSET), b.token(LPARENTHESIS), EXPRESSION(), b.zeroOrMore(f.newTuple(b.token(COMMA), EXPRESSION())), b.token(RPARENTHESIS)),
+ 
+         f.internalFunction(
+           b.firstOf(
+@@ -1540,14 +1540,14 @@ public ArrayInitializerTree ARRAY_INITIALIZER() {
+     return b.<SeparatedListImpl<ArrayPairTree>>nonterminal(PHPLexicalGrammar.ARRAY_PAIR_LIST).is(
+       f.arrayInitializerList(
+         ARRAY_PAIR(),
+-        b.zeroOrMore(f.newTuple17(b.token(COMMA), ARRAY_PAIR())),
++        b.zeroOrMore(f.newTuple(b.token(COMMA), ARRAY_PAIR())),
+         b.optional(b.token(COMMA))));
+   }
+ 
+   public ArrayPairTree ARRAY_PAIR() {
+     return b.<ArrayPairTree>nonterminal(Kind.ARRAY_PAIR).is(
+       b.firstOf(
+-        f.arrayPair1(EXPRESSION(), b.optional(f.newTuple13(b.token(DOUBLEARROW), b.firstOf(REFERENCE_VARIABLE(), EXPRESSION())))),
++        f.arrayPair1(EXPRESSION(), b.optional(f.newTuple(b.token(DOUBLEARROW), b.firstOf(REFERENCE_VARIABLE(), EXPRESSION())))),
+         f.arrayPair2(REFERENCE_VARIABLE())));
+   }
+ 
+@@ -1575,8 +1575,8 @@ public AnonymousClassTree ANONYMOUS_CLASS() {
+         b.optional(b.token(PHPPunctuator.LPARENTHESIS)),
+         ARGUMENTS(),
+         b.optional(b.token(PHPPunctuator.RPARENTHESIS)),
+-        b.optional(f.newTuple51(b.token(EXTENDS), NAMESPACE_NAME())),
+-        b.optional(f.newTuple31(b.token(IMPLEMENTS), INTERFACE_LIST())),
++        b.optional(f.newTuple(b.token(EXTENDS), NAMESPACE_NAME())),
++        b.optional(f.newTuple(b.token(IMPLEMENTS), INTERFACE_LIST())),
+         b.token(LCURLYBRACE),
+         b.zeroOrMore(CLASS_MEMBER()),
+         b.token(RCURLYBRACE))
+@@ -1610,7 +1610,7 @@ public ExpressionTree POSTFIX_EXPRESSION() {
+         b.optional(b.firstOf(
+           b.token(INC),
+           b.token(DEC),
+-          f.newTuple19(b.token(INSTANCEOF), MEMBER_EXPRESSION())))));
++          f.newTuple(b.token(INSTANCEOF), MEMBER_EXPRESSION())))));
+   }
+ 
+   /**
+diff --git a/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java b/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
+index 1782f153a..9380d15f5 100644
+--- a/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
++++ b/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
+@@ -1687,266 +1687,10 @@ public U second() {
+     }
+   }
+ 
+-  private static <T, U> Tuple<T, U> newTuple(T first, U second) {
++  public <T, U> Tuple<T, U> newTuple(T first, U second) {
+     return new Tuple<>(first, second);
+   }
+ 
+-  public <T, U> Tuple<T, U> newTuple1(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple2(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple3(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple4(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple5(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple6(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple7(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple8(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple9(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple10(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple11(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple12(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple13(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple14(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple15(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple16(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple17(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple18(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple19(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple20(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple21(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple22(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple23(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple24(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple25(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple26(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple27(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple28(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple29(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple30(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple31(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple50(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple51(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple52(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple53(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple54(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple55(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple60(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple61(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple62(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple63(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple64(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple65(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple66(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple67(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple68(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple69(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple70(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple71(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple72(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple73(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple75(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple76(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple88(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple89(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple90(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple91(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple92(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple93(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple94(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple95(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple96(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple97(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+-  public <T, U> Tuple<T, U> newTuple98(T first, U second) {
+-    return newTuple(first, second);
+-  }
+-
+   public List<SyntaxToken> singleToken(SyntaxToken token) {
+     return ImmutableList.of(token);
+   }

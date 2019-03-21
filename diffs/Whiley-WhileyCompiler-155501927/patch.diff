@@ -1,0 +1,149 @@
+diff --git a/lib/wycc-v0.4.0-SNAPSHOT.jar b/lib/wycc-v0.4.0-SNAPSHOT.jar
+index 13af5d94a..dd3644b36 100644
+Binary files a/lib/wycc-v0.4.0-SNAPSHOT.jar and b/lib/wycc-v0.4.0-SNAPSHOT.jar differ
+diff --git a/lib/wycs-v0.4.0.jar b/lib/wycs-v0.4.0.jar
+index ac7e450f3..47c45d404 100644
+Binary files a/lib/wycs-v0.4.0.jar and b/lib/wycs-v0.4.0.jar differ
+diff --git a/src/wyc/commands/Compile.java b/src/wyc/commands/Compile.java
+index 3049c8be4..ac19d812c 100644
+--- a/src/wyc/commands/Compile.java
++++ b/src/wyc/commands/Compile.java
+@@ -2,6 +2,8 @@
+ 
+ import java.io.File;
+ import java.io.IOException;
++import java.io.OutputStream;
++import java.io.PrintStream;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -34,6 +36,32 @@
+ 		INTERNAL_FAILURE
+ 	}
+ 	
++	/**
++	 * List of configuration options recognised by this command
++	 */
++	private static String[] configOptions = {
++			"verbose",
++			"verify",
++			"brief"
++	};
++	
++	/**
++	 * Provides a generic place to which normal output should be directed. This
++	 * should eventually be replaced.
++	 */
++	private final PrintStream sysout;
++	
++	/**
++	 * Provides a generic place to which error output should be directed. This
++	 * should eventually be replaced.
++	 */
++	private final PrintStream syserr;
++	
++	/**
++	 * Signals that verbose output should be produced.
++	 */
++	private boolean verbose = false;
++	
+ 	/**
+ 	 * Signals that brief error reporting should be used. This is primarily used
+ 	 * to help integration with external tools. More specifically, brief output
+@@ -56,9 +84,25 @@
+ 	 * @throws IOException 
+ 	 */
+ 	public Compile(Content.Registry registry, Logger logger) {
+-		super(registry, logger, "verify","brief");
++		super(registry, logger, configOptions);
++		this.sysout = System.out;
++		this.syserr = System.err;
+ 	}
+ 
++	/**
++	 * Construct a new instance of this command.
++	 * 
++	 * @param registry
++	 *            The content registry being used to match files to content
++	 *            types.
++	 * @throws IOException 
++	 */
++	public Compile(Content.Registry registry, Logger logger, OutputStream sysout, OutputStream syserr) {
++		super(registry, logger, configOptions);
++		this.sysout = new PrintStream(sysout);
++		this.syserr = new PrintStream(syserr);
++	}
++	
+ 	// =======================================================================
+ 	// Configuration
+ 	// =======================================================================
+@@ -71,6 +115,14 @@ public void setVerify() {
+ 		verify = true;
+ 	}
+ 
++	public String describeVerbose() {
++		return "Enable verbose output from Whiley compiler";
++	}
++
++	public void setVerbose() {
++		verbose = true;
++	}
++	
+ 	public String describeBrief() {
+ 		return "Enable brief reporting of error messages";
+ 	}
+@@ -113,7 +165,7 @@ public Result execute(String... args) {
+ 			for(File f : delta) {
+ 				if(!f.exists()) {
+ 					// FIXME: sort this out!
+-					System.out.println("compile: file not found: " + f.getName());
++					sysout.println("compile: file not found: " + f.getName());
+ 					return Result.ERRORS;
+ 				}
+ 			}
+@@ -130,6 +182,10 @@ public Result execute(String... args) {
+ 			//
+ 			return Result.SUCCESS;
+ 		} catch(SyntaxError e) {
++			e.outputSourceError(syserr,brief);
++			if (verbose) {
++				printStackTrace(syserr,e);				
++			}
+ 			return Result.ERRORS;
+ 		} catch(Exception e) {
+ 			// now what?
+@@ -179,4 +235,21 @@ private void addVerificationBuildRules(StdProject project) {
+ 		project.add(new StdBuildRule(wycsBuilder, wyaldir, wyalIncludes, wyalExcludes, wycsdir));
+ 	}
+ 
++	/**
++	 * Print a complete stack trace. This differs from
++	 * Throwable.printStackTrace() in that it always prints all of the trace.
++	 * 
++	 * @param out
++	 * @param err
++	 */
++	private static void printStackTrace(PrintStream out, Throwable err) {
++		out.println(err.getClass().getName() + ": " + err.getMessage());
++		for(StackTraceElement ste : err.getStackTrace()) {			
++			out.println("\tat " + ste.toString());
++		}
++		if(err.getCause() != null) {
++			out.print("Caused by: ");
++			printStackTrace(out,err.getCause());
++		}
++	}
+ }
+diff --git a/src/wyc/testing/TestUtils.java b/src/wyc/testing/TestUtils.java
+index 25dd77ad5..c012e812b 100644
+--- a/src/wyc/testing/TestUtils.java
++++ b/src/wyc/testing/TestUtils.java
+@@ -86,7 +86,7 @@ public int compare(Object[] o1, Object[] o2) {
+ 		ByteArrayOutputStream syserr = new ByteArrayOutputStream();
+ 		ByteArrayOutputStream sysout = new ByteArrayOutputStream();
+ 		Content.Registry registry = new wyc.Activator.Registry();
+-		Compile cmd = new Compile(registry,Logger.NULL);//new WycMain(new BuildTemplate(), WycMain.DEFAULT_OPTIONS, sysout, syserr).run(args);
++		Compile cmd = new Compile(registry,Logger.NULL,sysout,syserr);
+ 		cmd.setWhileydir(whileydir);
+ 		if(verify) {
+ 			cmd.setVerify();

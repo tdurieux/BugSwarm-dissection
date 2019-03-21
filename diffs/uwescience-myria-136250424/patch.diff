@@ -1,0 +1,1359 @@
+diff --git a/.travis.yml b/.travis.yml
+index 66fb1a6c3..8ff6359c0 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -14,3 +14,9 @@ sudo: false
+ cache:
+   directories:
+   - $HOME/.gradle/caches
++
++# encrypted AWS credentials for travis-ci IAM user under myria account
++env:
++  global:
++    - secure: "djjW9ThHbafN5TUFGQi+mFkc4uQ8w6pQuSIT3kLOT8u78LuKSJ2LeO3kpqHbiIPwobJrwnFs8TrfWWro7HQVsrmPyJIxjgsu1oMGZYwacAsO47v+UuCBXYcu3JtjdRyub2+L65SNCh299eXDTxjPq0GkzZUHOHoj/lWYe/CCJgA="
++    - secure: "CZ4RE0N0N/yeGnZZUf+ndN+vVzkLAgn2easCxExkOmvLqXmPNN9igKEaRAQ8sQ+YsAXuffyw2uxmo/paDUoVAcBpp/u/ZqdowdHHPcV13Upfqz70iQidsFU55zvF2CprmeHxNM1BLcbmVGY/tfeIrfosFSqb6gEOnSH/KfDsL6Y="
+diff --git a/build.gradle b/build.gradle
+index 44609a1c0..ab16b2cac 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -81,6 +81,9 @@ test.dependsOn verifyFormatting
+ 
+ /* Where we will fetch external JAR files from. */
+ repositories {
++  /* We need to override the official Apache repo for our custom Hadoop jars */
++  /* TODO: remove when we upgrade to Hadoop 2.8 (fixes HADOOP-12807) */
++  maven { url "https://raw.github.com/uwescience/hadoop/mvn-repo" }
+   mavenCentral() /* The standard Java Maven repository. */
+   maven { url "http://clojars.org/repo" } /* Clojars, for MonetDB */
+   flatDir {
+@@ -91,7 +94,7 @@ repositories {
+   /* Our private maven repo for our REEF fork */
+   maven { url "https://raw.github.com/uwescience/reef/mvn-repo" }
+ 
+-  /* Needed to find local REEF builds installed in the local Maven repo. */ 
++  /* For local REEF builds installed in the local Maven repo. */
+   /* mavenLocal() */
+ }
+ 
+@@ -106,12 +109,19 @@ ext.jerseyVersion = "2.14"
+ ext.swaggerVersion = "2.11"
+ ext.swaggerMinorVersion = "1.3.11"
+ ext.jmxetricsVersion = "1.0.8"
+-/* ext.reefVersion = "0.13.0-incubating" */
++ext.reefVersion = "0.15.0"
+ /* for local or development REEF builds */
+-ext.reefVersion = "0.14.0-SNAPSHOT"
++/* ext.reefVersion = "0.16.0-SNAPSHOT" */
++ext.hadoopVersion = "2.7.2"
+ 
+ dependencies {
+-  compile ("org.apache.hadoop:hadoop-client:2.6.0") {
++
++  /* Note this jar is fetched from our private Maven repo (patched for HADOOP-12807) */
++  compile ("org.apache.hadoop:hadoop-aws:${hadoopVersion}") {
++    exclude group: "com.sun.jersey"
++  }
++
++  compile ("org.apache.hadoop:hadoop-client:${hadoopVersion}") {
+     /* Hadoop depends on Jersey 1 but we don't need it. Exclude it to prevent
+      * Classloader picking the wrong version of Jersey classes. */
+     exclude group: "com.sun.jersey"
+@@ -166,7 +176,7 @@ dependencies {
+   compile "org.codehaus.janino:janino:2.7.7"
+ 
+   compile "org.postgresql:postgresql:9.4-1202-jdbc41"
+-  
++
+   compile("org.apache.reef:reef-project:${reefVersion}") { changing = true }
+   compile("org.apache.reef:reef-common:${reefVersion}") { changing = true }
+   compile("org.apache.reef:reef-runtime-local:${reefVersion}") { changing = true }
+@@ -260,14 +270,14 @@ jar {
+   }
+ }
+ 
+-/* Apache license files will cause weird issues on case-insensitive filesystems like Mac HFS */
++/* Build the uberjar containing all our dependencies */
+ shadowJar {
++  /* Without this option: "org.apache.tools.zip.Zip64RequiredException: archive contains more than 65535 entries." */
++  zip64 true
++  /* Apache license files will cause weird issues on case-insensitive filesystems like Mac HFS */
+   exclude "LICENSE", "META-INF/*.RSA", "META-INF/*.SF","META-INF/*.DSA", "META-INF/license"
+   transform(ApacheLicenseResourceTransformer)
+-}
+-
+-/* Some of our deps conflict with old versions in Hadoop distro */
+-shadowJar {
++  /* Some of our deps conflict with old versions in Hadoop distro */
+   relocate 'com.google.common', 'myriadeps.com.google.common'
+   relocate 'javax.ws.rs', 'myriadeps.javax.ws.rs'
+ }
+diff --git a/docs/developers/MyriaX.markdown b/docs/developers/MyriaX.markdown
+index f97cee093..022ea5b23 100644
+--- a/docs/developers/MyriaX.markdown
++++ b/docs/developers/MyriaX.markdown
+@@ -1,75 +1,70 @@
+ ---
+ layout: default
+-title: Architecture
+-group: "extra"
++title: MyriaX Internals
++group: "docs"
++weight: 1
++section: 4
+ ---
+ 
++# Myria REST API
+ 
+-# Overview of the architecture
++* Ingest a new dataset <br>
++```curl -i -XPOST {SERVER}:{PORT}/dataset -H "Content-type: application/json" -d @./data.json```
+ 
+-* Design philosophy?
++* Download data <br>
++```curl -i -XGET {SERVER}:{PORT}/dataset/user-{USER}/program-{PROGRAM}/relation-{RELATION}/data?format=json```
+ 
+-The MyriaX execution layer is modeled after the [Actor Model](http://en.wikipedia.org/wiki/Actor_model). But it is not a general purpose Actor Model implementation. It does not allow creation of new actors by existing actors. It allows only relational data as messages. And it restricts the processing of the messages by only using the Operator interface.
+-
+-# Components
+-
+-* [[MyriaX REST API]]
+-
+-* [[MyriaX Query Plans]]
+-
+-* [[Special Features]]
+-    * [[Expression library]]
+-    * [[Profiler]]
+-    * [[StatefulApply]]
+-    * [[UserDefinedAggregates]]
+-
+-* [[MyriaX Query Execution]]
+-    * [[Tuple batches]]
+-    * [[Control flow]]
+-    * [[EOS/EOI semantics]]
+-    * [[Memory management]]
+-    * [[Networking layer]]
+-    * [[Failure handling]]
+-
+-Query Execution
+--------------
++* Get datasets that match a search term <br>
++```curl -i -XGET {SERVER}:{PORT}/dataset/search?q=searchTerm```
+ 
+-### Operators: data processing units
+-Operators are MyriaX's data processing units. Each operator has a set of children operators (may be 0). Relational data (in format of TupleBatch) are drawn from the children operators (i.e. the inputs of the operator). Output relational data can be drawn by calling
+- > Operator.fetchNextReady().
++* Get a list of datasets for a user <br>
++```curl -i -XGET {SERVER}:{PORT}/dataset/user-{USER}```
+ 
+-Each operator can have a set of children operators, but only one or zero parent operator. In this way, operators can be linked together to form an operator tree. 
+-
+-#### Initialization and cleanup.
+-Before data processing, an Operator must be initialized, by calling
+->Operator.open()
++* Get a list of datasets for a user <br>
++```curl -i -XGET {SERVER}:{PORT}/dataset/user-{USER}/program-{PROGRAM}```
+ 
+-This method in turn calls
+-> Operator.init()
++* Gets all the workers in the cluster <br>
++```curl -i -XGET {SERVER}:{PORT}/workers```
+ 
+-It is a method that is required to be implemented by the Operator developers to do actual initialization. It may include memory allocation, system resource reservation, etc. 
++* Gets all the workers that are alive <br>
++```curl -i -XGET {SERVER}:{PORT}/workers/alive```
+ 
+-Once an operator is opend by the MyriaX system, it is guarranted that the Operator's
+->Operator.close()
++* Gets more info for a particular worker <br>
++```curl -i -XGET {SERVER}:{PORT}/workers/worker-workerId```
+ 
+-method will be called after the execution of the Operator, either successfully or erroneously. And in turn
+-> Operator.cleanup()
++# Query plan
+ 
+-is called . The Operator developer should do exactly the opposite of init in the cleanup method.
++MyriaX organizes its computation tasks by units of query plans. A query plan has a three layer hierarchical structure.
+ 
+-#### RootOperator and LeafOperator
++At the very top of a computation is the QueryPlan. A query plan has a globally identifiable long valued queryID, a set of properties that may control the execution of the query plan, for example how to react when a worker executing the query fails, and a mapping from workerID to sub queries. The maping from a workerID to a SubQueryPlan means the SubQueryPlan should be executed by the worker with id workerID.
+ 
+-A RootOperator is an operator without parent. Each operator tree must be rooted by a RootOperator. RootOperator is the single location where the relational data leaves the computing system. Currently, there are SinkRoot which simply drop everything, Insert which inserts the data drawn from its child into a database, and Producer ( and its children classes) which transfers data to remote operators.
++A QueryPlan can be generated by many ways. The simplest way is to create the QueryPlan Java object completely by hand. A better way is to compose a Json execution plan. And even better is to use a higher end language such as MyriaL or Datalog.
+ 
+-LeafOperator are the leafs of operator trees. There are also several implementations of LeafOperator, including DbScan which scans relational data from database tables, FileScan which scans relational data from local data files.
++When a QueryPlan is submitted, the system verifies the correctness of it and then dispatch the SubQueries to workers. A QueryPlan is considered running if any of the SubQueries is running. And currently if any of the SubQueries has errors during the execution, the whole QueryPlan will be killed. Note that here the errors are only limited to data processing errors. If any system error happens, for example, a worker machine gets down, the processing is up to the fault tolerance policies.
+ 
+-#### States
+-Each Operator has a EOS state variable. An Operator should execute and process data only if the EOS state is not true. If the EOS state becomes true, the Operator no longer process any data. It may still return data because it may maintain an output data buffer.
++<pre>
+++----------------------------------------------------------------+
++|  Query                                                         |
++| +-----------------------+         +--------------------------+ |
++| |   Sub Query           |         |     Sub Query            | |
++| |                       |         |                          | |
++| | +------------------+  |         | +---------------------+  | |
++| | |  LocalFragment 1 |  |         | |  LocalFragment 1    |  | |
++| | +------------------+  |         | +---------------------+  | |
++| | +------------------+  |         | +---------------------+  | |
++| | |  LocalFragment 2 |  |         | |  LocalFragment 3    |  | |
++| | +------------------+  |         | +---------------------+  | |
++| +-+------------------+--+         +-+---------------------+--+ |
++|        Worker 1                           Worker 2             |
+++----------------------------------------------------------------+
++</pre>
+ 
++## SubQuery
+ 
+-### Operator trees: execution units
++A SubQuery is the computation tasks that one worker is assigned in a QueryPlan. It contains a set of LocalFragments. The execution state of a SubQuery is similar to the execution state of a QueryPlan. When a SubQuery starts execution, all the LocalFragments start execution in the same time. A SubQuery is considered completed if all the LocalFragments are completed. And if any of the LocalFragments fails, the whole SubQuery will be marked as failure and gets killed.
+ 
+-A tree of operators rooted by a RootOperator is the basic execution unit of MyriaX.
++## Query Fragment
++A query fragment is the basic execution unit in MyriaX. Each LocalFragment is a driver of a single Operator tree. It is the basic execution unit of MyriaX.
+ 
+ <pre sytle="font-family: Consolas,monospace">
+                           +------------+                
+@@ -96,65 +91,48 @@ A tree of operators rooted by a RootOperator is the basic execution unit of Myri
+ |          |        |        |           |             |
+ +----------+        +--------+           +-------------+
+ 
+-  A sample operator tree.
++A sample query fragment.
+ </pre>
+ 
+-A operator tree is driven by a LocalFragment, which is discussed in the next section. A LocalFagment maintains the execution environment of an Operator tree. 
++A operator tree is driven by a query fragment, which is discussed in the next section. A query fragment maintains the execution environment of an Operator tree. 
+ 
+-### QueryPlan
+-
+-MyriaX organizes its computation tasks by units of query plans. A query plan has a three layer hierarchical structure.
+-
+-At the very top of a computation is the QueryPlan. A query plan has a globally identifiable long valued queryID, a set of properties that may control the execution of the query plan, for example how to react when a worker executing the query fails, and a mapping from workerID to sub queries. The maping from a workerID to a SubQueryPlan means the SubQueryPlan should be executed by the worker with id workerID.
+-
+-A QueryPlan can be generated by many ways. The simplest way is to create the QueryPlan Java object completely by hand. A better way is to compose a Json execution plan. And even better is to use a higher end language such as MyriaL or Datalog.
++Roughly, a query fragment runs a Operator tree in the following way (The actual implementation is much more complex because of all the concurrent state management):
+ 
+-When a QueryPlan is submitted, the system verifies the correctness of it and then dispatch the SubQueries to workers. A QueryPlan is considered running if any of the SubQueries is running. And currently if any of the SubQueries has errors during the execution, the whole QueryPlan will be killed. Note that here the errors are only limited to data processing errors. If any system error happens, for example, a worker machine gets down, the processing is up to the fault tolerance policies.
++```
++while (executionCondition is satisified)
++{
++  if (operatorTree.fetchNextReady() is null and no new data arrived)
++    break; // no data can be output currently
++}
++```
+ 
++## Operators
++Operators are MyriaX's data processing units. Each operator has a set of children operators (may be 0). Relational data (in format of TupleBatch) are drawn from the children operators (i.e. the inputs of the operator). Output relational data can be drawn by calling "Operator.fetchNextReady()".
++Each operator can have a set of children operators, but only one or zero parent operator. In this way, operators can be linked together to form an operator tree. 
+ 
+-<pre>
+-+----------------------------------------------------------------+
+-|                                                                |
+-|  Query                                                         |
+-|                                                                |
+-|                                                                |
+-|                                                                |
+-| +-----------------------+         +--------------------------+ |
+-| |   Sub Query           |         |     Sub Query            | |
+-| |                       |         |                          | |
+-| | +------------------+  |         | +---------------------+  | |
+-| | |  LocalFragment 1 |  |         | |  LocalFragment 1    |  | |
+-| | +------------------+  |         | +---------------------+  | |
+-| | +------------------+  |         | +---------------------+  | |
+-| | |  LocalFragment 2 |  |         | |  LocalFragment 3    |  | |
+-| | +------------------+  |         | +---------------------+  | |
+-| +-+------------------+--+         +-+---------------------+--+ |
+-|                                                                |
+-|        Worker 1                           Worker 2             |
+-|                                                                |
+-+----------------------------------------------------------------+
++### Initialization and cleanup.
++Before data processing, an Operator must be initialized, by calling "Operator.open()", which in turn calls "Operator.init()".
++It is a method that is required to be implemented by the Operator developers to do actual initialization. It may include memory allocation, system resource reservation, etc. 
+ 
+-</pre>
++Once an operator is opend by the MyriaX system, it is guarranted that the Operator's "Operator.close()".
++method will be called after the execution of the Operator, either successfully or erroneously. And in turn "Operator.cleanup()"
++is called. The Operator developer should do exactly the opposite of init in the cleanup method.
+ 
+-#### SubQuery
++### RootOperator and LeafOperator
+ 
+-A SubQuery is the computation tasks that one worker is assigned in a QueryPlan. It contains a set of LocalFragments. The execution state of a SubQuery is similar to the execution state of a QueryPlan. When a SubQuery starts execution, all the LocalFragments start execution in the same time. A SubQuery is considered completed if all the LocalFragments are completed. And if any of the LocalFragments fails, the whole SubQuery will be marked as failure and gets killed.
++A RootOperator is an operator without parent. Each operator tree must be rooted by a RootOperator. RootOperator is the single location where the relational data leaves the computing system. Currently, there are SinkRoot which simply drop everything, Insert which inserts the data drawn from its child into a database, and Producer ( and its children classes) which transfers data to remote operators.
+ 
++LeafOperator are the leafs of operator trees. There are also several implementations of LeafOperator, including DbScan which scans relational data from database tables, FileScan which scans relational data from local data files.
+ 
+-#### LocalFragment
+-A LocalFragment is the basic execution unit in MyriaX. Each LocalFragment is a driver of a single Operator tree.
++### States
++Each Operator has a EOS state variable. An Operator should execute and process data only if the EOS state is not true. If the EOS state becomes true, the Operator no longer process any data. It may still return data because it may maintain an output data buffer.
+ 
+-Very roughly, a LocalFragment runs a Operator tree in the following way (The actual implementation is much more complex because of all the concurrent state management):
++# Scheduling
++The MyriaX execution layer is modeled after the [Actor Model](http://en.wikipedia.org/wiki/Actor_model). But it is not a general purpose Actor Model implementation. It does not allow creation of new actors by existing actors. It allows only relational data as messages. And it restricts the processing of the messages by only using the Operator interface.
+ 
+-```
+-while (executionCondition is satisified)
+-{
+-  if (operatorTree.fetchNextReady() is null and no new data arrived)
+-    break; // no data can be output currently
+-}
+-```
++Currently there are no schedulers in Myria. Once a query Fragment gets executed, it keeps executing until it yields. And also if there is a set of query fragments waiting for execution, and now a execution thread becomes free, it is not deterministic of  which pending query fragments will be executed.
+ 
+-#### Execution mode and threading model
++## Execution mode and threading model
+ There are two execution modes for LocalFragments, i.e. Non-Blocking and Blocking. But the blocking mode is obsolete. It is not maintained long time ago. 
+ 
+ The differences between the two modes are mainly at the threading model. 
+@@ -165,48 +143,35 @@ In the code block of the last section, the *yield* of a LocalFragment is impleme
+ 
+ The blocking mode has no such execution pool. Each time a LocalFragment is created, a new Java Thread is created to execute the operator tree. The executionConditions and the break will be ignored. The execution keeps going when any of the LocalFragements is not EOS and no errors occur.
+ 
+-
+-####Execution condition
++### Execution condition
+ 
+ Each LocalFragment has a long state variable recording the current execution condition. Each bit of the long variable is a state indicator. Currently we have the following state bits:
+ 
+-  - STATE_INITIALIZED = (1 << 0) denotes if the owner LocalFragment is initialized. A LocalFragment is executable only if it is initialized.
++  - STATE_INITIALIZED: denotes if the owner LocalFragment is initialized. A LocalFragment is executable only if it is initialized.
+ 
+-  - STATE_STARTED = (1 << 1) records if the LocalFragment is allowed to start the execution. (TODO: not added by Shengliang, add more details by the actual author) .
++  - STATE_STARTED: records if the LocalFragment is allowed to start the execution. (TODO: not added by Shengliang, add more details by the actual author) .
+ 
+-  - STATE_OUTPUT_AVAILABLE = (1 << 2) denotes if all the output channels of this LocalFagment are writable. In the current implementation, if any of the output channels of a LocalFragment is not writable, the LocalFragment is not executable. But note that this is a soft constraint in that at the moment an output channel becomes unwritable, the LocalFragment may keep executing for a while.
++  - STATE_OUTPUT_AVAILABLE: denotes if all the output channels of this LocalFagment are writable. In the current implementation, if any of the output channels of a LocalFragment is not writable, the LocalFragment is not executable. But note that this is a soft constraint in that at the moment an output channel becomes unwritable, the LocalFragment may keep executing for a while.
+ 
+-  - STATE_INPUT_AVAILABLE = (1 << 3) denotes if currently there are any new input data that have not been checked by the operator tree.
++  - STATE_INPUT_AVAILABLE: denotes if currently there are any new input data that have not been checked by the operator tree.
+ 
+-  - STATE_KILLED = (1 << 4) denotes if the LocalFragment is already got killed.
++  - STATE_KILLED: denotes if the LocalFragment is already got killed.
+ 
+-  - STATE_EOS = (1 << 5).  As stated in the Operator section, each Operator has an EOS state variable. For an Operator tree, the EOS state of a whole true is the same as the EOS state of the root Operator. Once the EOS state of the root operator becomes true, the execution of the whole operator tree should be stopped. the STATE_EOS is set when the root operator reaches EOS.
++  - STATE_EOS: As stated in the Operator section, each Operator has an EOS state variable. For an Operator tree, the EOS state of a whole true is the same as the EOS state of the root Operator. Once the EOS state of the root operator becomes true, the execution of the whole operator tree should be stopped. the STATE_EOS is set when the root operator reaches EOS.
+ 
+-  - STATE_EXECUTION_REQUESTED = (1 << 6). This bit is to prevent multiple parallel execution of the same LocalFragment. It is because there may be multiple threads trigger the execution of a LocalFragment, for example a data input thread may trigger the execution of a LocalFragment because a new TupleBatch just arrived, and a data output thread may also trigger the execution of a LocalFragment because all the output channels become available.
++  - STATE_EXECUTION_REQUESTED: This bit is to prevent multiple parallel execution of the same LocalFragment. It is because there may be multiple threads trigger the execution of a LocalFragment, for example a data input thread may trigger the execution of a LocalFragment because a new TupleBatch just arrived, and a data output thread may also trigger the execution of a LocalFragment because all the output channels become available.
+ 
+-  - STATE_FAIL = (1 << 7) is set when everthere's any error raised and does not get processed by the operator tree. The LocalFragement should stop execution in these cases. And it should notify the owner SubQuery.
++  - STATE_FAIL: is set when any error is raised and does not get processed by the operator tree. The LocalFragement should stop execution in these cases. And it should notify the owner SubQuery.
+ 
+-  - STATE_INTERRUPTED = (1 << 8) is set when the execution thread gets interrupted. This usually happens when the system is shutting down.
++  - STATE_INTERRUPTED: is set when the execution thread gets interrupted. This usually happens when the system is shutting down.
+ 
+-  - STATE_IN_EXECUTION = (1 << 9) is set when the LocalFragment is in an execution. Together with the STATE_EXECUTION_REQUESTED, it also prevents from multiple parallel execution of the same LocalFragment.
++  - STATE_IN_EXECUTION: is set when the LocalFragment is in an execution. Together with the STATE_EXECUTION_REQUESTED, it also prevents from multiple parallel execution of the same LocalFragment.
+ 
+-To start executing a LocalFragment, the execution condition must be: 
++To start executing a LocalFragment, the execution condition must be: "EXECUTION_PRE_START = STATE_INITIALIZED | STATE_OUTPUT_AVAILABLE | STATE_INPUT_AVAILABLE".
++After execution starts, if the LocalFragment is ready to actually gets executed, the exeuction condition is: "EXECUTION_READY = EXECUTION_PRE_START | STATE_STARTED".
++When a LocalFragment executed a round (i.e. a call of fetchNextReady on the root Operator), it needs to check if currently another round of execution is needed. The execution condition is: "EXECUTION_READY | STATE_EXECUTION_REQUESTED | STATE_IN_EXECUTION".
+ 
+-> EXECUTION_PRE_START = STATE_INITIALIZED | STATE_OUTPUT_AVAILABLE | STATE_INPUT_AVAILABLE;
+-
+-After execution starts, if the LocalFragment is ready to actually gets executed, the exeuction condition is:
+-
+-> EXECUTION_READY = EXECUTION_PRE_START | STATE_STARTED;
+-
+-When a LocalFragment executed a round (i.e. a call of fetchNextReady on the root Operator), it needs to check if currently another round of execution is needed. The execution condition is:
+-
+->  EXECUTION_READY | STATE_EXECUTION_REQUESTED | STATE_IN_EXECUTION;
+-
+-### Scheduling
+-Currently there are no schedulers in Myria. Once a LocalFragment gets executed, it keeps executing until it yields. And also if there is a set of LocalFragments waiting for execution, and now a execution thread becomes free, it is not defined which waiting LocalFragment should get executed.
+-
+-IPC
+--------------
++# IPC
+ 
+ The IPC layer is the module that controls all the inter-process communications in MyriaX, including control message delivery and data message delivery. 
+ 
+@@ -233,7 +198,7 @@ The typical usage of the IPC layer is like the following code example:
+     }
+ ```
+ 
+-### The IPCEntities. 
++## The IPCEntities
+ 
+ The IPC layer is designed to support not only inter-process communications, but also intra-process communications. To provide this flexibility, the IPC layer abstracts the various senders and receivers using IPCEntity.
+ 
+@@ -241,51 +206,48 @@ Each IPCEntity has an IPCID. It is currently an integer. Given a set of IPCEntit
+ 
+ Each IPCEntity also has a SocketInfo recording the address of the IPCEntity.  Currently, only IP4 addresses/host names together with port numbers are supported.
+ 
+-Each IPCEntity is mapped into a single instance of an IPCConnectionPool. If a Java process has several IPCConnectionPool instances, each of them is an IPCEntity. They are able to talk to each other as long as their IPCID are unique and the SocketInfo addresses are also unique.
++Each IPCEntity is mapped into a single instance of an IPCConnectionPool. If a Java process has several IPCConnectionPool instances,
++each of them is an IPCEntity. They are able to talk to each other as long as their IPCID are unique and the SocketInfo addresses are also unique.
+ 
+-### Services.
++## Services
+ 
+ The IPC layer tries to hide all the complex and error prone concurrency/parallelism issues under a clean and easy to use interface. It provides two services for the users. 
+ 
+-  - **Standalone message delivery service**. This service can be accessed through the call of
+-  >  IPCConnectionPool.sendShortMessage(ipcID, message).
+-  
+-  This service is suitable for control message delivery. Given two calls of the sendShortMessage, there's no guarantee that the message sent by the first call is delivered and processed by the recipient before the message sent by the second call. 
++### Standalone message delivery service
+ 
+-  - **Stream data delivery service**. To use this service, firstly call 
+-  > streamOChannel = IPCConnectionPool.reserveLongTermConnection(ipcID, streamID, ...)
+-  
+-  and get a StreamOutputChannel instance. This will establish a data transfer channel (using TCP connections). And then data transfer can be achieved by calling
+-  > streamOChannel.write(message);  
+- 
+- as many times as the number of messages there are waiting for getting transferred. Given two calls of the write method in the same *streamOChannel* instance, the message written by the first call is guaranteed to get delivered and processed before the second one.
+- 
+- after all the messages are written, call
+- >streamOChannel.release();
+- 
+- to release the connection.
++This service can be accessed through the call of "IPCConnectionPool.sendShortMessage(ipcID, message)".
++This service is suitable for control message delivery. Given two calls of the sendShortMessage, there's no guarantee that
++the message sent by the first call is delivered and processed by the recipient before the message sent by the second call. 
++
++### Stream data delivery service. 
++
++To use this service, firstly call "streamOChannel = IPCConnectionPool.reserveLongTermConnection(ipcID, streamID, ...)" and
++get a "StreamOutputChannel" instance. This will establish a data transfer channel (using TCP connections). And then data transfer can be achieved by calling
++"streamOChannel.write(message)" as many times as the number of messages there are waiting for getting transferred.
++Given two calls of the write method in the same "streamOChannel" instance, the message written by the first call is
++guaranteed to get delivered and processed before the second one.
+ 
++After all the messages are written, call "streamOChannel.release()" to release the connection.
+ 
+-### IPC messages
++## IPC messages
+ The data unit that carries around by the IPC layer is IPCMessage.
+ 
+-#### IPC Header
+-Each IPCMessage has a header denoting the type of the IPCMessage.  Currently there are 6 headers: 
+-  *BOS*, *EOS*, *CONNECT*, *DISCONNECT*, *PING*, and *DATA*.
+-  
+- **CONNECT(entityID)** is the first message sent by the IPC layer after a physical connection is created. This message tells the remote side of a physical connection the IPCID (i.e. entityID) of this side.
++### IPC Header
++Each IPCMessage has a header denoting the type of the IPCMessage.  Currently there are 6 headers: *BOS*, *EOS*, *CONNECT*, *DISCONNECT*, *PING*, and *DATA*.
++
++ - **CONNECT(entityID)**: the first message sent by the IPC layer after a physical connection is created. This message tells the remote side of a physical connection the IPCID (i.e. entityID) of this side.
+ 
+-**DISCONNECT** is the last message sent by the IPC layer through a physical connection. It tells the remote side the physical conneciton has been abandoned by this side. If both the sides have abandoned the physical connection, the physical connection will be closed.
+-   
+-**BOS(streamID)** starts a data stream with a long typed streamID. This is the first message sent though a StreamOutputChannel instance.
++ - **DISCONNECT** is the last message sent by the IPC layer through a physical connection. It tells the remote side the physical conneciton has been abandoned by this side. If both the sides have abandoned the physical connection, the physical connection will be closed.
+ 
+-**EOS** ends a data stream and is the last message sent through a StreamOutputChannel instance.
++ - **BOS(streamID)** starts a data stream with a long typed streamID. This is the first message sent though a StreamOutputChannel instance.
++ 
++ - **EOS** ends a data stream and is the last message sent through a StreamOutputChannel instance.
+ 
+-**PING** is a type of message that dedicated to the detection of the liveness of remote IPCEntities. When an IPCEntity writes a PING to another IPCEntity, the message should fail to deliver when the remote IPCEntity is dead.
++ - **PING** is a type of message that dedicated to the detection of the liveness of remote IPCEntities. When an IPCEntity writes a PING to another IPCEntity, the message should fail to deliver when the remote IPCEntity is dead.
+ 
+-**DATA** messages are user messages. It contains a binary array payload field that can hold anything.
++ - **DATA** messages are user messages. It contains a binary array payload field that can hold anything.
+ 
+-#### IPC Payload
++### IPC Payload
+ 
+ For a DATA IPCMessage, the payload of the message is user defined. The IPC layer does not know what the Java type of the payload is. It only sees the binary representation, i.e. the serialized byte array of the payload.
+ 
+@@ -338,8 +300,7 @@ Input stream 2  +--------> |  Input Buffer | -------> QueryExecution
+ Input stream 3  +--------> +---------------+
+ </pre>
+ 
+-A stream input buffer is :
+-
++A stream input buffer is:
+  -  A trunk of memory where the IO threads put data in and the query executor thread(s) pull data out.
+  -  The physical representation of a logical data stream. When an input buffer is created, it receives a set of input data stream IDs in the format of a tuple (workerID, streamID). When an input buffer starts, it is ready to receive data. The input buffer is considered open when there is any logical input stream that has not EOS. When all the logical input streams are EOS, the input buffer is EOS. At that point, no data can be put into the buffer. And also, data that is not from any of the logical input streams will be dropped.
+ 
+@@ -348,21 +309,20 @@ Currently only bag-semantic input buffers are implemented in MyriaX.
+ #### Threading model
+ 
+ Data Inputs:
+-The input buffers are filled by IO workers. In current implementation, the IO workers are the worker threads of 
+-. There's no restriction on the threading model of the input streams. Currently, the input streams and the IO threads are n:1 mapping, i.e. data from one input stream will always be put into an input buffer by the same thread, but an IO thread may put data from multiple input streams. 
++The input buffers are filled by IO workers. There's no restriction on the threading model of the input streams. Currently, the input streams and the IO threads are n:1 mapping, i.e. data from one input stream will always be put into an input buffer by the same thread, but an IO thread may put data from multiple input streams. 
+ 
+ Data Outputs:
+ The threading model of pulling data out of an input buffer is upon implementations of input buffers. Current major implementation, i.e. the FlowControlInputBuffer, requires that only a single thread pulls data.
+ 
+-### Connection pooling.
++### Connection pooling
+ MyriaX relies on Java NIO for actual connection creation and data transferring. More specifically we use [Netty](http://netty.io).
+ 
+ MyriaX maintains a one-to-one mapping between stream data connections or standalone message data connections and Netty connections. 
+ 
+-For remote Netty connections, the IPC layer will not immediately release them at the time they are released by the user either in stream data transferring or standalone message transferring . The connections are pooled instead.  The pooling works according to the following policy:
+- 
++For remote Netty connections, the IPC layer will not immediately release them at the time they are released by the user either in stream data transferring or standalone message transferring . The connections are pooled instead. The pooling works according to the following policy:
++
+   - If the number of currently alive connections to a destination IPCEntity is less than MIN_POOL_SIZE, each time a call to sendShortMessage or reserveLongTermConnection (we'll refer these method calls as new connection request for convenience) will create a new connection to the destination. 
+-  
++
+   - If the number of currently alive connections to a destination IPCEntity >= MIN_POOL_SIZE, a new connection request checks if currently there is any existing connection that nobody is using it. If there exists such a connection, this connection will be reused, otherwise, create a new connection.
+ 
+   - When a user releases a connection, if currently the size of the connection pool >MAX_POOL_SIZE, the connection will be released immediately.
+@@ -371,34 +331,49 @@ For remote Netty connections, the IPC layer will not immediately release them at
+ 
+   - When a user releases a connection, if currently the size of the connection pool < MIN_POOL_SIZE, the connection will not be released and also no timeout releasing.
+  
+-### Flow control.
++### Flow control
+ 
+-Netty abstracts all the data transferring operations through a Channel interface. For each Channel, there is a bit controlling whether currently the channel should read data from the underlying system network stack.  The bit can be set by calling  
+->Channel.setReadable(readable).
++Netty abstracts all the data transferring operations through a Channel interface. For each Channel, there is a bit
++controlling whether currently the channel should read data from the underlying system network stack. 
++The bit can be set by calling "Channel.setReadable(readable)".
+ 
+- If data reading is paused, the system network layer at the recipient side notifies the sender side to stop sending data once the system receive buffer is full. This mechanism of flow control is called network back pressure.
++If data reading is paused, the system network layer at the recipient side notifies the sender side to stop sending data once
++the system receive buffer is full. This mechanism of flow control is called network back pressure.
+ 
+ MyriaX adopts a push based data transferring model. The sender keeps sending data until the recipient is not able to process them quickly enough. And the flow control in MyriaX is exactly the back pressure mechanism.
+ 
+ Currently the flow controlling is implemented in input buffers, more specifically, the FlowControlInputBuffer class. The mechanism is as the following:
+ 
+   - The flow control of a FlowControlInputBuffer is controlled by two parameters: *soft capacity* and *recover trigger*. Both are non-negative integers and that *soft capacity* > *recover trigger*.
++
+   - Let the size of current input buffer is *x*, i.e. currently there are *x* data messages stored in the input buffer.
++
+   - When a new data message comes, it does the following:
+   ```
+-   if x+1 >= capacity and the last event triggered is not buffer full
+-      trigger buffer full event
+-      // the buffer full listeners are executed,
+-      // including stop reading from all the underlying Netty channels
+-    
++   if x+1 >= capacity and the last event triggered is not buffer full, trigger buffer full event
+    ```
++
+   - When a data message gets drawn, it does the following:
+   ```
+-   if x+1 <= recover trigger and the last event triggered is buffer full
+-      trigger buffer recover event
+-      // the buffer recover listeners are executed,
+-      // including resume reading from all the underlying Netty channels
+-    
++   if x+1 <= recover trigger and the last event triggered is buffer full, trigger buffer recover event
+    ```
++
+   - When a data message gets drawn and results an empty input buffer, the buffer empty event is triggered. Currently, it resumes reading of the channels too, although is not necessary actually.
+   
++<!---
++TODO:
++* Special Features
++    * Expression library
++    * Profiler
++    * StatefulApply
++    * UserDefinedAggregates
++
++* MyriaX Query Execution
++    * Tuple batches
++    * Control flow
++    * EOS/EOI semantics
++    * Memory management
++    * Networking layer
++    * Failure handling
++-->
++
+diff --git a/docs/developers/setup.markdown b/docs/developers/setup.markdown
+index d893f6118..62194c70f 100644
+--- a/docs/developers/setup.markdown
++++ b/docs/developers/setup.markdown
+@@ -1,7 +1,8 @@
+ ---
+ layout: default
+ title: Myria Development
+-group: "extra"
++group: "docs"
++section: 5
+ ---
+ 
+ # Myria Development
+@@ -163,4 +164,4 @@ In IntelliJ, goto the Gradle menu and activate the `clean` action.
+ 
+ ### 3. Rebuild Eclipse classpath file
+ 
+-Re-type the command `./gradlew eclipseClasspath` as above.
+\ No newline at end of file
++Re-type the command `./gradlew eclipseClasspath` as above.
+diff --git a/docs/index.markdown b/docs/index.markdown
+index 192e7bb77..d09243fac 100644
+--- a/docs/index.markdown
++++ b/docs/index.markdown
+@@ -1,8 +1,9 @@
+ ---
+ layout: default
+-title: MyriaX
++title: Local Installation
+ group: "docs"
+ weight: 1
++section: 2
+ ---
+ 
+ # MyriaX Engine
+@@ -40,8 +41,8 @@ To test, run `ssh localhost`.
+ 
+ #### Storage
+ 
+-You need to install [SQLite](http://www.sqlite.org/), which is already pre-installed on many systems. 
+-For data storage, MyriaX uses existing single-node relational database management systems. 
++You need to install [SQLite](http://www.sqlite.org/), which is already pre-installed on many systems.
++For data storage, MyriaX uses existing single-node relational database management systems.
+ You can still use SQLite, but the preferred system is [PostgreSQL](http://www.postgresql.org/).
+ Myria currently uses Postgres 9.4, and installation instructions can be founded [here](http://www.postgresql.org/download/).
+ 
+@@ -60,7 +61,7 @@ you may need to run `./gradlew clean` before `./gradlew jar`. This is for cleani
+ 
+ If the build succeeded, you should be able to see jars in `build/libs` including `myria-0.1.jar`.
+ 
+-#### Deployment configuration file 
++#### Deployment configuration file
+ 
+ A MyriaX deployment needs a deployment config file. It specifies the details of the
+ deployment to start with, such as the worker hostnames and port numbers.
+@@ -93,7 +94,7 @@ You can replace `myria1` and `myria2` with your own databases.
+ 
+ - (Optional) Should you wish Myria to connect via an alternate port, add the
+ following key/value pair to the `[deployment]` section of your Myria deployment file:
+-    ```ini
++    ```
+     database_port = [custom_port_number]
+     ```
+ 
+@@ -134,7 +135,7 @@ If everything is okay, it will start the workers:
+ 
+ #### Check the cluster status
+ 
+-- Query which workers the master knows about. 
++- Query which workers the master knows about.
+ 
+     curl -i localhost:8753/workers
+ 
+@@ -181,14 +182,14 @@ The Datalog expression of this query is specified in `global_join.json`. The SQL
+     Where t1.col2 = t2.col1;
+ 
+ This query writes results back to the backend storage in a relation called `smallTable_join_smallTable`.
+-You should be able to find the result tables in your
+-databases. The table name is specified in the `DbInsert` operator, change it if you want.
++You should be able to find the resulting tables in your databases. The table name is specified in the 
++`DbInsert` operator, which you can modify.
+ 
+ #### Download a dataset.
+ 
+     curl -i localhost:8753/dataset/user-jwang/program-global_join/relation-smallTable_join_smallTable/data
+ 
+-This will download the table `smallTable_join_smallTable` in CSV format. JSON and TSV are also supported, to do that, specify the format like this:
++This will download the table `smallTable_join_smallTable` in CSV format. JSON and TSV are also supported, to do that, specify the format as the following:
+ 
+     curl -i localhost:8753/dataset/user-jwang/program-global_join/relation-smallTable_join_smallTable/data?format=json
+ 
+@@ -206,8 +207,9 @@ force-quit all machines:
+ 
+     ./stop_all_by_force deployment.cfg.local
+ 
+-This will go to all the nodes, find the master/worker processes under your username, and kill them.
++This will go to all the nodes, find the master/worker processes under your username, and kill them. Alternatively, you can also restart the cluster with the following REST call:
+ 
++    curl -i localhost:8753/server/restart
+ 
+ ## Using a shared-nothing cluster
+ 
+diff --git a/gradle/wrapper/gradle-wrapper.jar b/gradle/wrapper/gradle-wrapper.jar
+index c97a8bdb9..13372aef5 100644
+Binary files a/gradle/wrapper/gradle-wrapper.jar and b/gradle/wrapper/gradle-wrapper.jar differ
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index 83327289e..f96fa2698 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -1,4 +1,4 @@
+-#Thu Mar 05 11:59:27 PST 2015
++#Wed Jun 08 14:06:49 PDT 2016
+ distributionBase=GRADLE_USER_HOME
+ distributionPath=wrapper/dists
+ zipStoreBase=GRADLE_USER_HOME
+diff --git a/gradlew b/gradlew
+index 91a7e269e..9d82f7891 100755
+--- a/gradlew
++++ b/gradlew
+@@ -42,11 +42,6 @@ case "`uname`" in
+     ;;
+ esac
+ 
+-# For Cygwin, ensure paths are in UNIX format before anything is touched.
+-if $cygwin ; then
+-    [ -n "$JAVA_HOME" ] && JAVA_HOME=`cygpath --unix "$JAVA_HOME"`
+-fi
+-
+ # Attempt to set APP_HOME
+ # Resolve links: $0 may be a link
+ PRG="$0"
+@@ -61,9 +56,9 @@ while [ -h "$PRG" ] ; do
+     fi
+ done
+ SAVED="`pwd`"
+-cd "`dirname \"$PRG\"`/" >&-
++cd "`dirname \"$PRG\"`/" >/dev/null
+ APP_HOME="`pwd -P`"
+-cd "$SAVED" >&-
++cd "$SAVED" >/dev/null
+ 
+ CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+ 
+@@ -114,6 +109,7 @@ fi
+ if $cygwin ; then
+     APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+     CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
++    JAVACMD=`cygpath --unix "$JAVACMD"`
+ 
+     # We build the pattern for arguments to be converted via cygpath
+     ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
+diff --git a/src/edu/washington/escience/myria/api/DatasetResource.java b/src/edu/washington/escience/myria/api/DatasetResource.java
+index 3365486ec..9c78e97a4 100644
+--- a/src/edu/washington/escience/myria/api/DatasetResource.java
++++ b/src/edu/washington/escience/myria/api/DatasetResource.java
+@@ -555,15 +555,15 @@ private Response doIngest(
+   }
+ 
+   /**
+-   * @param dataset the dataset to be imported.
++   * @param dataset the dataset to be added.
+    * @param uriInfo information about the current URL.
+    * @return created dataset resource.
+    * @throws DbException if there is an error in the database.
+    */
+   @POST
+-  @Path("/importDataset")
++  @Path("/addDatasetToCatalog")
+   @Consumes(MediaType.APPLICATION_JSON)
+-  public Response importDataset(final DatasetEncoding dataset, @Context final UriInfo uriInfo)
++  public Response addDatasetToCatalog(final DatasetEncoding dataset, @Context final UriInfo uriInfo)
+       throws DbException {
+ 
+     /* If we already have a dataset by this name, tell the user there's a conflict. */
+@@ -577,15 +577,15 @@ public Response importDataset(final DatasetEncoding dataset, @Context final UriI
+       throw new DbException(e);
+     }
+ 
+-    /* For import, force the user to supply the workers. */
++    /* When adding a dataset to the catalog, force the user to supply the workers. */
+     if (dataset.workers == null) {
+       throw new MyriaApiException(
+           Status.BAD_REQUEST,
+-          "When importing, you need to specify which workers have the dataset.");
++          "When adding a dataset to the catalog, you need to specify which workers have the dataset.");
+     }
+ 
+     try {
+-      server.importDataset(dataset.relationKey, dataset.schema, dataset.workers);
++      server.addDatasetToCatalog(dataset.relationKey, dataset.schema, dataset.workers);
+     } catch (InterruptedException e) {
+       Thread.currentThread().interrupt();
+     }
+diff --git a/src/edu/washington/escience/myria/api/MasterResource.java b/src/edu/washington/escience/myria/api/MasterResource.java
+index 442cc19df..42b3dfa53 100644
+--- a/src/edu/washington/escience/myria/api/MasterResource.java
++++ b/src/edu/washington/escience/myria/api/MasterResource.java
+@@ -1,5 +1,9 @@
+ package edu.washington.escience.myria.api;
+ 
++import java.lang.management.ManagementFactory;
++import java.util.ArrayList;
++import java.util.List;
++
+ import javax.ws.rs.GET;
+ import javax.ws.rs.Path;
+ import javax.ws.rs.Produces;
+diff --git a/src/edu/washington/escience/myria/io/ByteSink.java b/src/edu/washington/escience/myria/io/ByteSink.java
+new file mode 100644
+index 000000000..d4d8e0b5f
+--- /dev/null
++++ b/src/edu/washington/escience/myria/io/ByteSink.java
+@@ -0,0 +1,23 @@
++/**
++ *
++ */
++package edu.washington.escience.myria.io;
++
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.OutputStream;
++
++public class ByteSink implements DataSink {
++  /** Required for Java serialization. */
++  private static final long serialVersionUID = 1L;
++
++  private transient ByteArrayOutputStream writerOutput;
++
++  @Override
++  public OutputStream getOutputStream() throws IOException {
++    if (writerOutput == null) {
++      writerOutput = new ByteArrayOutputStream();
++    }
++    return writerOutput;
++  }
++}
+diff --git a/src/edu/washington/escience/myria/io/DataSink.java b/src/edu/washington/escience/myria/io/DataSink.java
+index b3b35c29b..80fa83625 100644
+--- a/src/edu/washington/escience/myria/io/DataSink.java
++++ b/src/edu/washington/escience/myria/io/DataSink.java
+@@ -14,10 +14,8 @@
+  */
+ @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "dataType")
+ @JsonSubTypes({
+-  @Type(name = "Bytes", value = ByteArraySource.class),
+-  @Type(name = "File", value = FileSource.class),
+-  @Type(name = "URI", value = UriSource.class),
+-  @Type(name = "Empty", value = EmptySource.class)
++  @Type(name = "Pipe", value = PipeSink.class),
++  @Type(name = "Bytes", value = ByteSink.class)
+ })
+ public interface DataSink extends Serializable {
+   /**
+diff --git a/src/edu/washington/escience/myria/io/UriSink.java b/src/edu/washington/escience/myria/io/UriSink.java
+index 10d76c4e0..f1d028278 100644
+--- a/src/edu/washington/escience/myria/io/UriSink.java
++++ b/src/edu/washington/escience/myria/io/UriSink.java
+@@ -3,6 +3,7 @@
+ import java.io.IOException;
+ import java.io.OutputStream;
+ import java.net.URI;
++import java.net.URISyntaxException;
+ import java.util.Objects;
+ 
+ import org.apache.hadoop.conf.Configuration;
+@@ -17,13 +18,25 @@
+   /** Required for Java serialization. */
+   private static final long serialVersionUID = 1L;
+ 
+-  @JsonProperty private final URI uri;
++  @JsonProperty private URI uri;
+ 
+   public UriSink(@JsonProperty(value = "uri", required = true) final String uri)
+-      throws CatalogException {
++      throws CatalogException, URISyntaxException {
+     this.uri = URI.create(Objects.requireNonNull(uri, "Parameter uri cannot be null"));
+-    if (!this.uri.getScheme().equals("hdfs")) {
+-      throw new CatalogException("URI must be an HDFS URI");
++    /* Force using the Hadoop S3A FileSystem */
++    if (this.uri.getScheme().equals("s3")) {
++      this.uri =
++          new URI(
++              "s3a",
++              this.uri.getUserInfo(),
++              this.uri.getHost(),
++              this.uri.getPort(),
++              this.uri.getPath(),
++              this.uri.getQuery(),
++              this.uri.getFragment());
++    }
++    if (!this.uri.getScheme().equals("hdfs") && !this.uri.getScheme().equals("s3a")) {
++      throw new CatalogException("URI must be an HDFS or S3 URI");
+     }
+   }
+ 
+diff --git a/src/edu/washington/escience/myria/io/UriSource.java b/src/edu/washington/escience/myria/io/UriSource.java
+index f815d3517..429024506 100644
+--- a/src/edu/washington/escience/myria/io/UriSource.java
++++ b/src/edu/washington/escience/myria/io/UriSource.java
+@@ -6,7 +6,7 @@
+ import java.io.SequenceInputStream;
+ import java.io.Serializable;
+ import java.net.URI;
+-import java.net.URL;
++import java.net.URISyntaxException;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Objects;
+@@ -33,7 +33,7 @@
+   private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(UriSource.class);
+ 
+   /** The Uniform Resource Indicator (URI) of the data source. */
+-  @JsonProperty private final String uri;
++  transient URI parsedUri;
+ 
+   /**
+    * Construct a source of data from the specified URI. The URI may be: a path on the local file system; an HDFS link; a
+@@ -43,16 +43,29 @@
+    * {@link InputStream}.
+    *
+    * @param uri the Uniform Resource Indicator (URI) of the data source.
++   * @throws URISyntaxException
+    */
+   @JsonCreator
+-  public UriSource(@JsonProperty(value = "uri", required = true) final String uri) {
+-    this.uri = Objects.requireNonNull(uri, "Parameter uri to UriSource may not be null");
++  public UriSource(@JsonProperty(value = "uri", required = true) final String uri)
++      throws URISyntaxException {
++    parsedUri =
++        URI.create(Objects.requireNonNull(uri, "Parameter uri to UriSource may not be null"));
++    /* Force using the Hadoop S3A FileSystem */
++    if (parsedUri.getScheme().equals("s3")) {
++      parsedUri =
++          new URI(
++              "s3a",
++              parsedUri.getUserInfo(),
++              parsedUri.getHost(),
++              parsedUri.getPort(),
++              parsedUri.getPath(),
++              parsedUri.getQuery(),
++              parsedUri.getFragment());
++    }
+   }
+ 
+   @Override
+   public InputStream getInputStream() throws IOException {
+-    URI parsedUri = URI.create(uri);
+-
+     return (parsedUri.getScheme().equals("http") || parsedUri.getScheme().equals("https"))
+         ? parsedUri.toURL().openConnection().getInputStream()
+         : getHadoopFileSystemInputStream(parsedUri);
+diff --git a/src/edu/washington/escience/myria/operator/TipsyFileScan.java b/src/edu/washington/escience/myria/operator/TipsyFileScan.java
+index b3e428683..8a0cfca14 100644
+--- a/src/edu/washington/escience/myria/operator/TipsyFileScan.java
++++ b/src/edu/washington/escience/myria/operator/TipsyFileScan.java
+@@ -15,6 +15,10 @@
+ import java.util.Objects;
+ import java.util.Scanner;
+ 
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++
+ import com.google.common.base.Preconditions;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
+@@ -341,7 +345,14 @@ protected Schema generateSchema() {
+ 
+   private static InputStream openFileOrUrlInputStream(String filenameOrUrl) throws DbException {
+     try {
+-      return new URI(filenameOrUrl).toURL().openConnection().getInputStream();
++      URI uri = new URI(filenameOrUrl);
++      if (uri.getScheme() == null) {
++        return openFileInputStream(filenameOrUrl);
++      } else if (uri.getScheme().equals("hdfs")) {
++        return openHdfsInputStream(uri);
++      } else {
++        return uri.toURL().openStream();
++      }
+     } catch (IllegalArgumentException e) {
+       return openFileInputStream(filenameOrUrl);
+     } catch (URISyntaxException e) {
+@@ -360,4 +371,14 @@ private static InputStream openFileInputStream(String filename) throws DbExcepti
+       throw new DbException(e);
+     }
+   }
++
++  private static InputStream openHdfsInputStream(final URI uri) throws DbException {
++    try {
++      FileSystem fs = FileSystem.get(uri, new Configuration());
++      Path path = new Path(uri);
++      return fs.open(path);
++    } catch (IOException e) {
++      throw new DbException(e);
++    }
++  }
+ }
+diff --git a/src/edu/washington/escience/myria/parallel/LocalFragment.java b/src/edu/washington/escience/myria/parallel/LocalFragment.java
+index 9b53137ff..6e58ebe4b 100644
+--- a/src/edu/washington/escience/myria/parallel/LocalFragment.java
++++ b/src/edu/washington/escience/myria/parallel/LocalFragment.java
+@@ -33,6 +33,7 @@
+ import edu.washington.escience.myria.profiling.ProfilingLogger;
+ import edu.washington.escience.myria.util.AtomicUtils;
+ import edu.washington.escience.myria.util.IPCUtils;
++import edu.washington.escience.myria.util.JVMUtils;
+ import edu.washington.escience.myria.util.concurrent.ReentrantSpinLock;
+ 
+ /**
+@@ -204,9 +205,9 @@ public Void call() throws Exception {
+               synchronized (executionLock) {
+                 LocalFragment.this.executeActually();
+               }
+-            } catch (RuntimeException ee) {
+-              LOGGER.error("Unexpected Error: ", ee);
+-              throw ee;
++            } catch (RuntimeException e) {
++              LOGGER.error("Unexpected RuntimeException: ", e);
++              throw e;
+             } finally {
+               executionHandle = null;
+             }
+@@ -239,6 +240,8 @@ public Void call() throws Exception {
+               LOGGER.error("Fragment failed to open because of exception:", e);
+               if (e instanceof InterruptedException) {
+                 Thread.currentThread().interrupt();
++              } else if (e instanceof OutOfMemoryError) {
++                JVMUtils.shutdownVM(e);
+               }
+               AtomicUtils.setBitByValue(executionCondition, STATE_FAIL);
+               if (fragmentExecutionFuture.setFailure(e)) {
+@@ -499,6 +502,9 @@ private Object executeActually() {
+             }
+             failureCause = e;
+             AtomicUtils.setBitByValue(executionCondition, STATE_FAIL);
++            if (e instanceof OutOfMemoryError) {
++              JVMUtils.shutdownVM(e);
++            }
+           }
+ 
+           if (breakByOutputUnavailable) {
+diff --git a/src/edu/washington/escience/myria/parallel/Server.java b/src/edu/washington/escience/myria/parallel/Server.java
+index 5fa4cf031..2bb8c9628 100644
+--- a/src/edu/washington/escience/myria/parallel/Server.java
++++ b/src/edu/washington/escience/myria/parallel/Server.java
+@@ -4,6 +4,7 @@
+ import java.io.FileNotFoundException;
+ import java.io.IOException;
+ import java.io.ObjectInputStream;
++import java.net.URISyntaxException;
+ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Collections;
+@@ -912,13 +913,13 @@ public DatasetStatus ingestDataset(
+   }
+ 
+   /**
+-   * @param relationKey the relationalKey of the dataset to import
+-   * @param schema the schema of the dataset to import
++   * @param relationKey the relationalKey of the dataset to add
++   * @param schema the schema of the dataset to add
+    * @param workersToImportFrom the set of workers
+    * @throws DbException if there is an error
+    * @throws InterruptedException interrupted
+    */
+-  public void importDataset(
++  public void addDatasetToCatalog(
+       final RelationKey relationKey, final Schema schema, final Set<Integer> workersToImportFrom)
+       throws DbException, InterruptedException {
+ 
+@@ -938,9 +939,9 @@ public void importDataset(
+       }
+       ListenableFuture<Query> qf =
+           queryManager.submitQuery(
+-              "import " + relationKey.toString(),
+-              "import " + relationKey.toString(),
+-              "import " + relationKey.toString(getDBMS()),
++              "add to catalog " + relationKey.toString(),
++              "add to catalog " + relationKey.toString(),
++              "add to catalog " + relationKey.toString(getDBMS()),
+               new SubQueryPlan(new SinkRoot(new EOSSource())),
+               workerPlans);
+       try {
+@@ -1011,7 +1012,7 @@ public DatasetStatus deleteDataset(final RelationKey relationKey)
+    * @throws InterruptedException interrupted
+    */
+   public long persistDataset(final RelationKey relationKey)
+-      throws DbException, InterruptedException {
++      throws DbException, InterruptedException, URISyntaxException {
+     long queryID;
+ 
+     /* Mark the relation as is_persistent */
+diff --git a/src/edu/washington/escience/myria/parallel/Worker.java b/src/edu/washington/escience/myria/parallel/Worker.java
+index 8faee1be1..48e985aef 100644
+--- a/src/edu/washington/escience/myria/parallel/Worker.java
++++ b/src/edu/washington/escience/myria/parallel/Worker.java
+@@ -159,6 +159,14 @@ public void run() {
+                   toShutdown = true;
+                   abruptShutdown = false;
+                   break;
++                case ADD_WORKER:
++                  if (LOGGER.isInfoEnabled()) {
++                    LOGGER.info("received ADD_WORKER " + workerId);
++                  }
++                  connectionPool.putRemote(
++                      workerId, SocketInfo.fromProtobuf(cm.getRemoteAddress()));
++                  sendMessageToMaster(IPCUtils.addWorkerAckTM(workerId));
++                  break;
+                 default:
+                   if (LOGGER.isErrorEnabled()) {
+                     LOGGER.error("Unexpected control message received at worker: " + cm.getType());
+diff --git a/src/edu/washington/escience/myria/util/JVMUtils.java b/src/edu/washington/escience/myria/util/JVMUtils.java
+index 265b13a2f..42de4e48d 100644
+--- a/src/edu/washington/escience/myria/util/JVMUtils.java
++++ b/src/edu/washington/escience/myria/util/JVMUtils.java
+@@ -4,6 +4,8 @@
+  * JVM util methods.
+  */
+ public final class JVMUtils {
++  /** The logger for this class. */
++  private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(JVMUtils.class);
+ 
+   /**
+    * Shutdown the java virtual machine.
+@@ -12,6 +14,11 @@ public static void shutdownVM() {
+     System.exit(0);
+   }
+ 
++  public static void shutdownVM(final Throwable e) {
++    LOGGER.error("System will exit due to " + e);
++    System.exit(1);
++  }
++
+   /**
+    * util classes are not instantiable.
+    * */
+diff --git a/src/edu/washington/escience/myria/util/concurrent/ErrorLoggingTimerTask.java b/src/edu/washington/escience/myria/util/concurrent/ErrorLoggingTimerTask.java
+index a4cb3b19e..5c53a8f26 100644
+--- a/src/edu/washington/escience/myria/util/concurrent/ErrorLoggingTimerTask.java
++++ b/src/edu/washington/escience/myria/util/concurrent/ErrorLoggingTimerTask.java
+@@ -3,6 +3,8 @@
+ import java.util.TimerTask;
+ import java.util.concurrent.ScheduledExecutorService;
+ 
++import edu.washington.escience.myria.util.JVMUtils;
++
+ /**
+  * The Java {@link ScheduledExecutorService} suppress the subsequent execution of a {@link TimerTask} if any execution
+  * of the task encounters an exception. This class captures all {@link Throwable}s and logs them. And all
+@@ -35,7 +37,12 @@ public final void run() {
+       if (e instanceof InterruptedException) {
+         Thread.currentThread().interrupt();
+       } else if (e instanceof Error) {
++        if (e instanceof OutOfMemoryError) {
++          JVMUtils.shutdownVM(e);
++        }
+         throw (Error) e;
++      } else if (e instanceof RuntimeException) {
++        throw (RuntimeException) e;
+       }
+     }
+   }
+diff --git a/src/edu/washington/escience/myria/util/concurrent/ExecutableExecutionFuture.java b/src/edu/washington/escience/myria/util/concurrent/ExecutableExecutionFuture.java
+index 5536d3e4f..0b3971d28 100644
+--- a/src/edu/washington/escience/myria/util/concurrent/ExecutableExecutionFuture.java
++++ b/src/edu/washington/escience/myria/util/concurrent/ExecutableExecutionFuture.java
+@@ -10,6 +10,7 @@
+ import com.google.common.base.Preconditions;
+ 
+ import edu.washington.escience.myria.DbException;
++import edu.washington.escience.myria.util.JVMUtils;
+ 
+ /**
+  * The {@link ExecutionFuture} implementation that is Callable and Runnable. The state of the future is set
+@@ -211,6 +212,9 @@ public T call() throws Exception {
+       }
+     } catch (Throwable e) {
+       setFailure0(e);
++      if (e instanceof OutOfMemoryError) {
++        JVMUtils.shutdownVM(e);
++      }
+       if (e instanceof Exception) {
+         throw e;
+       }
+diff --git a/src/edu/washington/escience/myria/util/concurrent/OperationFutureBase.java b/src/edu/washington/escience/myria/util/concurrent/OperationFutureBase.java
+index 34be3f325..401a04fbe 100644
+--- a/src/edu/washington/escience/myria/util/concurrent/OperationFutureBase.java
++++ b/src/edu/washington/escience/myria/util/concurrent/OperationFutureBase.java
+@@ -580,11 +580,15 @@ private void notifyPreListeners() {
+   private void notifyListener(final OperationFutureListener l) {
+     try {
+       l.operationComplete(this);
+-    } catch (Throwable t) {
++    } catch (Exception t) {
+       if (LOGGER.isWarnEnabled()) {
+         LOGGER.warn(
+             "An exception was thrown by " + OperationFutureListener.class.getSimpleName() + '.', t);
+       }
++    } catch (Throwable t) {
++      LOGGER.info(
++          "A throwable was thrown by " + OperationFutureListener.class.getSimpleName() + '.', t);
++      throw t;
+     }
+   }
+ }
+diff --git a/systemtest/edu/washington/escience/myria/systemtest/UploadDownloadS3Test.java b/systemtest/edu/washington/escience/myria/systemtest/UploadDownloadS3Test.java
+new file mode 100644
+index 000000000..770076603
+--- /dev/null
++++ b/systemtest/edu/washington/escience/myria/systemtest/UploadDownloadS3Test.java
+@@ -0,0 +1,117 @@
++/**
++ *
++ */
++package edu.washington.escience.myria.systemtest;
++
++import static org.junit.Assert.assertEquals;
++
++import java.nio.file.Paths;
++import java.util.HashMap;
++import java.util.Map;
++
++import org.junit.Test;
++
++import edu.washington.escience.myria.CsvTupleWriter;
++import edu.washington.escience.myria.RelationKey;
++import edu.washington.escience.myria.Schema;
++import edu.washington.escience.myria.Type;
++import edu.washington.escience.myria.io.DataSink;
++import edu.washington.escience.myria.io.DataSource;
++import edu.washington.escience.myria.io.FileSource;
++import edu.washington.escience.myria.io.UriSink;
++import edu.washington.escience.myria.io.UriSource;
++import edu.washington.escience.myria.operator.DataOutput;
++import edu.washington.escience.myria.operator.DbInsert;
++import edu.washington.escience.myria.operator.DbQueryScan;
++import edu.washington.escience.myria.operator.FileScan;
++import edu.washington.escience.myria.operator.InMemoryOrderBy;
++import edu.washington.escience.myria.operator.RootOperator;
++import edu.washington.escience.myria.operator.network.CollectConsumer;
++import edu.washington.escience.myria.operator.network.CollectProducer;
++import edu.washington.escience.myria.operator.network.GenericShuffleConsumer;
++import edu.washington.escience.myria.operator.network.GenericShuffleProducer;
++import edu.washington.escience.myria.operator.network.partition.RoundRobinPartitionFunction;
++import edu.washington.escience.myria.operator.network.partition.SingleFieldHashPartitionFunction;
++import edu.washington.escience.myria.parallel.ExchangePairID;
++import edu.washington.escience.myria.util.JsonAPIUtils;
++
++/**
++ */
++public class UploadDownloadS3Test extends SystemTestBase {
++
++  @Test
++  public void s3UploadTest() throws Exception {
++
++    /* Ingest test data */
++    String filePath =
++        Paths.get("testdata", "filescan", "simple_two_col_int_to_hash.txt").toString();
++    DataSource relationSource = new FileSource(filePath);
++    RelationKey relationKeyUpload = RelationKey.of("public", "adhoc", "upload");
++    Schema relationSchema = Schema.ofFields("x", Type.INT_TYPE, "y", Type.INT_TYPE);
++
++    JsonAPIUtils.ingestData(
++        "localhost",
++        masterDaemonPort,
++        ingest(
++            relationKeyUpload,
++            relationSchema,
++            relationSource,
++            ' ',
++            new RoundRobinPartitionFunction(workerIDs.length)));
++
++    /* File to upload and download */
++    String fileName = String.format("s3://myria-test/test-%d.txt", System.currentTimeMillis());
++
++    /* Construct the query and upload data */
++    ExchangePairID serverReceiveID = ExchangePairID.newID();
++    DbQueryScan workerScan = new DbQueryScan(relationKeyUpload, relationSchema);
++    CollectProducer workerProducer = new CollectProducer(workerScan, serverReceiveID, MASTER_ID);
++
++    Map<Integer, RootOperator[]> workerPlans = new HashMap<Integer, RootOperator[]>();
++    for (int workerID : workerIDs) {
++      workerPlans.put(workerID, new RootOperator[] {workerProducer});
++    }
++    CollectConsumer serverConsumer =
++        new CollectConsumer(relationSchema, serverReceiveID, workerIDs);
++    InMemoryOrderBy sortOperator =
++        new InMemoryOrderBy(serverConsumer, new int[] {1}, new boolean[] {true});
++    DataSink dataSink = new UriSink(fileName);
++    DataOutput masterRoot = new DataOutput(sortOperator, new CsvTupleWriter(), dataSink);
++    server.submitQueryPlan(masterRoot, workerPlans).get();
++
++    /* Read the data back in from S3 and shuffle to one worker */
++    RelationKey relationKeyDownload = RelationKey.of("public", "adhoc", "download");
++    DataSource relationSourceS3 = new UriSource(fileName);
++
++    ExchangePairID workerReceiveID = ExchangePairID.newID();
++    FileScan serverFileScan = new FileScan(relationSourceS3, relationSchema, ',', null, null, 1);
++    GenericShuffleProducer serverProduce =
++        new GenericShuffleProducer(
++            serverFileScan,
++            workerReceiveID,
++            workerIDs,
++            new SingleFieldHashPartitionFunction(workerIDs.length, 0));
++    GenericShuffleConsumer workerConsumer =
++        new GenericShuffleConsumer(relationSchema, workerReceiveID, new int[] {MASTER_ID});
++    DbInsert workerInsert = new DbInsert(workerConsumer, relationKeyDownload, true);
++    Map<Integer, RootOperator[]> workerPlansInsert = new HashMap<Integer, RootOperator[]>();
++    for (int workerID : workerIDs) {
++      workerPlansInsert.put(workerID, new RootOperator[] {workerInsert});
++    }
++    server.submitQueryPlan(serverProduce, workerPlansInsert).get();
++
++    String dstData =
++        JsonAPIUtils.download(
++            "localhost",
++            masterDaemonPort,
++            relationKeyDownload.getUserName(),
++            relationKeyDownload.getProgramName(),
++            relationKeyDownload.getRelationName(),
++            "json");
++
++    String srcData =
++        "[{\"x\":1,\"y\":2},{\"x\":1,\"y\":2},{\"x\":1,\"y\":4},{\"x\":1,\"y\":4},{\"x\":1,\"y\":6},{\"x\":1,\"y\":6}]";
++
++    assertEquals(srcData, dstData);
++  }
++}
+diff --git a/test/edu/washington/escience/myria/operator/DataSinkTest.java b/test/edu/washington/escience/myria/operator/DataSinkTest.java
+new file mode 100644
+index 000000000..4d377ee6b
+--- /dev/null
++++ b/test/edu/washington/escience/myria/operator/DataSinkTest.java
+@@ -0,0 +1,49 @@
++/**
++ *
++ */
++package edu.washington.escience.myria.operator;
++
++import static org.junit.Assert.assertEquals;
++
++import java.io.ByteArrayOutputStream;
++import java.nio.charset.Charset;
++
++import org.junit.Test;
++
++import edu.washington.escience.myria.CsvTupleWriter;
++import edu.washington.escience.myria.Schema;
++import edu.washington.escience.myria.Type;
++import edu.washington.escience.myria.io.ByteArraySource;
++import edu.washington.escience.myria.io.ByteSink;
++import edu.washington.escience.myria.io.DataSource;
++import edu.washington.escience.myria.storage.TupleBatch;
++import edu.washington.escience.myria.util.TestEnvVars;
++
++/**
++ *
++ */
++public class DataSinkTest {
++
++  @Test
++  public void testDataSink() throws Exception {
++    /* Read a CSV and construct the query */
++    String dataSrc = "x,y\r\n1,2\r\n3,4\r\n5,6\r\n7,8\r\n";
++    byte[] srcBytes = dataSrc.getBytes(Charset.forName("UTF-8"));
++    Schema relationSchema = Schema.ofFields("x", Type.INT_TYPE, "y", Type.INT_TYPE);
++    DataSource byteSource = new ByteArraySource(srcBytes);
++    FileScan fileScan = new FileScan(byteSource, relationSchema, ',', null, null, 1);
++    ByteSink byteSink = new ByteSink();
++    DataOutput dataOutput = new DataOutput(fileScan, new CsvTupleWriter(), byteSink);
++
++    dataOutput.open(TestEnvVars.get());
++    while (!dataOutput.eos()) {
++      TupleBatch tb = dataOutput.nextReady();
++    }
++    dataOutput.close();
++
++    byte[] responseBytes = ((ByteArrayOutputStream) byteSink.getOutputStream()).toByteArray();
++    String dataDst = new String(responseBytes, Charset.forName("UTF-8"));
++
++    assertEquals(dataSrc, dataDst);
++  }
++}
+diff --git a/testdata/filescan/simple_two_col_int_to_hash.txt b/testdata/filescan/simple_two_col_int_to_hash.txt
+new file mode 100644
+index 000000000..8f22fee9e
+--- /dev/null
++++ b/testdata/filescan/simple_two_col_int_to_hash.txt
+@@ -0,0 +1,6 @@
++1 2
++1 6
++1 2
++1 4
++1 4
++1 6

@@ -1,0 +1,286 @@
+diff --git a/bom/pom.xml b/bom/pom.xml
+new file mode 100644
+index 000000000..58ef927dc
+--- /dev/null
++++ b/bom/pom.xml
+@@ -0,0 +1,82 @@
++<?xml version="1.0" encoding="UTF-8"?>
++
++<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
++  <modelVersion>4.0.0</modelVersion>
++
++  <parent>
++    <groupId>com.squareup.okhttp3</groupId>
++    <artifactId>parent</artifactId>
++    <version>3.12.0-SNAPSHOT</version>
++  </parent>
++
++  <artifactId>okhttp-bom</artifactId>
++  <packaging>pom</packaging>
++  <name>OkHttp (Bill of Materials)</name>
++
++  <dependencyManagement>
++    <dependencies>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-tests</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-android-support</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-apache</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-sse</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-testing-support</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-tls</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-urlconnection</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-logging-interceptor</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okhttp-dnsoverhttps</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>okcurl</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++      <dependency>
++        <groupId>${project.groupId}</groupId>
++        <artifactId>mockwebserver</artifactId>
++        <version>${project.version}</version>
++      </dependency>
++    </dependencies>
++  </dependencyManagement>
++
++</project>
+diff --git a/okhttp-logging-interceptor/src/main/java/okhttp3/logging/LoggingEventListener.java b/okhttp-logging-interceptor/src/main/java/okhttp3/logging/LoggingEventListener.java
+index 7de9b4960..ef3b5921c 100644
+--- a/okhttp-logging-interceptor/src/main/java/okhttp3/logging/LoggingEventListener.java
++++ b/okhttp-logging-interceptor/src/main/java/okhttp3/logging/LoggingEventListener.java
+@@ -26,6 +26,7 @@
+ import okhttp3.Connection;
+ import okhttp3.EventListener;
+ import okhttp3.Handshake;
++import okhttp3.OkHttpClient;
+ import okhttp3.Protocol;
+ import okhttp3.Request;
+ import okhttp3.Response;
+@@ -34,8 +35,8 @@
+ import static okhttp3.internal.platform.Platform.INFO;
+ 
+ /**
+- * An OkHttp EventListener, which logs call events. Can be applied as an {@linkplain
+- * OkHttpClient#eventListenerFactory() event listener factory}.
++ * An OkHttp EventListener, which logs call events. Can be applied as an
++ * {@linkplain OkHttpClient#eventListenerFactory() event listener factory}.
+  *
+  * <p>The format of the logs created by this class should not be considered stable and may change
+  * slightly between releases. If you need a stable logging format, use your own event listener.
+diff --git a/okhttp-tests/src/test/java/okhttp3/HeadersTest.java b/okhttp-tests/src/test/java/okhttp3/HeadersTest.java
+index ee136e449..d5a9e330f 100644
+--- a/okhttp-tests/src/test/java/okhttp3/HeadersTest.java
++++ b/okhttp-tests/src/test/java/okhttp3/HeadersTest.java
+@@ -16,9 +16,9 @@
+ package okhttp3;
+ 
+ import java.io.IOException;
+-import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Collections;
++import java.util.Date;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
+@@ -811,4 +811,43 @@
+         .build()
+         .byteCount());
+   }
++
++  @Test public void addDate() {
++    Date expected = new Date(0);
++    Headers headers = new Headers.Builder()
++        .add("testDate", expected)
++        .build();
++    assertEquals("Thu, 01 Jan 1970 00:00:00 GMT", headers.get("testDate"));
++  }
++
++  @Test public void addDateNull() {
++    try {
++      new Headers.Builder()
++          .add("testDate", (Date) null)
++          .build();
++      fail();
++    } catch (NullPointerException expected) {
++      assertEquals("value for name testDate == null", expected.getMessage());
++    }
++  }
++
++  @Test public void setDate() {
++    Date expected = new Date(1000);
++    Headers headers = new Headers.Builder()
++        .add("testDate", new Date(0))
++        .set("testDate", expected)
++        .build();
++    assertEquals("Thu, 01 Jan 1970 00:00:01 GMT", headers.get("testDate"));
++  }
++
++  @Test public void setDateNull() {
++    try {
++      new Headers.Builder()
++          .set("testDate", (Date) null)
++          .build();
++      fail();
++    } catch (NullPointerException expected) {
++      assertEquals("value for name testDate == null", expected.getMessage());
++    }
++  }
+ }
+diff --git a/okhttp/src/main/java/okhttp3/Headers.java b/okhttp/src/main/java/okhttp3/Headers.java
+index 73552fbee..8b662c96a 100644
+--- a/okhttp/src/main/java/okhttp3/Headers.java
++++ b/okhttp/src/main/java/okhttp3/Headers.java
+@@ -334,6 +334,26 @@ public Builder addAll(Headers headers) {
+       return this;
+     }
+ 
++    /**
++     * Add a header with the specified name and formatted Date.
++     * Does validation of header names and values.
++     */
++    public Builder add(String name, Date value) {
++      if (value == null) throw new NullPointerException("value for name " + name + " == null");
++      add(name, HttpDate.format(value));
++      return this;
++    }
++
++    /**
++     * Set a field with the specified date. If the field is not found, it is added. If the field is
++     * found, the existing values are replaced.
++     */
++    public Builder set(String name, Date value) {
++      if (value == null) throw new NullPointerException("value for name " + name + " == null");
++      set(name, HttpDate.format(value));
++      return this;
++    }
++
+     /**
+      * Add a field with the specified value without any validation. Only appropriate for headers
+      * from the remote peer or cache.
+diff --git a/pom.xml b/pom.xml
+index f6c73cea9..dbdbc9c16 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -36,6 +36,7 @@
+ 
+     <module>okcurl</module>
+     <module>mockwebserver</module>
++    <module>bom</module>
+     <module>samples</module>
+     <module>benchmarks</module>
+   </modules>
+@@ -56,7 +57,7 @@
+     <moshi.version>1.1.0</moshi.version>
+     <jnr-unixsocket.version>0.19</jnr-unixsocket.version>
+     <okio.version>1.15.0</okio.version>
+-    <conscrypt.version>1.3.0</conscrypt.version>
++    <conscrypt.version>1.4.0</conscrypt.version>
+ 
+     <!-- Test Dependencies -->
+     <junit.version>4.12</junit.version>
+diff --git a/samples/guide/src/main/java/okhttp3/recipes/CurrentDateHeader.java b/samples/guide/src/main/java/okhttp3/recipes/CurrentDateHeader.java
+new file mode 100644
+index 000000000..6c15d700d
+--- /dev/null
++++ b/samples/guide/src/main/java/okhttp3/recipes/CurrentDateHeader.java
+@@ -0,0 +1,58 @@
++/*
++ * Copyright (C) 2018 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package okhttp3.recipes;
++
++import java.io.IOException;
++import java.util.Date;
++import okhttp3.Headers;
++import okhttp3.Interceptor;
++import okhttp3.OkHttpClient;
++import okhttp3.Request;
++import okhttp3.Response;
++
++public final class CurrentDateHeader {
++  private final OkHttpClient client = new OkHttpClient.Builder()
++      .addInterceptor(new CurrentDateInterceptor())
++      .build();
++
++  public void run() throws Exception {
++    Request request = new Request.Builder()
++        .url("https://publicobject.com/helloworld.txt")
++        .build();
++
++    try (Response response = client.newCall(request).execute()) {
++      System.out.println(response.request().header("Date"));
++    }
++  }
++
++  static class CurrentDateInterceptor implements Interceptor {
++    @Override public Response intercept(Chain chain) throws IOException {
++      Request request = chain.request();
++      Headers newHeaders = request.headers()
++          .newBuilder()
++          .add("Date", new Date())
++          .build();
++      Request newRequest = request.newBuilder()
++          .headers(newHeaders)
++          .build();
++      return chain.proceed(newRequest);
++    }
++  }
++
++  public static void main(String... args) throws Exception {
++    new CurrentDateHeader().run();
++  }
++}

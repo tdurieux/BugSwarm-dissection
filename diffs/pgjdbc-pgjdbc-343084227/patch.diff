@@ -1,0 +1,414 @@
+diff --git a/docs/documentation/documentation.md b/docs/documentation/documentation.md
+index c72f53660..8fb0ff231 100644
+--- a/docs/documentation/documentation.md
++++ b/docs/documentation/documentation.md
+@@ -6,7 +6,8 @@ nav: ../
+ ---
+ 
+ * [HEAD](head/index.html)
+-* [9.4](94/index.html) Download - [postgresql-jdbc-head-doc.tar.gz](postgresql-jdbc-head-doc.tar.gz)
++* [42.x](head/index.html) Download - [postgresql-jdbc-head-doc.tar.gz](postgresql-jdbc-head-doc.tar.gz)
++* [9.4](94/index.html) Download - [postgresql-jdbc-94-doc.tar.gz](postgresql-jdbc-94-doc.tar.gz)
+ * [9.3](93/index.html) Download - [postgresql-jdbc-93-doc.tar.gz](postgresql-jdbc-93-doc.tar.gz)
+ * [9.2](92/index.html) Download - [postgresql-jdbc-92-doc.tar.gz](postgresql-jdbc-92-doc.tar.gz)
+ * [9.1](91/index.html) Download - [postgresql-jdbc-91-doc.tar.gz](postgresql-jdbc-91-doc.tar.gz)
+diff --git a/pgjdbc/src/main/java/org/postgresql/PGConnection.java b/pgjdbc/src/main/java/org/postgresql/PGConnection.java
+index ec849568e..ad2172a8e 100644
+--- a/pgjdbc/src/main/java/org/postgresql/PGConnection.java
++++ b/pgjdbc/src/main/java/org/postgresql/PGConnection.java
+@@ -204,12 +204,14 @@
+   String escapeLiteral(String literal) throws SQLException;
+ 
+   /**
+-   * Returns true if the connection is configured to use "simple 'Q' execute" commands only
+-   * When running in simple protocol only, certain features are not available: callable statements,
++   * Returns the query mode for this connection.
++   * <p>
++   * When running in simple query mode, certain features are not available: callable statements,
+    * partial result set fetch, bytea type, etc.
+    * The list of supported features is subject to change.
+    *
+-   * @return true if the connection is configured to use "simple 'Q' execute" commands only
++   * @return the preferred query mode
++   * @see PreferQueryMode
+    */
+   PreferQueryMode getPreferQueryMode();
+ 
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/Parser.java b/pgjdbc/src/main/java/org/postgresql/core/Parser.java
+index 2e5cd2136..8ae75a16c 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/Parser.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/Parser.java
+@@ -149,7 +149,7 @@
+                   nativeQueries = new ArrayList<NativeQuery>();
+                 }
+ 
+-                if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
++                if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+                     || (bindPositions != null
+                     && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+                   valuesBraceOpenPosition = -1;
+@@ -244,7 +244,7 @@
+       }
+     }
+ 
+-    if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
++    if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+         || (bindPositions != null
+         && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+       valuesBraceOpenPosition = -1;
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+index 57977c4d1..3fcb737d9 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+@@ -1489,6 +1489,17 @@ private void sendBind(SimpleQuery query, SimpleParameterList params, Portal port
+         }
+       }
+     }
++    // If text-only results are required (e.g. updateable resultset), and the query has binary columns,
++    // flip to text format.
++    if (noBinaryTransfer && query.hasBinaryFields()) {
++      for (Field field : fields) {
++        if (field.getFormat() != Field.TEXT_FORMAT) {
++          field.setFormat(Field.TEXT_FORMAT);
++        }
++      }
++      query.resetNeedUpdateFieldFormats();
++      query.setHasBinaryFields(false);
++    }
+ 
+     // This is not the number of binary fields, but the total number
+     // of fields if any of them are binary or zero if all of them
+@@ -1504,7 +1515,7 @@ private void sendBind(SimpleQuery query, SimpleParameterList params, Portal port
+ 
+     // backend's MaxAllocSize is the largest message that can
+     // be received from a client. If we have a bigger value
+-    // from either very large parameters or incorrent length
++    // from either very large parameters or incorrect length
+     // descriptions of setXXXStream we do not send the bind
+     // messsage.
+     //
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v3/SimpleQuery.java b/pgjdbc/src/main/java/org/postgresql/core/v3/SimpleQuery.java
+index feab7ef76..104172358 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v3/SimpleQuery.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v3/SimpleQuery.java
+@@ -204,6 +204,9 @@ boolean needUpdateFieldFormats() {
+     return false;
+   }
+ 
++  public void resetNeedUpdateFieldFormats() {
++    needUpdateFieldFormats = fields != null;
++  }
+ 
+   public boolean hasBinaryFields() {
+     return hasBinaryFields;
+diff --git a/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java b/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
+index 182008dc9..cfdb92258 100644
+--- a/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
++++ b/pgjdbc/src/main/java/org/postgresql/jdbc/TimestampUtils.java
+@@ -654,17 +654,18 @@ private static void appendTime(StringBuilder sb, int hours, int minutes, int sec
+     sb.append(':');
+     sb.append(NUMBERS[seconds]);
+ 
+-    // Add nanoseconds.
++    // Add microseconds, rounded.
+     // This won't work for server versions < 7.2 which only want
+     // a two digit fractional second, but we don't need to support 7.1
+     // anymore and getting the version number here is difficult.
+     //
+-    if (nanos == 0) {
++    int microseconds = (nanos / 1000) + (((nanos % 1000) + 500) / 1000);
++    if (microseconds == 0) {
+       return;
+     }
+     sb.append('.');
+     int len = sb.length();
+-    sb.append(nanos / 1000); // append microseconds
++    sb.append(microseconds);
+     int needZeros = 6 - (sb.length() - len);
+     if (needZeros > 0) {
+       sb.insert(len, ZEROS, 0, needZeros);
+diff --git a/pgjdbc/src/main/java/org/postgresql/util/GT.java b/pgjdbc/src/main/java/org/postgresql/util/GT.java
+index 3f3169c54..4780e4fdb 100644
+--- a/pgjdbc/src/main/java/org/postgresql/util/GT.java
++++ b/pgjdbc/src/main/java/org/postgresql/util/GT.java
+@@ -6,6 +6,7 @@
+ package org.postgresql.util;
+ 
+ import java.text.MessageFormat;
++import java.util.Locale;
+ import java.util.MissingResourceException;
+ import java.util.ResourceBundle;
+ 
+@@ -28,7 +29,11 @@ public static String tr(String message, Object... args) {
+ 
+   private GT() {
+     try {
++      //#if mvn.project.property.postgresql.jdbc.spec < "JDBC4.1"
+       _bundle = ResourceBundle.getBundle("org.postgresql.translation.messages");
++      //#else
++      _bundle = ResourceBundle.getBundle("org.postgresql.translation.messages", Locale.getDefault(Locale.Category.DISPLAY));
++      //#endif
+     } catch (MissingResourceException mre) {
+       // translation files have not been installed
+       _bundle = null;
+diff --git a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimestampTest.java b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimestampTest.java
+index a90e4427c..c8d976673 100644
+--- a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimestampTest.java
++++ b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/TimestampTest.java
+@@ -332,6 +332,10 @@ public void testGetTimestampWOTZ() throws SQLException {
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS6WOTZ_PGFORMAT + "'")));
+     assertEquals(1,
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS7WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS8WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS9WOTZ_PGFORMAT + "'")));
+ 
+     assertEquals(1,
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS1WOTZ_PGFORMAT + "'")));
+@@ -347,6 +351,10 @@ public void testGetTimestampWOTZ() throws SQLException {
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS6WOTZ_PGFORMAT + "'")));
+     assertEquals(1,
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS7WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS8WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS9WOTZ_PGFORMAT + "'")));
+ 
+     assertEquals(1,
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS1WOTZ_PGFORMAT + "'")));
+@@ -362,6 +370,10 @@ public void testGetTimestampWOTZ() throws SQLException {
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS6WOTZ_PGFORMAT + "'")));
+     assertEquals(1,
+         stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS7WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS8WOTZ_PGFORMAT + "'")));
++    assertEquals(1,
++        stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE, "'" + TS9WOTZ_PGFORMAT + "'")));
+ 
+     assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpDate1WOTZ.getTime())) + "'")));
+@@ -377,6 +389,8 @@ public void testGetTimestampWOTZ() throws SQLException {
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpDate6WOTZ.getTime())) + "'")));
+     assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpDate7WOTZ.getTime())) + "'")));
++    assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
++        "'" + tsu.toString(null, new java.sql.Timestamp(tmpDate8WOTZ.getTime())) + "'")));
+ 
+     assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpTime1WOTZ.getTime())) + "'")));
+@@ -392,11 +406,13 @@ public void testGetTimestampWOTZ() throws SQLException {
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpTime6WOTZ.getTime())) + "'")));
+     assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
+         "'" + tsu.toString(null, new java.sql.Timestamp(tmpTime7WOTZ.getTime())) + "'")));
++    assertEquals(1, stmt.executeUpdate(TestUtil.insertSQL(TSWOTZ_TABLE,
++        "'" + tsu.toString(null, new java.sql.Timestamp(tmpTime8WOTZ.getTime())) + "'")));
+ 
+     // Fall through helper
+     timestampTestWOTZ();
+ 
+-    assertEquals(35, stmt.executeUpdate("DELETE FROM " + TSWOTZ_TABLE));
++    assertEquals(43, stmt.executeUpdate("DELETE FROM " + TSWOTZ_TABLE));
+ 
+     stmt.close();
+   }
+@@ -436,6 +452,12 @@ public void testSetTimestampWOTZ() throws SQLException {
+     pstmt.setTimestamp(1, TS7WOTZ);
+     assertEquals(1, pstmt.executeUpdate());
+ 
++    pstmt.setTimestamp(1, TS8WOTZ);
++    assertEquals(1, pstmt.executeUpdate());
++
++    pstmt.setTimestamp(1, TS9WOTZ);
++    assertEquals(1, pstmt.executeUpdate());
++
+     // With java.sql.Timestamp
+     pstmt.setObject(1, TS1WOTZ, Types.TIMESTAMP);
+     assertEquals(1, pstmt.executeUpdate());
+@@ -451,6 +473,10 @@ public void testSetTimestampWOTZ() throws SQLException {
+     assertEquals(1, pstmt.executeUpdate());
+     pstmt.setObject(1, TS7WOTZ, Types.TIMESTAMP);
+     assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, TS8WOTZ, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, TS9WOTZ, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
+ 
+     // With Strings
+     pstmt.setObject(1, TS1WOTZ_PGFORMAT, Types.TIMESTAMP);
+@@ -467,6 +493,10 @@ public void testSetTimestampWOTZ() throws SQLException {
+     assertEquals(1, pstmt.executeUpdate());
+     pstmt.setObject(1, TS7WOTZ_PGFORMAT, Types.TIMESTAMP);
+     assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, TS8WOTZ_PGFORMAT, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, TS9WOTZ_PGFORMAT, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
+ 
+     // With java.sql.Date
+     pstmt.setObject(1, tmpDate1WOTZ, Types.TIMESTAMP);
+@@ -483,6 +513,8 @@ public void testSetTimestampWOTZ() throws SQLException {
+     assertEquals(1, pstmt.executeUpdate());
+     pstmt.setObject(1, tmpDate7WOTZ, Types.TIMESTAMP);
+     assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, tmpDate8WOTZ, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
+ 
+     // With java.sql.Time
+     pstmt.setObject(1, tmpTime1WOTZ, Types.TIMESTAMP);
+@@ -499,10 +531,12 @@ public void testSetTimestampWOTZ() throws SQLException {
+     assertEquals(1, pstmt.executeUpdate());
+     pstmt.setObject(1, tmpTime7WOTZ, Types.TIMESTAMP);
+     assertEquals(1, pstmt.executeUpdate());
++    pstmt.setObject(1, tmpTime8WOTZ, Types.TIMESTAMP);
++    assertEquals(1, pstmt.executeUpdate());
+     // Fall through helper
+     timestampTestWOTZ();
+ 
+-    assertEquals(35, stmt.executeUpdate("DELETE FROM " + TSWOTZ_TABLE));
++    assertEquals(43, stmt.executeUpdate("DELETE FROM " + TSWOTZ_TABLE));
+ 
+     pstmt.close();
+     stmt.close();
+@@ -663,6 +697,24 @@ private void timestampTestWOTZ() throws SQLException {
+       tString = rs.getString(1);
+       assertNotNull(tString);
+       assertEquals(TS7WOTZ_PGFORMAT, tString);
++
++      assertTrue(rs.next());
++      t = rs.getTimestamp(1);
++      assertNotNull(t);
++      assertEquals(TS8WOTZ, t);
++
++      tString = rs.getString(1);
++      assertNotNull(tString);
++      assertEquals(TS8WOTZ_PGFORMAT, tString);
++
++      assertTrue(rs.next());
++      t = rs.getTimestamp(1);
++      assertNotNull(t);
++      assertEquals(TS9WOTZ_ROUNDED, t);
++
++      tString = rs.getString(1);
++      assertNotNull(tString);
++      assertEquals(TS9WOTZ_ROUNDED_PGFORMAT, tString);
+     }
+ 
+     // Testing for Date
+@@ -701,6 +753,11 @@ private void timestampTestWOTZ() throws SQLException {
+     assertNotNull(t);
+     assertEquals(tmpDate7WOTZ.getTime(), t.getTime());
+ 
++    assertTrue(rs.next());
++    t = rs.getTimestamp(1);
++    assertNotNull(t);
++    assertEquals(tmpDate8WOTZ.getTime(), t.getTime());
++
+     // Testing for Time
+     assertTrue(rs.next());
+     t = rs.getTimestamp(1);
+@@ -737,6 +794,11 @@ private void timestampTestWOTZ() throws SQLException {
+     assertNotNull(t);
+     assertEquals(tmpTime7WOTZ.getTime(), t.getTime());
+ 
++    assertTrue(rs.next());
++    t = rs.getTimestamp(1);
++    assertNotNull(t);
++    assertEquals(tmpTime8WOTZ.getTime(), t.getTime());
++
+     assertTrue(!rs.next()); // end of table. Fail if more entries exist.
+ 
+     rs.close();
+@@ -816,6 +878,17 @@ private void timestampTestWOTZ() throws SQLException {
+       getTimestamp(2000, 7, 7, 15, 0, 0, 0, null);
+   private static final String TS7WOTZ_PGFORMAT = "2000-07-07 15:00:00";
+ 
++  private static final java.sql.Timestamp TS8WOTZ =
++      getTimestamp(2000, 7, 7, 15, 0, 0, 20400000, null);
++  private static final String TS8WOTZ_PGFORMAT = "2000-07-07 15:00:00.0204";
++
++  private static final java.sql.Timestamp TS9WOTZ =
++      getTimestamp(2000, 2, 7, 15, 0, 0, 789, null);
++  private static final String TS9WOTZ_PGFORMAT = "2000-02-07 15:00:00.000000789";
++  private static final java.sql.Timestamp TS9WOTZ_ROUNDED =
++      getTimestamp(2000, 2, 7, 15, 0, 0, 1000, null);
++  private static final String TS9WOTZ_ROUNDED_PGFORMAT = "2000-02-07 15:00:00.000001";
++
+   private static final String TSWTZ_TABLE = "testtimestampwtz";
+   private static final String TSWOTZ_TABLE = "testtimestampwotz";
+   private static final String DATE_TABLE = "testtimestampdate";
+@@ -843,6 +916,7 @@ private void timestampTestWOTZ() throws SQLException {
+   private static final java.sql.Date tmpTime6WOTZ = new java.sql.Date(TS6WOTZ.getTime());
+   private static final java.sql.Date tmpDate7WOTZ = new java.sql.Date(TS7WOTZ.getTime());
+   private static final java.sql.Time tmpTime7WOTZ = new java.sql.Time(TS7WOTZ.getTime());
+-
++  private static final java.sql.Date tmpDate8WOTZ = new java.sql.Date(TS8WOTZ.getTime());
++  private static final java.sql.Time tmpTime8WOTZ = new java.sql.Time(TS8WOTZ.getTime());
+ 
+ }
+diff --git a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/UpdateableResultTest.java b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/UpdateableResultTest.java
+index e98e4cae2..34631605a 100644
+--- a/pgjdbc/src/test/java/org/postgresql/test/jdbc2/UpdateableResultTest.java
++++ b/pgjdbc/src/test/java/org/postgresql/test/jdbc2/UpdateableResultTest.java
+@@ -12,8 +12,11 @@
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
++import org.postgresql.PGConnection;
+ import org.postgresql.test.TestUtil;
+ 
++import org.junit.Assert;
++import org.junit.Assume;
+ import org.junit.Test;
+ 
+ import java.io.ByteArrayInputStream;
+@@ -529,4 +532,49 @@ public void testMultiColumnUpdate() throws Exception {
+     st.close();
+   }
+ 
++  @Test
++  public void simpleAndUpdateableSameQuery() throws Exception {
++    PGConnection unwrap = con.unwrap(PGConnection.class);
++    Assume.assumeNotNull(unwrap);
++    int prepareThreshold = unwrap.getPrepareThreshold();
++    String sql = "select * from second where id1=?";
++    for (int i = 0; i <= prepareThreshold; i++) {
++      PreparedStatement ps = null;
++      ResultSet rs = null;
++      try {
++        ps = con.prepareStatement(sql);
++        ps.setInt(1, 1);
++        rs = ps.executeQuery();
++        rs.next();
++        String name1 = rs.getString("name1");
++        Assert.assertEquals("anyvalue", name1);
++        int id1 = rs.getInt("id1");
++        Assert.assertEquals(1, id1);
++      } finally {
++        TestUtil.closeQuietly(rs);
++        TestUtil.closeQuietly(ps);
++      }
++    }
++    // The same SQL, and use updateable ResultSet
++    {
++      PreparedStatement ps = null;
++      ResultSet rs = null;
++      try {
++        ps = con.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE);
++        ps.setInt(1, 1);
++        rs = ps.executeQuery();
++        rs.next();
++        String name1 = rs.getString("name1");
++        Assert.assertEquals("anyvalue", name1);
++        int id1 = rs.getInt("id1");
++        Assert.assertEquals(1, id1);
++        rs.updateString("name1", "updatedValue");
++        rs.updateRow();
++      } finally {
++        TestUtil.closeQuietly(rs);
++        TestUtil.closeQuietly(ps);
++      }
++    }
++  }
++
+ }

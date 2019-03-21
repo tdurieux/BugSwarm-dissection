@@ -1,0 +1,519 @@
+diff --git a/its/ruling/src/test/resources/commons-beanutils/squid-S1125.json b/its/ruling/src/test/resources/commons-beanutils/squid-S1125.json
+index c5cde382cd..d855540312 100644
+--- a/its/ruling/src/test/resources/commons-beanutils/squid-S1125.json
++++ b/its/ruling/src/test/resources/commons-beanutils/squid-S1125.json
+@@ -1,8 +1,17 @@
+ {
++'commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/BaseDynaBeanMapDecorator.java':[
++123,
++],
+ 'commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/BeanMap.java':[
+ 464,
+ 471,
+ 822,
+ 829,
+ ],
++'commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/LazyDynaBean.java':[
++896,
++],
++'commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/LazyDynaClass.java':[
++354,
++],
+ }
+diff --git a/its/ruling/src/test/resources/guava/squid-S1125.json b/its/ruling/src/test/resources/guava/squid-S1125.json
+new file mode 100644
+index 0000000000..0f7430bff6
+--- /dev/null
++++ b/its/ruling/src/test/resources/guava/squid-S1125.json
+@@ -0,0 +1,5 @@
++{
++'com.google.guava:guava:src/com/google/common/util/concurrent/AtomicLongMap.java':[
++405,
++],
++}
+diff --git a/its/ruling/src/test/resources/jdk6/squid-S1125.json b/its/ruling/src/test/resources/jdk6/squid-S1125.json
+index c51f7583e4..721dd943f1 100644
+--- a/its/ruling/src/test/resources/jdk6/squid-S1125.json
++++ b/its/ruling/src/test/resources/jdk6/squid-S1125.json
+@@ -7,12 +7,17 @@
+ 331,
+ ],
+ 'jdk6:java/awt/Container.java':[
++704,
+ 4329,
+ 4338,
+ ],
+ 'jdk6:java/awt/EventDispatchThread.java':[
+ 259,
+ ],
++'jdk6:java/awt/KeyboardFocusManager.java':[
++2736,
++2829,
++],
+ 'jdk6:java/awt/font/TextLine.java':[
+ 1349,
+ ],
+@@ -26,21 +31,38 @@
+ 2899,
+ ],
+ 'jdk6:java/awt/image/PackedColorModel.java':[
++114,
++182,
+ 352,
+ ],
+ 'jdk6:java/beans/PropertyDescriptor.java':[
+ 637,
+ 638,
+ ],
++'jdk6:java/beans/beancontext/BeanContextServicesSupport.java':[
++740,
++],
++'jdk6:java/lang/String.java':[
++1119,
++],
+ 'jdk6:java/lang/reflect/AccessibleObject.java':[
+ 115,
+ ],
++'jdk6:java/math/MutableBigInteger.java':[
++398,
++],
+ 'jdk6:java/net/InetAddress.java':[
+ 1263,
+ ],
++'jdk6:java/net/SocketPermission.java':[
++887,
++],
+ 'jdk6:java/rmi/activation/ActivationGroup.java':[
+ 269,
+ ],
++'jdk6:java/rmi/server/ObjID.java':[
++229,
++],
+ 'jdk6:java/security/AlgorithmParameters.java':[
+ 307,
+ 325,
+@@ -104,9 +126,18 @@
+ 45,
+ 78,
+ ],
++'jdk6:java/text/CollationElementIterator.java':[
++609,
++],
++'jdk6:java/text/DictionaryBasedBreakIterator.java':[
++114,
++],
+ 'jdk6:java/text/PatternEntry.java':[
+ 242,
+ ],
++'jdk6:java/util/GregorianCalendar.java':[
++776,
++],
+ 'jdk6:java/util/jar/JarInputStream.java':[
+ 145,
+ ],
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/BooleanLiteralCheck.java b/java-checks/src/main/java/org/sonar/java/checks/BooleanLiteralCheck.java
+index 074b200966..60ac42b1ef 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/BooleanLiteralCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/BooleanLiteralCheck.java
+@@ -20,50 +20,50 @@
+ package org.sonar.java.checks;
+ 
+ import com.google.common.collect.ImmutableList;
++import java.util.Arrays;
++import java.util.List;
++import javax.annotation.Nullable;
+ import org.sonar.check.Rule;
+ import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
+ import org.sonar.plugins.java.api.tree.BinaryExpressionTree;
++import org.sonar.plugins.java.api.tree.ConditionalExpressionTree;
+ import org.sonar.plugins.java.api.tree.LiteralTree;
+ import org.sonar.plugins.java.api.tree.Tree;
+ import org.sonar.plugins.java.api.tree.Tree.Kind;
+ import org.sonar.plugins.java.api.tree.UnaryExpressionTree;
+ 
+-import java.util.List;
+-
+ @Rule(key = "S1125")
+ public class BooleanLiteralCheck extends IssuableSubscriptionVisitor {
+ 
+   @Override
+   public List<Kind> nodesToVisit() {
+-    return ImmutableList.of(Kind.EQUAL_TO, Kind.NOT_EQUAL_TO, Kind.CONDITIONAL_AND, Kind.CONDITIONAL_OR, Kind.LOGICAL_COMPLEMENT);
++    return ImmutableList.of(Kind.EQUAL_TO, Kind.NOT_EQUAL_TO, Kind.CONDITIONAL_AND, Kind.CONDITIONAL_OR,
++      Kind.LOGICAL_COMPLEMENT, Kind.CONDITIONAL_EXPRESSION);
+   }
+ 
+   @Override
+   public void visitNode(Tree tree) {
+     LiteralTree literal;
+     if(tree.is(Kind.LOGICAL_COMPLEMENT)) {
+-      literal = getBooleanLiteral(((UnaryExpressionTree)tree).expression());
++      literal = getBooleanLiteral(((UnaryExpressionTree) tree).expression());
++    } else if (tree.is(Kind.CONDITIONAL_EXPRESSION)) {
++      ConditionalExpressionTree expression = (ConditionalExpressionTree) tree;
++      literal = getBooleanLiteral(expression.trueExpression(), expression.falseExpression());
+     } else {
+-      literal = getBooleanLiteralOperands((BinaryExpressionTree)tree);
++      BinaryExpressionTree expression = (BinaryExpressionTree) tree;
++      literal = getBooleanLiteral(expression.leftOperand(), expression.rightOperand());
+     }
+     if(literal != null) {
+       reportIssue(literal, "Remove the literal \"" + literal.value() + "\" boolean value.");
+     }
+   }
+ 
+-  private static LiteralTree getBooleanLiteral(Tree tree) {
+-    LiteralTree result = null;
+-    if (tree.is(Kind.BOOLEAN_LITERAL)) {
+-      result = (LiteralTree) tree;
+-    }
+-    return result;
++  @Nullable
++  private static LiteralTree getBooleanLiteral(Tree... trees) {
++    return Arrays.stream(trees)
++      .filter(tree -> tree.is(Kind.BOOLEAN_LITERAL))
++      .map(LiteralTree.class::cast)
++      .findFirst().orElse(null);
+   }
+ 
+-  private static LiteralTree getBooleanLiteralOperands(BinaryExpressionTree tree) {
+-    LiteralTree result = getBooleanLiteral(tree.leftOperand());
+-    if (result == null) {
+-      result = getBooleanLiteral(tree.rightOperand());
+-    }
+-    return result;
+-  }
+ }
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+index b5e5b2be57..e4470e0558 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+@@ -47,6 +47,7 @@
+ import org.sonar.java.checks.security.HostnameVerifierImplementationCheck;
+ import org.sonar.java.checks.security.IntegerToHexStringCheck;
+ import org.sonar.java.checks.security.LDAPDeserializationCheck;
++import org.sonar.java.checks.security.SecureXmlTransformerCheck;
+ import org.sonar.java.checks.security.TrustManagerCertificateCheck;
+ import org.sonar.java.checks.security.LDAPAuthenticatedConnectionCheck;
+ import org.sonar.java.checks.serialization.CustomSerializationMethodCheck;
+@@ -339,6 +340,7 @@ private CheckList() {
+       .add(EqualsOnAtomicClassCheck.class)
+       .add(LDAPAuthenticatedConnectionCheck.class)
+       .add(LDAPDeserializationCheck.class)
++      .add(SecureXmlTransformerCheck.class)
+       .add(NonShortCircuitLogicCheck.class)
+       .add(ArrayHashCodeAndToStringCheck.class)
+       .add(DefaultEncodingUsageCheck.class)
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java
+new file mode 100644
+index 0000000000..d6d1046184
+--- /dev/null
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java
+@@ -0,0 +1,101 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.security;
++
++import java.util.Collections;
++import java.util.List;
++import javax.xml.XMLConstants;
++import org.sonar.check.Rule;
++import org.sonar.java.checks.methods.AbstractMethodDetection;
++import org.sonar.java.matcher.MethodMatcher;
++import org.sonar.java.model.LiteralUtils;
++import org.sonar.plugins.java.api.tree.Arguments;
++import org.sonar.plugins.java.api.tree.BaseTreeVisitor;
++import org.sonar.plugins.java.api.tree.MethodInvocationTree;
++import org.sonar.plugins.java.api.tree.Tree;
++import org.sonar.plugins.java.api.tree.Tree.Kind;
++
++import static org.sonar.java.checks.helpers.ConstantUtils.resolveAsStringConstant;
++import static org.sonar.java.matcher.TypeCriteria.subtypeOf;
++
++@Rule(key = "S4435")
++public class SecureXmlTransformerCheck extends AbstractMethodDetection {
++
++  public static final String TRANSFORMER_FACTORY_CLASS_NAME = "javax.xml.transform.TransformerFactory";
++
++  @Override
++  protected List<MethodMatcher> getMethodInvocationMatchers() {
++    return Collections.singletonList(
++      MethodMatcher.create()
++        .typeDefinition(TRANSFORMER_FACTORY_CLASS_NAME)
++        .name("newInstance")
++        .withAnyParameters());
++  }
++
++  @Override
++  protected void onMethodInvocationFound(MethodInvocationTree mit) {
++    Tree enclosingMethod = enclosingMethod(mit);
++    MethodBodyVisitor visitor = new MethodBodyVisitor();
++    enclosingMethod.accept(visitor);
++    if (!visitor.foundCallsToSecuringMethods()) {
++      reportIssue(mit.methodSelect(), "Secure this \"Transformer\" by either disabling external DTDs or enabling secure processing.");
++    }
++  }
++
++  private static Tree enclosingMethod(Tree tree) {
++    Tree parent = tree.parent();
++    while (!parent.is(Kind.CLASS, Kind.METHOD)) {
++      parent = parent.parent();
++    }
++    if (parent.is(Kind.CLASS)) {
++      return null;
++    }
++    return parent;
++  }
++
++  private static class MethodBodyVisitor extends BaseTreeVisitor {
++
++    private static final MethodMatcher SET_FEATURE =
++      MethodMatcher.create()
++        .typeDefinition(subtypeOf(TRANSFORMER_FACTORY_CLASS_NAME))
++        .name("setFeature")
++        .parameters("java.lang.String", "boolean");
++
++    private boolean foundCallToSetFeature = false;
++
++    @Override
++    public void visitMethodInvocation(MethodInvocationTree methodInvocation) {
++      Arguments arguments = methodInvocation.arguments();
++
++      if (SET_FEATURE.matches(methodInvocation)
++        && XMLConstants.FEATURE_SECURE_PROCESSING.equals(resolveAsStringConstant(arguments.get(0)))
++        && LiteralUtils.isTrue(arguments.get(1))) {
++
++        foundCallToSetFeature = true;
++      }
++
++      super.visitMethodInvocation(methodInvocation);
++    }
++
++    private boolean foundCallsToSecuringMethods() {
++      return foundCallToSetFeature;
++    }
++  }
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html
+new file mode 100644
+index 0000000000..0bd41131e1
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html
+@@ -0,0 +1,41 @@
++<p>An XML External Entity or XSLT External Entity (XXE) vulnerability can occur when a <code>javax.xml.transform.Transformer</code> is created without
++enabling "Secure Processing" or when one is created without disabling external DTDs. If that external entity is hijacked by an attacker it may lead to
++the disclosure of confidential data, denial of service, server side request forgery, port scanning from the perspective of the machine where the
++parser is located, and other system impacts.</p>
++<p>This rule raises an issue when a <code>Transformer</code> is created without either of these settings.</p>
++<h2>Noncompliant Code Example</h2>
++<pre>
++Transformer transformer = TransformerFactory.newInstance().newTransformer();
++transformer.transform(input, result);
++</pre>
++<h2>Compliant Solution</h2>
++<pre>
++TransformerFactory factory = TransformerFactory.newInstance();
++factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++
++Transformer transformer = factory.newTransformer();
++transformer.setOutputProperty(OutputKeys.INDENT, "yes");
++
++transformer.transform(input, result);
++</pre>
++<p>or</p>
++<pre>
++TransformerFactory factory = TransformerFactory.newInstance();
++factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
++
++Transformer transformer = factory.newTransformer();
++transformer.setOutputProperty(OutputKeys.INDENT, "yes");
++
++transformer.transform(input, result);
++</pre>
++<h2>See</h2>
++<ul>
++  <li> <a href="http://cwe.mitre.org/data/definitions/611.html">MITRE, CWE-611</a> Improper Restriction of XML External Entity Reference ('XXE') </li>
++  <li> OWASP Top 10 2017 Category A4 - XML External Entities </li>
++  <li> [OWASP XXE cheat sheet| https://www.owasp.org/index.php/XML_External_Entity_(XXE)_Prevention_Cheat_Sheet#TransformerFactory] </li>
++  <li> Derived from FindSecBugs rule <a href="https://find-sec-bugs.github.io/bugs.htm#XXE_DTD_TRANSFORM_FACTORY">XXE_DTD_TRANSFORM_FACTORY</a> </li>
++  <li> Derived from FindSecBugs rule <a href="https://find-sec-bugs.github.io/bugs.htm#XXE_XSLT_TRANSFORM_FACTORY">XXE_XSLT_TRANSFORM_FACTORY</a>
++  </li>
++</ul>
++
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json
+new file mode 100644
+index 0000000000..441fbc40ce
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json
+@@ -0,0 +1,21 @@
++{
++  "title": "XML transformers should be secured",
++  "type": "VULNERABILITY",
++  "status": "ready",
++  "remediation": {
++    "func": "Constant\/Issue",
++    "constantCost": "5min"
++  },
++  "tags": [
++    "cwe",
++    "owasp-a4"
++  ],
++  "standards": [
++    "CWE",
++    "OWASP Top Ten"
++  ],
++  "defaultSeverity": "Critical",
++  "ruleSpecification": "RSPEC-4435",
++  "sqKey": "S4435",
++  "scope": "Main"
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+index cd7051f047..63d1716abc 100644
+--- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+@@ -304,11 +304,12 @@
+     "S4349",
+     "S4351",
+     "S4423",
+-    "S4425",
+     "S4424",
++    "S4425",
+     "S4432",
+     "S4433",
+     "S4434",
++    "S4435",
+     "S4449",
+     "S4454",
+     "S4524"
+diff --git a/java-checks/src/test/files/checks/BooleanEqualityComparisonCheck.java b/java-checks/src/test/files/checks/BooleanEqualityComparisonCheck.java
+index b031090417..744935900b 100644
+--- a/java-checks/src/test/files/checks/BooleanEqualityComparisonCheck.java
++++ b/java-checks/src/test/files/checks/BooleanEqualityComparisonCheck.java
+@@ -1,5 +1,5 @@
+ class A {
+-  public void f() {
++  public void f(boolean var) {
+     var == false;       // Noncompliant [[sc=12;ec=17]] {{Remove the literal "false" boolean value.}}
+     var == true;        // Noncompliant {{Remove the literal "true" boolean value.}}
+     var != false;       // Noncompliant {{Remove the literal "false" boolean value.}}
+@@ -19,5 +19,22 @@ public void f() {
+     ++ true;            // Compliant
+     !foo;               // Compliant
+     foo() && bar();     // Compliant
++
++    boolean exp = foo();
++    var = foo() ? true : false; // Noncompliant
++    var = foo() ? true : exp;   // Noncompliant
++    var = foo() ? false : exp;  // Noncompliant
++    var = foo() ? exp : true;   // Noncompliant
++    var = foo() ? exp : false;  // Noncompliant
++
++    var = foo();
++    var = foo() || exp;
++    var = !foo() && exp;
++    var = !foo() || exp;
++    var = foo() && exp;
+   }
++
++  boolean foo()          { return true; }
++  boolean foo(boolean b) { return b;    }
++  boolean bar()          { return true; }
+ }
+diff --git a/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java b/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java
+new file mode 100644
+index 0000000000..639f3c07fa
+--- /dev/null
++++ b/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java
+@@ -0,0 +1,36 @@
++import javax.xml.transform.Transformer;
++import javax.xml.transform.TransformerFactory;
++import javax.xml.XMLConstants;
++
++class A {
++
++  TransformerFactory no_call_to_securing_method() {
++    TransformerFactory factory = TransformerFactory.newInstance(); // Noncompliant
++    return factory;
++  }
++
++  TransformerFactory secure_processing_true() {
++    TransformerFactory factory = TransformerFactory.newInstance();
++    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++    return factory;
++  }
++
++  TransformerFactory secure_processing_false() {
++    TransformerFactory factory = TransformerFactory.newInstance(); // Noncompliant
++    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, false);
++    return factory;
++  }
++
++  TransformerFactory secure_processing_true_with_literal() {
++    TransformerFactory factory = TransformerFactory.newInstance();
++    factory.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);
++    return factory;
++  }
++
++  TransformerFactory secure_processing_true() {
++    TransformerFactory factory = TransformerFactory.newInstance(); // Noncompliant
++    factory.setFeature(XMLConstants.ACCESS_EXTERNAL_DTD, true);
++    return factory;
++  }
++
++}
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java
+new file mode 100644
+index 0000000000..89357eb502
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java
+@@ -0,0 +1,32 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.security;
++
++import org.junit.Test;
++import org.sonar.java.checks.verifier.JavaCheckVerifier;
++
++public class SecureXmlTransformerCheckTest {
++
++  @Test
++  public void test() {
++    JavaCheckVerifier.verify("src/test/files/checks/security/SecureXmlTransformerCheck.java", new SecureXmlTransformerCheck());
++  }
++
++}

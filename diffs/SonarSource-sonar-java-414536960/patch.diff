@@ -1,0 +1,444 @@
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/helpers/IdentifierUtils.java b/java-checks/src/main/java/org/sonar/java/checks/helpers/IdentifierUtils.java
+new file mode 100644
+index 0000000000..852eabbd98
+--- /dev/null
++++ b/java-checks/src/main/java/org/sonar/java/checks/helpers/IdentifierUtils.java
+@@ -0,0 +1,42 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.helpers;
++
++import java.util.function.Function;
++import javax.annotation.CheckForNull;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
++import org.sonar.plugins.java.api.tree.IdentifierTree;
++import org.sonar.plugins.java.api.tree.Tree;
++
++public class IdentifierUtils {
++  private IdentifierUtils() {
++    // This class only contains static methods
++  }
++
++  @CheckForNull
++  public static <T> T getValue(ExpressionTree expression, Function<ExpressionTree,T> resolver) {
++    T value = resolver.apply(expression);
++    if (value == null && expression.is(Tree.Kind.IDENTIFIER)) {
++      ExpressionTree last = ReassignmentFinder.getClosestReassignmentOrDeclarationExpression(expression, ((IdentifierTree) expression).symbol());
++      value = last == null || last == expression ? null : getValue(last, resolver);
++    }
++    return value;
++  }
++}
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java
+index de8f8a2163..cc9655508a 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java
+@@ -24,6 +24,8 @@
+ import java.util.Arrays;
+ import java.util.List;
+ import org.sonar.check.Rule;
++import org.sonar.java.checks.helpers.ConstantUtils;
++import org.sonar.java.checks.helpers.IdentifierUtils;
+ import org.sonar.java.matcher.MethodMatcher;
+ import org.sonar.java.matcher.TypeCriteria;
+ import org.sonar.java.model.LiteralUtils;
+@@ -242,7 +244,8 @@ private void updateIssuesToReport(MethodInvocationTree mit) {
+ 
+   private static boolean setterArgumentHasCompliantValue(Arguments arguments) {
+     ExpressionTree expressionTree = arguments.get(0);
+-    return !LiteralUtils.isFalse(expressionTree);
++    Boolean booleanValue = IdentifierUtils.getValue(expressionTree, ConstantUtils::resolveAsBooleanConstant);
++    return booleanValue == null || booleanValue;
+   }
+ 
+   private static IdentifierTree getIdentifier(MethodInvocationTree mit) {
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
+index 2b15d4e183..3337d3e695 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
+@@ -25,6 +25,7 @@
+ import javax.annotation.Nullable;
+ import org.sonar.check.Rule;
+ import org.sonar.java.checks.helpers.ConstantUtils;
++import org.sonar.java.checks.helpers.IdentifierUtils;
+ import org.sonar.java.checks.helpers.ReassignmentFinder;
+ import org.sonar.java.checks.methods.AbstractMethodDetection;
+ import org.sonar.java.matcher.MethodMatcher;
+@@ -62,23 +63,13 @@ protected void onMethodInvocationFound(MethodInvocationTree mit) {
+   }
+ 
+   private static boolean hasEmptyValue(ExpressionTree expression) {
+-    String literal = getStringValue(expression);
++    String literal = IdentifierUtils.getValue(expression, ConstantUtils::resolveAsStringConstant);
+     return literal != null && literal.trim().isEmpty();
+   }
+ 
+-  @Nullable
+-  private static String getStringValue(ExpressionTree expression) {
+-    String value = ConstantUtils.resolveAsStringConstant(expression);
+-    if (value == null && expression.is(Tree.Kind.IDENTIFIER)) {
+-      ExpressionTree last = ReassignmentFinder.getClosestReassignmentOrDeclarationExpression(expression, ((IdentifierTree) expression).symbol());
+-      value = last == null ? null : getStringValue(last);
+-    }
+-    return value;
+-  }
+-
+   private void checkForUrlConnection(MethodInvocationTree mit) {
+     ExpressionTree urlArgument = mit.arguments().get(URL_ARGUMENT);
+-    String url = getStringValue(urlArgument);
++    String url = IdentifierUtils.getValue(urlArgument, ConstantUtils::resolveAsStringConstant);
+     if (url != null && (!url.contains("password") || EMPTY_PASSWORD_PATTERN.matcher(url).matches())) {
+       reportIssue(mit, MESSAGE);
+     }
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/SecureCookieCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/SecureCookieCheck.java
+index a778302d1f..f37c751c32 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/SecureCookieCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/SecureCookieCheck.java
+@@ -27,6 +27,7 @@
+ import javax.annotation.Nullable;
+ import org.sonar.check.Rule;
+ import org.sonar.java.checks.helpers.ConstantUtils;
++import org.sonar.java.checks.helpers.IdentifierUtils;
+ import org.sonar.java.checks.helpers.ReassignmentFinder;
+ import org.sonar.java.matcher.MethodMatcher;
+ import org.sonar.java.model.LiteralUtils;
+@@ -160,7 +161,7 @@ private void addToUnsecuredCookies(AssignmentExpressionTree assignment) {
+   private void checkSecureCall(MethodInvocationTree mit) {
+     if (isSetSecureCall(mit) && mit.methodSelect().is(Tree.Kind.MEMBER_SELECT)) {
+       ExpressionTree methodObject = ((MemberSelectExpressionTree) mit.methodSelect()).expression();
+-      Boolean secureArgument = getBooleanValue(mit.arguments().get(0));
++      Boolean secureArgument = IdentifierUtils.getValue(mit.arguments().get(0), ConstantUtils::resolveAsBooleanConstant);
+       boolean isFalse = secureArgument != null && !secureArgument;
+       if (methodObject.is(Tree.Kind.IDENTIFIER)) {
+         IdentifierTree identifierTree = (IdentifierTree) methodObject;
+@@ -176,16 +177,6 @@ private void checkSecureCall(MethodInvocationTree mit) {
+     }
+   }
+ 
+-  @Nullable
+-  private static Boolean getBooleanValue(ExpressionTree expression) {
+-    Boolean value = ConstantUtils.resolveAsBooleanConstant(expression);
+-    if (value == null && expression.is(Tree.Kind.IDENTIFIER)) {
+-      ExpressionTree last = ReassignmentFinder.getClosestReassignmentOrDeclarationExpression(expression, ((IdentifierTree) expression).symbol());
+-      value = last == null ? null : getBooleanValue(last);
+-    }
+-    return value;
+-  }
+-
+   private void addToUnsecuredReturns(ReturnStatementTree tree) {
+     ExpressionTree returnedExpression = tree.expression();
+     if (returnedExpression != null
+diff --git a/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java b/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java
+index 2e2064affb..1ce6db39bc 100644
+--- a/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java
++++ b/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java
+@@ -39,12 +39,12 @@ void servletCookie(boolean param, Cookie c0) {
+     Cookie c3 = new Cookie("name", "value"); // Noncompliant
+     c3.setHttpOnly(false);
+ 
+-    Cookie c4 = new Cookie("name", "value");
+-    c4.setHttpOnly(FALSE_CONSTANT); // FN, would require SE
++    Cookie c4 = new Cookie("name", "value"); // Noncompliant
++    c4.setHttpOnly(FALSE_CONSTANT);
+ 
+-    Cookie c5 = new Cookie("name", "value");
+-    boolean b = true;
+-    c5.setHttpOnly(b); // FN, would require SE
++    Cookie c5 = new Cookie("name", "value"); // Noncompliant
++    boolean b = false;
++    c5.setHttpOnly(b);
+ 
+     Cookie c6 = new Cookie("name", "value");
+     c6.setHttpOnly(param);
+@@ -69,6 +69,10 @@ void servletCookie(boolean param, Cookie c0) {
+     Cookie c13; // Noncompliant
+     c13 = new UnknownCookie("name", "value");
+ 
++    Cookie c14 = new Cookie("name", "value");
++    boolean bValue = true;
++    c14.setHttpOnly(!bValue);
++
+     field4 = new Cookie("name, value"); // FN
+ 
+     X x;
+@@ -92,8 +96,8 @@ void httpCookie() {
+     HttpCookie c3 = new HttpCookie("name", "value"); // Noncompliant
+     c3.setHttpOnly(false);
+ 
+-    HttpCookie c4 = new HttpCookie("name", "value");
+-    c4.setHttpOnly(FALSE_CONSTANT); // FN, would require SE
++    HttpCookie c4 = new HttpCookie("name", "value"); // Noncompliant
++    c4.setHttpOnly(FALSE_CONSTANT);
+ 
+     HttpCookie c5; // Noncompliant
+     c5 = new HttpCookie("name", "value");
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/IdentifierUtilsTest.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/IdentifierUtilsTest.java
+new file mode 100644
+index 0000000000..c69559da1d
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/IdentifierUtilsTest.java
+@@ -0,0 +1,74 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.helpers;
++
++import org.junit.Test;
++import org.sonar.plugins.java.api.tree.IdentifierTree;
++import org.sonar.plugins.java.api.tree.MethodTree;
++
++import static org.assertj.core.api.Assertions.assertThat;
++
++public class IdentifierUtilsTest extends JavaParserHelper {
++
++  @Test
++  public void simpleAssignment() {
++    String code = newCode( "int foo() {",
++      "boolean a = true;",
++      "return a;",
++      "}");
++    assertThatLastReassignmentsOfReturnedVariableIsEqualTo(code, true);
++  }
++
++  @Test
++  public void selfAssigned() {
++    String code = newCode( "int foo() {",
++      "boolean a = a;",
++      "return a;",
++      "}");
++    assertThatLastReassignmentsOfReturnedVariableIsEqualTo(code, null);
++  }
++
++  @Test
++  public void unknownValue() {
++    String code = newCode( "int foo(boolean a) {",
++      "return a;",
++      "}");
++    assertThatLastReassignmentsOfReturnedVariableIsEqualTo(code, null);
++  }
++
++  @Test
++  public void notAnIdentifier() {
++    String code = newCode( "int foo() {",
++      "boolean a = bar();",
++      "return a;",
++      "}",
++      "boolean bar() {",
++      "return true;",
++      "}");
++    assertThatLastReassignmentsOfReturnedVariableIsEqualTo(code, null);
++  }
++
++  private <T> void assertThatLastReassignmentsOfReturnedVariableIsEqualTo(String code, T target) {
++    MethodTree method = methodTree(code);
++    IdentifierTree a = variableFromLastReturnStatement(method.block().body());
++    Boolean value = IdentifierUtils.getValue(a, ConstantUtils::resolveAsBooleanConstant);
++    assertThat(value).isEqualTo(target);
++  }
++}
+\ No newline at end of file
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/JavaParserHelper.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/JavaParserHelper.java
+new file mode 100644
+index 0000000000..4b18a91817
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/JavaParserHelper.java
+@@ -0,0 +1,79 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.helpers;
++
++import com.sonar.sslr.api.typed.ActionParser;
++import java.util.List;
++import java.util.Collections;
++import org.sonar.java.ast.parser.JavaParser;
++import org.sonar.java.bytecode.loader.SquidClassLoader;
++import org.sonar.java.resolve.SemanticModel;
++import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
++import org.sonar.plugins.java.api.tree.ClassTree;
++import org.sonar.plugins.java.api.tree.CompilationUnitTree;
++import org.sonar.plugins.java.api.tree.ExpressionStatementTree;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
++import org.sonar.plugins.java.api.tree.IdentifierTree;
++import org.sonar.plugins.java.api.tree.MethodTree;
++import org.sonar.plugins.java.api.tree.ReturnStatementTree;
++import org.sonar.plugins.java.api.tree.StatementTree;
++import org.sonar.plugins.java.api.tree.Tree;
++import org.sonar.plugins.java.api.tree.VariableTree;
++
++public abstract class JavaParserHelper {
++  private final ActionParser<Tree> p = JavaParser.createParser();
++
++  static IdentifierTree variableFromLastReturnStatement(List<StatementTree> statements) {
++    return (IdentifierTree) ((ReturnStatementTree) statements.get(statements.size() - 1)).expression();
++  }
++
++  static ExpressionTree assignementExpressionFromStatement(StatementTree statement) {
++    return ((AssignmentExpressionTree) ((ExpressionStatementTree) statement).expression()).expression();
++  }
++
++  static ExpressionTree initializerFromVariableDeclarationStatement(Tree statement) {
++    return ((VariableTree) statement).initializer();
++  }
++
++  ClassTree classTree(String classBody) {
++    CompilationUnitTree compilationUnitTree = (CompilationUnitTree) p.parse(classBody);
++    SemanticModel.createFor(compilationUnitTree, new SquidClassLoader(Collections.emptyList()));
++    return (ClassTree) compilationUnitTree.types().get(0);
++  }
++
++  MethodTree methodTree(String classBody) {
++    ClassTree firstType = classTree(classBody);
++    return (MethodTree) firstType.members().get(0);
++  }
++
++  List<StatementTree> methodBody(String code) {
++    return methodTree(code).block().body();
++  }
++
++  static String newCode(String... lines) {
++    String lineSeparator = System.lineSeparator();
++    StringBuilder sb = new StringBuilder("class A {").append(lineSeparator);
++    for (String string : lines) {
++      sb.append(string).append(lineSeparator);
++    }
++    return sb.append("}").append(lineSeparator).toString();
++  }
++
++}
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/ReassignmentFinderTest.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/ReassignmentFinderTest.java
+index b831556ae5..3c04d3304e 100644
+--- a/java-checks/src/test/java/org/sonar/java/checks/helpers/ReassignmentFinderTest.java
++++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/ReassignmentFinderTest.java
+@@ -19,38 +19,27 @@
+  */
+ package org.sonar.java.checks.helpers;
+ 
+-import com.sonar.sslr.api.typed.ActionParser;
++import java.lang.reflect.Constructor;
++import java.util.List;
+ import org.junit.Test;
+-import org.sonar.java.ast.parser.JavaParser;
+-import org.sonar.java.bytecode.loader.SquidClassLoader;
+-import org.sonar.java.resolve.SemanticModel;
+ import org.sonar.plugins.java.api.semantic.Symbol;
+-import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
+ import org.sonar.plugins.java.api.tree.BlockTree;
+ import org.sonar.plugins.java.api.tree.ClassTree;
+-import org.sonar.plugins.java.api.tree.CompilationUnitTree;
+ import org.sonar.plugins.java.api.tree.ExpressionStatementTree;
+ import org.sonar.plugins.java.api.tree.ExpressionTree;
+ import org.sonar.plugins.java.api.tree.IdentifierTree;
+ import org.sonar.plugins.java.api.tree.IfStatementTree;
+ import org.sonar.plugins.java.api.tree.MethodInvocationTree;
+ import org.sonar.plugins.java.api.tree.MethodTree;
+-import org.sonar.plugins.java.api.tree.ReturnStatementTree;
+ import org.sonar.plugins.java.api.tree.StatementTree;
+ import org.sonar.plugins.java.api.tree.Tree;
+ import org.sonar.plugins.java.api.tree.VariableTree;
+ 
+-import java.lang.reflect.Constructor;
+-import java.util.Collections;
+-import java.util.List;
+-
+ import static java.lang.reflect.Modifier.isFinal;
+ import static java.lang.reflect.Modifier.isPrivate;
+ import static org.assertj.core.api.Assertions.assertThat;
+ 
+-public class ReassignmentFinderTest {
+-
+-  private final ActionParser<Tree> p = JavaParser.createParser();
++public class ReassignmentFinderTest extends JavaParserHelper {
+ 
+   @Test
+   public void private_constructor() throws Exception {
+@@ -275,40 +264,4 @@ private static Tree getLastReassignment(List<StatementTree> statements) {
+     return ReassignmentFinder.getClosestReassignmentOrDeclarationExpression(statements.get(statements.size() - 1), variableFromLastReturnStatement(statements).symbol());
+   }
+ 
+-  private static IdentifierTree variableFromLastReturnStatement(List<StatementTree> statements) {
+-    return (IdentifierTree) ((ReturnStatementTree) statements.get(statements.size() - 1)).expression();
+-  }
+-
+-  private static ExpressionTree assignementExpressionFromStatement(StatementTree statement) {
+-    return ((AssignmentExpressionTree) ((ExpressionStatementTree) statement).expression()).expression();
+-  }
+-
+-  private static ExpressionTree initializerFromVariableDeclarationStatement(Tree statement) {
+-    return ((VariableTree) statement).initializer();
+-  }
+-
+-  private ClassTree classTree(String classBody) {
+-    CompilationUnitTree compilationUnitTree = (CompilationUnitTree) p.parse(classBody);
+-    SemanticModel.createFor(compilationUnitTree, new SquidClassLoader(Collections.emptyList()));
+-    return (ClassTree) compilationUnitTree.types().get(0);
+-  }
+-
+-  private MethodTree methodTree(String classBody) {
+-    ClassTree firstType = classTree(classBody);
+-    return (MethodTree) firstType.members().get(0);
+-  }
+-
+-  private List<StatementTree> methodBody(String code) {
+-    return methodTree(code).block().body();
+-  }
+-
+-  private static String newCode(String... lines) {
+-    String lineSeparator = System.lineSeparator();
+-    StringBuilder sb = new StringBuilder("class A {").append(lineSeparator);
+-    for (String string : lines) {
+-      sb.append(string).append(lineSeparator);
+-    }
+-    return sb.append("}").append(lineSeparator).toString();
+-  }
+-
+ }

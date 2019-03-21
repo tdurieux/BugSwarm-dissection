@@ -1,0 +1,682 @@
+diff --git a/doc/conftest.py b/doc/conftest.py
+index f6fe64458373..cab209d6ca00 100644
+--- a/doc/conftest.py
++++ b/doc/conftest.py
+@@ -6,6 +6,8 @@
+ from sklearn.utils.testing import SkipTest
+ from sklearn.utils.testing import check_skip_network
+ from sklearn.datasets import get_data_home
++from sklearn.datasets.base import _pkl_filepath
++from sklearn.datasets.twenty_newsgroups import CACHE_NAME
+ from sklearn.utils.testing import install_mldata_mock
+ from sklearn.utils.testing import uninstall_mldata_mock
+ 
+@@ -47,12 +49,16 @@ def setup_rcv1():
+ 
+ def setup_twenty_newsgroups():
+     data_home = get_data_home()
+-    if not exists(join(data_home, '20news_home')):
++    cache_path = _pkl_filepath(get_data_home(), CACHE_NAME)
++    if not exists(cache_path):
+         raise SkipTest("Skipping dataset loading doctests")
+ 
+ 
+ def setup_working_with_text_data():
+     check_skip_network()
++    cache_path = _pkl_filepath(get_data_home(), CACHE_NAME)
++    if not exists(cache_path):
++        raise SkipTest("Skipping dataset loading doctests")
+ 
+ 
+ def setup_compose():
+diff --git a/doc/datasets/twenty_newsgroups.rst b/doc/datasets/twenty_newsgroups.rst
+index 23c11b2998dd..5d6906c3cfa1 100644
+--- a/doc/datasets/twenty_newsgroups.rst
++++ b/doc/datasets/twenty_newsgroups.rst
+@@ -62,7 +62,7 @@ attribute is the integer index of the category::
+   >>> newsgroups_train.target.shape
+   (11314,)
+   >>> newsgroups_train.target[:10]
+-  array([12,  6,  9,  8,  6,  7,  9,  2, 13, 19])
++  array([ 7,  4,  4,  1, 14, 16, 13,  3,  2,  4])
+ 
+ It is possible to load only a sub-selection of the categories by passing the
+ list of the categories to load to the
+@@ -78,7 +78,7 @@ list of the categories to load to the
+   >>> newsgroups_train.target.shape
+   (1073,)
+   >>> newsgroups_train.target[:10]
+-  array([1, 1, 1, 0, 1, 0, 0, 1, 1, 1])
++  array([0, 1, 1, 1, 0, 1, 1, 0, 0, 0])
+ 
+ Converting text to vectors
+ --------------------------
+@@ -105,7 +105,7 @@ components by sample in a more than 30000-dimensional space
+ (less than .5% non-zero features)::
+ 
+   >>> vectors.nnz / float(vectors.shape[0])
+-  159.01327433628319
++  159.01327...
+ 
+ :func:`sklearn.datasets.fetch_20newsgroups_vectorized` is a function which returns
+ ready-to-use tfidf features instead of file names.
+@@ -131,9 +131,11 @@ which is fast to train and achieves a decent F-score::
+   >>> vectors_test = vectorizer.transform(newsgroups_test.data)
+   >>> clf = MultinomialNB(alpha=.01)
+   >>> clf.fit(vectors, newsgroups_train.target)
++  MultinomialNB(alpha=0.01, class_prior=None, fit_prior=True)
++
+   >>> pred = clf.predict(vectors_test)
+   >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')
+-  0.88213592402729568
++  0.88213...
+ 
+ (The example :ref:`sphx_glr_auto_examples_text_plot_document_classification_20newsgroups.py` shuffles
+ the training and test data, instead of segmenting by time, and in that case
+@@ -150,10 +152,10 @@ Let's take a look at what the most informative features are:
+   ...         print("%s: %s" % (category, " ".join(feature_names[top10])))
+   ...
+   >>> show_top10(clf, vectorizer, newsgroups_train.target_names)
+-  alt.atheism: sgi livesey atheists writes people caltech com god keith edu
+-  comp.graphics: organization thanks files subject com image lines university edu graphics
+-  sci.space: toronto moon gov com alaska access henry nasa edu space
+-  talk.religion.misc: article writes kent people christian jesus sandvik edu com god
++  alt.atheism: edu it and in you that is of to the
++  comp.graphics: edu in graphics it is for and of to the
++  sci.space: edu it that is in and space to of the
++  talk.religion.misc: not it you in is that and to of the
+ 
+ You can now see many things that these features have overfit to:
+ 
+@@ -183,7 +185,7 @@ blocks, and quotation blocks respectively.
+   >>> vectors_test = vectorizer.transform(newsgroups_test.data)
+   >>> pred = clf.predict(vectors_test)
+   >>> metrics.f1_score(pred, newsgroups_test.target, average='macro')
+-  0.77310350681274775
++  0.77310...
+ 
+ This classifier lost over a lot of its F-score, just because we removed
+ metadata that has little to do with topic classification.
+@@ -195,10 +197,12 @@ It loses even more if we also strip this metadata from the training data:
+   >>> vectors = vectorizer.fit_transform(newsgroups_train.data)
+   >>> clf = MultinomialNB(alpha=.01)
+   >>> clf.fit(vectors, newsgroups_train.target)
++  MultinomialNB(alpha=0.01, class_prior=None, fit_prior=True)
++
+   >>> vectors_test = vectorizer.transform(newsgroups_test.data)
+   >>> pred = clf.predict(vectors_test)
+   >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')
+-  0.76995175184521725
++  0.76995...
+ 
+ Some other classifiers cope better with this harder version of the task. Try
+ running :ref:`sphx_glr_auto_examples_model_selection_grid_search_text_feature_extraction.py` with and without
+diff --git a/doc/developers/contributing.rst b/doc/developers/contributing.rst
+index 0d6174f3b2d4..dd3b95e15789 100644
+--- a/doc/developers/contributing.rst
++++ b/doc/developers/contributing.rst
+@@ -53,11 +53,14 @@ project maintainers.
+ Another way to contribute is to report issues you're facing, and give a "thumbs
+ up" on issues that others reported and that are relevant to you.  It also helps
+ us if you spread the word: reference the project from your blog and articles,
+-link to it from your website, or simply say "I use it":
++link to it from your website, or simply star to say "I use it":
+ 
+ .. raw:: html
+ 
+-   <script type="text/javascript" src="http://www.ohloh.net/p/480792/widgets/project_users.js?style=rainbow"></script>
++   <a class="github-button" href="https://github.com/scikit-learn/scikit-learn"
++   data-icon="octicon-star" data-size="large" data-show-count="true" aria-label="Star
++   scikit-learn/scikit-learn on GitHub">Star</a>
++   <script async defer src="https://buttons.github.io/buttons.js"></script>
+ 
+ Submitting a bug report or a feature request
+ ============================================
+@@ -434,10 +437,9 @@ HTML output by building the documentation website.
+ Building the documentation
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-Building the documentation requires the ``sphinx``, ``sphinx-gallery``,
+-``numpydoc``, ``matplotlib``, and ``Pillow`` packages::
++Building the documentation requires installing some additional packages::
+ 
+-    pip install sphinx sphinx-gallery numpydoc matplotlib Pillow
++    pip install sphinx sphinx-gallery numpydoc matplotlib Pillow pandas scikit-image
+ 
+ To build the documentation, you need to be in the ``doc`` folder::
+ 
+diff --git a/doc/developers/performance.rst b/doc/developers/performance.rst
+index d3d6204ec328..89ee4af1325f 100644
+--- a/doc/developers/performance.rst
++++ b/doc/developers/performance.rst
+@@ -388,8 +388,7 @@ Checkout the official joblib documentation:
+ 
+ .. _warm-restarts:
+ 
+-A sample algorithmic trick: warm restarts for cross validation
++A sample algorithmic trick: warm restarts
+ ==============================================================
+ 
+-TODO: demonstrate the warm restart tricks for cross validation of linear
+-regression with Coordinate Descent.
++See the glossary entry for `warm_start <http://scikit-learn.org/dev/glossary.html#term-warm-start>`_
+diff --git a/doc/modules/linear_model.rst b/doc/modules/linear_model.rst
+index 06259cd867d4..e2cc0ba2601a 100644
+--- a/doc/modules/linear_model.rst
++++ b/doc/modules/linear_model.rst
+@@ -205,6 +205,20 @@ computes the coefficients along the full path of possible values.
+       thus be used to perform feature selection, as detailed in
+       :ref:`l1_feature_selection`.
+ 
++The following two references explain the iterations
++used in the coordinate descent solver of scikit-learn, as well as
++the duality gap computation used for convergence control.
++
++.. topic:: References
++
++    * "Regularization Path For Generalized linear Models by Coordinate Descent",
++      Friedman, Hastie & Tibshirani, J Stat Softw, 2010 (`Paper
++      <https://www.jstatsoft.org/article/view/v033i01/v33i01.pdf>`_).
++    * "An Interior-Point Method for Large-Scale L1-Regularized Least Squares,"
++      S. J. Kim, K. Koh, M. Lustig, S. Boyd and D. Gorinevsky,
++      in IEEE Journal of Selected Topics in Signal Processing, 2007
++      (`Paper <https://web.stanford.edu/~boyd/papers/pdf/l1_ls.pdf>`_)
++
+ 
+ Setting regularization parameter
+ --------------------------------
+@@ -358,7 +372,19 @@ The class :class:`ElasticNetCV` can be used to set the parameters
+   * :ref:`sphx_glr_auto_examples_linear_model_plot_lasso_and_elasticnet.py`
+   * :ref:`sphx_glr_auto_examples_linear_model_plot_lasso_coordinate_descent_path.py`
+ 
++The following two references explain the iterations
++used in the coordinate descent solver of scikit-learn, as well as
++the duality gap computation used for convergence control.
++
++.. topic:: References
+ 
++    * "Regularization Path For Generalized linear Models by Coordinate Descent",
++      Friedman, Hastie & Tibshirani, J Stat Softw, 2010 (`Paper
++      <https://www.jstatsoft.org/article/view/v033i01/v33i01.pdf>`_).
++    * "An Interior-Point Method for Large-Scale L1-Regularized Least Squares,"
++      S. J. Kim, K. Koh, M. Lustig, S. Boyd and D. Gorinevsky,
++      in IEEE Journal of Selected Topics in Signal Processing, 2007
++      (`Paper <https://web.stanford.edu/~boyd/papers/pdf/l1_ls.pdf>`_)
+ 
+ .. _multi_task_elastic_net:
+ 
+diff --git a/doc/modules/model_persistence.rst b/doc/modules/model_persistence.rst
+index 15ecf3c2d88f..f5173e5d9f3f 100644
+--- a/doc/modules/model_persistence.rst
++++ b/doc/modules/model_persistence.rst
+@@ -42,12 +42,12 @@ is often the case for fitted scikit-learn estimators, but can only pickle to the
+ disk and not to a string::
+ 
+   >>> from sklearn.externals import joblib
+-  >>> joblib.dump(clf, 'filename.pkl') # doctest: +SKIP
++  >>> joblib.dump(clf, 'filename.joblib') # doctest: +SKIP
+ 
+ Later you can load back the pickled model (possibly in another Python process)
+ with::
+ 
+-  >>> clf = joblib.load('filename.pkl') # doctest:+SKIP
++  >>> clf = joblib.load('filename.joblib') # doctest:+SKIP
+ 
+ .. note::
+ 
+diff --git a/doc/tutorial/basic/tutorial.rst b/doc/tutorial/basic/tutorial.rst
+index ece691f7de97..781495df9931 100644
+--- a/doc/tutorial/basic/tutorial.rst
++++ b/doc/tutorial/basic/tutorial.rst
+@@ -239,12 +239,12 @@ which is more efficient on big data but it can only pickle to the disk
+ and not to a string::
+ 
+   >>> from sklearn.externals import joblib
+-  >>> joblib.dump(clf, 'filename.pkl') # doctest: +SKIP
++  >>> joblib.dump(clf, 'filename.joblib') # doctest: +SKIP
+ 
+ Later, you can reload the pickled model (possibly in another Python process)
+ with::
+ 
+-  >>> clf = joblib.load('filename.pkl') # doctest:+SKIP
++  >>> clf = joblib.load('filename.joblib') # doctest:+SKIP
+ 
+ .. note::
+ 
+diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
+index 2df84310eb6b..4dafe7fb926e 100644
+--- a/doc/whats_new/v0.20.rst
++++ b/doc/whats_new/v0.20.rst
+@@ -332,6 +332,11 @@ Classifiers and regressors
+   returning incorrect probabilities in the case of binary outcomes.
+   :issue:`9939` by :user:`Roger Westover <rwolst>`.
+ 
++- Fixed a bug in :class:`linear_model.LogisticRegressionCV` where the
++  ``score`` method always computes accuracy, not the metric given by
++  the ``scoring`` parameter.
++  :issue:`10998` by :user:`Thomas Fan <thomasjpfan>`.
++
+ - Fixed a bug in :class:`linear_model.OrthogonalMatchingPursuit` that was
+   broken when setting ``normalize=False``.
+   :issue:`10071` by `Alexandre Gramfort`_.
+diff --git a/examples/manifold/plot_compare_methods.py b/examples/manifold/plot_compare_methods.py
+index 34e161dfb046..3af18269aeaa 100644
+--- a/examples/manifold/plot_compare_methods.py
++++ b/examples/manifold/plot_compare_methods.py
+@@ -1,6 +1,6 @@
+ """
+ =========================================
+- Comparison of Manifold Learning methods
++Comparison of Manifold Learning methods
+ =========================================
+ 
+ An illustration of dimensionality reduction on the S-curve dataset
+diff --git a/examples/manifold/plot_t_sne_perplexity.py b/examples/manifold/plot_t_sne_perplexity.py
+index c1cbe0001d0e..0fbade5746af 100644
+--- a/examples/manifold/plot_t_sne_perplexity.py
++++ b/examples/manifold/plot_t_sne_perplexity.py
+@@ -1,6 +1,6 @@
+ """
+ =============================================================================
+- t-SNE: The effect of various perplexity values on the shape
++t-SNE: The effect of various perplexity values on the shape
+ =============================================================================
+ 
+ An illustration of t-SNE on the two concentric circles and the S-curve
+diff --git a/sklearn/impute.py b/sklearn/impute.py
+index cd70d0f58b89..e6a4614da5f6 100644
+--- a/sklearn/impute.py
++++ b/sklearn/impute.py
+@@ -172,12 +172,19 @@ def _validate_input(self, X):
+         try:
+             X = check_array(X, accept_sparse='csc', dtype=dtype,
+                             force_all_finite=force_all_finite, copy=self.copy)
+-        except TypeError:
+-            raise TypeError("Cannot use {0} strategy with non-numeric "
+-                            "data.".format(self.strategy))
++        except ValueError as ve:
++            if "could not convert" in str(ve):
++                raise TypeError("Cannot use {0} strategy with non-numeric "
++                                "data. Received datatype :{1}."
++                                "".format(self.strategy, X.dtype.kind))
++            else:
++                raise ve
+ 
+         if X.dtype.kind not in ("i", "u", "f", "O"):
+-            X = X.astype(object)
++            raise TypeError("The SimpleImputer does not support this datatype"
++                            " ({0}). Please provide either numeric data or"
++                            " categorical data represented by integer or "
++                            "object datatypes.".format(X.dtype))
+ 
+         return X
+ 
+diff --git a/sklearn/linear_model/logistic.py b/sklearn/linear_model/logistic.py
+index 3e8a104d57d7..30e856094050 100644
+--- a/sklearn/linear_model/logistic.py
++++ b/sklearn/linear_model/logistic.py
+@@ -29,7 +29,8 @@
+ from ..utils.fixes import logsumexp
+ from ..utils.optimize import newton_cg
+ from ..utils.validation import check_X_y
+-from ..exceptions import NotFittedError, ConvergenceWarning
++from..exceptions import (NotFittedError, ConvergenceWarning,
++                         ChangedBehaviorWarning)
+ from ..utils.multiclass import check_classification_targets
+ from ..externals.joblib import Parallel, delayed
+ from ..model_selection import check_cv
+@@ -1789,3 +1790,37 @@ def fit(self, X, y, sample_weight=None):
+ 
+         self.C_ = np.asarray(self.C_)
+         return self
++
++    def score(self, X, y, sample_weight=None):
++        """Returns the score using the `scoring` option on the given
++        test data and labels.
++
++        Parameters
++        ----------
++        X : array-like, shape = (n_samples, n_features)
++            Test samples.
++
++        y : array-like, shape = (n_samples,)
++            True labels for X.
++
++        sample_weight : array-like, shape = [n_samples], optional
++            Sample weights.
++
++        Returns
++        -------
++        score : float
++            Score of self.predict(X) wrt. y.
++
++        """
++
++        if self.scoring is not None:
++            warnings.warn("The long-standing behavior to use the "
++                          "accuracy score has changed. The scoring "
++                          "parameter is now used. "
++                          "This warning will disappear in version 0.22.",
++                          ChangedBehaviorWarning)
++        scoring = self.scoring or 'accuracy'
++        if isinstance(scoring, six.string_types):
++            scoring = get_scorer(scoring)
++
++        return scoring(self, X, y, sample_weight=sample_weight)
+diff --git a/sklearn/linear_model/tests/test_logistic.py b/sklearn/linear_model/tests/test_logistic.py
+index e363fed2abb9..9939644f4d4e 100644
+--- a/sklearn/linear_model/tests/test_logistic.py
++++ b/sklearn/linear_model/tests/test_logistic.py
+@@ -22,6 +22,7 @@
+ from sklearn.utils.testing import assert_warns_message
+ 
+ from sklearn.exceptions import ConvergenceWarning
++from sklearn.exceptions import ChangedBehaviorWarning
+ from sklearn.linear_model.logistic import (
+     LogisticRegression,
+     logistic_regression_path, LogisticRegressionCV,
+@@ -92,6 +93,49 @@ def test_error():
+         assert_raise_message(ValueError, msg, LR(max_iter="test").fit, X, Y1)
+ 
+ 
++def test_logistic_cv_mock_scorer():
++
++    class MockScorer(object):
++        def __init__(self):
++            self.calls = 0
++            self.scores = [0.1, 0.4, 0.8, 0.5]
++
++        def __call__(self, model, X, y, sample_weight=None):
++            score = self.scores[self.calls % len(self.scores)]
++            self.calls += 1
++            return score
++
++    mock_scorer = MockScorer()
++    Cs = [1, 2, 3, 4]
++    cv = 2
++
++    lr = LogisticRegressionCV(Cs=Cs, scoring=mock_scorer, cv=cv)
++    lr.fit(X, Y1)
++
++    # Cs[2] has the highest score (0.8) from MockScorer
++    assert lr.C_[0] == Cs[2]
++
++    # scorer called 8 times (cv*len(Cs))
++    assert mock_scorer.calls == cv * len(Cs)
++
++    # reset mock_scorer
++    mock_scorer.calls = 0
++    with pytest.warns(ChangedBehaviorWarning):
++        custom_score = lr.score(X, lr.predict(X))
++
++    assert custom_score == mock_scorer.scores[0]
++    assert mock_scorer.calls == 1
++
++
++def test_logistic_cv_score_does_not_warn_by_default():
++    lr = LogisticRegressionCV(cv=2)
++    lr.fit(X, Y1)
++
++    with pytest.warns(None) as record:
++        lr.score(X, lr.predict(X))
++    assert len(record) == 0
++
++
+ def test_lr_liblinear_warning():
+     n_samples, n_features = iris.data.shape
+     target = iris.target_names[iris.target]
+diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py
+index 866cb4cc53aa..399f8df3a0ee 100644
+--- a/sklearn/model_selection/_split.py
++++ b/sklearn/model_selection/_split.py
+@@ -76,8 +76,8 @@ def split(self, X, y=None, groups=None):
+             Group labels for the samples used while splitting the dataset into
+             train/test set.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -301,8 +301,8 @@ def split(self, X, y=None, groups=None):
+             Group labels for the samples used while splitting the dataset into
+             train/test set.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -647,8 +647,8 @@ def split(self, X, y, groups=None):
+         groups : object
+             Always ignored, exists for compatibility.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -734,8 +734,8 @@ def split(self, X, y=None, groups=None):
+         groups : array-like, with shape (n_samples,), optional
+             Always ignored, exists for compatibility.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -1006,8 +1006,8 @@ def split(self, X, y=None, groups=None):
+             Group labels for the samples used while splitting the dataset into
+             train/test set.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -1182,8 +1182,8 @@ def split(self, X, y=None, groups=None):
+             Group labels for the samples used while splitting the dataset into
+             train/test set.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -1603,8 +1603,8 @@ def split(self, X, y, groups=None):
+         groups : object
+             Always ignored, exists for compatibility.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -1763,8 +1763,8 @@ def split(self, X=None, y=None, groups=None):
+         groups : object
+             Always ignored, exists for compatibility.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+@@ -1847,8 +1847,8 @@ def split(self, X=None, y=None, groups=None):
+         groups : object
+             Always ignored, exists for compatibility.
+ 
+-        Returns
+-        -------
++        Yields
++        ------
+         train : ndarray
+             The training set indices for that split.
+ 
+diff --git a/sklearn/tests/test_impute.py b/sklearn/tests/test_impute.py
+index cab1996c0c14..7dbbe6bd378f 100644
+--- a/sklearn/tests/test_impute.py
++++ b/sklearn/tests/test_impute.py
+@@ -223,29 +223,21 @@ def test_imputation_mean_median_error_invalid_type(strategy, dtype):
+ 
+ 
+ @pytest.mark.parametrize("strategy", ["constant", "most_frequent"])
+-@pytest.mark.parametrize("dtype", [None, object, str])
+-def test_imputation_non_numeric(strategy, dtype):
++@pytest.mark.parametrize("dtype", [str, np.dtype('U'), np.dtype('S')])
++def test_imputation_const_mostf_error_invalid_types(strategy, dtype):
+     # Test imputation on non-numeric data using "most_frequent" and "constant"
+     # strategy
+     X = np.array([
+-        ["", "a", "f"],
+-        ["c", "d", "d"],
+-        ["b", "d", "d"],
+-        ["c", "d", "h"],
++        [np.nan, np.nan, "a", "f"],
++        [np.nan, "c", np.nan, "d"],
++        [np.nan, "b", "d", np.nan],
++        [np.nan, "c", "d", "h"],
+     ], dtype=dtype)
+ 
+-    X_true = np.array([
+-        ["c", "a", "f"],
+-        ["c", "d", "d"],
+-        ["b", "d", "d"],
+-        ["c", "d", "h"],
+-    ], dtype=dtype)
+-
+-    imputer = SimpleImputer(missing_values="", strategy=strategy,
+-                            fill_value="c")
+-    X_trans = imputer.fit(X).transform(X)
+-
+-    assert_array_equal(X_trans, X_true)
++    err_msg = "SimpleImputer does not support this datatype"
++    with pytest.raises(TypeError, match=err_msg):
++        imputer = SimpleImputer(strategy=strategy)
++        imputer.fit(X).transform(X)
+ 
+ 
+ def test_imputation_most_frequent():
+diff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py
+index a619065f2687..2004b24f05c4 100644
+--- a/sklearn/utils/extmath.py
++++ b/sklearn/utils/extmath.py
+@@ -15,8 +15,7 @@
+ import warnings
+ 
+ import numpy as np
+-from scipy import linalg
+-from scipy.sparse import issparse, csr_matrix
++from scipy import linalg, sparse
+ 
+ from . import check_random_state, deprecated
+ from .fixes import np_version
+@@ -60,9 +59,9 @@ def row_norms(X, squared=False):
+ 
+     Performs no input validation.
+     """
+-    if issparse(X):
+-        if not isinstance(X, csr_matrix):
+-            X = csr_matrix(X)
++    if sparse.issparse(X):
++        if not isinstance(X, sparse.csr_matrix):
++            X = sparse.csr_matrix(X)
+         norms = csr_row_norms(X)
+     else:
+         norms = np.einsum('ij,ij->i', X, X)
+@@ -131,7 +130,7 @@ def safe_sparse_dot(a, b, dense_output=False):
+     dot_product : array or sparse matrix
+         sparse if ``a`` or ``b`` is sparse and ``dense_output=False``.
+     """
+-    if issparse(a) or issparse(b):
++    if sparse.issparse(a) or sparse.issparse(b):
+         ret = a * b
+         if dense_output and hasattr(ret, "toarray"):
+             ret = ret.toarray()
+@@ -307,6 +306,12 @@ def randomized_svd(M, n_components, n_oversamples=10, n_iter='auto',
+       analysis
+       A. Szlam et al. 2014
+     """
++    if isinstance(M, (sparse.lil_matrix, sparse.dok_matrix)):
++        warnings.warn("Calculating SVD of a {} is expensive. "
++                      "csr_matrix is more efficient.".format(
++                          type(M).__name__),
++                      sparse.SparseEfficiencyWarning)
++
+     random_state = check_random_state(random_state)
+     n_random = n_components + n_oversamples
+     n_samples, n_features = M.shape
+@@ -620,7 +625,7 @@ def safe_min(X):
+     Adapated from http://stackoverflow.com/q/13426580
+ 
+     """
+-    if issparse(X):
++    if sparse.issparse(X):
+         if len(X.data) == 0:
+             return 0
+         m = X.data.min()
+@@ -633,7 +638,7 @@ def make_nonnegative(X, min_value=0):
+     """Ensure `X.min()` >= `min_value`."""
+     min_ = safe_min(X)
+     if min_ < min_value:
+-        if issparse(X):
++        if sparse.issparse(X):
+             raise ValueError("Cannot make the data matrix"
+                              " nonnegative because it is sparse."
+                              " Adding a value to every entry would"
+diff --git a/sklearn/utils/tests/test_extmath.py b/sklearn/utils/tests/test_extmath.py
+index d89e2a1aa122..522435d32ded 100644
+--- a/sklearn/utils/tests/test_extmath.py
++++ b/sklearn/utils/tests/test_extmath.py
+@@ -365,6 +365,21 @@ def test_randomized_svd_power_iteration_normalizer():
+             assert_greater(15, np.abs(error_2 - error))
+ 
+ 
++def test_randomized_svd_sparse_warnings():
++    # randomized_svd throws a warning for lil and dok matrix
++    rng = np.random.RandomState(42)
++    X = make_low_rank_matrix(50, 20, effective_rank=10, random_state=rng)
++    n_components = 5
++    for cls in (sparse.lil_matrix, sparse.dok_matrix):
++        X = cls(X)
++        assert_warns_message(
++            sparse.SparseEfficiencyWarning,
++            "Calculating SVD of a {} is expensive. "
++            "csr_matrix is more efficient.".format(cls.__name__),
++            randomized_svd, X, n_components, n_iter=1,
++            power_iteration_normalizer='none')
++
++
+ def test_svd_flip():
+     # Check that svd_flip works in both situations, and reconstructs input.
+     rs = np.random.RandomState(1999)
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 2f62299a206b..5fd54dc49b07 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -492,10 +492,6 @@ def check_array(array, accept_sparse=False, dtype="numeric", order=None,
+             try:
+                 warnings.simplefilter('error', ComplexWarning)
+                 array = np.asarray(array, dtype=dtype, order=order)
+-            except ValueError as ve:
+-                if "convert" in ve:
+-                    raise TypeError("Invalid dtype conversion from {0} to "
+-                                    "{1}".format(dtype_orig, dtype))
+             except ComplexWarning:
+                 raise ValueError("Complex data not supported\n"
+                                  "{}\n".format(array))

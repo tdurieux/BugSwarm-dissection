@@ -1,0 +1,305 @@
+diff --git a/retrofit-converters/protobuf/src/test/java/retrofit/ProtoConverterFactoryTest.java b/retrofit-converters/protobuf/src/test/java/retrofit/ProtoConverterFactoryTest.java
+index 1a91f493c..25d683f8f 100644
+--- a/retrofit-converters/protobuf/src/test/java/retrofit/ProtoConverterFactoryTest.java
++++ b/retrofit-converters/protobuf/src/test/java/retrofit/ProtoConverterFactoryTest.java
+@@ -89,8 +89,8 @@
+           + "    for method Service.wrongClass");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for class java.lang.String. Tried:\n"
+-              + " * retrofit.ProtoConverterFactory\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory\n"
++              + " * retrofit.ProtoConverterFactory");
+     }
+   }
+ 
+@@ -106,8 +106,8 @@
+           + "    for method Service.wrongType");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for java.util.List<java.lang.String>. Tried:\n"
+-              + " * retrofit.ProtoConverterFactory\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory\n"
++              + " * retrofit.ProtoConverterFactory");
+     }
+   }
+ 
+diff --git a/retrofit-converters/wire/src/test/java/retrofit/WireConverterFactoryTest.java b/retrofit-converters/wire/src/test/java/retrofit/WireConverterFactoryTest.java
+index 3d22ca7d2..445617a50 100644
+--- a/retrofit-converters/wire/src/test/java/retrofit/WireConverterFactoryTest.java
++++ b/retrofit-converters/wire/src/test/java/retrofit/WireConverterFactoryTest.java
+@@ -88,8 +88,8 @@
+           + "    for method Service.wrongClass");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for class java.lang.String. Tried:\n"
+-              + " * retrofit.WireConverterFactory\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory\n"
++              + " * retrofit.WireConverterFactory");
+     }
+   }
+ 
+@@ -105,8 +105,8 @@
+           + "    for method Service.wrongType");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for java.util.List<java.lang.String>. Tried:\n"
+-              + " * retrofit.WireConverterFactory\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory\n"
++              + " * retrofit.WireConverterFactory");
+     }
+   }
+ 
+diff --git a/retrofit/src/main/java/retrofit/OkHttpBodyConverterFactory.java b/retrofit/src/main/java/retrofit/BuiltInConverterFactory.java
+similarity index 90%
+rename from retrofit/src/main/java/retrofit/OkHttpBodyConverterFactory.java
+rename to retrofit/src/main/java/retrofit/BuiltInConverterFactory.java
+index a7281ea20..820a26020 100644
+--- a/retrofit/src/main/java/retrofit/OkHttpBodyConverterFactory.java
++++ b/retrofit/src/main/java/retrofit/BuiltInConverterFactory.java
+@@ -21,7 +21,7 @@
+ import java.lang.reflect.Type;
+ import retrofit.http.Streaming;
+ 
+-final class OkHttpBodyConverterFactory implements Converter.Factory {
++final class BuiltInConverterFactory implements Converter.Factory {
+   @Override public Converter<?> get(Type type, Annotation[] annotations) {
+     if (!(type instanceof Class)) {
+       return null;
+@@ -34,6 +34,9 @@
+       boolean streaming = Utils.isAnnotationPresent(annotations, Streaming.class);
+       return new OkHttpResponseBodyConverter(streaming);
+     }
++    if (cls == Void.class) {
++      return new VoidConverter();
++    }
+     return null;
+   }
+ }
+diff --git a/retrofit/src/main/java/retrofit/Retrofit.java b/retrofit/src/main/java/retrofit/Retrofit.java
+index 8885183c8..568ac3c95 100644
+--- a/retrofit/src/main/java/retrofit/Retrofit.java
++++ b/retrofit/src/main/java/retrofit/Retrofit.java
+@@ -179,6 +179,12 @@ public Executor callbackExecutor() {
+     private List<CallAdapter.Factory> adapterFactories = new ArrayList<>();
+     private Executor callbackExecutor;
+ 
++    public Builder() {
++      // Add the built-in converter factory first. This prevents overriding its behavior but also
++      // ensures correct behavior when using converters that consume all types.
++      converterFactories.add(new BuiltInConverterFactory());
++    }
++
+     /** The HTTP client used for requests. */
+     public Builder client(OkHttpClient client) {
+       this.client = checkNotNull(client, "client == null");
+@@ -264,9 +270,8 @@ public Retrofit build() {
+       List<CallAdapter.Factory> adapterFactories = new ArrayList<>(this.adapterFactories);
+       adapterFactories.add(Platform.get().defaultCallAdapterFactory(callbackExecutor));
+ 
+-      // Make a defensive copy of the converters and add the default OkHttp body converter.
++      // Make a defensive copy of the converters.
+       List<Converter.Factory> converterFactories = new ArrayList<>(this.converterFactories);
+-      converterFactories.add(new OkHttpBodyConverterFactory());
+ 
+       return new Retrofit(client, baseUrl, converterFactories, adapterFactories, callbackExecutor);
+     }
+diff --git a/retrofit/src/main/java/retrofit/VoidConverter.java b/retrofit/src/main/java/retrofit/VoidConverter.java
+new file mode 100644
+index 000000000..1987ee9b3
+--- /dev/null
++++ b/retrofit/src/main/java/retrofit/VoidConverter.java
+@@ -0,0 +1,16 @@
++package retrofit;
++
++import com.squareup.okhttp.RequestBody;
++import com.squareup.okhttp.ResponseBody;
++import java.io.IOException;
++
++public final class VoidConverter implements Converter<Void> {
++  @Override public Void fromBody(ResponseBody body) throws IOException {
++    body.close();
++    return null;
++  }
++
++  @Override public RequestBody toBody(Void value) {
++    throw new UnsupportedOperationException();
++  }
++}
+diff --git a/retrofit/src/test/java/retrofit/RequestBuilderTest.java b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
+index b2b64fdce..826b27472 100644
+--- a/retrofit/src/test/java/retrofit/RequestBuilderTest.java
++++ b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
+@@ -1662,7 +1662,7 @@ private Request buildRequest(Class<?> cls, Object... args) {
+       }
+     };
+     List<Converter.Factory> converterFactories =
+-        Arrays.asList(new ToStringConverterFactory(), new OkHttpBodyConverterFactory());
++        Arrays.asList(new BuiltInConverterFactory(), new ToStringConverterFactory());
+ 
+     RequestFactory requestFactory = RequestFactoryParser.parse(method, baseUrl, converterFactories);
+     return requestFactory.create(args);
+diff --git a/retrofit/src/test/java/retrofit/RetrofitTest.java b/retrofit/src/test/java/retrofit/RetrofitTest.java
+index 361518a46..2eaaa23ee 100644
+--- a/retrofit/src/test/java/retrofit/RetrofitTest.java
++++ b/retrofit/src/test/java/retrofit/RetrofitTest.java
+@@ -64,8 +64,9 @@
+   interface CallMethod {
+     @GET("/") Call<String> disallowed();
+     @POST("/") Call<ResponseBody> disallowed(@Body String body);
+-    @GET("/") Call<ResponseBody> allowed();
+-    @POST("/") Call<ResponseBody> allowed(@Body RequestBody body);
++    @GET("/") Call<ResponseBody> getResponseBody();
++    @GET("/") Call<Void> getVoid();
++    @POST("/") Call<ResponseBody> postRequestBody(@Body RequestBody body);
+   }
+   interface FutureMethod {
+     @GET("/") Future<String> method();
+@@ -90,8 +91,8 @@
+     @POST("/b") Call<CharSequence> call(@Body CharSequence charSequence);
+   }
+   interface Annotated {
+-    @GET("/") @Foo Call<ResponseBody> method();
+-    @POST("/") Call<ResponseBody> parameter(@Foo @Body RequestBody param);
++    @GET("/") @Foo Call<String> method();
++    @POST("/") Call<ResponseBody> parameter(@Foo @Body String param);
+ 
+     @Retention(RUNTIME)
+     @interface Foo {}
+@@ -141,7 +142,7 @@
+         .baseUrl(server.url("/"))
+         .build();
+     CallMethod example = retrofit.create(CallMethod.class);
+-    assertThat(example.allowed()).isNotNull();
++    assertThat(example.getResponseBody()).isNotNull();
+   }
+ 
+   @Test public void callCallCustomAdapter() {
+@@ -171,7 +172,7 @@
+         .addCallAdapterFactory(new MyCallAdapterFactory())
+         .build();
+     CallMethod example = retrofit.create(CallMethod.class);
+-    assertThat(example.allowed()).isNotNull();
++    assertThat(example.getResponseBody()).isNotNull();
+     assertThat(factoryCalled.get()).isTrue();
+     assertThat(adapterCalled.get()).isTrue();
+   }
+@@ -213,6 +214,7 @@
+     }
+     Retrofit retrofit = new Retrofit.Builder()
+         .baseUrl(server.url("/"))
++        .addConverterFactory(new ToStringConverterFactory())
+         .addCallAdapterFactory(new MyCallAdapterFactory())
+         .build();
+     Annotated annotated = retrofit.create(Annotated.class);
+@@ -245,7 +247,7 @@
+     class MyConverterFactory implements Converter.Factory {
+       @Override public Converter<?> get(Type type, Annotation[] annotations) {
+         annotationsRef.set(annotations);
+-        return null;
++        return new ToStringConverterFactory.StringConverter();
+       }
+     }
+     Retrofit retrofit = new Retrofit.Builder()
+@@ -263,10 +265,10 @@
+     final AtomicReference<Annotation[]> annotationsRef = new AtomicReference<>();
+     class MyConverterFactory implements Converter.Factory {
+       @Override public Converter<?> get(Type type, Annotation[] annotations) {
+-        if (type == RequestBody.class) {
++        if (type == String.class) {
+           annotationsRef.set(annotations);
+         }
+-        return null;
++        return new ToStringConverterFactory.StringConverter();
+       }
+     }
+     Retrofit retrofit = new Retrofit.Builder()
+@@ -294,7 +296,7 @@
+               + "    for method CallMethod.disallowed");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for class java.lang.String. Tried:\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory");
+     }
+   }
+ 
+@@ -314,7 +316,7 @@
+           + "    for method CallMethod.disallowed");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for class java.lang.String. Tried:\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory");
+     }
+   }
+ 
+@@ -337,8 +339,8 @@
+           + "    for method CallMethod.disallowed");
+       assertThat(e.getCause()).hasMessage(
+           "Could not locate converter for class java.lang.String. Tried:\n"
+-              + " * retrofit.RetrofitTest$3\n"
+-              + " * retrofit.OkHttpBodyConverterFactory");
++              + " * retrofit.BuiltInConverterFactory\n"
++              + " * retrofit.RetrofitTest$3");
+     }
+   }
+ 
+@@ -350,10 +352,22 @@
+ 
+     server.enqueue(new MockResponse().setBody("Hi"));
+ 
+-    Response<ResponseBody> response = example.allowed().execute();
++    Response<ResponseBody> response = example.getResponseBody().execute();
+     assertThat(response.body().string()).isEqualTo("Hi");
+   }
+ 
++  @Test public void voidOutgoingAllowed() throws IOException {
++    Retrofit retrofit = new Retrofit.Builder()
++        .baseUrl(server.url("/"))
++        .build();
++    CallMethod example = retrofit.create(CallMethod.class);
++
++    server.enqueue(new MockResponse().setBody("Hi"));
++
++    Response<Void> response = example.getVoid().execute();
++    assertThat(response.body()).isNull();
++  }
++
+   @Test public void responseBodyIncomingAllowed() throws IOException, InterruptedException {
+     Retrofit retrofit = new Retrofit.Builder()
+         .baseUrl(server.url("/"))
+@@ -363,7 +377,7 @@
+     server.enqueue(new MockResponse().setBody("Hi"));
+ 
+     RequestBody body = RequestBody.create(MediaType.parse("text/plain"), "Hey");
+-    Response<ResponseBody> response = example.allowed(body).execute();
++    Response<ResponseBody> response = example.postRequestBody(body).execute();
+     assertThat(response.body().string()).isEqualTo("Hi");
+ 
+     assertThat(server.takeRequest().getBody().readUtf8()).isEqualTo("Hey");
+@@ -521,7 +535,7 @@
+         .build();
+     List<Converter.Factory> converterFactories = retrofit.converterFactories();
+     assertThat(converterFactories).hasSize(1);
+-    assertThat(converterFactories.get(0)).isInstanceOf(OkHttpBodyConverterFactory.class);
++    assertThat(converterFactories.get(0)).isInstanceOf(BuiltInConverterFactory.class);
+   }
+ 
+   @Test public void converterFactoryPropagated() {
+@@ -631,7 +645,7 @@
+         .callbackExecutor(executor)
+         .build();
+     CallMethod service = retrofit.create(CallMethod.class);
+-    Call<ResponseBody> call = service.allowed();
++    Call<ResponseBody> call = service.getResponseBody();
+ 
+     server.enqueue(new MockResponse());
+ 
+@@ -662,7 +676,7 @@
+         .callbackExecutor(executor)
+         .build();
+     CallMethod service = retrofit.create(CallMethod.class);
+-    Call<ResponseBody> call = service.allowed();
++    Call<ResponseBody> call = service.getResponseBody();
+ 
+     server.enqueue(new MockResponse().setSocketPolicy(DISCONNECT_AT_START));
+ 

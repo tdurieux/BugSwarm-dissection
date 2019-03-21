@@ -1,0 +1,1162 @@
+diff --git a/README.md b/README.md
+index 1aba9d50..57d380af 100644
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,13 @@
+ [![stagemonitor-h75px](https://cloud.githubusercontent.com/assets/2163464/3024619/70ed9cd0-dffb-11e3-9251-083e62d97f0d.png)](http://www.stagemonitor.org)
+ 
+-[![Build Status](https://travis-ci.org/stagemonitor/stagemonitor.svg?branch=master)](https://travis-ci.org/stagemonitor/stagemonitor) [![Coverage Status](https://coveralls.io/repos/stagemonitor/stagemonitor/badge.svg?branch=master&service=github)](https://coveralls.io/github/stagemonitor/stagemonitor?branch=master) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.stagemonitor/stagemonitor-web/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.stagemonitor/stagemonitor-web)  [![Release](https://jitpack.io/v/stagemonitor/stagemonitor.svg)](https://jitpack.io/#com.github.stagemonitor.stagemonitor/stagemonitor-web)
+-=================
++[![Build Status](https://travis-ci.org/stagemonitor/stagemonitor.svg?branch=master)](https://travis-ci.org/stagemonitor/stagemonitor)
++[![OpenTracing Badge](https://img.shields.io/badge/OpenTracing-enabled-blue.svg)](http://opentracing.io)
++[![Coverage Status](https://coveralls.io/repos/stagemonitor/stagemonitor/badge.svg?branch=master&service=github)](https://coveralls.io/github/stagemonitor/stagemonitor?branch=master)
++[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.stagemonitor/stagemonitor-web/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.stagemonitor/stagemonitor-web)
++[![Release](https://jitpack.io/v/stagemonitor/stagemonitor.svg)](https://jitpack.io/#com.github.stagemonitor.stagemonitor/stagemonitor-web)
++
++
++---
+ 
+ Stagemonitor is a Java monitoring agent that tightly integrates with time series databases like Elasticsearch, Graphite and InfluxDB to analyze graphed metrics and [Kibana](http://www.elasticsearch.org/overview/kibana/) to analyze requests and call stacks. It includes preconfigured Grafana and Kibana dashboards that can be customized.
+ 
+diff --git a/stagemonitor-core/src/main/java/org/stagemonitor/core/CorePlugin.java b/stagemonitor-core/src/main/java/org/stagemonitor/core/CorePlugin.java
+index b2426735..13fb97c8 100644
+--- a/stagemonitor-core/src/main/java/org/stagemonitor/core/CorePlugin.java
++++ b/stagemonitor-core/src/main/java/org/stagemonitor/core/CorePlugin.java
+@@ -339,8 +339,9 @@
+ 			.key("stagemonitor.instrument.include")
+ 			.dynamic(true)
+ 			.label("Included packages")
+-			.description("The packages that should be included for instrumentation (for example the profiler). " +
+-					"If this property is empty, all packages (except for the excluded ones) are instrumented. " +
++			.description("The packages that should be included for instrumentation. " +
++					"If this property is required if you want to use the profiler, the @MonitorRequests annotation, the " +
++					"com.codahale.metrics.annotation.* annotations or similar features. " +
+ 					"You can exclude subpackages of a included package via `stagemonitor.instrument.exclude`.")
+ 			.defaultValue(Collections.<String>emptySet())
+ 			.configurationCategory(CORE_PLUGIN_NAME)
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopSpan.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopSpan.java
+index 7ed619ec..9a4cd1e6 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopSpan.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopSpan.java
+@@ -70,7 +70,7 @@ public Span log(long timestampMicroseconds, String eventName, Object payload) {
+ 		return this;
+ 	}
+ 
+-	static class NoopSpanContext implements SpanContext {
++	static final class NoopSpanContext implements SpanContext {
+ 		static final SpanContext INSTANCE = new NoopSpanContext();
+ 
+ 		@Override
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopTracer.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopTracer.java
+index 8c8c3e29..5e51899a 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopTracer.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/NoopTracer.java
+@@ -8,7 +8,7 @@
+ import io.opentracing.Tracer;
+ import io.opentracing.propagation.Format;
+ 
+-public class NoopTracer implements Tracer {
++public final class NoopTracer implements Tracer {
+ 
+ 	public static final Tracer INSTANCE = new NoopTracer();
+ 
+@@ -29,7 +29,7 @@ public SpanBuilder buildSpan(String operationName) {
+ 		return NoopSpan.NoopSpanContext.INSTANCE;
+ 	}
+ 
+-	private static class NoopSpanBuilder implements SpanBuilder {
++	private final static class NoopSpanBuilder implements SpanBuilder {
+ 
+ 		private static final NoopSpanBuilder INSTANCE = new NoopSpanBuilder();
+ 
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/JaegerTracerFactory.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/JaegerTracerFactory.java
+index 5b39767d..a694121e 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/JaegerTracerFactory.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/JaegerTracerFactory.java
+@@ -1,6 +1,5 @@
+ package org.stagemonitor.requestmonitor.tracing.jaeger;
+ 
+-import com.uber.jaeger.reporters.CompositeReporter;
+ import com.uber.jaeger.samplers.ConstSampler;
+ 
+ import org.stagemonitor.core.StagemonitorPlugin;
+@@ -15,7 +14,7 @@
+ 	public Tracer getTracer(StagemonitorPlugin.InitArguments initArguments) {
+ 		return new com.uber.jaeger.Tracer.Builder(
+ 				initArguments.getMeasurementSession().getApplicationName(),
+-				new CompositeReporter(new LoggingSpanReporter(initArguments.getPlugin(RequestMonitorPlugin.class))),
++				new LoggingSpanReporter(initArguments.getPlugin(RequestMonitorPlugin.class)),
+ 				new ConstSampler(true))
+ 				.build();
+ 	}
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/MDCSpanEventListener.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/MDCSpanEventListener.java
+index fdc736dd..727b23b3 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/MDCSpanEventListener.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/jaeger/MDCSpanEventListener.java
+@@ -54,6 +54,7 @@ private void setContextToMdc(SpanContext context) {
+ 
+ 	@Override
+ 	public void onFinish(SpanWrapper spanWrapper, String operationName, long durationNanos) {
++		// the other keys are not span-scoped hence not removed here
+ 		MDC.remove("traceId");
+ 		MDC.remove("spanId");
+ 		MDC.remove("parentId");
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListener.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListener.java
+index e032937d..ba16b5c9 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListener.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListener.java
+@@ -20,6 +20,9 @@
+  * <li>
+  * Populate the {@link org.slf4j.MDC}
+  * </li>
++ * <li>
++ * Implement custom span reporters by leveraging the {@link #onFinish(SpanWrapper, String, long)} method
++ * </li>
+  * </ul>
+  */
+ public interface SpanEventListener {
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListenerFactory.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListenerFactory.java
+index 572f75b9..8a5c462b 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListenerFactory.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanEventListenerFactory.java
+@@ -7,8 +7,8 @@
+  * a new instance of {@link SpanEventListener} has to be created for each individual {@link Span}.
+  * <p/>
+  * If your {@link SpanEventListener} is stateless i.e. it does not use instance variables which are dependent on the
+- * parameters of any {@link SpanEventListener} method, use {@link StatelessSpanEventListener} which reuses the same
+- * instance for each {@link Span}.
++ * parameters of any {@link SpanEventListener} method, use {@link StatelessSpanEventListener} as a base class as it
++ * reuses the same instance for each {@link Span}.
+  */
+ public interface SpanEventListenerFactory {
+ 	SpanEventListener create();
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrapper.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrapper.java
+index e2616a63..9a0a4b78 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrapper.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrapper.java
+@@ -8,8 +8,15 @@
+ import io.opentracing.Span;
+ import io.opentracing.SpanContext;
+ 
++/**
++ * The purpose of this wrapper is to call the registered {@link SpanEventListener}s before certain methods of the
++ * {@link #delegate} {@link Span} are invoked.
++ */
+ public class SpanWrapper implements Span {
+ 
++	/**
++	 * The actual span to be invoked
++	 */
+ 	private Span delegate;
+ 	private String operationName;
+ 	private final long startTimestampNanos;
+diff --git a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrappingTracer.java b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrappingTracer.java
+index 5fd91812..c13b3107 100644
+--- a/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrappingTracer.java
++++ b/stagemonitor-requestmonitor/src/main/java/org/stagemonitor/requestmonitor/tracing/wrapper/SpanWrappingTracer.java
+@@ -1,6 +1,7 @@
+ package org.stagemonitor.requestmonitor.tracing.wrapper;
+ 
+ import java.util.ArrayList;
++import java.util.Collection;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.CopyOnWriteArrayList;
+@@ -11,16 +12,21 @@
+ import io.opentracing.Tracer;
+ import io.opentracing.propagation.Format;
+ 
++/**
++ * The purpose of this class is to make it possible to register {@link SpanEventListener}s which are created by
++ * {@link SpanEventListenerFactory}s. The {@link SpanEventListener}s are called when certain methods of a
++ * {@link SpanBuilder} or {@link Span} are called.
++ */
+ public class SpanWrappingTracer implements Tracer {
+ 
+ 	private final Tracer delegate;
+-	private final List<SpanEventListenerFactory> spanInterceptorFactories;
++	private final Collection<SpanEventListenerFactory> spanInterceptorFactories;
+ 
+ 	public SpanWrappingTracer(Tracer delegate) {
+ 		this(delegate, new CopyOnWriteArrayList<SpanEventListenerFactory>());
+ 	}
+ 
+-	public SpanWrappingTracer(Tracer delegate, List<SpanEventListenerFactory> spanInterceptorFactories) {
++	public SpanWrappingTracer(Tracer delegate, Collection<SpanEventListenerFactory> spanInterceptorFactories) {
+ 		this.delegate = delegate;
+ 		this.spanInterceptorFactories = spanInterceptorFactories;
+ 	}
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/RequestKeeper.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/RequestKeeper.java
+index 09149668..bb04a7d4 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/RequestKeeper.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/RequestKeeper.java
+@@ -1,30 +1,32 @@
+ package org.stagemonitor.vertx;
+ 
+ import com.uber.jaeger.context.TraceContext;
++
+ import org.stagemonitor.vertx.utils.SavedTraceContext;
+ 
+ import java.util.concurrent.ConcurrentHashMap;
+ 
+ public class RequestKeeper {
+-    private static RequestKeeper ourInstance = new RequestKeeper();
+-
+-    public static RequestKeeper getInstance() {
+-        return ourInstance;
+-    }
++	private static RequestKeeper ourInstance = new RequestKeeper();
++	private ConcurrentHashMap<Object, SavedTraceContext> savedContexts;
+ 
+-    private ConcurrentHashMap<Object, SavedTraceContext> savedContexts;
++	private RequestKeeper() {
++		savedContexts = new ConcurrentHashMap<>();
++	}
+ 
+-    private RequestKeeper() {
+-        savedContexts = new ConcurrentHashMap<>();
+-    }
++	public static RequestKeeper getInstance() {
++		return ourInstance;
++	}
+ 
+-    public SavedTraceContext getSavedContext(Object id){
+-        return savedContexts.get(id);
+-    }
++	public SavedTraceContext getSavedContext(Object id) {
++		SavedTraceContext context = savedContexts.get(id);
++		savedContexts.remove(id);
++		return context;
++	}
+ 
+-    public void storeContext(Object id, TraceContext context){
+-        savedContexts.put(id, new SavedTraceContext(context));
+-    }
++	public void storeContext(Object id, TraceContext context) {
++		savedContexts.putIfAbsent(id, new SavedTraceContext(context));
++	}
+ 
+ 	public boolean containsKey(Object message) {
+ 		return savedContexts.containsKey(message);
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusConsumerTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusConsumerTransformer.java
+index 682dc1f4..47ef21d6 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusConsumerTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusConsumerTransformer.java
+@@ -1,12 +1,10 @@
+ package org.stagemonitor.vertx.transformers;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.core.eventbus.Message;
+-import io.vertx.core.eventbus.MessageConsumer;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+@@ -14,32 +12,38 @@
+ import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.wrappers.MessageConsumerMonitoringHandler;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import io.vertx.core.Handler;
++import io.vertx.core.eventbus.Message;
++import io.vertx.core.eventbus.MessageConsumer;
++
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class EventBusConsumerTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(EventBusConsumerTransformer.class);
++	public static Logger logger = LoggerFactory.getLogger(EventBusConsumerTransformer.class);
++
++	private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
+ 
+-    private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
++	@Advice.OnMethodEnter
++	public static void wrap(@Advice.Argument(value = 1, readOnly = false) Handler<Message<?>> handler) throws NoSuchFieldException, IllegalAccessException {
++		handler = new MessageConsumerMonitoringHandler(handler);
++	}
+ 
+ 	@Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return EventBusConsumerTransformer.class;
+-    }
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return EventBusConsumerTransformer.class;
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named(vertxPlugin.getEventBusImplementation());
+-    }
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named(vertxPlugin.getEventBusImplementation());
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+ 		return takesArguments(String.class, Handler.class)
+ 				.and(returns(MessageConsumer.class));
+-    }
+-
+-    @Advice.OnMethodEnter
+-    public static void wrap(@Advice.Argument(value = 1, readOnly = false) Handler<Message<?>> handler) throws NoSuchFieldException, IllegalAccessException {
+-		handler = new MessageConsumerMonitoringHandler(handler);
+-    }
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusSendTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusSendTransformer.java
+index 99a8007c..bc4e23a8 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusSendTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/EventBusSendTransformer.java
+@@ -1,47 +1,50 @@
+ package org.stagemonitor.vertx.transformers;
+ 
+ import com.uber.jaeger.context.TracingUtils;
+-import io.vertx.core.eventbus.EventBus;
++
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+ import org.stagemonitor.vertx.RequestKeeper;
+ import org.stagemonitor.vertx.VertxPlugin;
+-import rx.Observable;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import io.vertx.core.eventbus.EventBus;
++
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
+ 
+ public class EventBusSendTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(EventBusSendTransformer.class);
++	public static Logger logger = LoggerFactory.getLogger(EventBusSendTransformer.class);
+ 	private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
+ 
+-    @Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return EventBusSendTransformer.class;
+-    }
++	@Advice.OnMethodEnter
++	public static void storeContext(@Advice.Argument(value = 1) Object message) {
++		if (!RequestKeeper.getInstance().containsKey(message)) {
++			RequestKeeper.getInstance().storeContext(message, TracingUtils.getTraceContext());
++		}
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named(vertxPlugin.getEventBusImplementation());
+-    }
++	@Override
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return EventBusSendTransformer.class;
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+-        return (named("send")
+-				.or(named("publish")))
+-                .and(returns(EventBus.class));
+-    }
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named(vertxPlugin.getEventBusImplementation());
++	}
+ 
+-    @Advice.OnMethodEnter
+-    public static void storeContext(@Advice.Argument(value = 1) Object message){
+-    	if(!RequestKeeper.getInstance().containsKey(message)){
+-			RequestKeeper.getInstance().storeContext(message, TracingUtils.getTraceContext());
+-		}
+-    }
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++		return (named("send")
++				.or(named("publish")))
++				.and(returns(EventBus.class));
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/MessageConsumerTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/MessageConsumerTransformer.java
+index 79c610a0..9098cd00 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/MessageConsumerTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/MessageConsumerTransformer.java
+@@ -1,50 +1,50 @@
+ package org.stagemonitor.vertx.transformers;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.core.eventbus.Message;
+-import io.vertx.core.eventbus.MessageConsumer;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+ import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.wrappers.MessageConsumerMonitoringHandler;
+-import org.stagemonitor.vertx.wrappers.rxJava.ObservableWrapper;
+-import rx.Observable;
+ 
+-import java.lang.reflect.Field;
++import io.vertx.core.Handler;
++import io.vertx.core.eventbus.Message;
++import io.vertx.core.eventbus.MessageConsumer;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class MessageConsumerTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(MessageConsumerTransformer.class);
++	public static Logger logger = LoggerFactory.getLogger(MessageConsumerTransformer.class);
+ 
+-    private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
++	private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
++
++	@Advice.OnMethodEnter
++	public static void wrap(@Advice.Argument(value = 0, readOnly = false) Handler<Message<?>> handler) throws NoSuchFieldException, IllegalAccessException {
++		handler = new MessageConsumerMonitoringHandler(handler);
++	}
+ 
+ 	@Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return MessageConsumerTransformer.class;
+-    }
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return MessageConsumerTransformer.class;
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named(vertxPlugin.getMessageConsumerImplementation());
+-    }
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named(vertxPlugin.getMessageConsumerImplementation());
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+ 		return named("handler")
+ 				.and(takesArguments(Handler.class))
+ 				.and(returns(MessageConsumer.class));
+-    }
+-
+-    @Advice.OnMethodEnter
+-    public static void wrap(@Advice.Argument(value = 0,readOnly = false) Handler<Message<?>> handler) throws NoSuchFieldException, IllegalAccessException {
+-		handler = new MessageConsumerMonitoringHandler(handler);
+-    }
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/RouteHandlerTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/RouteHandlerTransformer.java
+index bf6c4f4d..79c7f703 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/RouteHandlerTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/RouteHandlerTransformer.java
+@@ -1,12 +1,10 @@
+ package org.stagemonitor.vertx.transformers;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.rxjava.ext.web.Route;
+-import io.vertx.rxjava.ext.web.RoutingContext;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+@@ -14,33 +12,39 @@
+ import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.wrappers.RouteMonitoringHandler;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import io.vertx.core.Handler;
++import io.vertx.rxjava.ext.web.Route;
++import io.vertx.rxjava.ext.web.RoutingContext;
++
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class RouteHandlerTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(RouteHandlerTransformer.class);
++	public static Logger logger = LoggerFactory.getLogger(RouteHandlerTransformer.class);
+ 
+ 	private static VertxPlugin vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
+ 
+-    @Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return RouteHandlerTransformer.class;
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named(vertxPlugin.getWebRouteImplementation());
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+-        return named("handler")
+-                .and(takesArguments(Handler.class))
+-                .and(returns(Route.class));
+-    }
+-
+-    @Advice.OnMethodEnter
+-    public static void wrapHandler(@Advice.Argument(value = 0, readOnly = false) Handler<RoutingContext> handler) {
+-        handler = new RouteMonitoringHandler(handler);
+-    }
++	@Advice.OnMethodEnter
++	public static void wrapHandler(@Advice.Argument(value = 0, readOnly = false) Handler<RoutingContext> handler) {
++		handler = new RouteMonitoringHandler(handler);
++	}
++
++	@Override
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return RouteHandlerTransformer.class;
++	}
++
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named(vertxPlugin.getWebRouteImplementation());
++	}
++
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++		return named("handler")
++				.and(takesArguments(Handler.class))
++				.and(returns(Route.class));
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/EventBusSendObservableTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/EventBusSendObservableTransformer.java
+index 68f660fb..0ae94800 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/EventBusSendObservableTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/EventBusSendObservableTransformer.java
+@@ -1,41 +1,46 @@
+ package org.stagemonitor.vertx.transformers.rxJava;
+ 
+ import com.uber.jaeger.context.TracingUtils;
++
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+ import org.stagemonitor.vertx.RequestKeeper;
++
+ import rx.Observable;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class EventBusSendObservableTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(EventBusSendObservableTransformer.class);
+-
+-    @Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return EventBusSendObservableTransformer.class;
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named("io.vertx.rxjava.core.eventbus.EventBus");
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+-        return named("sendObservable")
+-                .and(returns(Observable.class))
+-                .and(takesArguments(2));
+-    }
++	public static Logger logger = LoggerFactory.getLogger(EventBusSendObservableTransformer.class);
+ 
+-    @Advice.OnMethodEnter
+-    public static void storeContext(@Advice.Argument(value = 1) Object message){
++	@Advice.OnMethodEnter
++	public static void storeContext(@Advice.Argument(value = 1) Object message) {
+ 		RequestKeeper.getInstance().storeContext(message, TracingUtils.getTraceContext());
+-    }
++	}
++
++	@Override
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return EventBusSendObservableTransformer.class;
++	}
++
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named("io.vertx.rxjava.core.eventbus.EventBus");
++	}
++
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++		return named("sendObservable")
++				.and(returns(Observable.class))
++				.and(takesArguments(2));
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/MessageConsumerObservableTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/MessageConsumerObservableTransformer.java
+index 3eadedd2..870f795b 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/MessageConsumerObservableTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/MessageConsumerObservableTransformer.java
+@@ -1,50 +1,50 @@
+ package org.stagemonitor.vertx.transformers.rxJava;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.core.eventbus.MessageConsumer;
+-import io.vertx.rxjava.core.eventbus.Message;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+-import org.stagemonitor.core.Stagemonitor;
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+-import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.wrappers.rxJava.ObservableWrapper;
+-import rx.Observable;
+ 
+ import java.lang.reflect.Field;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import io.vertx.rxjava.core.eventbus.Message;
++import rx.Observable;
++
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class MessageConsumerObservableTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(MessageConsumerObservableTransformer.class);
++	public static Logger logger = LoggerFactory.getLogger(MessageConsumerObservableTransformer.class);
++
++	@Advice.OnMethodExit(onThrowable = Throwable.class)
++	@SuppressWarnings("unchecked")
++	public static void wrap(@Advice.Return(readOnly = false) Observable<Message<?>> observable) throws NoSuchFieldException, IllegalAccessException {
++		Field onSubscribe = observable.getClass().getDeclaredField("onSubscribe");
++		onSubscribe.setAccessible(true);
++		observable = new ObservableWrapper((Observable.OnSubscribe) onSubscribe.get(observable), "MONITORING_MESSAGE");
++	}
+ 
+ 	@Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return MessageConsumerObservableTransformer.class;
+-    }
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return MessageConsumerObservableTransformer.class;
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named("io.vertx.rxjava.core.eventbus.MessageConsumer");
+-    }
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named("io.vertx.rxjava.core.eventbus.MessageConsumer");
++	}
+ 
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+ 		return named("toObservable")
+ 				.and(returns(Observable.class))
+ 				.and(takesArguments(0));
+-    }
+-
+-    @Advice.OnMethodExit(onThrowable = Throwable.class)
+-    @SuppressWarnings("unchecked")
+-    public static void wrap(@Advice.Return(readOnly = false) Observable<Message<?>> observable) throws NoSuchFieldException, IllegalAccessException {
+-		Field onSubscribe = observable.getClass().getDeclaredField("onSubscribe");
+-        onSubscribe.setAccessible(true);
+-		observable = new ObservableWrapper((Observable.OnSubscribe) onSubscribe.get(observable), "MONITORING_MESSAGE");
+-    }
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/ObservableTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/ObservableTransformer.java
+index 16782591..e12a8d9f 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/ObservableTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/ObservableTransformer.java
+@@ -1,50 +1,50 @@
+ package org.stagemonitor.vertx.transformers.rxJava;
+ 
+-import io.vertx.rxjava.core.eventbus.Message;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+-import net.bytebuddy.implementation.bind.annotation.Argument;
+-import net.bytebuddy.implementation.bind.annotation.Super;
+-import net.bytebuddy.implementation.bind.annotation.This;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+ import org.stagemonitor.vertx.wrappers.rxJava.MessageConsumerMonitoringSubscriber;
+ import org.stagemonitor.vertx.wrappers.rxJava.ObservableWrapper;
+-import rx.Observable;
++
++import io.vertx.rxjava.core.eventbus.Message;
+ import rx.Subscriber;
+ import rx.Subscription;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class ObservableTransformer extends StagemonitorByteBuddyTransformer {
+ 
++	@Advice.OnMethodEnter
++	public static void intercept(@Advice.Argument(value = 0, readOnly = false) Subscriber<Message<?>> sub, @Advice.This Object instance) {
++		if (instance instanceof ObservableWrapper) {
++			ObservableWrapper observableWrapper = (ObservableWrapper) instance;
++			switch (observableWrapper.getBehavior()) {
++				case "MONITORING_MESSAGE":
++					sub = new MessageConsumerMonitoringSubscriber(sub);
++					break;
++			}
++		}
++	}
++
+ 	@Override
+ 	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+ 		return ObservableTransformer.class;
+ 	}
+ 
+ 	@Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named("rx.Observable");
+-    }
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named("rx.Observable");
++	}
+ 
+ 	@Override
+ 	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getMethodElementMatcher() {
+ 		return named("subscribe")
+-			.and(takesArguments(Subscriber.class))
+-			.and(returns(Subscription.class));
+-	}
+-
+-	@Advice.OnMethodEnter
+-	public static void intercept(@Advice.Argument(value = 0, readOnly = false) Subscriber<Message<?>> sub, @Advice.This Object instance) {
+-		if(instance instanceof ObservableWrapper){
+-			ObservableWrapper observableWrapper = (ObservableWrapper) instance;
+-			switch (observableWrapper.getBehavior()){
+-				case "MONITORING_MESSAGE":
+-					sub = new MessageConsumerMonitoringSubscriber(sub);
+-					break;
+-			}
+-		}
++				.and(takesArguments(Subscriber.class))
++				.and(returns(Subscription.class));
+ 	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/RouteRxHandlerTransformer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/RouteRxHandlerTransformer.java
+index e3032f37..9cb386b3 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/RouteRxHandlerTransformer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/transformers/rxJava/RouteRxHandlerTransformer.java
+@@ -1,42 +1,46 @@
+ package org.stagemonitor.vertx.transformers.rxJava;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.rxjava.ext.web.Route;
+-import io.vertx.rxjava.ext.web.RoutingContext;
+ import net.bytebuddy.asm.Advice;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.type.TypeDescription;
+ import net.bytebuddy.matcher.ElementMatcher;
++
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.instrument.StagemonitorByteBuddyTransformer;
+ import org.stagemonitor.vertx.wrappers.RouteMonitoringHandler;
+ 
+-import static net.bytebuddy.matcher.ElementMatchers.*;
++import io.vertx.core.Handler;
++import io.vertx.rxjava.ext.web.Route;
++import io.vertx.rxjava.ext.web.RoutingContext;
++
++import static net.bytebuddy.matcher.ElementMatchers.named;
++import static net.bytebuddy.matcher.ElementMatchers.returns;
++import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+ 
+ public class RouteRxHandlerTransformer extends StagemonitorByteBuddyTransformer {
+ 
+-    public static Logger logger = LoggerFactory.getLogger(RouteRxHandlerTransformer.class);
+-
+-    @Override
+-    protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
+-        return RouteRxHandlerTransformer.class;
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
+-        return named("io.vertx.rxjava.ext.web.Route");
+-    }
+-
+-    @Override
+-    protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
+-        return named("handler")
+-                .and(takesArguments(Handler.class))
+-                .and(returns(Route.class));
+-    }
+-
+-    @Advice.OnMethodEnter
+-    public static void wrapHandler(@Advice.Argument(value = 0, readOnly = false) Handler<RoutingContext> handler) {
+-        handler = new RouteMonitoringHandler(handler);
+-    }
++	public static Logger logger = LoggerFactory.getLogger(RouteRxHandlerTransformer.class);
++
++	@Advice.OnMethodEnter
++	public static void wrapHandler(@Advice.Argument(value = 0, readOnly = false) Handler<RoutingContext> handler) {
++		handler = new RouteMonitoringHandler(handler);
++	}
++
++	@Override
++	protected Class<? extends StagemonitorByteBuddyTransformer> getAdviceClass() {
++		return RouteRxHandlerTransformer.class;
++	}
++
++	@Override
++	protected ElementMatcher.Junction<TypeDescription> getNarrowTypesMatcher() {
++		return named("io.vertx.rxjava.ext.web.Route");
++	}
++
++	@Override
++	protected ElementMatcher.Junction<MethodDescription.InDefinedShape> getExtraMethodElementMatcher() {
++		return named("handler")
++				.and(takesArguments(Handler.class))
++				.and(returns(Route.class));
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/DefaultRequestNamer.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/DefaultRequestNamer.java
+index db532069..1973118d 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/DefaultRequestNamer.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/DefaultRequestNamer.java
+@@ -1,6 +1,7 @@
+ package org.stagemonitor.vertx.utils;
+ 
+ import io.vertx.core.eventbus.Message;
++
+ public class DefaultRequestNamer implements RequestNamer {
+ 	@Override
+ 	public String getRequestName(Message<?> msg) {
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/SavedTraceContext.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/SavedTraceContext.java
+index aba75f2c..fc564b53 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/SavedTraceContext.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/utils/SavedTraceContext.java
+@@ -1,6 +1,7 @@
+ package org.stagemonitor.vertx.utils;
+ 
+ import com.uber.jaeger.context.TraceContext;
++
+ import io.opentracing.Span;
+ 
+ /**
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/MessageConsumerMonitoringHandler.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/MessageConsumerMonitoringHandler.java
+index 207ed7c7..3b59e0e5 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/MessageConsumerMonitoringHandler.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/MessageConsumerMonitoringHandler.java
+@@ -1,7 +1,5 @@
+ package org.stagemonitor.vertx.wrappers;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.core.eventbus.Message;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+@@ -11,30 +9,32 @@
+ import org.stagemonitor.vertx.RequestKeeper;
+ import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.utils.SavedTraceContext;
+-import rx.Subscriber;
+ 
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+ 
++import io.vertx.core.Handler;
++import io.vertx.core.eventbus.Message;
++
+ public class MessageConsumerMonitoringHandler implements Handler<Message<?>> {
+ 
+-    private final Handler<Message<?>> delegate;
++	private final Handler<Message<?>> delegate;
+ 
+-    private Logger logger = LoggerFactory.getLogger(MessageConsumerMonitoringHandler.class);
+-    private VertxPlugin vertxPlugin;
+-    private RequestMonitorPlugin requestMonitorPlugin;
++	private Logger logger = LoggerFactory.getLogger(MessageConsumerMonitoringHandler.class);
++	private VertxPlugin vertxPlugin;
++	private RequestMonitorPlugin requestMonitorPlugin;
+ 
+-    public MessageConsumerMonitoringHandler(Handler<Message<?>> delegate) {
+-        this.delegate = delegate;
++	public MessageConsumerMonitoringHandler(Handler<Message<?>> delegate) {
++		this.delegate = delegate;
+ 		vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
+ 		requestMonitorPlugin = Stagemonitor.getPlugin(RequestMonitorPlugin.class);
+-    }
++	}
+ 
+ 	@Override
+ 	public void handle(Message<?> message) {
+ 		final RequestMonitor requestMonitor = requestMonitorPlugin.getRequestMonitor();
+ 		SavedTraceContext context = RequestKeeper.getInstance().getSavedContext(message.body());
+-		if(context != null && context.getCurrentSpan() != null){
++		if (context != null && context.getCurrentSpan() != null) {
+ 			context.getTraceContext().push(context.getCurrentSpan());
+ 		}
+ 		try {
+@@ -42,15 +42,13 @@ public void handle(Message<?> message) {
+ 		} catch (IllegalAccessException | InstantiationException | ClassNotFoundException e) {
+ 			e.printStackTrace();
+ 		}
+-		try{
++		try {
+ 			delegate.handle(message);
+-		}
+-		catch (Throwable e){
++		} catch (Throwable e) {
+ 			requestMonitor.recordException((Exception) e);
+-		}
+-		finally {
++		} finally {
+ 			requestMonitor.monitorStop();
+-			if(context != null && context.getCurrentSpan() != null){
++			if (context != null && context.getCurrentSpan() != null) {
+ 				context.getTraceContext().pop();
+ 			}
+ 		}
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/RouteMonitoringHandler.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/RouteMonitoringHandler.java
+index 8943354d..d0ab042b 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/RouteMonitoringHandler.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/RouteMonitoringHandler.java
+@@ -1,45 +1,45 @@
+ package org.stagemonitor.vertx.wrappers;
+ 
+-import io.vertx.core.Handler;
+-import io.vertx.rxjava.ext.web.RoutingContext;
+ import org.stagemonitor.core.Stagemonitor;
+ import org.stagemonitor.requestmonitor.MonitoredMethodRequest;
+ import org.stagemonitor.requestmonitor.RequestMonitor;
+ import org.stagemonitor.requestmonitor.RequestMonitorPlugin;
+ 
++import io.vertx.core.Handler;
++import io.vertx.rxjava.ext.web.RoutingContext;
++
+ public class RouteMonitoringHandler implements Handler<RoutingContext> {
+ 
+-    private Handler<RoutingContext> delegate;
++	private Handler<RoutingContext> delegate;
+ 	private RequestMonitorPlugin requestMonitorPlugin;
+ 
+-    public RouteMonitoringHandler(Handler<RoutingContext> delegate) {
+-        this.delegate = delegate;
++	public RouteMonitoringHandler(Handler<RoutingContext> delegate) {
++		this.delegate = delegate;
+ 		requestMonitorPlugin = Stagemonitor.getPlugin(RequestMonitorPlugin.class);
+-    }
++	}
+ 
+-    @Override
+-    public void handle(RoutingContext event) {
+-        if(!event.normalisedPath().startsWith("/eventbus") && !event.normalisedPath().equals("/")) {
+-            final RequestMonitor requestMonitor = requestMonitorPlugin.getRequestMonitor();
+-            startMonitoring(event);
+-            try {
+-                delegate.handle(event);
+-            } catch (Exception e) {
+-                requestMonitor.recordException(e);
+-            } finally {
+-                if(event.failed()){
+-                    requestMonitor.recordException((Exception) ((io.vertx.ext.web.RoutingContext)event.getDelegate()).failure());
+-                }
++	@Override
++	public void handle(RoutingContext event) {
++		if (!event.normalisedPath().startsWith("/eventbus") && !event.normalisedPath().equals("/")) {
++			final RequestMonitor requestMonitor = requestMonitorPlugin.getRequestMonitor();
++			startMonitoring(event);
++			try {
++				delegate.handle(event);
++			} catch (Exception e) {
++				requestMonitor.recordException(e);
++			} finally {
++				if (event.failed()) {
++					requestMonitor.recordException((Exception) ((io.vertx.ext.web.RoutingContext) event.getDelegate()).failure());
++				}
+ 				requestMonitor.monitorStop();
+-            }
+-        }
+-        else{
+-            delegate.handle(event);
+-        }
+-    }
++			}
++		} else {
++			delegate.handle(event);
++		}
++	}
+ 
+-    private void startMonitoring(RoutingContext event){
+-        final MonitoredMethodRequest monitoredRequest = new MonitoredMethodRequest(Stagemonitor.getConfiguration(), event.normalisedPath(), null);
++	private void startMonitoring(RoutingContext event) {
++		final MonitoredMethodRequest monitoredRequest = new MonitoredMethodRequest(Stagemonitor.getConfiguration(), event.normalisedPath(), null);
+ 		requestMonitorPlugin.getRequestMonitor().monitorStart(monitoredRequest);
+-    }
++	}
+ }
+diff --git a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/rxJava/MessageConsumerMonitoringSubscriber.java b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/rxJava/MessageConsumerMonitoringSubscriber.java
+index 247f48a7..682b9001 100644
+--- a/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/rxJava/MessageConsumerMonitoringSubscriber.java
++++ b/stagemonitor-vertx/src/main/java/org/stagemonitor/vertx/wrappers/rxJava/MessageConsumerMonitoringSubscriber.java
+@@ -1,6 +1,5 @@
+ package org.stagemonitor.vertx.wrappers.rxJava;
+ 
+-import io.vertx.rxjava.core.eventbus.Message;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.stagemonitor.core.Stagemonitor;
+@@ -10,69 +9,69 @@
+ import org.stagemonitor.vertx.RequestKeeper;
+ import org.stagemonitor.vertx.VertxPlugin;
+ import org.stagemonitor.vertx.utils.SavedTraceContext;
+-import rx.Subscriber;
+ 
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+ 
++import io.vertx.rxjava.core.eventbus.Message;
++import rx.Subscriber;
++
+ public class MessageConsumerMonitoringSubscriber extends Subscriber<Message<?>> {
+ 
+-    private final Subscriber<Message<?>> actual;
++	private final Subscriber<Message<?>> actual;
+ 
+-    private Logger logger = LoggerFactory.getLogger(MessageConsumerMonitoringSubscriber.class);
+-    private VertxPlugin vertxPlugin;
+-    private RequestMonitorPlugin requestMonitorPlugin;
++	private Logger logger = LoggerFactory.getLogger(MessageConsumerMonitoringSubscriber.class);
++	private VertxPlugin vertxPlugin;
++	private RequestMonitorPlugin requestMonitorPlugin;
+ 
+-    public MessageConsumerMonitoringSubscriber(Subscriber<Message<?>> actual) {
+-        super(actual);
+-        this.actual = actual;
++	public MessageConsumerMonitoringSubscriber(Subscriber<Message<?>> actual) {
++		super(actual);
++		this.actual = actual;
+ 		vertxPlugin = Stagemonitor.getPlugin(VertxPlugin.class);
+ 		requestMonitorPlugin = Stagemonitor.getPlugin(RequestMonitorPlugin.class);
+-    }
++	}
+ 
+-    @Override
+-    public void onCompleted() {
+-        actual.onCompleted();
+-    }
++	@Override
++	public void onCompleted() {
++		actual.onCompleted();
++	}
+ 
+-    @Override
+-    public void onError(Throwable e) {
++	@Override
++	public void onError(Throwable e) {
+ 		requestMonitorPlugin.getRequestMonitor().recordException((Exception) e);
+-        actual.onError(e);
+-    }
++		actual.onError(e);
++	}
+ 
+-    @Override
+-    public void onNext(Message<?> message) {
++	@Override
++	public void onNext(Message<?> message) {
+ 		final RequestMonitor requestMonitor = requestMonitorPlugin.getRequestMonitor();
+-        SavedTraceContext context = RequestKeeper.getInstance().getSavedContext(message.body());
+-        if(context != null && context.getCurrentSpan() != null){
+-            context.getTraceContext().push(context.getCurrentSpan());
+-        }
++		SavedTraceContext context = RequestKeeper.getInstance().getSavedContext(message.body());
++		if (context != null && context.getCurrentSpan() != null) {
++			context.getTraceContext().push(context.getCurrentSpan());
++		}
+ 		try {
+ 			startMonitoring(message);
+ 		} catch (IllegalAccessException | InstantiationException | ClassNotFoundException e) {
+ 			e.printStackTrace();
+ 		}
+-		try{
+-            actual.onNext(message);
+-        }
+-        catch (Throwable e){
+-            requestMonitor.recordException((Exception) e);
+-        }
+-        finally {
++		try {
++			actual.onNext(message);
++		} catch (Throwable e) {
++			requestMonitor.recordException((Exception) e);
++		} finally {
+ 			requestMonitor.monitorStop();
+-			if(context != null && context.getCurrentSpan() != null){
++			if (context != null && context.getCurrentSpan() != null) {
+ 				context.getTraceContext().pop();
+ 			}
+-        }
+-    }
++		}
++	}
+ 
+-    private void startMonitoring(Message<?> message) throws IllegalAccessException, InstantiationException, ClassNotFoundException {
+-        final String requestName = vertxPlugin.getRequestNamer().getRequestName((io.vertx.core.eventbus.Message<?>) message.getDelegate());
+-        Map<String, Object> params = new LinkedHashMap<>();
+-        params.put("message", message.body());
+-        final MonitoredMethodRequest monitoredRequest = new MonitoredMethodRequest(Stagemonitor.getConfiguration(), requestName, null, params);
+-        final RequestMonitorPlugin requestMonitorPlugin = Stagemonitor.getPlugin(RequestMonitorPlugin.class);
+-        requestMonitorPlugin.getRequestMonitor().monitorStart(monitoredRequest);
+-    }
++	private void startMonitoring(Message<?> message) throws IllegalAccessException, InstantiationException, ClassNotFoundException {
++		final String requestName = vertxPlugin.getRequestNamer().getRequestName((io.vertx.core.eventbus.Message<?>) message.getDelegate());
++		Map<String, Object> params = new LinkedHashMap<>();
++		params.put("message", message.body());
++		final MonitoredMethodRequest monitoredRequest = new MonitoredMethodRequest(Stagemonitor.getConfiguration(), requestName, null, params);
++		final RequestMonitorPlugin requestMonitorPlugin = Stagemonitor.getPlugin(RequestMonitorPlugin.class);
++		requestMonitorPlugin.getRequestMonitor().monitorStart(monitoredRequest);
++	}
+ }

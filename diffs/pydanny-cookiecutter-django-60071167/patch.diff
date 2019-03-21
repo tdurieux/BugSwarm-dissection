@@ -1,0 +1,474 @@
+diff --git a/README.rst b/README.rst
+index 35cb84af4..068cca5e5 100644
+--- a/README.rst
++++ b/README.rst
+@@ -121,20 +121,16 @@ First make sure to create and activate a virtualenv_, then open a terminal at th
+ 
+ Then, create a PostgreSQL database and add the database configuration using the  ``dj-database-url`` app pattern: ``postgres://db_owner:password@dbserver_ip:port/db_name`` either:
+ 
+-* in the ``config.common.py`` setting file,
+-* or in the env variable ``DATABASE_URL``
++* in the ``config.settings.common.py`` setting file,
++* or in the environment variable ``DATABASE_URL``
+ 
+ 
++You can now run the usual Django ``migrate`` and ``runserver`` command::
+ 
+-You can now run the usual Django ``migrate`` and ``runserver`` command (replace ``yourapp`` with the name of the directory containing the Django project)::
++    $ python manage.py migrate
+ 
+-    $ python yourapp/manage.py migrate
++    $ python manage.py runserver
+ 
+-    $ python yourapp/manage.py runserver
+-
+-The base app will run but you'll need to carry out a few steps to make the sign-up and login forms work. These are currently detailed in `issue #39`_.
+-
+-.. _issue #39: https://github.com/pydanny/cookiecutter-django/issues/39
+ 
+ **Live reloading and Sass CSS compilation**
+ 
+diff --git a/{{cookiecutter.repo_name}}/Gruntfile.js b/{{cookiecutter.repo_name}}/Gruntfile.js
+index 2b9f32f19..ba14b1e4a 100644
+--- a/{{cookiecutter.repo_name}}/Gruntfile.js
++++ b/{{cookiecutter.repo_name}}/Gruntfile.js
+@@ -21,7 +21,7 @@ module.exports = function (grunt) {
+       fonts: this.app + '/static/fonts',
+       images: this.app + '/static/images',
+       js: this.app + '/static/js',
+-      manageScript: this.app + '/manage.py'
++      manageScript: 'manage.py'
+     }
+   };
+ 
+diff --git a/{{cookiecutter.repo_name}}/Procfile b/{{cookiecutter.repo_name}}/Procfile
+index fa8bdaad6..c00f42350 100644
+--- a/{{cookiecutter.repo_name}}/Procfile
++++ b/{{cookiecutter.repo_name}}/Procfile
+@@ -1 +1 @@
+-web: gunicorn --pythonpath="$PWD/{{cookiecutter.repo_name}}" wsgi:application
++web: gunicorn config.wsgi:application
+diff --git a/{{cookiecutter.repo_name}}/README.rst b/{{cookiecutter.repo_name}}/README.rst
+index d617d70c4..87e8786ec 100644
+--- a/{{cookiecutter.repo_name}}/README.rst
++++ b/{{cookiecutter.repo_name}}/README.rst
+@@ -52,7 +52,7 @@ First make sure to create and activate a virtualenv_, then open a terminal at th
+ 
+ You can now run the ``runserver_plus`` command::
+ 
+-    $ python {{cookiecutter.repo_name}}/manage.py runserver_plus
++    $ python manage.py runserver_plus
+ 
+ The base app will run but you'll need to carry out a few steps to make the sign-up and login forms work. These are currently detailed in `issue #39`_.
+ 
+@@ -104,8 +104,8 @@ Run these commands to deploy the project to Heroku:
+     heroku config:set DJANGO_AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY_HERE
+     heroku config:set DJANGO_AWS_STORAGE_BUCKET_NAME=YOUR_AWS_S3_BUCKET_NAME_HERE
+     git push heroku master
+-    heroku run python {{cookiecutter.repo_name}}/manage.py migrate
+-    heroku run python {{cookiecutter.repo_name}}/manage.py createsuperuser
++    heroku run python manage.py migrate
++    heroku run python manage.py createsuperuser
+     heroku open
+ 
+ Dokku
+@@ -144,7 +144,7 @@ You can then deploy by running the following commands.
+     ssh -t dokku@yourservername.com dokku config:set {{cookiecutter.repo_name}} DJANGO_AWS_STORAGE_BUCKET_NAME=YOUR_AWS_S3_BUCKET_NAME_HERE
+     ssh -t dokku@yourservername.com dokku config:set {{cookiecutter.repo_name}} SENDGRID_USERNAME=YOUR_SENDGRID_USERNAME
+     ssh -t dokku@yourservername.com dokku config:set {{cookiecutter.repo_name}} SENDGRID_PASSWORD=YOUR_SENDGRID_PASSWORD
+-    ssh -t dokku@yourservername.com dokku run {{cookiecutter.repo_name}} python {{cookiecutter.repo_name}}/manage.py migrate
+-    ssh -t dokku@yourservername.com dokku run {{cookiecutter.repo_name}} python {{cookiecutter.repo_name}}/manage.py createsuperuser
++    ssh -t dokku@yourservername.com dokku run {{cookiecutter.repo_name}} python manage.py migrate
++    ssh -t dokku@yourservername.com dokku run {{cookiecutter.repo_name}} python manage.py createsuperuser
+ 
+ When deploying via Dokku make sure you backup your database in some fashion as it is NOT done automatically.
+diff --git a/{{cookiecutter.repo_name}}/config/__init__.py b/{{cookiecutter.repo_name}}/config/__init__.py
+new file mode 100644
+index 000000000..e69de29bb
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/__init__.py b/{{cookiecutter.repo_name}}/config/settings/__init__.py
+similarity index 100%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/__init__.py
+rename to {{cookiecutter.repo_name}}/config/settings/__init__.py
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/common.py b/{{cookiecutter.repo_name}}/config/settings/common.py
+similarity index 96%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/common.py
+rename to {{cookiecutter.repo_name}}/config/settings/common.py
+index bb9cbb662..8d8ae674c 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/common.py
++++ b/{{cookiecutter.repo_name}}/config/settings/common.py
+@@ -12,8 +12,8 @@
+ 
+ import environ
+ 
+-APPS_DIR = environ.Path(__file__) - 2  # one folder back (/a/b/ - 1 = /a/)
+-ROOT_DIR = APPS_DIR - 1
++ROOT_DIR = environ.Path(__file__) - 3  # (/a/b/myfile.py - 3 = /)
++APPS_DIR = ROOT_DIR.path('{{ cookiecutter.repo_name }}')
+ 
+ env = environ.Env()
+ 
+@@ -44,7 +44,7 @@
+ 
+ # Apps specific for this project go here.
+ LOCAL_APPS = (
+-    'users',  # custom users app
++    '{{ cookiecutter.repo_name }}.users',  # custom users app
+     # Your stuff: custom apps go here
+ )
+ 
+@@ -66,7 +66,7 @@
+ # MIGRATIONS CONFIGURATION
+ # ------------------------------------------------------------------------------
+ MIGRATION_MODULES = {
+-    'sites': 'contrib.sites.migrations'
++    'sites': '{{ cookiecutter.repo_name }}.contrib.sites.migrations'
+ }
+ 
+ # DEBUG
+@@ -87,7 +87,6 @@
+ # EMAIL CONFIGURATION
+ # ------------------------------------------------------------------------------
+ EMAIL_BACKEND = env('DJANGO_EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+-# END EMAIL CONFIGURATION
+ 
+ # MANAGER CONFIGURATION
+ # ------------------------------------------------------------------------------
+@@ -131,7 +130,6 @@
+ 
+ # See: https://docs.djangoproject.com/en/dev/ref/settings/#use-tz
+ USE_TZ = True
+-# END GENERAL CONFIGURATION
+ 
+ # TEMPLATE CONFIGURATION
+ # ------------------------------------------------------------------------------
+@@ -192,10 +190,10 @@
+ 
+ # URL Configuration
+ # ------------------------------------------------------------------------------
+-ROOT_URLCONF = 'urls'
++ROOT_URLCONF = 'config.urls'
+ 
+ # See: https://docs.djangoproject.com/en/dev/ref/settings/#wsgi-application
+-WSGI_APPLICATION = 'wsgi.application'
++WSGI_APPLICATION = 'config.wsgi.application'
+ 
+ # AUTHENTICATION CONFIGURATION
+ # ------------------------------------------------------------------------------
+@@ -208,7 +206,6 @@
+ ACCOUNT_AUTHENTICATION_METHOD = 'username'
+ ACCOUNT_EMAIL_REQUIRED = True
+ ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+-# END AUTHENTICATION CONFIGURATION
+ 
+ # Custom user app defaults
+ # Select the correct user model
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/local.py b/{{cookiecutter.repo_name}}/config/settings/local.py
+similarity index 100%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/local.py
+rename to {{cookiecutter.repo_name}}/config/settings/local.py
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/production.py b/{{cookiecutter.repo_name}}/config/settings/production.py
+similarity index 94%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/production.py
+rename to {{cookiecutter.repo_name}}/config/settings/production.py
+index dae3a2734..daf9c927c 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/config/production.py
++++ b/{{cookiecutter.repo_name}}/config/settings/production.py
+@@ -61,9 +61,9 @@
+ 
+ STATICFILES_STORAGE = DEFAULT_FILE_STORAGE = 'storages.backends.s3boto.S3BotoStorage'
+ 
+-AWS_ACCESS_KEY_ID = env("DJANGO_AWS_ACCESS_KEY_ID")
+-AWS_SECRET_ACCESS_KEY = env("DJANGO_AWS_SECRET_ACCESS_KEY")
+-AWS_STORAGE_BUCKET_NAME = env("DJANGO_AWS_STORAGE_BUCKET_NAME")
++AWS_ACCESS_KEY_ID = env('DJANGO_AWS_ACCESS_KEY_ID')
++AWS_SECRET_ACCESS_KEY = env('DJANGO_AWS_SECRET_ACCESS_KEY')
++AWS_STORAGE_BUCKET_NAME = env('DJANGO_AWS_STORAGE_BUCKET_NAME')
+ AWS_AUTO_CREATE_BUCKET = True
+ AWS_QUERYSTRING_AUTH = False
+ AWS_S3_CALLING_FORMAT = OrdinaryCallingFormat()
+@@ -80,9 +80,8 @@
+ # Revert the following and use str after the above-mentioned bug is fixed in
+ # either django-storage-redux or boto
+ AWS_HEADERS = {
+-    'Cache-Control': str.encode(
+-        'max-age=%d, s-maxage=%d, must-revalidate' % (
+-            AWS_EXPIREY, AWS_EXPIREY))
++    'Cache-Control': str.encode('max-age=%d, s-maxage=%d, must-revalidate' % (
++        AWS_EXPIRY, AWS_EXPIRY))
+ }
+ 
+ # See: https://docs.djangoproject.com/en/dev/ref/settings/#static-url
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/urls.py b/{{cookiecutter.repo_name}}/config/urls.py
+similarity index 55%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/urls.py
+rename to {{cookiecutter.repo_name}}/config/urls.py
+index e7fa8c960..bd7306608 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/urls.py
++++ b/{{cookiecutter.repo_name}}/config/urls.py
+@@ -6,28 +6,25 @@
+ from django.conf.urls.static import static
+ from django.views.generic import TemplateView
+ 
+-# Uncomment the next two lines to enable the admin:
++# Comment the next two lines to disable the admin:
+ from django.contrib import admin
+ admin.autodiscover()
+ 
+-urlpatterns = patterns('',
+-    url(r'^$',  # noqa
+-        TemplateView.as_view(template_name='pages/home.html'),
+-        name="home"),
+-    url(r'^about/$',
+-        TemplateView.as_view(template_name='pages/about.html'),
+-        name="about"),
++urlpatterns = patterns('',  # noqa
++    url(r'^$', TemplateView.as_view(template_name='pages/home.html'), name="home"),
++    url(r'^about/$', TemplateView.as_view(template_name='pages/about.html'), name="about"),
+ 
+-    # Uncomment the next line to enable the admin:
++    # Django Admin (Comment the next line to disable the admin)
+     url(r'^admin/', include(admin.site.urls)),
+ 
+     # User management
+-    url(r'^users/', include("users.urls", namespace="users")),
++    url(r'^users/', include("{{ cookiecutter.repo_name }}.users.urls", namespace="users")),
+     url(r'^accounts/', include('allauth.urls')),
+ 
+     # Uncomment the next line to enable avatars
+     url(r'^avatar/', include('avatar.urls')),
+ 
+-    # Your stuff: custom urls go here
++    # Your stuff: custom urls includes go here
++
+ 
+ ) + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/wsgi.py b/{{cookiecutter.repo_name}}/config/wsgi.py
+similarity index 89%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/wsgi.py
+rename to {{cookiecutter.repo_name}}/config/wsgi.py
+index 805c33c90..d362a44c4 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/wsgi.py
++++ b/{{cookiecutter.repo_name}}/config/wsgi.py
+@@ -18,8 +18,8 @@
+ # We defer to a DJANGO_SETTINGS_MODULE already in the environment. This breaks
+ # if running multiple sites in the same mod_wsgi process. To fix this, use
+ # mod_wsgi daemon mode with each site in its own daemon process, or use
+-# os.environ["DJANGO_SETTINGS_MODULE"] = "{{ repo_name }}.settings"
+-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.production")
++# os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings.production"
++os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
+ 
+ # This application object is used by any WSGI server configured to use this
+ # file. This includes Django's development server, if the WSGI_APPLICATION
+diff --git a/{{cookiecutter.repo_name}}/install_python_dependencies.sh b/{{cookiecutter.repo_name}}/install_python_dependencies.sh
+index 5d04044ac..0de90c829 100755
+--- a/{{cookiecutter.repo_name}}/install_python_dependencies.sh
++++ b/{{cookiecutter.repo_name}}/install_python_dependencies.sh
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-pip --version >/dev/null 2>&1 || { 
++pip --version >/dev/null 2>&1 || {
+     echo >&2 -e "\npip is required but it's not installed."
+     echo >&2 -e "You can install it by running the following command:\n"
+     echo >&2 "wget https://bootstrap.pypa.io/get-pip.py; chmod +x get-pip.py; sudo ./get-pip.py"
+@@ -9,7 +9,7 @@ pip --version >/dev/null 2>&1 || {
+     exit 1;
+ }
+ 
+-virtualenv --version >/dev/null 2>&1 || { 
++virtualenv --version >/dev/null 2>&1 || {
+     echo >&2 -e "\nvirtualenv is required but it's not installed."
+     echo >&2 -e "You can install it by running the following command:\n"
+     echo >&2 "sudo pip install virtualenv"
+@@ -35,6 +35,3 @@ else
+     pip install -r requirements/test.txt
+     pip install -r requirements.txt
+ fi
+-
+-
+-
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/manage.py b/{{cookiecutter.repo_name}}/manage.py
+similarity index 69%
+rename from {{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/manage.py
+rename to {{cookiecutter.repo_name}}/manage.py
+index 4f90e49e1..7b367ffeb 100755
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/manage.py
++++ b/{{cookiecutter.repo_name}}/manage.py
+@@ -3,7 +3,7 @@
+ import sys
+ 
+ if __name__ == "__main__":
+-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.local")
++    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+ 
+     from django.core.management import execute_from_command_line
+ 
+diff --git a/{{cookiecutter.repo_name}}/setup.py b/{{cookiecutter.repo_name}}/setup.py
+deleted file mode 100644
+index 89a683808..000000000
+--- a/{{cookiecutter.repo_name}}/setup.py
++++ /dev/null
+@@ -1,24 +0,0 @@
+-#!/usr/bin/env python
+-# -*- coding: utf-8 -*-
+-from __future__ import unicode_literals
+-
+-try:
+-    from setuptools import setup
+-except ImportError:
+-    from distutils.core import setup
+-
+-setup(
+-    name="{{ cookiecutter.project_name }}",
+-    version="{{ cookiecutter.version }}",
+-    author="{{ cookiecutter.author_name }}",
+-    author_email="{{ cookiecutter.email }}",
+-    packages=[
+-        "{{ cookiecutter.repo_name }}",
+-    ],
+-    include_package_data=True,
+-    install_requires=[
+-        "Django==1.7.6",
+-    ],
+-    zip_safe=False,
+-    scripts=["{{ cookiecutter.repo_name }}/manage.py"],
+-)
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/__init__.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/__init__.py
+index e69de29bb..40a96afc6 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/__init__.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/__init__.py
+@@ -0,0 +1 @@
++# -*- coding: utf-8 -*-
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/__init__.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/__init__.py
+index e69de29bb..40a96afc6 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/__init__.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/__init__.py
+@@ -0,0 +1 @@
++# -*- coding: utf-8 -*-
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/0002_set_site_domain_and_name.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/0002_set_site_domain_and_name.py
+index bf77f5472..db6b6a28d 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/0002_set_site_domain_and_name.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/0002_set_site_domain_and_name.py
+@@ -2,7 +2,7 @@
+ from __future__ import unicode_literals
+ 
+ from django.conf import settings
+-from django.db import models, migrations
++from django.db import migrations
+ 
+ 
+ def update_site_forward(apps, schema_editor):
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/__init__.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/__init__.py
+index e69de29bb..40a96afc6 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/__init__.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/contrib/sites/migrations/__init__.py
+@@ -0,0 +1 @@
++# -*- coding: utf-8 -*-
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/__init__.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/__init__.py
+index e69de29bb..40a96afc6 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/__init__.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/__init__.py
+@@ -0,0 +1 @@
++# -*- coding: utf-8 -*-
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/admin.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/admin.py
+index a6b7592d6..7425331c9 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/admin.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/admin.py
+@@ -1,8 +1,10 @@
+ # -*- coding: utf-8 -*-
++from __future__ import absolute_import, unicode_literals
++
+ from django import forms
+ from django.contrib import admin
+-from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+ from django.contrib.auth.admin import UserAdmin as AuthUserAdmin
++from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+ 
+ from .models import User
+ 
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/forms.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/forms.py
+index c4f4d1fba..75719ae50 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/forms.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/forms.py
+@@ -1,4 +1,6 @@
+ # -*- coding: utf-8 -*-
++from __future__ import absolute_import, unicode_literals
++
+ from django import forms
+ 
+ from .models import User
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/urls.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/urls.py
+index 061f54a1e..8681f9eca 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/urls.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/urls.py
+@@ -1,31 +1,20 @@
+ # -*- coding: utf-8 -*-
++from __future__ import absolute_import, unicode_literals
++
+ from django.conf.urls import patterns, url
+ 
+-from users import views
++from . import views
+ 
+ urlpatterns = patterns('',
+     # URL pattern for the UserListView  # noqa
+-    url(
+-        regex=r'^$',
+-        view=views.UserListView.as_view(),
+-        name='list'
+-    ),
++    url(regex=r'^$', view=views.UserListView.as_view(), name='list'),
++
+     # URL pattern for the UserRedirectView
+-    url(
+-        regex=r'^~redirect/$',
+-        view=views.UserRedirectView.as_view(),
+-        name='redirect'
+-    ),
++    url(regex=r'^~redirect/$', view=views.UserRedirectView.as_view(), name='redirect'),
++
+     # URL pattern for the UserDetailView
+-    url(
+-        regex=r'^(?P<username>[\w.@+-]+)/$',
+-        view=views.UserDetailView.as_view(),
+-        name='detail'
+-    ),
++    url(regex=r'^(?P<username>[\w.@+-]+)/$', view=views.UserDetailView.as_view(), name='detail'),
++
+     # URL pattern for the UserUpdateView
+-    url(
+-        regex=r'^~update/$',
+-        view=views.UserUpdateView.as_view(),
+-        name='update'
+-    ),
++    url(regex=r'^~update/$', view=views.UserUpdateView.as_view(), name='update'),
+ )
+diff --git a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/views.py b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/views.py
+index 5b961fa39..a8d6190a7 100644
+--- a/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/views.py
++++ b/{{cookiecutter.repo_name}}/{{cookiecutter.repo_name}}/users/views.py
+@@ -1,20 +1,12 @@
+ # -*- coding: utf-8 -*-
+-# Import the reverse lookup function
+-from django.core.urlresolvers import reverse
++from __future__ import absolute_import, unicode_literals
+ 
+-# view imports
+-from django.views.generic import DetailView
+-from django.views.generic import RedirectView
+-from django.views.generic import UpdateView
+-from django.views.generic import ListView
++from django.core.urlresolvers import reverse
++from django.views.generic import DetailView, ListView, RedirectView, UpdateView
+ 
+-# Only authenticated users can access views using this.
+ from braces.views import LoginRequiredMixin
+ 
+-# Import the form from users/forms.py
+ from .forms import UserForm
+-
+-# Import the customized User model
+ from .models import User
+ 
+ 

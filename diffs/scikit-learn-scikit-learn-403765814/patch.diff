@@ -1,0 +1,1699 @@
+diff --git a/AUTHORS.rst b/AUTHORS.rst
+index 628851aaed51..48427fc0a2b3 100644
+--- a/AUTHORS.rst
++++ b/AUTHORS.rst
+@@ -47,6 +47,7 @@ The following people have been core contributors to scikit-learn's development a
+   * `Kyle Kastner <http://kastnerkyle.github.io>`_
+   * `Manoj Kumar <https://manojbits.wordpress.com>`_
+   * Robert Layton
++  * `Guillaume Lemaitre <https://github.com/glemaitre>`_
+   * `Wei Li <http://kuantkid.github.io/>`_
+   * Paolo Losi
+   * `Gilles Louppe <http://glouppe.github.io/>`_
+@@ -59,11 +60,14 @@ The following people have been core contributors to scikit-learn's development a
+   * `Alexandre Passos <http://atpassos.posterous.com>`_
+   * `Fabian Pedregosa <http://fa.bianp.net/blog/>`_
+   * `Peter Prettenhofer <https://sites.google.com/site/peterprettenhofer/>`_
++  * `Hanmin Qin <https://github.com/qinhanmin2014>`_
+   * Bertrand Thirion
++  * `Joris Van den Bossche <https://github.com/jorisvandenbossche>`_
+   * `Jake VanderPlas <http://staff.washington.edu/jakevdp/>`_
+   * Nelle Varoquaux
+   * `Gael Varoquaux <http://gael-varoquaux.info/>`_
+   * Ron Weiss
++  * `Roman Yurchak <https://github.com/rth>`_
+ 
+ Please do not email the authors directly to ask for assistance or report issues.
+ Instead, please see `What's the best way to ask questions about scikit-learn
+diff --git a/doc/modules/classes.rst b/doc/modules/classes.rst
+index df46579f7fd8..3d91d021dbca 100644
+--- a/doc/modules/classes.rst
++++ b/doc/modules/classes.rst
+@@ -1240,6 +1240,7 @@ Model validation
+ 
+    preprocessing.Binarizer
+    preprocessing.FunctionTransformer
++   preprocessing.KBinsDiscretizer
+    preprocessing.KernelCenterer
+    preprocessing.LabelBinarizer
+    preprocessing.LabelEncoder
+diff --git a/doc/modules/decomposition.rst b/doc/modules/decomposition.rst
+index e011f2143053..608e7b7d0d90 100644
+--- a/doc/modules/decomposition.rst
++++ b/doc/modules/decomposition.rst
+@@ -417,10 +417,10 @@ Generic dictionary learning
+ 
+ Dictionary learning (:class:`DictionaryLearning`) is a matrix factorization
+ problem that amounts to finding a (usually overcomplete) dictionary that will
+-perform good at sparsely encoding the fitted data.
++perform well at sparsely encoding the fitted data.
+ 
+ Representing data as sparse combinations of atoms from an overcomplete
+-dictionary is suggested to be the way the mammal primary visual cortex works.
++dictionary is suggested to be the way the mammalian primary visual cortex works.
+ Consequently, dictionary learning applied on image patches has been shown to
+ give good results in image processing tasks such as image completion,
+ inpainting and denoising, as well as for supervised recognition tasks.
+@@ -604,7 +604,7 @@ about these components (e.g. whether they are orthogonal):
+ 
+ .. centered:: |pca_img3| |fa_img3|
+ 
+-The main advantage for Factor Analysis (over :class:`PCA` is that
++The main advantage for Factor Analysis over :class:`PCA` is that
+ it can model the variance in every direction of the input space independently
+ (heteroscedastic noise):
+ 
+diff --git a/doc/modules/preprocessing.rst b/doc/modules/preprocessing.rst
+index 0474a8a66501..5d3979ead65e 100644
+--- a/doc/modules/preprocessing.rst
++++ b/doc/modules/preprocessing.rst
+@@ -432,67 +432,6 @@ The normalizer instance can then be used on sample vectors as any transformer::
+   efficient Cython routines. To avoid unnecessary memory copies, it is
+   recommended to choose the CSR representation upstream.
+ 
+-.. _preprocessing_binarization:
+-
+-Binarization
+-============
+-
+-Feature binarization
+---------------------
+-
+-**Feature binarization** is the process of **thresholding numerical
+-features to get boolean values**. This can be useful for downstream
+-probabilistic estimators that make assumption that the input data
+-is distributed according to a multi-variate `Bernoulli distribution
+-<https://en.wikipedia.org/wiki/Bernoulli_distribution>`_. For instance,
+-this is the case for the :class:`sklearn.neural_network.BernoulliRBM`.
+-
+-It is also common among the text processing community to use binary
+-feature values (probably to simplify the probabilistic reasoning) even
+-if normalized counts (a.k.a. term frequencies) or TF-IDF valued features
+-often perform slightly better in practice.
+-
+-As for the :class:`Normalizer`, the utility class
+-:class:`Binarizer` is meant to be used in the early stages of
+-:class:`sklearn.pipeline.Pipeline`. The ``fit`` method does nothing
+-as each sample is treated independently of others::
+-
+-  >>> X = [[ 1., -1.,  2.],
+-  ...      [ 2.,  0.,  0.],
+-  ...      [ 0.,  1., -1.]]
+-
+-  >>> binarizer = preprocessing.Binarizer().fit(X)  # fit does nothing
+-  >>> binarizer
+-  Binarizer(copy=True, threshold=0.0)
+-
+-  >>> binarizer.transform(X)
+-  array([[1., 0., 1.],
+-         [1., 0., 0.],
+-         [0., 1., 0.]])
+-
+-It is possible to adjust the threshold of the binarizer::
+-
+-  >>> binarizer = preprocessing.Binarizer(threshold=1.1)
+-  >>> binarizer.transform(X)
+-  array([[0., 0., 1.],
+-         [1., 0., 0.],
+-         [0., 0., 0.]])
+-
+-As for the :class:`StandardScaler` and :class:`Normalizer` classes, the
+-preprocessing module provides a companion function :func:`binarize`
+-to be used when the transformer API is not necessary.
+-
+-.. topic:: Sparse input
+-
+-  :func:`binarize` and :class:`Binarizer` accept **both dense array-like
+-  and sparse matrices from scipy.sparse as input**.
+-
+-  For sparse input the data is **converted to the Compressed Sparse Rows
+-  representation** (see ``scipy.sparse.csr_matrix``).
+-  To avoid unnecessary memory copies, it is recommended to choose the CSR
+-  representation upstream.
+-
+-
+ .. _preprocessing_categorical_features:
+ 
+ Encoding categorical features
+@@ -589,6 +528,124 @@ columns for this feature will be all zeros
+ See :ref:`dict_feature_extraction` for categorical features that are represented
+ as a dict, not as scalars.
+ 
++.. _preprocessing_discretization:
++
++Discretization
++==============
++
++`Discretization <https://en.wikipedia.org/wiki/Discretization_of_continuous_features>`_
++(otherwise known as quantization or binning) provides a way to partition continuous
++features into discrete values. Certain datasets with continuous features
++may benefit from discretization, because discretization can transform the dataset
++of continuous attributes to one with only nominal attributes.
++
++K-bins discretization
++---------------------
++
++:class:`KBinsDiscretizer` discretizers features into ``k`` equal width bins::
++
++  >>> X = np.array([[ -3., 5., 15 ],
++  ...               [  0., 6., 14 ],
++  ...               [  6., 3., 11 ]])
++  >>> est = preprocessing.KBinsDiscretizer(n_bins=[3, 2, 2], encode='ordinal').fit(X)
++
++By default the output is one-hot encoded into a sparse matrix
++(See :ref:`preprocessing_categorical_features`)
++and this can be configured with the ``encode`` parameter.
++For each feature, the bin edges are computed during ``fit`` and together with
++the number of bins, they will define the intervals. Therefore, for the current
++example, these intervals are defined as:
++
++ - feature 1: :math:`{[-\infty, -1), [-1, 2), [2, \infty)}`
++ - feature 2: :math:`{[-\infty, 5), [5, \infty)}`
++ - feature 3: :math:`{[-\infty, 14), [14, \infty)}`
++
++ Based on these bin intervals, ``X`` is transformed as follows::
++
++  >>> est.transform(X)                      # doctest: +SKIP
++  array([[ 0., 1., 1.],
++         [ 1., 1., 1.],
++         [ 2., 0., 0.]])
++
++The resulting dataset contains ordinal attributes which can be further used
++in a :class:`sklearn.pipeline.Pipeline`.
++
++Discretization is similar to constructing histograms for continuous data.
++However, histograms focus on counting features which fall into particular
++bins, whereas discretization focuses on assigning feature values to these bins.
++
++:class:`KBinsDiscretizer` implements different binning strategies, which can be
++selected with the ``strategy`` parameter. The 'uniform' strategy uses
++constant-width bins. The 'quantile' strategy uses the quantiles values to have
++equally populated bins in each feature. The 'kmeans' strategy defines bins based
++on a k-means clustering procedure performed on each feature independently.
++
++.. topic:: Examples:
++
++  * :ref:`sphx_glr_auto_examples_plot_discretization.py`
++  * :ref:`sphx_glr_auto_examples_plot_discretization_classification.py`
++  * :ref:`sphx_glr_auto_examples_plot_discretization_strategies.py`
++
++.. _preprocessing_binarization:
++
++Feature binarization
++--------------------
++
++**Feature binarization** is the process of **thresholding numerical
++features to get boolean values**. This can be useful for downstream
++probabilistic estimators that make assumption that the input data
++is distributed according to a multi-variate `Bernoulli distribution
++<https://en.wikipedia.org/wiki/Bernoulli_distribution>`_. For instance,
++this is the case for the :class:`sklearn.neural_network.BernoulliRBM`.
++
++It is also common among the text processing community to use binary
++feature values (probably to simplify the probabilistic reasoning) even
++if normalized counts (a.k.a. term frequencies) or TF-IDF valued features
++often perform slightly better in practice.
++
++As for the :class:`Normalizer`, the utility class
++:class:`Binarizer` is meant to be used in the early stages of
++:class:`sklearn.pipeline.Pipeline`. The ``fit`` method does nothing
++as each sample is treated independently of others::
++
++  >>> X = [[ 1., -1.,  2.],
++  ...      [ 2.,  0.,  0.],
++  ...      [ 0.,  1., -1.]]
++
++  >>> binarizer = preprocessing.Binarizer().fit(X)  # fit does nothing
++  >>> binarizer
++  Binarizer(copy=True, threshold=0.0)
++
++  >>> binarizer.transform(X)
++  array([[1., 0., 1.],
++         [1., 0., 0.],
++         [0., 1., 0.]])
++
++It is possible to adjust the threshold of the binarizer::
++
++  >>> binarizer = preprocessing.Binarizer(threshold=1.1)
++  >>> binarizer.transform(X)
++  array([[0., 0., 1.],
++         [1., 0., 0.],
++         [0., 0., 0.]])
++
++As for the :class:`StandardScaler` and :class:`Normalizer` classes, the
++preprocessing module provides a companion function :func:`binarize`
++to be used when the transformer API is not necessary.
++
++Note that the :class:`Binarizer` is similar to the :class:`KBinsDiscretizer`
++when ``k = 2``, and when the bin edge is at the value ``threshold``.
++
++.. topic:: Sparse input
++
++  :func:`binarize` and :class:`Binarizer` accept **both dense array-like
++  and sparse matrices from scipy.sparse as input**.
++
++  For sparse input the data is **converted to the Compressed Sparse Rows
++  representation** (see ``scipy.sparse.csr_matrix``).
++  To avoid unnecessary memory copies, it is recommended to choose the CSR
++  representation upstream.
++
+ .. _imputation:
+ 
+ Imputation of missing values
+diff --git a/doc/whats_new/_contributors.rst b/doc/whats_new/_contributors.rst
+index 58edca3a46b3..a55cc1bc8e7b 100644
+--- a/doc/whats_new/_contributors.rst
++++ b/doc/whats_new/_contributors.rst
+@@ -153,3 +153,5 @@
+ .. _Joris Van den Bossche: https://github.com/jorisvandenbossche
+ 
+ .. _Roman Yurchak: https://github.com/rth
++
++.. _Hanmin Qin: https://github.com/qinhanmin2014
+diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
+index 3a2d3d33ce92..0df0635d57c7 100644
+--- a/doc/whats_new/v0.20.rst
++++ b/doc/whats_new/v0.20.rst
+@@ -31,8 +31,8 @@ String or pandas Categorical columns can now be encoded with
+ 
+ :class:`~compose.TransformedTargetRegressor` helps when the regression target
+ needs to be transformed to be modeled. :class:`~preprocessing.PowerTransformer`
+-joins :class:`~preprocessing.QuantileTransformer` as a non-linear
+-transformation.
++and :class:`~preprocessing.KBinsDiscretizer` join
++:class:`~preprocessing.QuantileTransformer` as non-linear transformations.
+ 
+ Beyond this, we have added :term:`sample_weight` support to several estimators
+ (including :class:`~cluster.KMeans`, :class:`~linear_model.BayesianRidge` and
+@@ -127,6 +127,13 @@ Preprocessing
+   the maximum value in the features. :issue:`9151` and :issue:`10521` by
+   :user:`Vighnesh Birodkar <vighneshbirodkar>` and `Joris Van den Bossche`_.
+ 
++- Added :class:`preprocessing.KBinsDiscretizer` for turning
++  continuous features into categorical or one-hot encoded
++  features. :issue:`7668`, :issue:`9647`, :issue:`10195`,
++  :issue:`10192`, :issue:`11272` and :issue:`11467`.
++  by :user:`Henry Lin <hlin117>`, `Hanmin Qin`_
++  and `Tom Dupre la Tour`_.
++
+ - Added :class:`compose.ColumnTransformer`, which allows to apply
+   different transformers to different columns of arrays or pandas
+   DataFrames. :issue:`9012` by `Andreas Müller`_ and `Joris Van den Bossche`_,
+diff --git a/examples/preprocessing/plot_discretization.py b/examples/preprocessing/plot_discretization.py
+new file mode 100644
+index 000000000000..9cfcb30e6fdd
+--- /dev/null
++++ b/examples/preprocessing/plot_discretization.py
+@@ -0,0 +1,86 @@
++# -*- coding: utf-8 -*-
++
++"""
++================================================================
++Using KBinsDiscretizer to discretize continuous features
++================================================================
++
++The example compares prediction result of linear regression (linear model)
++and decision tree (tree based model) with and without discretization of
++real-valued features.
++
++As is shown in the result before discretization, linear model is fast to
++build and relatively straightforward to interpret, but can only model
++linear relationships, while decision tree can build a much more complex model
++of the data. One way to make linear model more powerful on continuous data
++is to use discretization (also known as binning). In the example, we
++discretize the feature and one-hot encode the transformed data. Note that if
++the bins are not reasonably wide, there would appear to be a substantially
++increased risk of overfitting, so the discretizer parameters should usually
++be tuned under cross validation.
++
++After discretization, linear regression and decision tree make exactly the
++same prediction. As features are constant within each bin, any model must
++predict the same value for all points within a bin. Compared with the result
++before discretization, linear model become much more flexible while decision
++tree gets much less flexible. Note that binning features generally has no
++beneficial effect for tree-based models, as these models can learn to split
++up the data anywhere.
++
++"""
++
++# Author: Andreas Müller
++#         Hanmin Qin <qinhanmin2005@sina.com>
++# License: BSD 3 clause
++
++import numpy as np
++import matplotlib.pyplot as plt
++
++from sklearn.linear_model import LinearRegression
++from sklearn.preprocessing import KBinsDiscretizer
++from sklearn.tree import DecisionTreeRegressor
++
++print(__doc__)
++
++# construct the dataset
++rnd = np.random.RandomState(42)
++X = rnd.uniform(-3, 3, size=100)
++y = np.sin(X) + rnd.normal(size=len(X)) / 3
++X = X.reshape(-1, 1)
++
++# transform the dataset with KBinsDiscretizer
++enc = KBinsDiscretizer(n_bins=10, encode='onehot')
++X_binned = enc.fit_transform(X)
++
++# predict with original dataset
++fig, (ax1, ax2) = plt.subplots(ncols=2, sharey=True, figsize=(10, 4))
++line = np.linspace(-3, 3, 1000, endpoint=False).reshape(-1, 1)
++reg = LinearRegression().fit(X, y)
++ax1.plot(line, reg.predict(line), linewidth=2, color='green',
++         label="linear regression")
++reg = DecisionTreeRegressor(min_samples_split=3, random_state=0).fit(X, y)
++ax1.plot(line, reg.predict(line), linewidth=2, color='red',
++         label="decision tree")
++ax1.plot(X[:, 0], y, 'o', c='k')
++ax1.legend(loc="best")
++ax1.set_ylabel("Regression output")
++ax1.set_xlabel("Input feature")
++ax1.set_title("Result before discretization")
++
++# predict with transformed dataset
++line_binned = enc.transform(line)
++reg = LinearRegression().fit(X_binned, y)
++ax2.plot(line, reg.predict(line_binned), linewidth=2, color='green',
++         linestyle='-', label='linear regression')
++reg = DecisionTreeRegressor(min_samples_split=3,
++                            random_state=0).fit(X_binned, y)
++ax2.plot(line, reg.predict(line_binned), linewidth=2, color='red',
++         linestyle=':', label='decision tree')
++ax2.plot(X[:, 0], y, 'o', c='k')
++ax2.vlines(enc.bin_edges_[0], *plt.gca().get_ylim(), linewidth=1, alpha=.2)
++ax2.legend(loc="best")
++ax2.set_xlabel("Input feature")
++ax2.set_title("Result after discretization")
++
++plt.tight_layout()
++plt.show()
+diff --git a/examples/preprocessing/plot_discretization_classification.py b/examples/preprocessing/plot_discretization_classification.py
+new file mode 100644
+index 000000000000..4dfe7e989d2d
+--- /dev/null
++++ b/examples/preprocessing/plot_discretization_classification.py
+@@ -0,0 +1,191 @@
++#!/usr/bin/python
++# -*- coding: utf-8 -*-
++"""
++======================
++Feature discretization
++======================
++
++A demonstration of feature discretization on synthetic classification datasets.
++Feature discretization decomposes each feature into a set of bins, here equally
++distributed in width. The discrete values are then one-hot encoded, and given
++to a linear classifier. This preprocessing enables a non-linear behavior even
++though the classifier is linear.
++
++On this example, the first two rows represent linearly non-separable datasets
++(moons and concentric circles) while the third is approximately linearly
++separable. On the two linearly non-separable datasets, feature discretization
++largely increases the performance of linear classifiers. On the linearly
++separable dataset, feature discretization decreases the performance of linear
++classifiers. Two non-linear classifiers are also shown for comparison.
++
++This example should be taken with a grain of salt, as the intuition conveyed
++does not necessarily carry over to real datasets. Particularly in
++high-dimensional spaces, data can more easily be separated linearly. Moreover,
++using feature discretization and one-hot encoding increases the number of
++features, which easily lead to overfitting when the number of samples is small.
++
++The plots show training points in solid colors and testing points
++semi-transparent. The lower right shows the classification accuracy on the test
++set.
++"""
++# Code source: Tom Dupré la Tour
++# Adapted from plot_classifier_comparison by Gaël Varoquaux and Andreas Müller
++#
++# License: BSD 3 clause
++
++import numpy as np
++import matplotlib.pyplot as plt
++from matplotlib.colors import ListedColormap
++from sklearn.model_selection import train_test_split
++from sklearn.preprocessing import StandardScaler
++from sklearn.datasets import make_moons, make_circles, make_classification
++from sklearn.linear_model import LogisticRegression
++from sklearn.model_selection import GridSearchCV
++from sklearn.pipeline import make_pipeline
++from sklearn.preprocessing import KBinsDiscretizer
++from sklearn.svm import SVC, LinearSVC
++from sklearn.ensemble import GradientBoostingClassifier
++from sklearn.utils.testing import ignore_warnings
++from sklearn.exceptions import ConvergenceWarning
++
++print(__doc__)
++
++h = .02  # step size in the mesh
++
++
++def get_name(estimator):
++    name = estimator.__class__.__name__
++    if name == 'Pipeline':
++        name = [get_name(est[1]) for est in estimator.steps]
++        name = ' + '.join(name)
++    return name
++
++
++# list of (estimator, param_grid), where param_grid is used in GridSearchCV
++classifiers = [
++    (LogisticRegression(solver='lbfgs', random_state=0), {
++        'C': np.logspace(-2, 7, 10)
++    }),
++    (LinearSVC(random_state=0), {
++        'C': np.logspace(-2, 7, 10)
++    }),
++    (make_pipeline(
++        KBinsDiscretizer(encode='onehot'),
++        LogisticRegression(solver='lbfgs', random_state=0)), {
++            'kbinsdiscretizer__n_bins': np.arange(2, 10),
++            'logisticregression__C': np.logspace(-2, 7, 10),
++        }),
++    (make_pipeline(
++        KBinsDiscretizer(encode='onehot'), LinearSVC(random_state=0)), {
++            'kbinsdiscretizer__n_bins': np.arange(2, 10),
++            'linearsvc__C': np.logspace(-2, 7, 10),
++        }),
++    (GradientBoostingClassifier(n_estimators=50, random_state=0), {
++        'learning_rate': np.logspace(-4, 0, 10)
++    }),
++    (SVC(random_state=0, gamma='scale'), {
++        'C': np.logspace(-2, 7, 10)
++    }),
++]
++
++names = [get_name(e) for e, g in classifiers]
++
++n_samples = 100
++datasets = [
++    make_moons(n_samples=n_samples, noise=0.2, random_state=0),
++    make_circles(n_samples=n_samples, noise=0.2, factor=0.5, random_state=1),
++    make_classification(n_samples=n_samples, n_features=2, n_redundant=0,
++                        n_informative=2, random_state=2,
++                        n_clusters_per_class=1)
++]
++
++figure = plt.figure(figsize=(21, 9))
++cm = plt.cm.PiYG
++cm_bright = ListedColormap(['#b30065', '#178000'])
++i = 1
++# iterate over datasets
++for ds_cnt, (X, y) in enumerate(datasets):
++    print('\ndataset %d\n---------' % ds_cnt)
++
++    # preprocess dataset, split into training and test part
++    X = StandardScaler().fit_transform(X)
++    X_train, X_test, y_train, y_test = train_test_split(
++        X, y, test_size=.5, random_state=42)
++
++    # create the grid for background colors
++    x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
++    y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
++    xx, yy = np.meshgrid(
++        np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
++
++    # plot the dataset first
++    ax = plt.subplot(len(datasets), len(classifiers) + 1, i)
++    if ds_cnt == 0:
++        ax.set_title("Input data")
++    # plot the training points
++    ax.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm_bright,
++               edgecolors='k')
++    # and testing points
++    ax.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=cm_bright, alpha=0.6,
++               edgecolors='k')
++    ax.set_xlim(xx.min(), xx.max())
++    ax.set_ylim(yy.min(), yy.max())
++    ax.set_xticks(())
++    ax.set_yticks(())
++    i += 1
++
++    # iterate over classifiers
++    for name, (estimator, param_grid) in zip(names, classifiers):
++        ax = plt.subplot(len(datasets), len(classifiers) + 1, i)
++
++        clf = GridSearchCV(estimator=estimator, param_grid=param_grid, cv=5,
++                           iid=False)
++        with ignore_warnings(category=ConvergenceWarning):
++            clf.fit(X_train, y_train)
++        score = clf.score(X_test, y_test)
++        print('%s: %.2f' % (name, score))
++
++        # plot the decision boundary. For that, we will assign a color to each
++        # point in the mesh [x_min, x_max]*[y_min, y_max].
++        if hasattr(clf, "decision_function"):
++            Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
++        else:
++            Z = clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
++
++        # put the result into a color plot
++        Z = Z.reshape(xx.shape)
++        ax.contourf(xx, yy, Z, cmap=cm, alpha=.8)
++
++        # plot the training points
++        ax.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm_bright,
++                   edgecolors='k')
++        # and testing points
++        ax.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=cm_bright,
++                   edgecolors='k', alpha=0.6)
++        ax.set_xlim(xx.min(), xx.max())
++        ax.set_ylim(yy.min(), yy.max())
++        ax.set_xticks(())
++        ax.set_yticks(())
++
++        if ds_cnt == 0:
++            ax.set_title(name.replace(' + ', '\n'))
++        ax.text(0.95, 0.06, ('%.2f' % score).lstrip('0'), size=15,
++                bbox=dict(boxstyle='round', alpha=0.8, facecolor='white'),
++                transform=ax.transAxes, horizontalalignment='right')
++
++        i += 1
++
++plt.tight_layout()
++
++# Add suptitles above the figure
++plt.subplots_adjust(top=0.90)
++suptitles = [
++    'Linear classifiers',
++    'Feature discretization and linear classifiers',
++    'Non-linear classifiers',
++]
++for i, suptitle in zip([2, 4, 6], suptitles):
++    ax = plt.subplot(len(datasets), len(classifiers) + 1, i)
++    ax.text(1.05, 1.25, suptitle, transform=ax.transAxes,
++            horizontalalignment='center', size='x-large')
++plt.show()
+diff --git a/examples/preprocessing/plot_discretization_strategies.py b/examples/preprocessing/plot_discretization_strategies.py
+new file mode 100644
+index 000000000000..9ef211a83ccf
+--- /dev/null
++++ b/examples/preprocessing/plot_discretization_strategies.py
+@@ -0,0 +1,95 @@
++# -*- coding: utf-8 -*-
++"""
++==========================================================
++Demonstrating the different strategies of KBinsDiscretizer
++==========================================================
++
++This example presents the different strategies implemented in KBinsDiscretizer:
++
++- 'uniform': The discretization is uniform in each feature, which means that
++  the bin widths are constant in each dimension.
++- quantile': The discretization is done on the quantiled values, which means
++  that each bin has approximately the same number of samples.
++- 'kmeans': The discretization is based on the centroids of a KMeans clustering
++  procedure.
++
++The plot shows the regions where the discretized encoding is constant.
++"""
++
++# Author: Tom Dupré la Tour
++# License: BSD 3 clause
++
++import numpy as np
++import matplotlib.pyplot as plt
++
++from sklearn.preprocessing import KBinsDiscretizer
++from sklearn.datasets import make_blobs
++
++print(__doc__)
++
++strategies = ['uniform', 'quantile', 'kmeans']
++
++n_samples = 200
++centers_0 = np.array([[0, 0], [0, 5], [2, 4], [8, 8]])
++centers_1 = np.array([[0, 0], [3, 1]])
++
++# construct the datasets
++random_state = 42
++X_list = [
++    np.random.RandomState(random_state).uniform(-3, 3, size=(n_samples, 2)),
++    make_blobs(n_samples=[n_samples // 10, n_samples * 4 // 10,
++                          n_samples // 10, n_samples * 4 // 10],
++               cluster_std=0.5, centers=centers_0,
++               random_state=random_state)[0],
++    make_blobs(n_samples=[n_samples // 5, n_samples * 4 // 5],
++               cluster_std=0.5, centers=centers_1,
++               random_state=random_state)[0],
++]
++
++figure = plt.figure(figsize=(14, 9))
++i = 1
++for ds_cnt, X in enumerate(X_list):
++
++    ax = plt.subplot(len(X_list), len(strategies) + 1, i)
++    ax.scatter(X[:, 0], X[:, 1], edgecolors='k')
++    if ds_cnt == 0:
++        ax.set_title("Input data", size=14)
++
++    xx, yy = np.meshgrid(
++        np.linspace(X[:, 0].min(), X[:, 0].max(), 300),
++        np.linspace(X[:, 1].min(), X[:, 1].max(), 300))
++    grid = np.c_[xx.ravel(), yy.ravel()]
++
++    ax.set_xlim(xx.min(), xx.max())
++    ax.set_ylim(yy.min(), yy.max())
++    ax.set_xticks(())
++    ax.set_yticks(())
++
++    i += 1
++    # transform the dataset with KBinsDiscretizer
++    for strategy in strategies:
++        enc = KBinsDiscretizer(n_bins=4, encode='ordinal', strategy=strategy)
++        enc.fit(X)
++        grid_encoded = enc.transform(grid)
++
++        ax = plt.subplot(len(X_list), len(strategies) + 1, i)
++
++        # horizontal stripes
++        horizontal = grid_encoded[:, 0].reshape(xx.shape)
++        ax.contourf(xx, yy, horizontal, alpha=.5)
++        # vertical stripes
++        vertical = grid_encoded[:, 1].reshape(xx.shape)
++        ax.contourf(xx, yy, vertical, alpha=.5)
++
++        ax.scatter(X[:, 0], X[:, 1], edgecolors='k')
++        ax.set_xlim(xx.min(), xx.max())
++        ax.set_ylim(yy.min(), yy.max())
++        ax.set_xticks(())
++        ax.set_yticks(())
++        if ds_cnt == 0:
++            ax.set_title("strategy='%s'" % (strategy, ), size=14)
++
++        i += 1
++
++plt.tight_layout()
++plt.show()
+diff --git a/sklearn/cluster/bicluster.py b/sklearn/cluster/bicluster.py
+index f412b8ab59ed..b0ed745be46a 100644
+--- a/sklearn/cluster/bicluster.py
++++ b/sklearn/cluster/bicluster.py
+@@ -262,17 +262,17 @@ class SpectralCoclustering(BaseSpectral):
+     --------
+     >>> from sklearn.cluster import SpectralCoclustering
+     >>> import numpy as np
+-    >>> X = np.array([[1, 2], [1, 4], [1, 0],
+-    ...               [4, 2], [4, 4], [4, 0]])
+-    >>> clustering = SpectralCoclustering(n_clusters=2).fit(X)
++    >>> X = np.array([[1, 1], [2, 1], [1, 0],
++    ...               [4, 7], [3, 5], [3, 6]])
++    >>> clustering = SpectralCoclustering(n_clusters=2, random_state=0).fit(X)
+     >>> clustering.row_labels_
+-    array([1, 1, 0, 0, 1, 0], dtype=int32)
++    array([0, 1, 1, 0, 0, 0], dtype=int32)
+     >>> clustering.column_labels_
+-    array([0, 1], dtype=int32)
++    array([0, 0], dtype=int32)
+     >>> clustering
+     ... # doctest: +NORMALIZE_WHITESPACE
+     SpectralCoclustering(init='k-means++', mini_batch=False, n_clusters=2,
+-               n_init=10, n_jobs=1, n_svd_vecs=None, random_state=None,
++               n_init=10, n_jobs=1, n_svd_vecs=None, random_state=0,
+                svd_method='randomized')
+ 
+     References
+diff --git a/sklearn/kernel_approximation.py b/sklearn/kernel_approximation.py
+index 68b2e82772b1..a0720a85689d 100644
+--- a/sklearn/kernel_approximation.py
++++ b/sklearn/kernel_approximation.py
+@@ -44,6 +44,26 @@ class RBFSampler(BaseEstimator, TransformerMixin):
+         If None, the random number generator is the RandomState instance used
+         by `np.random`.
+ 
++    Examples
++    --------
++    >>> from sklearn.kernel_approximation import RBFSampler
++    >>> from sklearn.linear_model import SGDClassifier
++    >>> X = [[0, 0], [1, 1], [1, 0], [0, 1]]
++    >>> y = [0, 0, 1, 1]
++    >>> rbf_feature = RBFSampler(gamma=1, random_state=1)
++    >>> X_features = rbf_feature.fit_transform(X)
++    >>> clf = SGDClassifier(max_iter=5)
++    >>> clf.fit(X_features, y)
++    ... # doctest: +NORMALIZE_WHITESPACE
++    SGDClassifier(alpha=0.0001, average=False, class_weight=None,
++           early_stopping=False, epsilon=0.1, eta0=0.0, fit_intercept=True,
++           l1_ratio=0.15, learning_rate='optimal', loss='hinge', max_iter=5,
++           n_iter=None, n_iter_no_change=5, n_jobs=1, penalty='l2',
++           power_t=0.5, random_state=None, shuffle=True, tol=None,
++           validation_fraction=0.1, verbose=0, warm_start=False)
++    >>> clf.score(X_features, y)
++    1.0
++
+     Notes
+     -----
+     See "Random Features for Large-Scale Kernel Machines" by A. Rahimi and
+@@ -132,6 +152,27 @@ class SkewedChi2Sampler(BaseEstimator, TransformerMixin):
+         If None, the random number generator is the RandomState instance used
+         by `np.random`.
+ 
++    Examples
++    --------
++    >>> from sklearn.kernel_approximation import SkewedChi2Sampler
++    >>> from sklearn.linear_model import SGDClassifier
++    >>> X = [[0, 0], [1, 1], [1, 0], [0, 1]]
++    >>> y = [0, 0, 1, 1]
++    >>> chi2_feature = SkewedChi2Sampler(skewedness=.01,
++    ...                                  n_components=10,
++    ...                                  random_state=0)
++    >>> X_features = chi2_feature.fit_transform(X, y)
++    >>> clf = SGDClassifier(max_iter=10)
++    >>> clf.fit(X_features, y)
++    SGDClassifier(alpha=0.0001, average=False, class_weight=None,
++           early_stopping=False, epsilon=0.1, eta0=0.0, fit_intercept=True,
++           l1_ratio=0.15, learning_rate='optimal', loss='hinge', max_iter=10,
++           n_iter=None, n_iter_no_change=5, n_jobs=1, penalty='l2',
++           power_t=0.5, random_state=None, shuffle=True, tol=None,
++           validation_fraction=0.1, verbose=0, warm_start=False)
++    >>> clf.score(X_features, y)
++    1.0
++
+     References
+     ----------
+     See "Random Fourier Approximations for Skewed Multiplicative Histogram
+diff --git a/sklearn/preprocessing/__init__.py b/sklearn/preprocessing/__init__.py
+index 85bade9b81c1..15905bf37d2e 100644
+--- a/sklearn/preprocessing/__init__.py
++++ b/sklearn/preprocessing/__init__.py
+@@ -33,6 +33,8 @@
+ from .label import LabelEncoder
+ from .label import MultiLabelBinarizer
+ 
++from ._discretization import KBinsDiscretizer
++
+ from .imputation import Imputer
+ 
+ # stub, remove in version 0.21
+@@ -42,6 +44,7 @@
+     'Binarizer',
+     'FunctionTransformer',
+     'Imputer',
++    'KBinsDiscretizer',
+     'KernelCenterer',
+     'LabelBinarizer',
+     'LabelEncoder',
+diff --git a/sklearn/preprocessing/_discretization.py b/sklearn/preprocessing/_discretization.py
+new file mode 100644
+index 000000000000..d51a2b96c47c
+--- /dev/null
++++ b/sklearn/preprocessing/_discretization.py
+@@ -0,0 +1,303 @@
++# -*- coding: utf-8 -*-
++
++# Author: Henry Lin <hlin117@gmail.com>
++#         Tom Dupré la Tour
++
++# License: BSD
++
++from __future__ import division, absolute_import
++
++import numbers
++import numpy as np
++import warnings
++
++from . import OneHotEncoder
++
++from ..base import BaseEstimator, TransformerMixin
++from ..utils.validation import check_array
++from ..utils.validation import check_is_fitted
++from ..utils.validation import FLOAT_DTYPES
++from ..utils.fixes import np_version
++
++
++class KBinsDiscretizer(BaseEstimator, TransformerMixin):
++    """Bin continuous data into intervals.
++
++    Read more in the :ref:`User Guide <preprocessing_discretization>`.
++
++    Parameters
++    ----------
++    n_bins : int or array-like, shape (n_features,) (default=5)
++        The number of bins to produce. The intervals for the bins are
++        determined by the minimum and maximum of the input data.
++        Raises ValueError if ``n_bins < 2``.
++
++        If ``n_bins`` is an array, and there is an ignored feature at
++        index ``i``, ``n_bins[i]`` will be ignored.
++
++    encode : {'onehot', 'onehot-dense', 'ordinal'}, (default='onehot')
++        Method used to encode the transformed result.
++
++        onehot
++            Encode the transformed result with one-hot encoding
++            and return a sparse matrix. Ignored features are always
++            stacked to the right.
++        onehot-dense
++            Encode the transformed result with one-hot encoding
++            and return a dense array. Ignored features are always
++            stacked to the right.
++        ordinal
++            Return the bin identifier encoded as an integer value.
++
++    strategy : {'uniform', 'quantile', 'kmeans'}, (default='quantile')
++        Strategy used to define the widths of the bins.
++
++        uniform
++            All bins in each feature have identical widths.
++        quantile
++            All bins in each feature have the same number of points.
++        kmeans
++            Values in each bin have the same nearest center of a 1D k-means
++            cluster.
++
++    Attributes
++    ----------
++    n_bins_ : int array, shape (n_features,)
++        Number of bins per feature. An ignored feature at index ``i``
++        will have ``n_bins_[i] == 0``.
++
++    bin_edges_ : array of arrays, shape (n_features, )
++        The edges of each bin. Contain arrays of varying shapes (n_bins_, ).
++        Ignored features will have empty arrays.
++
++    Examples
++    --------
++    >>> X = [[-2, 1, -4,   -1],
++    ...      [-1, 2, -3, -0.5],
++    ...      [ 0, 3, -2,  0.5],
++    ...      [ 1, 4, -1,    2]]
++    >>> est = KBinsDiscretizer(n_bins=3, encode='ordinal', strategy='uniform')
++    >>> est.fit(X)  # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
++    KBinsDiscretizer(...)
++    >>> Xt = est.transform(X)
++    >>> Xt  # doctest: +SKIP
++    array([[ 0., 0., 0., 0.],
++           [ 1., 1., 1., 0.],
++           [ 2., 2., 2., 1.],
++           [ 2., 2., 2., 2.]])
++
++    Sometimes it may be useful to convert the data back into the original
++    feature space. The ``inverse_transform`` function converts the binned
++    data into the original feature space. Each value will be equal to the mean
++    of the two bin edges.
++
++    >>> est.bin_edges_[0]
++    array([-2., -1.,  0.,  1.])
++    >>> est.inverse_transform(Xt)
++    array([[-1.5,  1.5, -3.5, -0.5],
++           [-0.5,  2.5, -2.5, -0.5],
++           [ 0.5,  3.5, -1.5,  0.5],
++           [ 0.5,  3.5, -1.5,  1.5]])
++
++    Notes
++    -----
++    In bin edges for feature ``i``, the first and last values are used only for
++    ``inverse_transform``. During transform, bin edges are extended to::
++
++      np.concatenate([-np.inf, bin_edges_[i][1:-1], np.inf])
++
++    You can combine ``KBinsDiscretizer`` with
++    :class:`sklearn.compose.ColumnTransformer` if you only want to preprocess
++    part of the features.
++
++    See also
++    --------
++     sklearn.preprocessing.Binarizer : class used to bin values as ``0`` or
++        ``1`` based on a parameter ``threshold``.
++    """
++
++    def __init__(self, n_bins=5, encode='onehot', strategy='quantile'):
++        self.n_bins = n_bins
++        self.encode = encode
++        self.strategy = strategy
++
++    def fit(self, X, y=None):
++        """Fits the estimator.
++
++        Parameters
++        ----------
++        X : numeric array-like, shape (n_samples, n_features)
++            Data to be discretized.
++
++        y : ignored
++
++        Returns
++        -------
++        self
++        """
++        X = check_array(X, dtype='numeric')
++
++        valid_encode = ('onehot', 'onehot-dense', 'ordinal')
++        if self.encode not in valid_encode:
++            raise ValueError("Valid options for 'encode' are {}. "
++                             "Got encode={!r} instead."
++                             .format(valid_encode, self.encode))
++        valid_strategy = ('uniform', 'quantile', 'kmeans')
++        if self.strategy not in valid_strategy:
++            raise ValueError("Valid options for 'strategy' are {}. "
++                             "Got strategy={!r} instead."
++                             .format(valid_strategy, self.strategy))
++
++        n_features = X.shape[1]
++        n_bins = self._validate_n_bins(n_features)
++
++        bin_edges = np.zeros(n_features, dtype=object)
++        for jj in range(n_features):
++            column = X[:, jj]
++            col_min, col_max = column.min(), column.max()
++
++            if col_min == col_max:
++                warnings.warn("Feature %d is constant and will be "
++                              "replaced with 0." % jj)
++                n_bins[jj] = 1
++                bin_edges[jj] = np.array([-np.inf, np.inf])
++                continue
++
++            if self.strategy == 'uniform':
++                bin_edges[jj] = np.linspace(col_min, col_max, n_bins[jj] + 1)
++
++            elif self.strategy == 'quantile':
++                quantiles = np.linspace(0, 100, n_bins[jj] + 1)
++                if np_version < (1, 9):
++                    quantiles = list(quantiles)
++                bin_edges[jj] = np.asarray(np.percentile(column, quantiles))
++
++            elif self.strategy == 'kmeans':
++                from ..cluster import KMeans  # fixes import loops
++
++                # Deterministic initialization with uniform spacing
++                uniform_edges = np.linspace(col_min, col_max, n_bins[jj] + 1)
++                init = (uniform_edges[1:] + uniform_edges[:-1])[:, None] * 0.5
++
++                # 1D k-means procedure
++                km = KMeans(n_clusters=n_bins[jj], init=init, n_init=1)
++                centers = km.fit(column[:, None]).cluster_centers_[:, 0]
++                bin_edges[jj] = (centers[1:] + centers[:-1]) * 0.5
++                bin_edges[jj] = np.r_[col_min, bin_edges[jj], col_max]
++
++        self.bin_edges_ = bin_edges
++        self.n_bins_ = n_bins
++
++        return self
++
++    def _validate_n_bins(self, n_features):
++        """Returns n_bins_, the number of bins per feature.
++
++        Also ensures that ignored bins are zero.
++        """
++        orig_bins = self.n_bins
++        if isinstance(orig_bins, numbers.Number):
++            if not isinstance(orig_bins, (numbers.Integral, np.integer)):
++                raise ValueError("{} received an invalid n_bins type. "
++                                 "Received {}, expected int."
++                                 .format(KBinsDiscretizer.__name__,
++                                         type(orig_bins).__name__))
++            if orig_bins < 2:
++                raise ValueError("{} received an invalid number "
++                                 "of bins. Received {}, expected at least 2."
++                                 .format(KBinsDiscretizer.__name__, orig_bins))
++            return np.ones(n_features, dtype=np.int) * orig_bins
++
++        n_bins = check_array(orig_bins, dtype=np.int, copy=True,
++                             ensure_2d=False)
++
++        if n_bins.ndim > 1 or n_bins.shape[0] != n_features:
++            raise ValueError("n_bins must be a scalar or array "
++                             "of shape (n_features,).")
++
++        bad_nbins_value = (n_bins < 2) | (n_bins != orig_bins)
++
++        violating_indices = np.where(bad_nbins_value)[0]
++        if violating_indices.shape[0] > 0:
++            indices = ", ".join(str(i) for i in violating_indices)
++            raise ValueError("{} received an invalid number "
++                             "of bins at indices {}. Number of bins "
++                             "must be at least 2, and must be an int."
++                             .format(KBinsDiscretizer.__name__, indices))
++        return n_bins
++
++    def transform(self, X):
++        """Discretizes the data.
++
++        Parameters
++        ----------
++        X : numeric array-like, shape (n_samples, n_features)
++            Data to be discretized.
++
++        Returns
++        -------
++        Xt : numeric array-like or sparse matrix
++            Data in the binned space.
++        """
++        check_is_fitted(self, ["bin_edges_"])
++
++        Xt = check_array(X, copy=True, dtype=FLOAT_DTYPES)
++        n_features = self.n_bins_.shape[0]
++        if Xt.shape[1] != n_features:
++            raise ValueError("Incorrect number of features. Expecting {}, "
++                             "received {}.".format(n_features, Xt.shape[1]))
++
++        bin_edges = self.bin_edges_
++        for jj in range(Xt.shape[1]):
++            # Values which are close to a bin edge are susceptible to numeric
++            # instability. Add eps to X so these values are binned correctly
++            # with respect to their decimal truncation. See documentation of
++            # numpy.isclose for an explanation of ``rtol`` and ``atol``.
++            rtol = 1.e-5
++            atol = 1.e-8
++            eps = atol + rtol * np.abs(Xt[:, jj])
++            Xt[:, jj] = np.digitize(Xt[:, jj] + eps, bin_edges[jj][1:])
++        np.clip(Xt, 0, self.n_bins_ - 1, out=Xt)
++
++        if self.encode == 'ordinal':
++            return Xt
++
++        encode_sparse = self.encode == 'onehot'
++        return OneHotEncoder(categories=[np.arange(i) for i in self.n_bins_],
++                             sparse=encode_sparse).fit_transform(Xt)
++
++    def inverse_transform(self, Xt):
++        """Transforms discretized data back to original feature space.
++
++        Note that this function does not regenerate the original data
++        due to discretization rounding.
++
++        Parameters
++        ----------
++        Xt : numeric array-like, shape (n_sample, n_features)
++            Transformed data in the binned space.
++
++        Returns
++        -------
++        Xinv : numeric array-like
++            Data in the original feature space.
++        """
++        check_is_fitted(self, ["bin_edges_"])
++
++        if self.encode != 'ordinal':
++            raise ValueError("inverse_transform only supports "
++                             "'encode = ordinal'. Got encode={!r} instead."
++                             .format(self.encode))
++
++        Xinv = check_array(Xt, copy=True, dtype=FLOAT_DTYPES)
++        n_features = self.n_bins_.shape[0]
++        if Xinv.shape[1] != n_features:
++            raise ValueError("Incorrect number of features. Expecting {}, "
++                             "received {}.".format(n_features, Xinv.shape[1]))
++
++        for jj in range(n_features):
++            bin_edges = self.bin_edges_[jj]
++            bin_centers = (bin_edges[1:] + bin_edges[:-1]) * 0.5
++            Xinv[:, jj] = bin_centers[np.int_(Xinv[:, jj])]
++
++        return Xinv
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 7516b2af9ec8..f3bd4b9ffb63 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -15,7 +15,9 @@
+ from ..utils import check_array
+ from ..utils import deprecated
+ from ..utils.fixes import _argmax
+-from ..utils.validation import check_is_fitted, FLOAT_DTYPES
++from ..utils.validation import check_is_fitted
++
++from .base import _transform_selected
+ from .label import _encode, _encode_check_unknown
+ 
+ 
+@@ -28,64 +30,6 @@
+ ]
+ 
+ 
+-def _transform_selected(X, transform, dtype, selected="all", copy=True):
+-    """Apply a transform function to portion of selected features
+-
+-    Parameters
+-    ----------
+-    X : {array-like, sparse matrix}, shape [n_samples, n_features]
+-        Dense array or sparse matrix.
+-
+-    transform : callable
+-        A callable transform(X) -> X_transformed
+-
+-    dtype : number type
+-        Desired dtype of output.
+-
+-    copy : boolean, optional
+-        Copy X even if it could be avoided.
+-
+-    selected: "all" or array of indices or mask
+-        Specify which features to apply the transform to.
+-
+-    Returns
+-    -------
+-    X : array or sparse matrix, shape=(n_samples, n_features_new)
+-    """
+-    X = check_array(X, accept_sparse='csc', copy=copy, dtype=FLOAT_DTYPES)
+-
+-    if isinstance(selected, six.string_types) and selected == "all":
+-        return transform(X)
+-
+-    if len(selected) == 0:
+-        return X
+-
+-    n_features = X.shape[1]
+-    ind = np.arange(n_features)
+-    sel = np.zeros(n_features, dtype=bool)
+-    sel[np.asarray(selected)] = True
+-    not_sel = np.logical_not(sel)
+-    n_selected = np.sum(sel)
+-
+-    if n_selected == 0:
+-        # No features selected.
+-        return X
+-    elif n_selected == n_features:
+-        # All features selected.
+-        return transform(X)
+-    else:
+-        X_sel = transform(X[:, ind[sel]])
+-        # The columns of X which are not transformed need
+-        # to be casted to the desire dtype before concatenation.
+-        # Otherwise, the stacking will cast to the higher-precision dtype.
+-        X_not_sel = X[:, ind[not_sel]].astype(dtype)
+-
+-        if sparse.issparse(X_sel) or sparse.issparse(X_not_sel):
+-            return sparse.hstack((X_sel, X_not_sel))
+-        else:
+-            return np.hstack((X_sel, X_not_sel))
+-
+-
+ class _BaseEncoder(BaseEstimator, TransformerMixin):
+     """
+     Base class for encoders that includes the code to categorize and
+diff --git a/sklearn/preprocessing/base.py b/sklearn/preprocessing/base.py
+new file mode 100644
+index 000000000000..4b0cdbc35e1e
+--- /dev/null
++++ b/sklearn/preprocessing/base.py
+@@ -0,0 +1,90 @@
++"""Helpers for preprocessing"""
++
++import numpy as np
++from scipy import sparse
++
++from ..utils import check_array
++from ..utils.validation import FLOAT_DTYPES
++from ..externals import six
++
++
++def _transform_selected(X, transform, dtype, selected="all", copy=True,
++                        retain_order=False):
++    """Apply a transform function to portion of selected features.
++
++    Returns an array Xt, where the non-selected features appear on the right
++    side (largest column indices) of Xt.
++
++    Parameters
++    ----------
++    X : {array-like, sparse matrix}, shape [n_samples, n_features]
++        Dense array or sparse matrix.
++
++    transform : callable
++        A callable transform(X) -> X_transformed
++
++    dtype : number type
++        Desired dtype of output.
++
++    copy : boolean, default=True
++        Copy X even if it could be avoided.
++
++    selected : "all" or array of indices or mask
++        Specify which features to apply the transform to.
++
++    retain_order : boolean, default=False
++        If True, the non-selected features will not be displaced to the right
++        side of the transformed array. The number of features in Xt must
++        match the number of features in X. Furthermore, X and Xt cannot be
++        sparse.
++
++    Returns
++    -------
++    Xt : array or sparse matrix, shape=(n_samples, n_features_new)
++    """
++    X = check_array(X, accept_sparse='csc', copy=copy, dtype=FLOAT_DTYPES)
++
++    if sparse.issparse(X) and retain_order:
++        raise ValueError("The retain_order option can only be set to True "
++                         "for dense matrices.")
++
++    if isinstance(selected, six.string_types) and selected == "all":
++        return transform(X)
++
++    if len(selected) == 0:
++        return X
++
++    n_features = X.shape[1]
++    ind = np.arange(n_features)
++    sel = np.zeros(n_features, dtype=bool)
++    sel[np.asarray(selected)] = True
++    not_sel = np.logical_not(sel)
++    n_selected = np.sum(sel)
++
++    if n_selected == 0:
++        # No features selected.
++        return X
++    elif n_selected == n_features:
++        # All features selected.
++        return transform(X)
++    else:
++        X_sel = transform(X[:, ind[sel]])
++        # The columns of X which are not transformed need
++        # to be casted to the desire dtype before concatenation.
++        # Otherwise, the stacking will cast to the higher-precision dtype.
++        X_not_sel = X[:, ind[not_sel]].astype(dtype)
++
++    if retain_order:
++        if X_sel.shape[1] + X_not_sel.shape[1] != n_features:
++            raise ValueError("The retain_order option can only be set to True "
++                             "if the dimensions of the input array match the "
++                             "dimensions of the transformed array.")
++
++        # Fancy indexing not supported for sparse matrices
++        X[:, ind[sel]] = X_sel
++        return X
++
++    if sparse.issparse(X_sel) or sparse.issparse(X_not_sel):
++        return sparse.hstack((X_sel, X_not_sel))
++    else:
++        return np.hstack((X_sel, X_not_sel))
+diff --git a/sklearn/preprocessing/tests/test_base.py b/sklearn/preprocessing/tests/test_base.py
+new file mode 100644
+index 000000000000..530d9174a16d
+--- /dev/null
++++ b/sklearn/preprocessing/tests/test_base.py
+@@ -0,0 +1,89 @@
++import numpy as np
++import pytest
++from scipy import sparse
++
++from sklearn.utils.testing import assert_array_equal
++from sklearn.utils.testing import assert_raise_message
++from sklearn.preprocessing._encoders import _transform_selected
++from sklearn.preprocessing.data import Binarizer
++
++
++def toarray(a):
++    if hasattr(a, "toarray"):
++        a = a.toarray()
++    return a
++
++
++def _check_transform_selected(X, X_expected, dtype, sel):
++    for M in (X, sparse.csr_matrix(X)):
++        Xtr = _transform_selected(M, Binarizer().transform, dtype, sel)
++        assert_array_equal(toarray(Xtr), X_expected)
++
++
++@pytest.mark.parametrize("output_dtype", [np.int32, np.float32, np.float64])
++@pytest.mark.parametrize("input_dtype", [np.int32, np.float32, np.float64])
++def test_transform_selected(output_dtype, input_dtype):
++    X = np.asarray([[3, 2, 1], [0, 1, 1]], dtype=input_dtype)
++
++    X_expected = np.asarray([[1, 2, 1], [0, 1, 1]], dtype=output_dtype)
++    _check_transform_selected(X, X_expected, output_dtype, [0])
++    _check_transform_selected(X, X_expected, output_dtype,
++                              [True, False, False])
++
++    X_expected = np.asarray([[1, 1, 1], [0, 1, 1]], dtype=output_dtype)
++    _check_transform_selected(X, X_expected, output_dtype, [0, 1, 2])
++    _check_transform_selected(X, X_expected, output_dtype, [True, True, True])
++    _check_transform_selected(X, X_expected, output_dtype, "all")
++
++    _check_transform_selected(X, X, output_dtype, [])
++    _check_transform_selected(X, X, output_dtype, [False, False, False])
++
++
++@pytest.mark.parametrize("output_dtype", [np.int32, np.float32, np.float64])
++@pytest.mark.parametrize("input_dtype", [np.int32, np.float32, np.float64])
++def test_transform_selected_copy_arg(output_dtype, input_dtype):
++    # transformer that alters X
++    def _mutating_transformer(X):
++        X[0, 0] = X[0, 0] + 1
++        return X
++
++    original_X = np.asarray([[1, 2], [3, 4]], dtype=input_dtype)
++    expected_Xtr = np.asarray([[2, 2], [3, 4]], dtype=output_dtype)
++
++    X = original_X.copy()
++    Xtr = _transform_selected(X, _mutating_transformer, output_dtype,
++                              copy=True, selected='all')
++
++    assert_array_equal(toarray(X), toarray(original_X))
++    assert_array_equal(toarray(Xtr), expected_Xtr)
++
++
++def test_transform_selected_retain_order():
++    X = [[-1, 1], [2, -2]]
++
++    assert_raise_message(ValueError,
++                         "The retain_order option can only be set to True "
++                         "for dense matrices.",
++                         _transform_selected, sparse.csr_matrix(X),
++                         Binarizer().transform, dtype=np.int, selected=[0],
++                         retain_order=True)
++
++    def transform(X):
++        return np.hstack((X, [[0], [0]]))
++
++    assert_raise_message(ValueError,
++                         "The retain_order option can only be set to True "
++                         "if the dimensions of the input array match the "
++                         "dimensions of the transformed array.",
++                         _transform_selected, X, transform, dtype=np.int,
++                         selected=[0], retain_order=True)
++
++    X_expected = [[-1, 1], [2, 0]]
++    Xtr = _transform_selected(X, Binarizer().transform, dtype=np.int,
++                              selected=[1], retain_order=True)
++    assert_array_equal(toarray(Xtr), X_expected)
++
++    X_expected = [[0, 1], [1, -2]]
++    Xtr = _transform_selected(X, Binarizer().transform, dtype=np.int,
++                              selected=[0], retain_order=True)
++    assert_array_equal(toarray(Xtr), X_expected)
+diff --git a/sklearn/preprocessing/tests/test_discretization.py b/sklearn/preprocessing/tests/test_discretization.py
+new file mode 100644
+index 000000000000..5592605a8a4e
+--- /dev/null
++++ b/sklearn/preprocessing/tests/test_discretization.py
+@@ -0,0 +1,250 @@
++from __future__ import absolute_import
++
++import pytest
++import numpy as np
++import scipy.sparse as sp
++import warnings
++
++from sklearn.externals.six.moves import xrange as range
++from sklearn.preprocessing import KBinsDiscretizer
++from sklearn.preprocessing import OneHotEncoder
++from sklearn.utils.testing import (
++    assert_array_equal,
++    assert_raises,
++    assert_raise_message,
++    assert_warns_message
++)
++
++X = [[-2, 1.5, -4, -1],
++     [-1, 2.5, -3, -0.5],
++     [0, 3.5, -2, 0.5],
++     [1, 4.5, -1, 2]]
++
++
++@pytest.mark.parametrize(
++    'strategy, expected',
++    [('uniform', [[0, 0, 0, 0], [1, 1, 1, 0], [2, 2, 2, 1], [2, 2, 2, 2]]),
++     ('kmeans', [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [2, 2, 2, 2]]),
++     ('quantile', [[0, 0, 0, 0], [1, 1, 1, 1], [2, 2, 2, 2], [2, 2, 2, 2]])])
++def test_fit_transform(strategy, expected):
++    est = KBinsDiscretizer(n_bins=3, encode='ordinal', strategy=strategy)
++    est.fit(X)
++    assert_array_equal(expected, est.transform(X))
++
++
++def test_valid_n_bins():
++    KBinsDiscretizer(n_bins=2).fit_transform(X)
++    KBinsDiscretizer(n_bins=np.array([2])[0]).fit_transform(X)
++    assert KBinsDiscretizer(n_bins=2).fit(X).n_bins_.dtype == np.dtype(np.int)
++
++
++def test_invalid_n_bins():
++    est = KBinsDiscretizer(n_bins=1)
++    assert_raise_message(ValueError, "KBinsDiscretizer received an invalid "
++                         "number of bins. Received 1, expected at least 2.",
++                         est.fit_transform, X)
++
++    est = KBinsDiscretizer(n_bins=1.1)
++    assert_raise_message(ValueError, "KBinsDiscretizer received an invalid "
++                         "n_bins type. Received float, expected int.",
++                         est.fit_transform, X)
++
++
++def test_invalid_n_bins_array():
++    # Bad shape
++    n_bins = np.ones((2, 4)) * 2
++    est = KBinsDiscretizer(n_bins=n_bins)
++    assert_raise_message(ValueError,
++                         "n_bins must be a scalar or array of shape "
++                         "(n_features,).", est.fit_transform, X)
++
++    # Incorrect number of features
++    n_bins = [1, 2, 2]
++    est = KBinsDiscretizer(n_bins=n_bins)
++    assert_raise_message(ValueError,
++                         "n_bins must be a scalar or array of shape "
++                         "(n_features,).", est.fit_transform, X)
++
++    # Bad bin values
++    n_bins = [1, 2, 2, 1]
++    est = KBinsDiscretizer(n_bins=n_bins)
++    assert_raise_message(ValueError,
++                         "KBinsDiscretizer received an invalid number of bins "
++                         "at indices 0, 3. Number of bins must be at least 2, "
++                         "and must be an int.",
++                         est.fit_transform, X)
++
++    # Float bin values
++    n_bins = [2.1, 2, 2.1, 2]
++    est = KBinsDiscretizer(n_bins=n_bins)
++    assert_raise_message(ValueError,
++                         "KBinsDiscretizer received an invalid number of bins "
++                         "at indices 0, 2. Number of bins must be at least 2, "
++                         "and must be an int.",
++                         est.fit_transform, X)
++
++
++@pytest.mark.parametrize(
++    'strategy, expected',
++    [('uniform', [[0, 0, 0, 0], [0, 1, 1, 0], [1, 2, 2, 1], [1, 2, 2, 2]]),
++     ('kmeans', [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [1, 2, 2, 2]]),
++     ('quantile', [[0, 0, 0, 0], [0, 1, 1, 1], [1, 2, 2, 2], [1, 2, 2, 2]])])
++def test_fit_transform_n_bins_array(strategy, expected):
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3], encode='ordinal',
++                           strategy=strategy).fit(X)
++    assert_array_equal(expected, est.transform(X))
++
++    # test the shape of bin_edges_
++    n_features = np.array(X).shape[1]
++    assert est.bin_edges_.shape == (n_features, )
++    for bin_edges, n_bins in zip(est.bin_edges_, est.n_bins_):
++        assert bin_edges.shape == (n_bins + 1, )
++
++
++def test_invalid_n_features():
++    est = KBinsDiscretizer(n_bins=3).fit(X)
++    bad_X = np.arange(25).reshape(5, -1)
++    assert_raise_message(ValueError,
++                         "Incorrect number of features. Expecting 4, "
++                         "received 5", est.transform, bad_X)
++
++
++@pytest.mark.parametrize('strategy', ['uniform', 'kmeans', 'quantile'])
++def test_same_min_max(strategy):
++    warnings.simplefilter("always")
++    X = np.array([[1, -2],
++                  [1, -1],
++                  [1, 0],
++                  [1, 1]])
++    est = KBinsDiscretizer(strategy=strategy, n_bins=3, encode='ordinal')
++    assert_warns_message(UserWarning,
++                         "Feature 0 is constant and will be replaced "
++                         "with 0.", est.fit, X)
++    assert est.n_bins_[0] == 1
++    # replace the feature with zeros
++    Xt = est.transform(X)
++    assert_array_equal(Xt[:, 0], np.zeros(X.shape[0]))
++
++
++def test_transform_1d_behavior():
++    X = np.arange(4)
++    est = KBinsDiscretizer(n_bins=2)
++    assert_raises(ValueError, est.fit, X)
++
++    est = KBinsDiscretizer(n_bins=2)
++    est.fit(X.reshape(-1, 1))
++    assert_raises(ValueError, est.transform, X)
++
++
++def test_numeric_stability():
++    X_init = np.array([2., 4., 6., 8., 10.]).reshape(-1, 1)
++    Xt_expected = np.array([0, 0, 1, 1, 1]).reshape(-1, 1)
++
++    # Test up to discretizing nano units
++    for i in range(1, 9):
++        X = X_init / 10**i
++        Xt = KBinsDiscretizer(n_bins=2, encode='ordinal').fit_transform(X)
++        assert_array_equal(Xt_expected, Xt)
++
++
++def test_invalid_encode_option():
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3], encode='invalid-encode')
++    assert_raise_message(ValueError, "Valid options for 'encode' are "
++                         "('onehot', 'onehot-dense', 'ordinal'). "
++                         "Got encode='invalid-encode' instead.",
++                         est.fit, X)
++
++
++def test_encode_options():
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3],
++                           encode='ordinal').fit(X)
++    Xt_1 = est.transform(X)
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3],
++                           encode='onehot-dense').fit(X)
++    Xt_2 = est.transform(X)
++    assert not sp.issparse(Xt_2)
++    assert_array_equal(OneHotEncoder(
++                           categories=[np.arange(i) for i in [2, 3, 3, 3]],
++                           sparse=False)
++                       .fit_transform(Xt_1), Xt_2)
++    assert_raise_message(ValueError, "inverse_transform only supports "
++                         "'encode = ordinal'. Got encode='onehot-dense' "
++                         "instead.", est.inverse_transform, Xt_2)
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3],
++                           encode='onehot').fit(X)
++    Xt_3 = est.transform(X)
++    assert sp.issparse(Xt_3)
++    assert_array_equal(OneHotEncoder(
++                           categories=[np.arange(i) for i in [2, 3, 3, 3]],
++                           sparse=True)
++                       .fit_transform(Xt_1).toarray(),
++                       Xt_3.toarray())
++    assert_raise_message(ValueError, "inverse_transform only supports "
++                         "'encode = ordinal'. Got encode='onehot' "
++                         "instead.", est.inverse_transform, Xt_2)
++
++
++def test_invalid_strategy_option():
++    est = KBinsDiscretizer(n_bins=[2, 3, 3, 3], strategy='invalid-strategy')
++    assert_raise_message(ValueError, "Valid options for 'strategy' are "
++                         "('uniform', 'quantile', 'kmeans'). "
++                         "Got strategy='invalid-strategy' instead.",
++                         est.fit, X)
++
++
++@pytest.mark.parametrize(
++    'strategy, expected_2bins, expected_3bins',
++    [('uniform', [0, 0, 0, 0, 1, 1], [0, 0, 0, 0, 2, 2]),
++     ('kmeans', [0, 0, 0, 0, 1, 1], [0, 1, 1, 1, 2, 2]),
++     ('quantile', [0, 0, 0, 1, 1, 1], [0, 0, 1, 1, 2, 2])])
++def test_nonuniform_strategies(strategy, expected_2bins, expected_3bins):
++    X = np.array([0, 1, 2, 3, 9, 10]).reshape(-1, 1)
++
++    # with 2 bins
++    est = KBinsDiscretizer(n_bins=2, strategy=strategy, encode='ordinal')
++    Xt = est.fit_transform(X)
++    assert_array_equal(expected_2bins, Xt.ravel())
++
++    # with 3 bins
++    est = KBinsDiscretizer(n_bins=3, strategy=strategy, encode='ordinal')
++    Xt = est.fit_transform(X)
++    assert_array_equal(expected_3bins, Xt.ravel())
++
++
++@pytest.mark.parametrize('strategy', ['uniform', 'kmeans', 'quantile'])
++def test_inverse_transform(strategy):
++    X = np.random.RandomState(0).randn(100, 3)
++    kbd = KBinsDiscretizer(n_bins=3, strategy=strategy, encode='ordinal')
++    Xt = kbd.fit_transform(X)
++    assert_array_equal(Xt.max(axis=0) + 1, kbd.n_bins_)
++
++    X2 = kbd.inverse_transform(Xt)
++    X2t = kbd.fit_transform(X2)
++    assert_array_equal(X2t.max(axis=0) + 1, kbd.n_bins_)
++    assert_array_equal(Xt, X2t)
++
++
++@pytest.mark.parametrize('strategy', ['uniform', 'kmeans', 'quantile'])
++def test_transform_outside_fit_range(strategy):
++    X = np.array([0, 1, 2, 3])[:, None]
++    kbd = KBinsDiscretizer(n_bins=4, strategy=strategy, encode='ordinal')
++    kbd.fit(X)
++
++    X2 = np.array([-2, 5])[:, None]
++    X2t = kbd.transform(X2)
++    assert_array_equal(X2t.max(axis=0) + 1, kbd.n_bins_)
++    assert_array_equal(X2t.min(axis=0), [0])
++
++
++def test_overwrite():
++    X = np.array([0, 1, 2, 3])[:, None]
++    X_before = X.copy()
++
++    est = KBinsDiscretizer(n_bins=3, encode="ordinal")
++    Xt = est.fit_transform(X)
++    assert_array_equal(X, X_before)
++
++    Xt_before = Xt.copy()
++    Xinv = est.inverse_transform(Xt)
++    assert_array_equal(Xt, Xt_before)
++    assert_array_equal(Xinv, np.array([[0.5], [1.5], [2.5], [2.5]]))
+diff --git a/sklearn/preprocessing/tests/test_encoders.py b/sklearn/preprocessing/tests/test_encoders.py
+index d4f8aaefc34a..e655acd20b30 100644
+--- a/sklearn/preprocessing/tests/test_encoders.py
++++ b/sklearn/preprocessing/tests/test_encoders.py
+@@ -16,8 +16,6 @@
+ from sklearn.utils.testing import assert_warns_message
+ from sklearn.utils.testing import assert_no_warnings
+ 
+-from sklearn.preprocessing._encoders import _transform_selected
+-from sklearn.preprocessing.data import Binarizer
+ from sklearn.preprocessing import OneHotEncoder
+ from sklearn.preprocessing import OrdinalEncoder
+ 
+@@ -177,50 +175,6 @@ def test_one_hot_encoder_force_new_behaviour():
+     assert_raises(ValueError, enc.transform, X2)
+ 
+ 
+-def _check_transform_selected(X, X_expected, dtype, sel):
+-    for M in (X, sparse.csr_matrix(X)):
+-        Xtr = _transform_selected(M, Binarizer().transform, dtype, sel)
+-        assert_array_equal(toarray(Xtr), X_expected)
+-
+-
+-@pytest.mark.parametrize("output_dtype", [np.int32, np.float32, np.float64])
+-@pytest.mark.parametrize("input_dtype", [np.int32, np.float32, np.float64])
+-def test_transform_selected(output_dtype, input_dtype):
+-    X = np.asarray([[3, 2, 1], [0, 1, 1]], dtype=input_dtype)
+-
+-    X_expected = np.asarray([[1, 2, 1], [0, 1, 1]], dtype=output_dtype)
+-    _check_transform_selected(X, X_expected, output_dtype, [0])
+-    _check_transform_selected(X, X_expected, output_dtype,
+-                              [True, False, False])
+-
+-    X_expected = np.asarray([[1, 1, 1], [0, 1, 1]], dtype=output_dtype)
+-    _check_transform_selected(X, X_expected, output_dtype, [0, 1, 2])
+-    _check_transform_selected(X, X_expected, output_dtype, [True, True, True])
+-    _check_transform_selected(X, X_expected, output_dtype, "all")
+-
+-    _check_transform_selected(X, X, output_dtype, [])
+-    _check_transform_selected(X, X, output_dtype, [False, False, False])
+-
+-
+-@pytest.mark.parametrize("output_dtype", [np.int32, np.float32, np.float64])
+-@pytest.mark.parametrize("input_dtype", [np.int32, np.float32, np.float64])
+-def test_transform_selected_copy_arg(output_dtype, input_dtype):
+-    # transformer that alters X
+-    def _mutating_transformer(X):
+-        X[0, 0] = X[0, 0] + 1
+-        return X
+-
+-    original_X = np.asarray([[1, 2], [3, 4]], dtype=input_dtype)
+-    expected_Xtr = np.asarray([[2, 2], [3, 4]], dtype=output_dtype)
+-
+-    X = original_X.copy()
+-    Xtr = _transform_selected(X, _mutating_transformer, output_dtype,
+-                              copy=True, selected='all')
+-
+-    assert_array_equal(toarray(X), toarray(original_X))
+-    assert_array_equal(toarray(Xtr), expected_Xtr)
+-
+-
+ def _run_one_hot(X, X2, cat):
+     # enc = assert_warns(
+     #     DeprecationWarning,

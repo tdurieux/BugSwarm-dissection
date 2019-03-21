@@ -1,0 +1,131 @@
+diff --git a/doc/modules/linear_model.rst b/doc/modules/linear_model.rst
+index 6c36873d215a..3e39c3e438e9 100644
+--- a/doc/modules/linear_model.rst
++++ b/doc/modules/linear_model.rst
+@@ -1161,7 +1161,6 @@ This way, we can solve the XOR problem with a linear classifier::
+            [ 1.,  0.,  1.,  0.],
+            [ 1.,  1.,  0.,  0.],
+            [ 1.,  1.,  1.,  1.]])
+-    >>> clf = Perceptron(fit_intercept=False, tol=0, max_iter=10,
+-    shuffle=False).fit(X, y)
++    >>> clf = Perceptron(fit_intercept=False, tol=0, max_iter=10, shuffle=False).fit(X, y)
+     >>> clf.score(X, y)
+     1.0
+diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
+index d7361127d944..d311e60c9f12 100644
+--- a/doc/modules/model_evaluation.rst
++++ b/doc/modules/model_evaluation.rst
+@@ -1405,7 +1405,7 @@ Dummy estimators
+ 
+ When doing supervised learning, a simple sanity check consists of comparing
+ one's estimator against simple rules of thumb. :class:`DummyClassifier`
+-implements three such simple strategies for classification:
++implements several such simple strategies for classification:
+ 
+ - ``stratified`` generates random predictions by respecting the training
+   set class distribution.
+diff --git a/sklearn/linear_model/passive_aggressive.py b/sklearn/linear_model/passive_aggressive.py
+index 4c1de65afb7f..e7c2ea168905 100644
+--- a/sklearn/linear_model/passive_aggressive.py
++++ b/sklearn/linear_model/passive_aggressive.py
+@@ -24,11 +24,11 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
+     max_iter : int, optional
+         The maximum number of passes over the training data (aka epochs).
+         It only impacts the behavior in the `fit` method, and not the
+-        `partial_fit`. Defaults to 5. Defaults to 100 in 0.19.
++        `partial_fit`. Defaults to 5. Defaults to 100 in 0.20.
+ 
+     tol : float, optional
+         The tolerance for the stopping criterion.
+-        Defaults to 0. Defaults to 1e-4 in 0.19.
++        Defaults to 0. Defaults to 1e-4 in 0.20.
+ 
+     shuffle : bool, default=True
+         Whether or not the training data should be shuffled after each epoch.
+@@ -202,11 +202,11 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
+     max_iter : int, optional
+         The maximum number of passes over the training data (aka epochs).
+         It only impacts the behavior in the `fit` method, and not the
+-        `partial_fit`. Defaults to 5. Defaults to 100 in 0.19.
++        `partial_fit`. Defaults to 5. Defaults to 100 in 0.20.
+ 
+     tol : float, optional
+         The tolerance for the stopping criterion.
+-        Defaults to 0. Defaults to 1e-4 in 0.19.
++        Defaults to 0. Defaults to 1e-4 in 0.20.
+ 
+     shuffle : bool, default=True
+         Whether or not the training data should be shuffled after each epoch.
+diff --git a/sklearn/linear_model/perceptron.py b/sklearn/linear_model/perceptron.py
+index dfba4002d723..7af8756b41be 100644
+--- a/sklearn/linear_model/perceptron.py
++++ b/sklearn/linear_model/perceptron.py
+@@ -27,11 +27,11 @@ class Perceptron(BaseSGDClassifier, _LearntSelectorMixin):
+     max_iter : int, optional
+         The maximum number of passes over the training data (aka epochs).
+         It only impacts the behavior in the `fit` method, and not the
+-        `partial_fit`. Defaults to 5. Defaults to 100 in 0.19.
++        `partial_fit`. Defaults to 5. Defaults to 100 in 0.20.
+ 
+     tol : float, optional
+         The tolerance for the stopping criterion.
+-        Defaults to 0. Defaults to 1e-4 in 0.19.
++        Defaults to 0. Defaults to 1e-4 in 0.20.
+ 
+     shuffle : bool, optional, default True
+         Whether or not the training data should be shuffled after each epoch.
+diff --git a/sklearn/linear_model/stochastic_gradient.py b/sklearn/linear_model/stochastic_gradient.py
+index 74ef8b921ca5..d9a3fea3e267 100644
+--- a/sklearn/linear_model/stochastic_gradient.py
++++ b/sklearn/linear_model/stochastic_gradient.py
+@@ -72,18 +72,18 @@ def __init__(self, loss, penalty='l2', alpha=0.0001, C=1.0,
+         self.average = average
+ 
+         if n_iter is not None:
+-            warnings.warn("n_iter parameter is deprecated in 0.17 and will be"
+-                          " removed in 0.19. Use max_iter and tol instead.",
++            warnings.warn("n_iter parameter is deprecated in 0.18 and will be"
++                          " removed in 0.20. Use max_iter and tol instead.",
+                           DeprecationWarning)
+             self.max_iter = n_iter
+             self.tol = 0.
+ 
+         if tol is None:
+-            warnings.warn("tol parameter has been added in 0.17. "
++            warnings.warn("tol parameter has been added in 0.18. "
+                           "Set it to a positive value to stop the method "
+                           "before maximum number of iteration. "
+                           "Set it to 0 to force the number of iteration. "
+-                          "In 0.19, default tol value will be changed to 1e-4"
++                          "In 0.20, default tol value will be changed to 1e-4"
+                           ", and default max_iter value will be changed to "
+                           "100.", DeprecationWarning)
+ 
+@@ -644,11 +644,11 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
+     max_iter : int, optional
+         The maximum number of passes over the training data (aka epochs).
+         It only impacts the behavior in the `fit` method, and not the
+-        `partial_fit`. Defaults to 5. Defaults to 100 in 0.19.
++        `partial_fit`. Defaults to 5. Defaults to 100 in 0.20.
+ 
+     tol : float, optional
+         The tolerance for the stopping criterion.
+-        Defaults to 0. Defaults to 1e-4 in 0.19.
++        Defaults to 0. Defaults to 1e-4 in 0.20.
+ 
+     shuffle : bool, optional
+         Whether or not the training data should be shuffled after each epoch.
+@@ -1200,11 +1200,11 @@ class SGDRegressor(BaseSGDRegressor, _LearntSelectorMixin):
+     max_iter : int, optional
+         The maximum number of passes over the training data (aka epochs).
+         It only impacts the behavior in the `fit` method, and not the
+-        `partial_fit`. Defaults to 5. Defaults to 100 in 0.19.
++        `partial_fit`. Defaults to 5. Defaults to 100 in 0.20.
+ 
+     tol : float, optional
+         The tolerance for the stopping criterion.
+-        Defaults to 0. Defaults to 1e-4 in 0.19.
++        Defaults to 0. Defaults to 1e-4 in 0.20.
+ 
+     shuffle : bool, optional
+         Whether or not the training data should be shuffled after each epoch.

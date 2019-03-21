@@ -1,0 +1,107 @@
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
+index b7a3aa2617..2b15d4e183 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheck.java
+@@ -41,23 +41,23 @@
+   private static final int PASSWORD_ARGUMENT = 2;
+   private static final int URL_ARGUMENT = 0;
+   private static final Pattern EMPTY_PASSWORD_PATTERN = Pattern.compile(".*password\\s*=\\s*([&;].*|$)");
++  private static final List<MethodMatcher> METHOD_MATCHERS = Collections.singletonList(
++    MethodMatcher.create().typeDefinition("java.sql.DriverManager").name("getConnection").withAnyParameters());
+ 
+ 
+   @Override
+   protected List<MethodMatcher> getMethodInvocationMatchers() {
+-    return Collections.singletonList(
+-      MethodMatcher.create().typeDefinition("java.sql.DriverManager").name("getConnection").withAnyParameters()
+-    );
++    return METHOD_MATCHERS;
+   }
+ 
+   @Override
+   protected void onMethodInvocationFound(MethodInvocationTree mit) {
+     Arguments args = mit.arguments();
+     if (args.size() > 2 && hasEmptyValue(args.get(PASSWORD_ARGUMENT))) {
+-      reportIssue(args.get(PASSWORD_ARGUMENT), MESSAGE);
++      reportIssue(mit, MESSAGE);
+     }
+     if (args.size() == 1) {
+-      checkForUrlConnection(args.get(URL_ARGUMENT));
++      checkForUrlConnection(mit);
+     }
+   }
+ 
+@@ -76,10 +76,11 @@ private static String getStringValue(ExpressionTree expression) {
+     return value;
+   }
+ 
+-  private void checkForUrlConnection(ExpressionTree expression) {
+-    String url = getStringValue(expression);
++  private void checkForUrlConnection(MethodInvocationTree mit) {
++    ExpressionTree urlArgument = mit.arguments().get(URL_ARGUMENT);
++    String url = getStringValue(urlArgument);
+     if (url != null && (!url.contains("password") || EMPTY_PASSWORD_PATTERN.matcher(url).matches())) {
+-      reportIssue(expression, MESSAGE);
++      reportIssue(mit, MESSAGE);
+     }
+ 
+   }
+diff --git a/java-checks/src/test/files/checks/security/EmptyDatabasePasswordCheck.java b/java-checks/src/test/files/checks/security/EmptyDatabasePasswordCheck.java
+index 0a54a927d2..d26f538cef 100644
+--- a/java-checks/src/test/files/checks/security/EmptyDatabasePasswordCheck.java
++++ b/java-checks/src/test/files/checks/security/EmptyDatabasePasswordCheck.java
+@@ -4,8 +4,8 @@
+ import static org.sonar.java.checks.security.EmptyDatabasePasswordCheckTest.NON_EMPTY_PASSWORD;
+ 
+ class S2115 {
+-  void foo(Properties connectionProps) throws SQLException {
+-    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", ""); // Noncompliant {{Add password protection to this database.}}
++  void foo(Properties connectionProps, String unknown) throws SQLException {
++    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", ""); // Noncompliant [[sc=5;ec=86]] {{Add password protection to this database.}}
+     DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", "Foo");
+ 
+     String pwd = "";
+@@ -19,9 +19,13 @@ void foo(Properties connectionProps) throws SQLException {
+ 
+     DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", pwd3); // Noncompliant
+ 
+-    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", EMPTY_PASSWORD); // Noncompliant
++    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", getPassword());
++
++    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", EMPTY_PASSWORD); // Noncompliant [[sc=5;ec=98]]
+     DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", NON_EMPTY_PASSWORD);
+ 
++    DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", unknown);
++
+     DriverManager.getConnection("jdbc:derby:memory:myDB;create=true", "AppLogin", null);
+ 
+     DriverManager.getConnection("jdbc:derby:memory:myDB;create=true"); // Noncompliant
+@@ -43,6 +47,9 @@ void foo(Properties connectionProps) throws SQLException {
+     DriverManager.getConnection(url);
+     DriverManager.getConnection(null);
+ 
++  }
+ 
++  String getPassword() {
++    return "foo";
+   }
+ }
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheckTest.java
+index a262d08a1e..7cacc66cda 100644
+--- a/java-checks/src/test/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheckTest.java
++++ b/java-checks/src/test/java/org/sonar/java/checks/security/EmptyDatabasePasswordCheckTest.java
+@@ -21,8 +21,14 @@
+ 
+ import org.junit.Test;
+ import org.sonar.java.checks.verifier.JavaCheckVerifier;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
+ 
+ public class EmptyDatabasePasswordCheckTest {
++  /**
++   * Constants used inside "src/test/files/checks/security/EmptyDatabasePasswordCheck.java" file
++   * in order to test {@link EmptyDatabasePasswordCheck#getStringValue(ExpressionTree)} resolution
++   * of an identifier outside of the compilation unit (static import in this case).
++   */
+   public final static String EMPTY_PASSWORD = "";
+   public final static String NON_EMPTY_PASSWORD = "foo";
+   @Test

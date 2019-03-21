@@ -1,0 +1,1254 @@
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java b/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
+index bcba301d..9510c8ff 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
+@@ -27,6 +27,10 @@
+ import com.squareup.protoparser.RpcElement;
+ import com.squareup.protoparser.ServiceElement;
+ import com.squareup.protoparser.TypeElement;
++import com.squareup.wire.model.Linker;
++import com.squareup.wire.model.Loader;
++import com.squareup.wire.model.RootSet;
++import com.squareup.wire.model.WireProtoFile;
+ import java.io.File;
+ import java.io.IOException;
+ import java.lang.reflect.Constructor;
+@@ -170,10 +174,14 @@ public WireCompiler(String protoPath, List<String> sourceFileNames, List<String>
+   public void compile() throws WireException {
+     Map<String, ProtoFile> parsedFiles = new LinkedHashMap<String, ProtoFile>();
+ 
++
++    Loader loader = new Loader(repoPath, io);
++
+     for (String sourceFilename : options.sourceFileNames) {
+       String sourcePath = repoPath + File.separator + sourceFilename;
+       try {
+         ProtoFile protoFile = io.parse(sourcePath);
++        loader.add(sourceFilename);
+         parsedFiles.put(sourcePath, protoFile);
+         loadSymbols(protoFile);
+       } catch (IOException e) {
+@@ -181,8 +189,13 @@ public void compile() throws WireException {
+       }
+     }
+ 
++    List<WireProtoFile> wireProtoFiles = loader.loaded();
++    Linker linker = new Linker();
++    RootSet rootSet = linker.link(wireProtoFiles);
++
+     if (!typesToEmit.isEmpty()) {
+       log.info("Analyzing dependencies of root types.");
++      rootSet = rootSet.retainRoots(typesToEmit);
+       findDependencies(parsedFiles.values());
+     }
+ 
+@@ -955,7 +968,7 @@ private boolean hasExtends() {
+     if (!shouldEmitOptions()) {
+       for (ExtendElement declaration : declarations) {
+         String name = declaration.qualifiedName();
+-        if (!(isFieldOptions(name) || isMessageOptions(name))) {
++        if (!isFieldOptions(name) && !isMessageOptions(name)) {
+           return true;
+         }
+       }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java b/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java
+index 330749c6..afbdfb87 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java
+@@ -16,83 +16,75 @@
+ package com.squareup.wire.model;
+ 
+ import com.squareup.protoparser.DataType;
+-import com.squareup.protoparser.ProtoFile;
+-import com.squareup.wire.IO;
+-import java.io.File;
+-import java.io.IOException;
+ import java.util.ArrayList;
++import java.util.Collection;
+ import java.util.Collections;
+ import java.util.LinkedHashMap;
+-import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
+ 
++/** Links local field types and option types to the corresponding declarations. */
+ public final class Linker {
+-  private final String repoPath;
+-  private final IO io;
+-  private final Set<String> loadedDependencies;
+   private final Map<String, WireType> protoTypeNames;
+-  private final Map<ProtoFile, WireProtoFile> protoFilesMap;
+   private final Map<ProtoTypeName, Map<String, WireField>> extensionsMap;
+ 
+   // Context when linking.
+-  private final String enclosingProtoPackage;
+   private final List<WireType> enclosingTypes;
+ 
+-  public Linker(String repoPath, IO io) {
+-    this.repoPath = repoPath;
+-    this.io = io;
+-    this.loadedDependencies = new LinkedHashSet<String>();
++  public Linker() {
+     this.protoTypeNames = new LinkedHashMap<String, WireType>();
+-    this.protoFilesMap = new LinkedHashMap<ProtoFile, WireProtoFile>();
+     this.extensionsMap = new LinkedHashMap<ProtoTypeName, Map<String, WireField>>();
+-    this.enclosingProtoPackage = null;
+     this.enclosingTypes = Collections.emptyList();
+   }
+ 
+-  private Linker(Linker enclosing, String protoPackage, WireType type) {
+-    this.repoPath = enclosing.repoPath;
+-    this.io = enclosing.io;
+-    this.loadedDependencies = enclosing.loadedDependencies;
++  private Linker(Linker enclosing, WireType type) {
+     this.protoTypeNames = enclosing.protoTypeNames;
+-    this.protoFilesMap = enclosing.protoFilesMap;
+     this.extensionsMap = enclosing.extensionsMap;
+-    this.enclosingProtoPackage = protoPackage;
+     this.enclosingTypes = type != null
+         ? Util.concatenate(enclosing.enclosingTypes, type)
+         : enclosing.enclosingTypes;
+   }
+ 
+-  /** Recursively add {@code protoFile} and its dependencies. */
+-  public void add(ProtoFile protoFile) throws IOException {
+-    WireProtoFile wireProtoFile = new WireProtoFile(protoFile);
+-    protoFilesMap.put(protoFile, wireProtoFile);
+-
++  public RootSet link(Collection<WireProtoFile> wireProtoFiles) {
+     // Register the types.
+-    for (WireType type : wireProtoFile.types()) {
+-      register(type);
++    for (WireProtoFile wireProtoFile : wireProtoFiles) {
++      for (WireType type : wireProtoFile.types()) {
++        register(type);
++      }
+     }
+ 
+     // Register the extensions.
+-    for (WireExtend extend : wireProtoFile.wireExtends()) {
+-      Map<String, WireField> map = extensionsMap.get(extend.protoTypeName());
+-      if (map == null) {
+-        map = new LinkedHashMap<String, WireField>();
+-        extensionsMap.put(extend.protoTypeName(), map);
+-      }
+-      for (WireField field : extend.fields()) {
+-        map.put(wireProtoFile.packageName() + "." + field.name(), field);
++    for (WireProtoFile wireProtoFile : wireProtoFiles) {
++      for (WireExtend extend : wireProtoFile.wireExtends()) {
++        Map<String, WireField> map = extensionsMap.get(extend.protoTypeName());
++        if (map == null) {
++          map = new LinkedHashMap<String, WireField>();
++          extensionsMap.put(extend.protoTypeName(), map);
++        }
++        for (WireField field : extend.fields()) {
++          map.put(extend.packageName() + "." + field.name(), field);
++        }
+       }
+     }
+ 
+-    // Recursively load dependencies.
+-    for (String dependency : protoFile.dependencies()) {
+-      if (!loadedDependencies.contains(dependency)) {
+-        add(io.parse(repoPath + File.separator + dependency));
+-        loadedDependencies.add(dependency);
++    // Link.
++    for (WireProtoFile wireProtoFile : wireProtoFiles) {
++      for (WireType type : wireProtoFile.types()) {
++        type.link(this);
++      }
++      for (WireService service : wireProtoFile.services()) {
++        service.link(this);
++      }
++      for (WireExtend extend : wireProtoFile.wireExtends()) {
++        extend.link(this);
++      }
++      for (WireOption option : wireProtoFile.options()) {
++        option.link(ProtoTypeName.FILE_OPTIONS, this);
+       }
+     }
++
++    return new RootSet(wireProtoFiles);
+   }
+ 
+   private void register(WireType type) {
+@@ -102,20 +94,14 @@ private void register(WireType type) {
+     }
+   }
+ 
+-  public void link() {
+-    for (WireProtoFile wireProtoFile : protoFilesMap.values()) {
+-      wireProtoFile.link(this);
+-    }
+-  }
+-
+-  /** Returns the proto type for {@code type} according to this linker. */
+-  ProtoTypeName protoTypeName(DataType type) {
++  /** Returns the type name for the scalar, relative or fully-qualified name {@code name}. */
++  ProtoTypeName resolveType(String packageName, DataType type) {
+     switch (type.kind()) {
+       case SCALAR:
+         return ProtoTypeName.getScalar(type.toString());
+ 
+       case NAMED:
+-        return wireType(type.toString()).protoTypeName();
++        return resolveNamedType(packageName, type.toString());
+ 
+       default:
+         // TODO(jwilson): report an error and return a sentinel instead of crashing here.
+@@ -123,14 +109,14 @@ ProtoTypeName protoTypeName(DataType type) {
+     }
+   }
+ 
+-  /** Returns the wire type for the relative or fully-qualified name {@code name}. */
+-  WireType wireType(String name) {
++  /** Returns the type name for the relative or fully-qualified name {@code name}. */
++  ProtoTypeName resolveNamedType(String packageName, String name) {
+     WireType fullyQualified = protoTypeNames.get(name);
+-    if (fullyQualified != null) return fullyQualified;
++    if (fullyQualified != null) return fullyQualified.protoTypeName();
+ 
+-    if (enclosingProtoPackage != null) {
+-      WireType samePackage = protoTypeNames.get(enclosingProtoPackage + "." + name);
+-      if (samePackage != null) return samePackage;
++    if (packageName != null) {
++      WireType samePackage = protoTypeNames.get(packageName + "." + name);
++      if (samePackage != null) return samePackage.protoTypeName();
+     }
+ 
+     // Look at the enclosing type, and its children, all the way up the nesting hierarchy.
+@@ -138,12 +124,12 @@ WireType wireType(String name) {
+       WireType enclosingType = enclosingTypes.get(i);
+ 
+       if (name.equals(enclosingType.protoTypeName().simpleName())) {
+-        return enclosingType;
++        return enclosingType.protoTypeName();
+       }
+ 
+       for (WireType peerType : enclosingType.nestedTypes()) {
+         if (name.equals(peerType.protoTypeName().simpleName())) {
+-          return peerType;
++          return peerType.protoTypeName();
+         }
+       }
+     }
+@@ -158,16 +144,16 @@ WireType wireType(String name) {
+    * This is particularly awkward because of the collision between the separators for package names
+    * and fields.
+    */
+-  List<WireField> fieldPath(ProtoTypeName extensionType, String fieldPath) {
++  List<WireField> fieldPath(String packageName, ProtoTypeName extensionType, String fieldPath) {
+     Map<String, WireField> extensionsForType = extensionsMap.get(extensionType);
+     if (extensionsForType == null) {
+       return null; // No known extensions for the given extension type.
+     }
+ 
+     String[] path = resolveFieldPath(fieldPath, extensionsForType.keySet());
+-    if (path == null && enclosingProtoPackage != null) {
++    if (path == null && packageName != null) {
+       // If the path couldn't be resolved, attempt again by prefixing it with the package name.
+-      path = resolveFieldPath(enclosingProtoPackage + "." + fieldPath, extensionsForType.keySet());
++      path = resolveFieldPath(packageName + "." + fieldPath, extensionsForType.keySet());
+     }
+     if (path == null) {
+       return null; // Unable to find the root of this field path.
+@@ -182,7 +168,7 @@ WireType wireType(String name) {
+       ProtoTypeName valueType = field.type();
+       WireType wireType = protoTypeNames.get(valueType.toString());
+       if (wireType instanceof WireMessage) {
+-        field = ((WireMessage) wireType).getField(pathSegment);
++        field = ((WireMessage) wireType).field(pathSegment);
+         fields.add(field);
+       } else {
+         return null; // Unable to traverse this field path.
+@@ -222,13 +208,8 @@ WireType wireType(String name) {
+     return null;
+   }
+ 
+-  /** Returns a new linker that uses {@code protoPackage} to resolve local type names. */
+-  Linker withProtoPackage(String protoPackage) {
+-    return new Linker(this, protoPackage, null);
+-  }
+-
+   /** Returns a new linker that uses {@code message} to resolve local type names. */
+   Linker withMessage(WireMessage message) {
+-    return new Linker(this, enclosingProtoPackage, message);
++    return new Linker(this, message);
+   }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/Loader.java b/wire-compiler/src/main/java/com/squareup/wire/model/Loader.java
+new file mode 100644
+index 00000000..4a7f8bd8
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/Loader.java
+@@ -0,0 +1,61 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.ProtoFile;
++import com.squareup.wire.IO;
++import java.io.File;
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Set;
++
++/**
++ * Load proto files and their transitive dependencies, parse them, and prepare for linking. The
++ * returned values are not linked and should not be used prior to linking.
++ */
++public final class Loader {
++  private final String repoPath;
++  private final IO io;
++  private final Set<String> protoFileNames = new LinkedHashSet<String>();
++  private final List<WireProtoFile> loaded = new ArrayList<WireProtoFile>();
++
++  public Loader(String repoPath, IO io) {
++    this.repoPath = repoPath;
++    this.io = io;
++  }
++
++  /** Recursively add {@code protoFile} and its dependencies. */
++  public void add(String protoFileName) throws IOException {
++    if (!protoFileNames.add(protoFileName)) {
++      return;
++    }
++
++    ProtoFile protoFile = io.parse(repoPath + File.separator + protoFileName);
++    WireProtoFile wireProtoFile = WireProtoFile.get(protoFile);
++    loaded.add(wireProtoFile);
++
++    // Recursively add dependencies.
++    for (String dependency : protoFile.dependencies()) {
++      add(dependency);
++    }
++  }
++
++  public List<WireProtoFile> loaded() {
++    return Util.immutableList(loaded);
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java b/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java
+index 0a38ddea..4b1884b7 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java
+@@ -87,6 +87,10 @@ private ProtoTypeName(String protoPackage, List<String> names, boolean isScalar)
+     this.isScalar = isScalar;
+   }
+ 
++  public String packageName() {
++    return protoPackage;
++  }
++
+   public String simpleName() {
+     return names.get(names.size() - 1);
+   }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/RootSet.java b/wire-compiler/src/main/java/com/squareup/wire/model/RootSet.java
+new file mode 100644
+index 00000000..e6625d9e
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/RootSet.java
+@@ -0,0 +1,212 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import java.util.ArrayDeque;
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.Deque;
++import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++/** A collection of messages, enums and services. */
++public final class RootSet {
++  private final List<WireProtoFile> protoFiles;
++  private final Map<String, WireType> typesIndex;
++  private final Map<String, WireService> servicesIndex;
++
++  RootSet(Collection<WireProtoFile> protoFiles) {
++    this.protoFiles = Util.immutableList(protoFiles);
++    this.typesIndex = buildTypesIndex(protoFiles);
++    this.servicesIndex = buildServicesIndex(protoFiles);
++  }
++
++  private static Map<String, WireType> buildTypesIndex(Collection<WireProtoFile> protoFiles) {
++    Map<String, WireType> result = new LinkedHashMap<String, WireType>();
++    for (WireProtoFile protoFile : protoFiles) {
++      for (WireType type : protoFile.types()) {
++        index(result, type);
++      }
++    }
++    return Util.immutableMap(result);
++  }
++
++  private static void index(Map<String, WireType> typesByName, WireType type) {
++    typesByName.put(type.protoTypeName().toString(), type);
++    for (WireType nested : type.nestedTypes()) {
++      index(typesByName, nested);
++    }
++  }
++
++  private static Map<String, WireService> buildServicesIndex(Collection<WireProtoFile> protoFiles) {
++    Map<String, WireService> result = new LinkedHashMap<String, WireService>();
++    for (WireProtoFile protoFile : protoFiles) {
++      for (WireService service : protoFile.services()) {
++        result.put(service.protoTypeName().toString(), service);
++      }
++    }
++    return Util.immutableMap(result);
++  }
++
++  /**
++   * Returns a new root set that contains only the types in {@code roots} and their transitive
++   * dependencies.
++   */
++  public RootSet retainRoots(Set<String> roots) {
++    // Mark and enqueue the roots.
++    MarkSet markSet = new MarkSet();
++    for (String s : roots) {
++      markSet.mark(s);
++    }
++
++    // Extensions and options are also roots.
++    for (WireProtoFile protoFile : protoFiles) {
++      for (WireExtend extend : protoFile.wireExtends()) {
++        markSet.markExtend(extend);
++      }
++      markSet.markOptions(protoFile.options());
++    }
++
++    // Mark everything reachable by what's enqueued, queueing new things as we go.
++    for (String name; (name = markSet.queue.poll()) != null;) {
++      if (ProtoTypeName.getScalar(name) != null) {
++        continue; // Skip scalar types.
++      }
++
++      WireType type = typesIndex.get(name);
++      if (type != null) {
++        markSet.markType(type);
++        continue;
++      }
++
++      WireService service = servicesIndex.get(name);
++      if (service != null) {
++        markSet.markService(service);
++        continue;
++      }
++
++      // If the root set contains a method name like 'Service#Method', only that RPC is marked.
++      int hash = name.indexOf('#');
++      if (hash != -1) {
++        String serviceName = name.substring(0, hash);
++        String rpcName = name.substring(hash + 1);
++        WireService partialService = servicesIndex.get(serviceName);
++        if (partialService != null) {
++          WireRpc rpc = partialService.rpc(rpcName);
++          if (rpc != null) {
++            markSet.markOptions(partialService.options());
++            markSet.markRpc(rpc);
++            continue;
++          }
++        }
++      }
++
++      throw new IllegalArgumentException("Unexpected type: " + name);
++    }
++
++    List<WireProtoFile> retained = new ArrayList<WireProtoFile>();
++    for (WireProtoFile protoFile : protoFiles) {
++      retained.add(protoFile.retainAll(markSet.marks));
++    }
++
++    return new RootSet(retained);
++  }
++
++  /** Visits all types and services and mark them. */
++  private static class MarkSet {
++    /** Homogeneous identifiers including type names, service names, and RPC names. */
++    final Set<String> marks = new LinkedHashSet<String>();
++
++    /** Identifiers whose immediate dependencies have not yet been marked. */
++    final Deque<String> queue = new ArrayDeque<String>();
++
++    public void mark(ProtoTypeName typeName) {
++      mark(typeName.toString());
++    }
++
++    private void mark(String identifier) {
++      if (marks.add(identifier)) {
++        queue.add(identifier); // The transitive dependencies of this identifier must be visited.
++      }
++    }
++
++    void markExtend(WireExtend extend) {
++      mark(extend.protoTypeName());
++      markFields(extend.fields());
++    }
++
++    void markType(WireType type) {
++      markOptions(type.options());
++      for (WireType nestedType : type.nestedTypes()) {
++        mark(nestedType.protoTypeName());
++      }
++      if (type instanceof WireMessage) {
++        markMessage((WireMessage) type);
++      } else if (type instanceof WireEnum) {
++        markEnum((WireEnum) type);
++      }
++    }
++
++    void markMessage(WireMessage message) {
++      markFields(message.fields());
++      for (WireOneOf oneOf : message.oneOfs()) {
++        markFields(oneOf.fields());
++      }
++    }
++
++    void markEnum(WireEnum wireEnum) {
++      markOptions(wireEnum.options());
++      for (WireEnumConstant constant : wireEnum.constants()) {
++        markOptions(constant.options());
++      }
++    }
++
++    void markFields(List<WireField> fields) {
++      for (WireField field : fields) {
++        markField(field);
++      }
++    }
++
++    void markField(WireField field) {
++      markOptions(field.options());
++      mark(field.type());
++    }
++
++    void markOptions(List<WireOption> options) {
++      for (WireOption option : options) {
++        if (option.fieldPath() != null) {
++          markFields(option.fieldPath());
++        }
++      }
++    }
++
++    void markService(WireService service) {
++      markOptions(service.options());
++      for (WireRpc rpc : service.rpcs()) {
++        markRpc(rpc);
++      }
++    }
++
++    void markRpc(WireRpc rpc) {
++      markOptions(rpc.options());
++      mark(rpc.requestType());
++      mark(rpc.responseType());
++    }
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/Util.java b/wire-compiler/src/main/java/com/squareup/wire/model/Util.java
+index 78214967..41100b35 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/Util.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/Util.java
+@@ -16,7 +16,11 @@
+ package com.squareup.wire.model;
+ 
+ import java.util.ArrayList;
++import java.util.Collection;
++import java.util.Collections;
++import java.util.LinkedHashMap;
+ import java.util.List;
++import java.util.Map;
+ 
+ final class Util {
+   private Util() {
+@@ -61,4 +65,13 @@ public static WireOption findOption(List<WireOption> options, String name) {
+   public static boolean equal(Object a, Object b) {
+     return a == b || (a != null && a.equals(b));
+   }
++
++  /** Returns an immutable copy of {@code list}. */
++  public static <T> List<T> immutableList(Collection<T> list) {
++    return Collections.unmodifiableList(new ArrayList<T>(list));
++  }
++
++  public static <K, V> Map<K, V> immutableMap(Map<K, V> map) {
++    return Collections.unmodifiableMap(new LinkedHashMap<K, V>(map));
++  }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java
+index 7c064a27..87c47225 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java
+@@ -15,12 +15,10 @@
+  */
+ package com.squareup.wire.model;
+ 
+-import com.squareup.protoparser.EnumConstantElement;
+ import com.squareup.protoparser.EnumElement;
+-import com.squareup.protoparser.OptionElement;
+-import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.List;
++import java.util.Set;
+ 
+ public final class WireEnum extends WireType {
+   private final ProtoTypeName protoTypeName;
+@@ -28,20 +26,11 @@
+   private final List<WireEnumConstant> constants;
+   private final List<WireOption> options;
+ 
+-  WireEnum(ProtoTypeName protoTypeName, EnumElement element) {
++  WireEnum(ProtoTypeName protoTypeName, EnumElement element, List<WireEnumConstant> constants,
++      List<WireOption> options) {
+     this.protoTypeName = protoTypeName;
+     this.element = element;
+-
+-    List<WireEnumConstant> constants = new ArrayList<WireEnumConstant>();
+-    for (EnumConstantElement constant : this.element.constants()) {
+-      constants.add(new WireEnumConstant(constant));
+-    }
+     this.constants = Collections.unmodifiableList(constants);
+-
+-    List<WireOption> options = new ArrayList<WireOption>();
+-    for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
+-    }
+     this.options = Collections.unmodifiableList(options);
+   }
+ 
+@@ -73,4 +62,8 @@
+       option.link(ProtoTypeName.ENUM_OPTIONS, linker);
+     }
+   }
++
++  @Override WireType retainAll(Set<String> identifiers) {
++    return identifiers.contains(protoTypeName.toString()) ? this : null;
++  }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java
+index c7d9fd6b..31198e30 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java
+@@ -22,19 +22,25 @@
+ import java.util.List;
+ 
+ public final class WireEnumConstant {
++  private final String packageName;
+   private final EnumConstantElement element;
+   private final List<WireOption> options;
+ 
+-  public WireEnumConstant(EnumConstantElement element) {
++  WireEnumConstant(String packageName, EnumConstantElement element) {
++    this.packageName = packageName;
+     this.element = element;
+ 
+     List<WireOption> options = new ArrayList<WireOption>();
+     for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
++      options.add(new WireOption(packageName, option));
+     }
+     this.options = Collections.unmodifiableList(options);
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public String name() {
+     return element.name();
+   }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java
+index 6de100cb..a3d543ed 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java
+@@ -22,20 +22,26 @@
+ import java.util.List;
+ 
+ public final class WireExtend {
++  private final String packageName;
+   private final ExtendElement element;
+   private final List<WireField> fields;
+   private ProtoTypeName protoTypeName;
+ 
+-  public WireExtend(ExtendElement element) {
++  public WireExtend(String packageName, ExtendElement element) {
++    this.packageName = packageName;
+     this.element = element;
+ 
+     List<WireField> fields = new ArrayList<WireField>();
+     for (FieldElement field : element.fields()) {
+-      fields.add(new WireField(field));
++      fields.add(new WireField(packageName, field));
+     }
+     this.fields = Collections.unmodifiableList(fields);
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public ProtoTypeName protoTypeName() {
+     return protoTypeName;
+   }
+@@ -52,6 +58,6 @@ void link(Linker linker) {
+     for (WireField field : fields) {
+       field.link(linker);
+     }
+-    protoTypeName = linker.wireType(element.name()).protoTypeName();
++    protoTypeName = linker.resolveNamedType(packageName, element.name());
+   }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java
+index 0c453e96..fbf08f0e 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java
+@@ -22,20 +22,26 @@
+ import java.util.List;
+ 
+ public final class WireField {
++  private final String packageName;
+   private final FieldElement element;
+   private final List<WireOption> options;
+   private ProtoTypeName type;
+ 
+-  WireField(FieldElement element) {
++  WireField(String packageName, FieldElement element) {
++    this.packageName = packageName;
+     this.element = element;
+ 
+     List<WireOption> options = new ArrayList<WireOption>();
+     for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
++      options.add(new WireOption(packageName, option));
+     }
+     this.options = Collections.unmodifiableList(options);
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public FieldElement.Label label() {
+     return element.label();
+   }
+@@ -73,7 +79,7 @@ public WireOption getDefault() {
+   }
+ 
+   void link(Linker linker) {
+-    type = linker.protoTypeName(element.type());
++    type = linker.resolveType(packageName, element.type());
+     for (WireOption option : options) {
+       option.link(ProtoTypeName.FIELD_OPTIONS, linker);
+     }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java
+index a189d89d..363dae60 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java
+@@ -16,14 +16,11 @@
+ package com.squareup.wire.model;
+ 
+ import com.squareup.protoparser.ExtensionsElement;
+-import com.squareup.protoparser.FieldElement;
+ import com.squareup.protoparser.MessageElement;
+-import com.squareup.protoparser.OneOfElement;
+-import com.squareup.protoparser.OptionElement;
+-import com.squareup.protoparser.TypeElement;
+ import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.List;
++import java.util.Set;
+ 
+ public final class WireMessage extends WireType {
+   private final ProtoTypeName protoTypeName;
+@@ -33,33 +30,15 @@
+   private final List<WireType> nestedTypes;
+   private final List<WireOption> options;
+ 
+-  WireMessage(ProtoTypeName protoTypeName, MessageElement element) {
++  public WireMessage(ProtoTypeName protoTypeName, MessageElement element,
++      List<WireField> fields, List<WireOneOf> oneOfs,
++      List<WireType> nestedTypes, List<WireOption> options) {
+     this.protoTypeName = protoTypeName;
+     this.element = element;
+-
+-    List<WireField> fields = new ArrayList<WireField>();
+-    for (FieldElement field : element.fields()) {
+-      fields.add(new WireField(field));
+-    }
+-    this.fields = Collections.unmodifiableList(fields);
+-
+-    List<WireOneOf> oneOfs = new ArrayList<WireOneOf>();
+-    for (OneOfElement oneOf : element.oneOfs()) {
+-      oneOfs.add(new WireOneOf(oneOf));
+-    }
+-    this.oneOfs = Collections.unmodifiableList(oneOfs);
+-
+-    List<WireType> nestedTypes = new ArrayList<WireType>();
+-    for (TypeElement type : element.nestedElements()) {
+-      nestedTypes.add(WireType.get(protoTypeName.nestedType(type.name()), type));
+-    }
+-    this.nestedTypes = Collections.unmodifiableList(nestedTypes);
+-
+-    List<WireOption> options = new ArrayList<WireOption>();
+-    for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
+-    }
+-    this.options = Collections.unmodifiableList(options);
++    this.fields = Util.immutableList(fields);
++    this.oneOfs = Util.immutableList(oneOfs);
++    this.nestedTypes = Util.immutableList(nestedTypes);
++    this.options = Util.immutableList(options);
+   }
+ 
+   @Override public ProtoTypeName protoTypeName() {
+@@ -83,7 +62,7 @@
+   }
+ 
+   /** Returns the field named {@code name}, or null if this type has no such field. */
+-  public WireField getField(String name) {
++  public WireField field(String name) {
+     for (WireField field : fields) {
+       if (field.name().equals(name)) {
+         return field;
+@@ -115,4 +94,28 @@ void link(Linker linker) {
+       option.link(ProtoTypeName.MESSAGE_OPTIONS, linker);
+     }
+   }
++
++  @Override WireType retainAll(Set<String> identifiers) {
++    List<WireType> retainedNestedTypes = new ArrayList<WireType>();
++    for (WireType nestedType : nestedTypes) {
++      WireType retainedNestedType = nestedType.retainAll(identifiers);
++      if (retainedNestedType != null) {
++        retainedNestedTypes.add(retainedNestedType);
++      }
++    }
++
++    // If this type is retained, return it and all of its retained nested types.
++    if (identifiers.contains(protoTypeName.toString())) {
++      return new WireMessage(protoTypeName, element, fields, oneOfs, retainedNestedTypes, options);
++    }
++
++    // If this type is not retained, we may need it anyway to host nested types.
++    if (!retainedNestedTypes.isEmpty()) {
++      return new WireMessage(protoTypeName, element, Collections.<WireField>emptyList(),
++          Collections.<WireOneOf>emptyList(), retainedNestedTypes, options);
++    }
++
++    // Neither this type, nor its nested types are needed.
++    return null;
++  }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java
+index c5243651..f4ffe76a 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java
+@@ -22,19 +22,25 @@
+ import java.util.List;
+ 
+ public final class WireOneOf {
++  private final String packageName;
+   private final OneOfElement element;
+   private final List<WireField> fields;
+ 
+-  WireOneOf(OneOfElement element) {
++  WireOneOf(String packageName, OneOfElement element) {
++    this.packageName = packageName;
+     this.element = element;
+ 
+     List<WireField> fields = new ArrayList<WireField>();
+     for (FieldElement field : element.fields()) {
+-      fields.add(new WireField(field));
++      fields.add(new WireField(packageName, field));
+     }
+     this.fields = Collections.unmodifiableList(fields);
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public String name() {
+     return element.name();
+   }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java
+index b62f20b2..62b33c55 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java
+@@ -19,17 +19,27 @@
+ import java.util.List;
+ 
+ public final class WireOption {
++  private final String packageName;
+   private final OptionElement element;
+   private List<WireField> fieldPath;
+ 
+-  public WireOption(OptionElement element) {
++  public WireOption(String packageName, OptionElement element) {
++    this.packageName = packageName;
+     this.element = element;
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public String name() {
+     return element.name();
+   }
+ 
++  public List<WireField> fieldPath() {
++    return fieldPath;
++  }
++
+   public OptionElement.Kind kind() {
+     return element.kind();
+   }
+@@ -43,6 +53,6 @@ public boolean isParenthesized() {
+   }
+ 
+   void link(ProtoTypeName optionType, Linker linker) {
+-    fieldPath = linker.fieldPath(optionType, element.name());
++    fieldPath = linker.fieldPath(packageName, optionType, element.name());
+   }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java
+index ca7f6af0..262d93c2 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java
+@@ -21,8 +21,8 @@
+ import com.squareup.protoparser.ServiceElement;
+ import com.squareup.protoparser.TypeElement;
+ import java.util.ArrayList;
+-import java.util.Collections;
+ import java.util.List;
++import java.util.Set;
+ 
+ public final class WireProtoFile {
+   private final ProtoFile protoFile;
+@@ -31,36 +31,41 @@
+   private final List<WireExtend> wireExtends;
+   private final List<WireOption> options;
+ 
+-  WireProtoFile(ProtoFile protoFile) {
++  private WireProtoFile(ProtoFile protoFile, List<WireType> types, List<WireService> services,
++      List<WireExtend> wireExtends, List<WireOption> options) {
+     this.protoFile = protoFile;
++    this.types = Util.immutableList(types);
++    this.services = Util.immutableList(services);
++    this.wireExtends = Util.immutableList(wireExtends);
++    this.options = Util.immutableList(options);
++  }
+ 
+-    String protoPackage = protoFile.packageName();
++  public static WireProtoFile get(ProtoFile protoFile) {
++    String packageName = protoFile.packageName();
+ 
+     List<WireType> types = new ArrayList<WireType>();
+     for (TypeElement type : protoFile.typeElements()) {
+-      ProtoTypeName protoTypeName = ProtoTypeName.get(protoPackage, type.name());
++      ProtoTypeName protoTypeName = ProtoTypeName.get(packageName, type.name());
+       types.add(WireType.get(protoTypeName, type));
+     }
+-    this.types = Collections.unmodifiableList(types);
+ 
+     List<WireService> services = new ArrayList<WireService>();
+     for (ServiceElement service : protoFile.services()) {
+-      ProtoTypeName protoTypeName = ProtoTypeName.get(protoPackage, service.name());
+-      services.add(new WireService(protoTypeName, service));
++      ProtoTypeName protoTypeName = ProtoTypeName.get(packageName, service.name());
++      services.add(WireService.get(protoTypeName, service));
+     }
+-    this.services = Collections.unmodifiableList(services);
+ 
+     List<WireExtend> wireExtends = new ArrayList<WireExtend>();
+     for (ExtendElement extend : protoFile.extendDeclarations()) {
+-      wireExtends.add(new WireExtend(extend));
++      wireExtends.add(new WireExtend(packageName, extend));
+     }
+-    this.wireExtends = Collections.unmodifiableList(wireExtends);
+ 
+     List<WireOption> options = new ArrayList<WireOption>();
+     for (OptionElement option : protoFile.options()) {
+-      options.add(new WireOption(option));
++      options.add(new WireOption(packageName, option));
+     }
+-    this.options = Collections.unmodifiableList(options);
++
++    return new WireProtoFile(protoFile, types, services, wireExtends, options);
+   }
+ 
+   public String packageName() {
+@@ -83,19 +88,24 @@ public String packageName() {
+     return options;
+   }
+ 
+-  public void link(Linker linker) {
+-    linker = linker.withProtoPackage(packageName());
++  /** Returns a new proto file that omits types and services not in {@code identifiers}. */
++  WireProtoFile retainAll(Set<String> identifiers) {
++    List<WireType> retainedTypes = new ArrayList<WireType>();
+     for (WireType type : types) {
+-      type.link(linker);
++      WireType retainedType = type.retainAll(identifiers);
++      if (retainedType != null) {
++        retainedTypes.add(retainedType);
++      }
+     }
++
++    List<WireService> retainedServices = new ArrayList<WireService>();
+     for (WireService service : services) {
+-      service.link(linker);
+-    }
+-    for (WireExtend extend : wireExtends) {
+-      extend.link(linker);
+-    }
+-    for (WireOption option : options) {
+-      option.link(ProtoTypeName.FILE_OPTIONS, linker);
++      WireService retainedService = service.retainAll(identifiers);
++      if (retainedService != null) {
++        retainedServices.add(retainedService);
++      }
+     }
++
++    return new WireProtoFile(protoFile, retainedTypes, retainedServices, wireExtends, options);
+   }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java
+index feb6fcd3..b4d091d0 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java
+@@ -22,21 +22,27 @@
+ import java.util.List;
+ 
+ public final class WireRpc {
++  private final String packageName;
+   private final RpcElement element;
+   private final List<WireOption> options;
+   private ProtoTypeName requestType;
+   private ProtoTypeName responseType;
+ 
+-  WireRpc(RpcElement element) {
++  WireRpc(String packageName, RpcElement element) {
++    this.packageName = packageName;
+     this.element = element;
+ 
+     List<WireOption> options = new ArrayList<WireOption>();
+     for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
++      options.add(new WireOption(packageName, option));
+     }
+     this.options = Collections.unmodifiableList(options);
+   }
+ 
++  public String packageName() {
++    return packageName;
++  }
++
+   public String name() {
+     return element.name();
+   }
+@@ -58,8 +64,8 @@ public ProtoTypeName responseType() {
+   }
+ 
+   void link(Linker linker) {
+-    requestType = linker.protoTypeName(element.requestType());
+-    responseType = linker.protoTypeName(element.responseType());
++    requestType = linker.resolveNamedType(packageName, element.requestType().name());
++    responseType = linker.resolveNamedType(packageName, element.responseType().name());
+     for (WireOption option : options) {
+       option.link(ProtoTypeName.METHOD_OPTIONS, linker);
+     }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java
+index 2299f67b..c02dd197 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java
+@@ -21,6 +21,7 @@
+ import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.List;
++import java.util.Set;
+ 
+ public final class WireService {
+   private final ProtoTypeName protoTypeName;
+@@ -28,21 +29,26 @@
+   private final List<WireRpc> rpcs;
+   private final List<WireOption> options;
+ 
+-  WireService(ProtoTypeName protoTypeName, ServiceElement element) {
++  private WireService(ProtoTypeName protoTypeName, ServiceElement element, List<WireRpc> rpcs,
++      List<WireOption> options) {
+     this.protoTypeName = protoTypeName;
+     this.element = element;
++    this.rpcs = Collections.unmodifiableList(rpcs);
++    this.options = Collections.unmodifiableList(options);
++  }
+ 
++  public static WireService get(ProtoTypeName protoTypeName, ServiceElement element) {
+     List<WireRpc> rpcs = new ArrayList<WireRpc>();
+     for (RpcElement rpc : element.rpcs()) {
+-      rpcs.add(new WireRpc(rpc));
++      rpcs.add(new WireRpc(protoTypeName.packageName(), rpc));
+     }
+-    this.rpcs = Collections.unmodifiableList(rpcs);
+ 
+     List<WireOption> options = new ArrayList<WireOption>();
+     for (OptionElement option : element.options()) {
+-      options.add(new WireOption(option));
++      options.add(new WireOption(protoTypeName.packageName(), option));
+     }
+-    this.options = Collections.unmodifiableList(options);
++
++    return new WireService(protoTypeName, element, rpcs, options);
+   }
+ 
+   public ProtoTypeName protoTypeName() {
+@@ -57,6 +63,16 @@ public String documentation() {
+     return rpcs;
+   }
+ 
++  /** Returns the RPC named {@code name}, or null if this service has no such method. */
++  public WireRpc rpc(String name) {
++    for (WireRpc rpc : rpcs) {
++      if (rpc.name().equals(name)) {
++        return rpc;
++      }
++    }
++    return null;
++  }
++
+   public List<WireOption> options() {
+     return options;
+   }
+@@ -69,4 +85,26 @@ void link(Linker linker) {
+       option.link(ProtoTypeName.SERVICE_OPTIONS, linker);
+     }
+   }
++
++  WireService retainAll(Set<String> identifiers) {
++    String serviceName = protoTypeName.toString();
++    if (identifiers.contains(serviceName)) {
++      return this; // Fully retained.
++    }
++
++    List<WireRpc> retainedRpcs = new ArrayList<WireRpc>();
++    for (WireRpc rpc : rpcs) {
++      if (identifiers.contains(serviceName + '#' + rpc.name())) {
++        retainedRpcs.add(rpc);
++      }
++    }
++
++    // If child RPCs are retained, return a subset of this service.
++    if (!retainedRpcs.isEmpty()) {
++      return new WireService(protoTypeName, element, retainedRpcs, options);
++    }
++
++    // Neither this service, nor any of its RPCs are retained.
++    return null;
++  }
+ }
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java
+index 058ef387..426628d8 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java
+@@ -15,10 +15,16 @@
+  */
+ package com.squareup.wire.model;
+ 
++import com.squareup.protoparser.EnumConstantElement;
+ import com.squareup.protoparser.EnumElement;
++import com.squareup.protoparser.FieldElement;
+ import com.squareup.protoparser.MessageElement;
++import com.squareup.protoparser.OneOfElement;
++import com.squareup.protoparser.OptionElement;
+ import com.squareup.protoparser.TypeElement;
++import java.util.ArrayList;
+ import java.util.List;
++import java.util.Set;
+ 
+ public abstract class WireType {
+   public abstract ProtoTypeName protoTypeName();
+@@ -26,13 +32,49 @@
+   public abstract List<WireOption> options();
+   public abstract List<WireType> nestedTypes();
+   abstract void link(Linker linker);
++  abstract WireType retainAll(Set<String> identifiers);
+ 
+   static WireType get(ProtoTypeName protoTypeName, TypeElement type) {
+     if (type instanceof EnumElement) {
+-      return new WireEnum(protoTypeName, (EnumElement) type);
++      EnumElement enumElement = (EnumElement) type;
++
++      List<WireEnumConstant> constants = new ArrayList<WireEnumConstant>();
++      for (EnumConstantElement constant : enumElement.constants()) {
++        constants.add(new WireEnumConstant(protoTypeName.packageName(), constant));
++      }
++
++      List<WireOption> options = new ArrayList<WireOption>();
++      for (OptionElement option : enumElement.options()) {
++        options.add(new WireOption(protoTypeName.packageName(), option));
++      }
++
++      return new WireEnum(protoTypeName, enumElement, constants, options);
+ 
+     } else if (type instanceof MessageElement) {
+-      return new WireMessage(protoTypeName, (MessageElement) type);
++      MessageElement messageElement = (MessageElement) type;
++      String packageName = protoTypeName.packageName();
++
++      List<WireField> fields = new ArrayList<WireField>();
++      for (FieldElement field : messageElement.fields()) {
++        fields.add(new WireField(packageName, field));
++      }
++
++      List<WireOneOf> oneOfs = new ArrayList<WireOneOf>();
++      for (OneOfElement oneOf : messageElement.oneOfs()) {
++        oneOfs.add(new WireOneOf(packageName, oneOf));
++      }
++
++      List<WireType> nestedTypes = new ArrayList<WireType>();
++      for (TypeElement nestedType : messageElement.nestedElements()) {
++        nestedTypes.add(WireType.get(protoTypeName.nestedType(nestedType.name()), nestedType));
++      }
++
++      List<WireOption> options = new ArrayList<WireOption>();
++      for (OptionElement option : messageElement.options()) {
++        options.add(new WireOption(packageName, option));
++      }
++
++      return new WireMessage(protoTypeName, messageElement, fields, oneOfs, nestedTypes, options);
+ 
+     } else {
+       throw new IllegalArgumentException("unexpected type: " + type.getClass());

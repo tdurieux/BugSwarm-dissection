@@ -1,0 +1,125 @@
+diff --git a/okio/src/main/java/okio/Buffer.java b/okio/src/main/java/okio/Buffer.java
+index 6f4bba98..3e910e46 100644
+--- a/okio/src/main/java/okio/Buffer.java
++++ b/okio/src/main/java/okio/Buffer.java
+@@ -1455,11 +1455,21 @@ Segment writableSegment(int minimumCapacity) {
+     return rangeEquals(offset, bytes, 0, bytes.size());
+   }
+ 
+-  @Override public boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int count) {
+-    if (size - offset < count) {
++  @Override public boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int byteCount) {
++    if (offset < 0) throw new ArrayIndexOutOfBoundsException("offset=" + offset);
++    int bytesSize = bytes.size();
++    if ((bytesOffset | byteCount) < 0
++        || bytesOffset > bytesSize
++        || bytesSize - bytesOffset < byteCount) {
++      throw new ArrayIndexOutOfBoundsException(
++          String.format("bytes.size()=%s bytesOffset=%s byteCount=%s", bytesSize, bytesOffset,
++              byteCount));
++    }
++
++    if (this.size - offset < byteCount) {
+       return false;
+     }
+-    for (int i = 0; i < count; i++) {
++    for (int i = 0; i < byteCount; i++) {
+       if (getByte(offset + i) != bytes.getByte(bytesOffset + i)) {
+         return false;
+       }
+diff --git a/okio/src/main/java/okio/BufferedSource.java b/okio/src/main/java/okio/BufferedSource.java
+index f9220cbd..76e07a44 100644
+--- a/okio/src/main/java/okio/BufferedSource.java
++++ b/okio/src/main/java/okio/BufferedSource.java
+@@ -490,11 +490,12 @@
+   boolean rangeEquals(long offset, ByteString bytes) throws IOException;
+ 
+   /**
+-   * Returns true if {@code count} bytes at {@code offset} in this source equal the {@code bytes}
++   * Returns true if {@code byteCount} bytes at {@code offset} in this source equal {@code bytes}
+    * at {@code bytesOffset}. This expands the buffer as necessary until a byte does not match, all
+    * bytes are matched, or if the stream is exhausted before enough bytes could determine a match.
+    */
+-  boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int count) throws IOException;
++  boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int byteCount)
++      throws IOException;
+ 
+   /** Returns an input stream that reads from this source. */
+   InputStream inputStream();
+diff --git a/okio/src/main/java/okio/RealBufferedSource.java b/okio/src/main/java/okio/RealBufferedSource.java
+index e2c45d30..4c8dced0 100644
+--- a/okio/src/main/java/okio/RealBufferedSource.java
++++ b/okio/src/main/java/okio/RealBufferedSource.java
+@@ -371,11 +371,22 @@
+     return rangeEquals(offset, bytes, 0, bytes.size());
+   }
+ 
+-  @Override public boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int count)
++  @Override
++  public boolean rangeEquals(long offset, ByteString bytes, int bytesOffset, int byteCount)
+       throws IOException {
+     if (closed) throw new IllegalStateException("closed");
+ 
+-    for (int i = 0; i < count; i++) {
++    if (offset < 0) throw new ArrayIndexOutOfBoundsException("offset=" + offset);
++    int bytesSize = bytes.size();
++    if ((bytesOffset | byteCount) < 0
++        || bytesOffset > bytesSize
++        || bytesSize - bytesOffset < byteCount) {
++      throw new ArrayIndexOutOfBoundsException(
++          String.format("bytes.size()=%s bytesOffset=%s byteCount=%s", bytesSize, bytesOffset,
++              byteCount));
++    }
++
++    for (int i = 0; i < byteCount; i++) {
+       long bufferOffset = offset + i;
+       if (!request(bufferOffset + 1)) return false;
+       if (buffer.getByte(bufferOffset) != bytes.getByte(bytesOffset + i)) return false;
+diff --git a/okio/src/test/java/okio/BufferedSourceTest.java b/okio/src/test/java/okio/BufferedSourceTest.java
+index 8dfeda01..bfec8145 100644
+--- a/okio/src/test/java/okio/BufferedSourceTest.java
++++ b/okio/src/test/java/okio/BufferedSourceTest.java
+@@ -940,4 +940,43 @@ private void assertLongDecimalString(String s, long expected) throws IOException
+     assertFalse(source.rangeEquals(0, ByteString.encodeUtf8("A man.")));
+     assertEquals("A man,", source.buffer().readUtf8());
+   }
++
++  @Test public void rangeEqualsArgumentValidation() throws IOException {
++    try {
++      source.rangeEquals(-1, ByteString.encodeUtf8("A"));
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("offset=-1", expected.getMessage());
++    }
++    try {
++      source.rangeEquals(0, ByteString.encodeUtf8("A"), -1, 1);
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("bytes.size()=1 bytesOffset=-1 byteCount=1", expected.getMessage());
++    }
++    try {
++      source.rangeEquals(0, ByteString.encodeUtf8("A"), 2, 1);
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("bytes.size()=1 bytesOffset=2 byteCount=1", expected.getMessage());
++    }
++    try {
++      source.rangeEquals(0, ByteString.encodeUtf8("A"), 0, -1);
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("bytes.size()=1 bytesOffset=0 byteCount=-1", expected.getMessage());
++    }
++    try {
++      source.rangeEquals(0, ByteString.encodeUtf8("A"), 0, 2);
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("bytes.size()=1 bytesOffset=0 byteCount=2", expected.getMessage());
++    }
++    try {
++      source.rangeEquals(0, ByteString.encodeUtf8("A"), 1, 1);
++      fail();
++    } catch (ArrayIndexOutOfBoundsException expected) {
++      assertEquals("bytes.size()=1 bytesOffset=1 byteCount=1", expected.getMessage());
++    }
++  }
+ }

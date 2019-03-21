@@ -1,0 +1,34 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java b/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
+index f863062f13..1edfae5773 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
+@@ -1,5 +1,6 @@
+ package net.bytebuddy;
+ 
++import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+ import net.bytebuddy.utility.CompoundList;
+ 
+ import java.lang.ref.Reference;
+@@ -254,9 +255,10 @@ public int hashCode() {
+         }
+ 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {
+             return (other instanceof LookupKey && ((LookupKey) other).classLoader == classLoader)
+-                    || (other instanceof StorageKey && ((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode);
++                    || (other instanceof StorageKey && ((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader);
+         }
+ 
+         @Override
+@@ -295,8 +297,9 @@ public int hashCode() {
+         }
+ 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {
+-            return (other instanceof LookupKey && ((LookupKey) other).classLoader == get() && ((LookupKey) other).hashCode == hashCode)
++            return (other instanceof LookupKey && ((LookupKey) other).hashCode == hashCode && ((LookupKey) other).classLoader == get())
+                     || (other instanceof StorageKey && ((StorageKey) other).get() == get());
+         }
+ 

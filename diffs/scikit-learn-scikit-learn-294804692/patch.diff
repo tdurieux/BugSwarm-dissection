@@ -1,0 +1,1324 @@
+diff --git a/benchmarks/bench_isolation_forest.py b/benchmarks/bench_isolation_forest.py
+index 4d9f3037b275..547b4f3ed2dd 100644
+--- a/benchmarks/bench_isolation_forest.py
++++ b/benchmarks/bench_isolation_forest.py
+@@ -3,6 +3,17 @@
+ IsolationForest benchmark
+ ==========================================
+ A test of IsolationForest on classical anomaly detection datasets.
++
++The benchmark is run as follows:
++1. The dataset is randomly split into a training set and a test set, both
++assumed to contain outliers.
++2. Isolation Forest is trained on the training set.
++3. The ROC curve is computed on the test set using the knowledge of the labels.
++
++Note that the smtp dataset contains a very small proportion of outliers.
++Therefore, depending on the seed of the random number generator, randomly
++splitting the data set might lead to a test set containing no outliers. In this
++case a warning is raised when computing the ROC curve.
+ """
+ 
+ from time import time
+@@ -12,7 +23,7 @@
+ from sklearn.ensemble import IsolationForest
+ from sklearn.metrics import roc_curve, auc
+ from sklearn.datasets import fetch_kddcup99, fetch_covtype, fetch_mldata
+-from sklearn.preprocessing import MultiLabelBinarizer
++from sklearn.preprocessing import LabelBinarizer
+ from sklearn.utils import shuffle as sh
+ 
+ print(__doc__)
+@@ -30,15 +41,14 @@ def print_outlier_ratio(y):
+     print("----- Outlier ratio: %.5f" % (np.min(cnt) / len(y)))
+ 
+ 
+-np.random.seed(1)
++random_state = 1
+ fig_roc, ax_roc = plt.subplots(1, 1, figsize=(8, 5))
+ 
+ # Set this to true for plotting score histograms for each dataset:
+ with_decision_function_histograms = False
+ 
+-# Removed the shuttle dataset because as of 2017-03-23 mldata.org is down:
+-# datasets = ['http', 'smtp', 'SA', 'SF', 'shuttle', 'forestcover']
+-datasets = ['http', 'smtp', 'SA', 'SF', 'forestcover']
++# datasets available = ['http', 'smtp', 'SA', 'SF', 'shuttle', 'forestcover']
++datasets = ['http', 'smtp', 'SA', 'SF', 'shuttle', 'forestcover']
+ 
+ # Loop over all datasets for fitting and scoring the estimator:
+ for dat in datasets:
+@@ -47,7 +57,8 @@ def print_outlier_ratio(y):
+     print('====== %s ======' % dat)
+     print('--- Fetching data...')
+     if dat in ['http', 'smtp', 'SF', 'SA']:
+-        dataset = fetch_kddcup99(subset=dat, shuffle=True, percent10=True)
++        dataset = fetch_kddcup99(subset=dat, shuffle=True,
++                                 percent10=True, random_state=random_state)
+         X = dataset.data
+         y = dataset.target
+ 
+@@ -55,7 +66,7 @@ def print_outlier_ratio(y):
+         dataset = fetch_mldata('shuttle')
+         X = dataset.data
+         y = dataset.target
+-        X, y = sh(X, y)
++        X, y = sh(X, y, random_state=random_state)
+         # we remove data with label 4
+         # normal data are then those of class 1
+         s = (y != 4)
+@@ -65,7 +76,7 @@ def print_outlier_ratio(y):
+         print('----- ')
+ 
+     if dat == 'forestcover':
+-        dataset = fetch_covtype(shuffle=True)
++        dataset = fetch_covtype(shuffle=True, random_state=random_state)
+         X = dataset.data
+         y = dataset.target
+         # normal data are those with attribute 2
+@@ -79,17 +90,17 @@ def print_outlier_ratio(y):
+     print('--- Vectorizing data...')
+ 
+     if dat == 'SF':
+-        lb = MultiLabelBinarizer()
+-        x1 = lb.fit_transform(X[:, 1])
++        lb = LabelBinarizer()
++        x1 = lb.fit_transform(X[:, 1].astype(str))
+         X = np.c_[X[:, :1], x1, X[:, 2:]]
+         y = (y != b'normal.').astype(int)
+         print_outlier_ratio(y)
+ 
+     if dat == 'SA':
+-        lb = MultiLabelBinarizer()
+-        x1 = lb.fit_transform(X[:, 1])
+-        x2 = lb.fit_transform(X[:, 2])
+-        x3 = lb.fit_transform(X[:, 3])
++        lb = LabelBinarizer()
++        x1 = lb.fit_transform(X[:, 1].astype(str))
++        x2 = lb.fit_transform(X[:, 2].astype(str))
++        x3 = lb.fit_transform(X[:, 3].astype(str))
+         X = np.c_[X[:, :1], x1, x2, x3, X[:, 4:]]
+         y = (y != b'normal.').astype(int)
+         print_outlier_ratio(y)
+@@ -108,7 +119,7 @@ def print_outlier_ratio(y):
+     y_test = y[n_samples_train:]
+ 
+     print('--- Fitting the IsolationForest estimator...')
+-    model = IsolationForest(n_jobs=-1)
++    model = IsolationForest(n_jobs=-1, random_state=random_state)
+     tstart = time()
+     model.fit(X_train)
+     fit_time = time() - tstart
+diff --git a/benchmarks/bench_lof.py b/benchmarks/bench_lof.py
+index 620adc3d43b0..4d063b8100fc 100644
+--- a/benchmarks/bench_lof.py
++++ b/benchmarks/bench_lof.py
+@@ -5,6 +5,16 @@
+ 
+ A test of LocalOutlierFactor on classical anomaly detection datasets.
+ 
++Note that LocalOutlierFactor is not meant to predict on a test set and its
++performance is assessed in an outlier detection context:
++1. The model is trained on the whole dataset which is assumed to contain
++outliers.
++2. The ROC curve is computed on the same dataset using the knowledge of the
++labels.
++In this context there is no need to shuffle the dataset because the model
++is trained and tested on the whole dataset. The randomness of this benchmark
++is only caused by the random selection of anomalies in the SA dataset.
++
+ """
+ 
+ from time import time
+@@ -14,23 +24,21 @@
+ from sklearn.metrics import roc_curve, auc
+ from sklearn.datasets import fetch_kddcup99, fetch_covtype, fetch_mldata
+ from sklearn.preprocessing import LabelBinarizer
+-from sklearn.utils import shuffle as sh
+ 
+ print(__doc__)
+ 
+-np.random.seed(2)
++random_state = 2  # to control the random selection of anomalies in SA
+ 
+ # datasets available: ['http', 'smtp', 'SA', 'SF', 'shuttle', 'forestcover']
+-datasets = ['shuttle']
+-
+-novelty_detection = True  # if False, training set polluted by outliers
++datasets = ['http', 'smtp', 'SA', 'SF', 'shuttle', 'forestcover']
+ 
++plt.figure()
+ for dataset_name in datasets:
+     # loading and vectorization
+     print('loading data')
+     if dataset_name in ['http', 'smtp', 'SA', 'SF']:
+-        dataset = fetch_kddcup99(subset=dataset_name, shuffle=True,
+-                                 percent10=False)
++        dataset = fetch_kddcup99(subset=dataset_name, percent10=True,
++                                 random_state=random_state)
+         X = dataset.data
+         y = dataset.target
+ 
+@@ -38,7 +46,6 @@
+         dataset = fetch_mldata('shuttle')
+         X = dataset.data
+         y = dataset.target
+-        X, y = sh(X, y)
+         # we remove data with label 4
+         # normal data are then those of class 1
+         s = (y != 4)
+@@ -47,7 +54,7 @@
+         y = (y != 1).astype(int)
+ 
+     if dataset_name == 'forestcover':
+-        dataset = fetch_covtype(shuffle=True)
++        dataset = fetch_covtype()
+         X = dataset.data
+         y = dataset.target
+         # normal data are those with attribute 2
+@@ -61,54 +68,34 @@
+ 
+     if dataset_name == 'SF':
+         lb = LabelBinarizer()
+-        lb.fit(X[:, 1])
+-        x1 = lb.transform(X[:, 1])
++        x1 = lb.fit_transform(X[:, 1].astype(str))
+         X = np.c_[X[:, :1], x1, X[:, 2:]]
+-        y = (y != 'normal.').astype(int)
++        y = (y != b'normal.').astype(int)
+ 
+     if dataset_name == 'SA':
+         lb = LabelBinarizer()
+-        lb.fit(X[:, 1])
+-        x1 = lb.transform(X[:, 1])
+-        lb.fit(X[:, 2])
+-        x2 = lb.transform(X[:, 2])
+-        lb.fit(X[:, 3])
+-        x3 = lb.transform(X[:, 3])
++        x1 = lb.fit_transform(X[:, 1].astype(str))
++        x2 = lb.fit_transform(X[:, 2].astype(str))
++        x3 = lb.fit_transform(X[:, 3].astype(str))
+         X = np.c_[X[:, :1], x1, x2, x3, X[:, 4:]]
+-        y = (y != 'normal.').astype(int)
++        y = (y != b'normal.').astype(int)
+ 
+     if dataset_name == 'http' or dataset_name == 'smtp':
+-        y = (y != 'normal.').astype(int)
+-
+-    n_samples, n_features = np.shape(X)
+-    n_samples_train = n_samples // 2
+-    n_samples_test = n_samples - n_samples_train
++        y = (y != b'normal.').astype(int)
+ 
+     X = X.astype(float)
+-    X_train = X[:n_samples_train, :]
+-    X_test = X[n_samples_train:, :]
+-    y_train = y[:n_samples_train]
+-    y_test = y[n_samples_train:]
+-
+-    if novelty_detection:
+-        X_train = X_train[y_train == 0]
+-        y_train = y_train[y_train == 0]
+ 
+     print('LocalOutlierFactor processing...')
+     model = LocalOutlierFactor(n_neighbors=20)
+     tstart = time()
+-    model.fit(X_train)
++    model.fit(X)
+     fit_time = time() - tstart
+-    tstart = time()
+-
+-    scoring = -model.decision_function(X_test)  # the lower, the more normal
+-    predict_time = time() - tstart
+-    fpr, tpr, thresholds = roc_curve(y_test, scoring)
++    scoring = -model.negative_outlier_factor_  # the lower, the more normal
++    fpr, tpr, thresholds = roc_curve(y, scoring)
+     AUC = auc(fpr, tpr)
+     plt.plot(fpr, tpr, lw=1,
+-             label=('ROC for %s (area = %0.3f, train-time: %0.2fs,'
+-                    'test-time: %0.2fs)' % (dataset_name, AUC, fit_time,
+-                                            predict_time)))
++             label=('ROC for %s (area = %0.3f, train-time: %0.2fs)'
++                    % (dataset_name, AUC, fit_time)))
+ 
+ plt.xlim([-0.05, 1.05])
+ plt.ylim([-0.05, 1.05])
+diff --git a/doc/modules/calibration.rst b/doc/modules/calibration.rst
+index 18c3cfdd8366..d7bb10479ce6 100644
+--- a/doc/modules/calibration.rst
++++ b/doc/modules/calibration.rst
+@@ -34,7 +34,7 @@ with different biases per method:
+ 
+ .. currentmodule:: sklearn.naive_bayes
+ 
+-*  :class:`GaussianNB` tends to push probabilties to 0 or 1 (note the
++*  :class:`GaussianNB` tends to push probabilities to 0 or 1 (note the
+    counts in the histograms). This is mainly because it makes the assumption
+    that features are conditionally independent given the class, which is not
+    the case in this dataset which contains 2 redundant features.
+@@ -59,7 +59,7 @@ with different biases per method:
+    relatively high variance due to feature subsetting." As a result, the
+    calibration curve also referred to as the reliability diagram (Wilks 1995 [5]_) shows a
+    characteristic sigmoid shape, indicating that the classifier could trust its
+-   "intuition" more and return probabilties closer to 0 or 1 typically.
++   "intuition" more and return probabilities closer to 0 or 1 typically.
+ 
+ .. currentmodule:: sklearn.svm
+ 
+diff --git a/doc/modules/clustering.rst b/doc/modules/clustering.rst
+index 4a5d15b775e7..9dfb0d08eaa4 100644
+--- a/doc/modules/clustering.rst
++++ b/doc/modules/clustering.rst
+@@ -676,7 +676,7 @@ affinities), in particular Euclidean distance (*l2*), Manhattan distance
+ (or Cityblock, or *l1*), cosine distance, or any precomputed affinity
+ matrix.
+ 
+-* *l1* distance is often good for sparse features, or sparse noise: ie
++* *l1* distance is often good for sparse features, or sparse noise: i.e.
+   many of the features are zero, as in text mining using occurrences of
+   rare words.
+ 
+@@ -872,7 +872,7 @@ the user is advised
+  2. Train all data by multiple calls to partial_fit.
+  3. Set ``n_clusters`` to a required value using
+     ``brc.set_params(n_clusters=n_clusters)``.
+- 4. Call ``partial_fit`` finally with no arguments, i.e ``brc.partial_fit()``
++ 4. Call ``partial_fit`` finally with no arguments, i.e. ``brc.partial_fit()``
+     which performs the global clustering.
+ 
+ .. image:: ../auto_examples/cluster/images/sphx_glr_plot_birch_vs_minibatchkmeans_001.png
+diff --git a/doc/modules/computational_performance.rst b/doc/modules/computational_performance.rst
+index 11272d44e619..d66cba212a2d 100644
+--- a/doc/modules/computational_performance.rst
++++ b/doc/modules/computational_performance.rst
+@@ -111,7 +111,7 @@ memory footprint and estimator).
+ Influence of the Input Data Representation
+ ------------------------------------------
+ 
+-Scipy provides sparse matrix datastructures which are optimized for storing
++Scipy provides sparse matrix data structures which are optimized for storing
+ sparse data. The main feature of sparse formats is that you don't store zeros
+ so if your data is sparse then you use much less memory. A non-zero value in
+ a sparse (`CSR or CSC <http://docs.scipy.org/doc/scipy/reference/sparse.html>`_)
+diff --git a/doc/modules/decomposition.rst b/doc/modules/decomposition.rst
+index a734ed8a2934..646f1c58ebcc 100644
+--- a/doc/modules/decomposition.rst
++++ b/doc/modules/decomposition.rst
+@@ -763,7 +763,7 @@ defined by :
+     :scale: 75%
+ 
+ Note that this definition is not valid if :math:`\beta \in (0; 1)`, yet it can
+-be continously extended to the definitions of :math:`d_{KL}` and :math:`d_{IS}`
++be continuously extended to the definitions of :math:`d_{KL}` and :math:`d_{IS}`
+ respectively.
+ 
+ :class:`NMF` implements two solvers, using Coordinate Descent ('cd') [5]_, and
+diff --git a/doc/modules/dp-derivation.rst b/doc/modules/dp-derivation.rst
+index b02b329472dc..4509e0fa323b 100644
+--- a/doc/modules/dp-derivation.rst
++++ b/doc/modules/dp-derivation.rst
+@@ -358,7 +358,7 @@ The model then is
+   X_t &\sim& Normal(\mu_{z_i},  \Sigma^{-1})
+   \end{array}
+ 
+-Tha variational distribution we'll use is
++The variational distribution we'll use is
+ 
+ .. math::
+ 
+diff --git a/doc/modules/grid_search.rst b/doc/modules/grid_search.rst
+index 3851392ed2d8..a492b6011bdf 100644
+--- a/doc/modules/grid_search.rst
++++ b/doc/modules/grid_search.rst
+@@ -270,7 +270,7 @@ Some models can offer an information-theoretic closed-form formula of the
+ optimal estimate of the regularization parameter by computing a single
+ regularization path (instead of several when using cross-validation).
+ 
+-Here is the list of models benefitting from the Akaike Information
++Here is the list of models benefiting from the Akaike Information
+ Criterion (AIC) or the Bayesian Information Criterion (BIC) for automated
+ model selection:
+ 
+diff --git a/doc/modules/mixture.rst b/doc/modules/mixture.rst
+index d8057c4f398e..bb9514024c40 100644
+--- a/doc/modules/mixture.rst
++++ b/doc/modules/mixture.rst
+@@ -264,7 +264,7 @@ Pros
+ :Less sensitivity to the number of parameters: unlike finite models, which will
+    almost always use all components as much as they can, and hence will produce
+    wildly different solutions for different numbers of components, the
+-   variantional inference with a Dirichlet process prior
++   variational inference with a Dirichlet process prior
+    (``weight_concentration_prior_type='dirichlet_process'``) won't change much
+    with changes to the parameters, leading to more stability and less tuning.
+ 
+diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
+index cba974c7e3de..4a19e27e9c11 100644
+--- a/doc/modules/model_evaluation.rst
++++ b/doc/modules/model_evaluation.rst
+@@ -461,6 +461,38 @@ given binary ``y_true`` and ``y_pred``:
+     Currently this score function is only defined for binary classification problems, you
+     may need to wrap it by yourself if you want to use it for multilabel problems.
+ 
++    There is no clear consensus on the definition of a balanced accuracy for the
++    multiclass setting. Here are some definitions that can be found in the literature:
++
++    * Normalized class-wise accuracy average as described in [Guyon2015]_: for multi-class
++      classification problem, each sample is assigned the class with maximum prediction value.
++      The predictions are then binarized to compute the accuracy of each class on a
++      one-vs-rest fashion. The balanced accuracy is obtained by averaging the individual
++      accuracies over all classes and then normalized by the expected value of balanced
++      accuracy for random predictions (:math:`0.5` for binary classification, :math:`1/C`
++      for C-class classification problem).
++    * Macro-average recall as described in [Mosley2013]_ and [Kelleher2015]_: the recall
++      for each class is computed independently and the average is taken over all classes.
++
++    Note that none of these different definitions are currently implemented within
++    the :func:`balanced_accuracy_score` function. However, the macro-averaged recall
++    is implemented in :func:`sklearn.metrics.recall_score`: set ``average`` parameter
++    to ``"macro"``.
++
++.. topic:: References:
++
++  .. [Guyon2015] I. Guyon, K. Bennett, G. Cawley, H.J. Escalante, S. Escalera, T.K. Ho, N. Macià,
++     B. Ray, M. Saeed, A.R. Statnikov, E. Viegas, `Design of the 2015 ChaLearn AutoML Challenge
++     <http://ieeexplore.ieee.org/document/7280767/>`_,
++     IJCNN 2015.
++  .. [Mosley2013] L. Mosley, `A balanced approach to the multi-class imbalance problem
++     <http://lib.dr.iastate.edu/etd/13537/>`_,
++     IJCV 2010.
++  .. [Kelleher2015] John. D. Kelleher, Brian Mac Namee, Aoife D'Arcy, `Fundamentals of
++     Machine Learning for Predictive Data Analytics: Algorithms, Worked Examples,
++     and Case Studies <https://mitpress.mit.edu/books/fundamentals-machine-learning-predictive-data-analytics>`_,
++     2015.
++
+ .. _cohen_kappa:
+ 
+ Cohen's kappa
+diff --git a/doc/modules/neural_networks_supervised.rst b/doc/modules/neural_networks_supervised.rst
+index 292ed903eeff..177ef09c0dfa 100644
+--- a/doc/modules/neural_networks_supervised.rst
++++ b/doc/modules/neural_networks_supervised.rst
+@@ -91,12 +91,13 @@ training samples::
+     ...
+     >>> clf.fit(X, y)                         # doctest: +NORMALIZE_WHITESPACE
+     MLPClassifier(activation='relu', alpha=1e-05, batch_size='auto',
+-           beta_1=0.9, beta_2=0.999, early_stopping=False,
+-           epsilon=1e-08, hidden_layer_sizes=(5, 2), learning_rate='constant',
+-           learning_rate_init=0.001, max_iter=200, momentum=0.9,
+-           nesterovs_momentum=True, power_t=0.5, random_state=1, shuffle=True,
+-           solver='lbfgs', tol=0.0001, validation_fraction=0.1, verbose=False,
+-           warm_start=False)
++                  beta_1=0.9, beta_2=0.999, early_stopping=False,
++                  epsilon=1e-08, hidden_layer_sizes=(5, 2),
++                  learning_rate='constant', learning_rate_init=0.001,
++                  max_iter=200, momentum=0.9, n_iter_no_change=10,
++                  nesterovs_momentum=True, power_t=0.5, random_state=1,
++                  shuffle=True, solver='lbfgs', tol=0.0001,
++                  validation_fraction=0.1, verbose=False, warm_start=False)
+ 
+ After fitting (training), the model can predict labels for new samples::
+ 
+@@ -139,12 +140,13 @@ indices where the value is `1` represents the assigned classes of that sample::
+     ...
+     >>> clf.fit(X, y)                         # doctest: +NORMALIZE_WHITESPACE
+     MLPClassifier(activation='relu', alpha=1e-05, batch_size='auto',
+-           beta_1=0.9, beta_2=0.999, early_stopping=False,
+-           epsilon=1e-08, hidden_layer_sizes=(15,), learning_rate='constant',
+-           learning_rate_init=0.001, max_iter=200, momentum=0.9,
+-           nesterovs_momentum=True, power_t=0.5, random_state=1, shuffle=True,
+-           solver='lbfgs', tol=0.0001, validation_fraction=0.1, verbose=False,
+-           warm_start=False)
++                  beta_1=0.9, beta_2=0.999, early_stopping=False,
++                  epsilon=1e-08, hidden_layer_sizes=(15,),
++                  learning_rate='constant', learning_rate_init=0.001,
++                  max_iter=200, momentum=0.9, n_iter_no_change=10,
++                  nesterovs_momentum=True, power_t=0.5,  random_state=1,
++                  shuffle=True, solver='lbfgs', tol=0.0001,
++                  validation_fraction=0.1, verbose=False, warm_start=False)
+     >>> clf.predict([[1., 2.]])
+     array([[1, 1]])
+     >>> clf.predict([[0., 0.]])
+@@ -247,7 +249,7 @@ where :math:`x_i \in \mathbf{R}^n` and :math:`y_i \in \{0, 1\}`, a one hidden
+ layer one hidden neuron MLP learns the function :math:`f(x) = W_2 g(W_1^T x + b_1) + b_2`
+ where :math:`W_1 \in \mathbf{R}^m` and :math:`W_2, b_1, b_2 \in \mathbf{R}` are
+ model parameters. :math:`W_1, W_2` represent the weights of the input layer and
+-hidden layer, resepctively; and :math:`b_1, b_2` represent the bias added to
++hidden layer, respectively; and :math:`b_1, b_2` represent the bias added to
+ the hidden layer and the output layer, respectively.
+ :math:`g(\cdot) : R \rightarrow R` is the activation function, set by default as
+ the hyperbolic tan. It is given as,
+diff --git a/doc/modules/preprocessing.rst b/doc/modules/preprocessing.rst
+index 5825409f0f11..8bcb14363d69 100644
+--- a/doc/modules/preprocessing.rst
++++ b/doc/modules/preprocessing.rst
+@@ -610,6 +610,15 @@ a transformer that applies a log transformation in a pipeline, do::
+     array([[ 0.        ,  0.69314718],
+            [ 1.09861229,  1.38629436]])
+ 
++You can ensure that ``func`` and ``inverse_func`` are the inverse of each other
++by setting ``check_inverse=True`` and calling ``fit`` before
++``transform``. Please note that a warning is raised and can be turned into an
++error with a ``filterwarnings``::
++
++  >>> import warnings
++  >>> warnings.filterwarnings("error", message=".*check_inverse*.",
++  ...                         category=UserWarning, append=False)
++
+ For a full code example that demonstrates using a :class:`FunctionTransformer`
+ to do custom feature selection,
+ see :ref:`sphx_glr_auto_examples_preprocessing_plot_function_transformer.py`
+diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
+index e7a96921870f..88cd5dcd6a85 100644
+--- a/doc/whats_new/v0.20.rst
++++ b/doc/whats_new/v0.20.rst
+@@ -18,6 +18,9 @@ random sampling procedures.
+ - :class:`decomposition.IncrementalPCA` in Python 2 (bug fix)
+ - :class:`isotonic.IsotonicRegression` (bug fix)
+ - :class:`metrics.roc_auc_score` (bug fix)
++- :class:`neural_network.BaseMultilayerPerceptron` (bug fix)
++- :class:`neural_network.MLPRegressor` (bug fix)
++- :class:`neural_network.MLPClassifier` (bug fix)
+ 
+ Details are listed in the changelog below.
+ 
+@@ -70,6 +73,18 @@ Classifiers and regressors
+   :class:`sklearn.naive_bayes.GaussianNB` to give a precise control over
+   variances calculation. :issue:`9681` by :user:`Dmitry Mottl <Mottl>`.
+ 
++- Add `n_iter_no_change` parameter in
++  :class:`neural_network.BaseMultilayerPerceptron`,
++  :class:`neural_network.MLPRegressor`, and
++  :class:`neural_network.MLPClassifier` to give control over
++  maximum number of epochs to not meet ``tol`` improvement.
++  :issue:`9456` by :user:`Nicholas Nadeau <nnadeau>`.
++
++- A parameter ``check_inverse`` was added to :class:`FunctionTransformer`
++  to ensure that ``func`` and ``inverse_func`` are the inverse of each
++  other.
++  :issue:`9399` by :user:`Guillaume Lemaitre <glemaitre>`.
++
+ Model evaluation and meta-estimators
+ 
+ - A scorer based on :func:`metrics.brier_score_loss` is also available.
+@@ -96,6 +111,20 @@ Classifiers and regressors
+   identical X values.
+   :issue:`9432` by :user:`Dallas Card <dallascard>`
+ 
++- Fixed a bug in :class:`neural_network.BaseMultilayerPerceptron`,
++  :class:`neural_network.MLPRegressor`, and
++  :class:`neural_network.MLPClassifier` with new ``n_iter_no_change``
++  parameter now at 10 from previously hardcoded 2.
++  :issue:`9456` by :user:`Nicholas Nadeau <nnadeau>`.
++  
++- Fixed a bug in :class:`neural_network.MLPRegressor` where fitting
++  quit unexpectedly early due to local minima or fluctuations.
++  :issue:`9456` by :user:`Nicholas Nadeau <nnadeau>`
++
++- Fixed a bug in :class:`naive_bayes.GaussianNB` which incorrectly raised
++  error for prior list which summed to 1.
++  :issue:`10005` by :user:`Gaurav Dhingra <gxyd>`.
++
+ Decomposition, manifold learning and clustering
+ 
+ - Fix for uninformative error in :class:`decomposition.IncrementalPCA`:
+@@ -127,6 +156,10 @@ Decomposition, manifold learning and clustering
+   with large datasets when ``n_components='mle'`` on Python 3 versions.
+   :issue:`9886` by :user:`Hanmin Qin <qinhanmin2014>`.
+ 
++- Fixed a bug when setting parameters on meta-estimator, involving both a
++  wrapped estimator and its parameter. :issue:`9999` by :user:`Marcus Voss
++  <marcus-voss>` and `Joel Nothman`_.
++
+ Metrics
+ 
+ - Fixed a bug due to floating point error in :func:`metrics.roc_auc_score` with
+diff --git a/sklearn/base.py b/sklearn/base.py
+index b653b7149c37..81c7e5dae7bc 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -263,6 +263,7 @@ def set_params(self, **params):
+                 nested_params[key][sub_key] = value
+             else:
+                 setattr(self, key, value)
++                valid_params[key] = value
+ 
+         for key, sub_params in nested_params.items():
+             valid_params[key].set_params(**sub_params)
+diff --git a/sklearn/calibration.py b/sklearn/calibration.py
+index 0d2f76cd1223..3c09d5c02f13 100644
+--- a/sklearn/calibration.py
++++ b/sklearn/calibration.py
+@@ -265,6 +265,10 @@ class _CalibratedClassifier(object):
+             if None, then classes is extracted from the given target values
+             in fit().
+ 
++    See also
++    --------
++    CalibratedClassifierCV
++
+     References
+     ----------
+     .. [1] Obtaining calibrated probability estimates from decision trees
+diff --git a/sklearn/feature_selection/rfe.py b/sklearn/feature_selection/rfe.py
+index 1b95c92fdb5b..5bde9e57c3f9 100644
+--- a/sklearn/feature_selection/rfe.py
++++ b/sklearn/feature_selection/rfe.py
+@@ -101,6 +101,11 @@ class RFE(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
+     >>> selector.ranking_
+     array([1, 1, 1, 1, 1, 6, 4, 3, 2, 5])
+ 
++    See also
++    --------
++    RFECV : Recursive feature elimination with built-in cross-validated
++        selection of the best number of features
++
+     References
+     ----------
+ 
+@@ -365,6 +370,10 @@ class RFECV(RFE, MetaEstimatorMixin):
+     >>> selector.ranking_
+     array([1, 1, 1, 1, 1, 6, 4, 3, 2, 5])
+ 
++    See also
++    --------
++    RFE : Recursive feature elimination
++
+     References
+     ----------
+ 
+diff --git a/sklearn/linear_model/coordinate_descent.py b/sklearn/linear_model/coordinate_descent.py
+index e03aece7f276..388c6ca49bed 100644
+--- a/sklearn/linear_model/coordinate_descent.py
++++ b/sklearn/linear_model/coordinate_descent.py
+@@ -640,6 +640,8 @@ class ElasticNet(LinearModel, RegressorMixin):
+ 
+     See also
+     --------
++    ElasticNetCV : Elastic net model with best model selection by
++        cross-validation.
+     SGDRegressor: implements elastic net regression with incremental training.
+     SGDClassifier: implements logistic regression with elastic net penalty
+         (``SGDClassifier(loss="log", penalty="elasticnet")``).
+@@ -1688,7 +1690,10 @@ class MultiTaskElasticNet(Lasso):
+ 
+     See also
+     --------
+-    ElasticNet, MultiTaskLasso
++    MultiTaskElasticNet : Multi-task L1/L2 ElasticNet with built-in
++        cross-validation.
++    ElasticNet
++    MultiTaskLasso
+ 
+     Notes
+     -----
+@@ -1873,7 +1878,9 @@ class MultiTaskLasso(MultiTaskElasticNet):
+ 
+     See also
+     --------
+-    Lasso, MultiTaskElasticNet
++    MultiTaskLasso : Multi-task L1/L2 Lasso with built-in cross-validation
++    Lasso
++    MultiTaskElasticNet
+ 
+     Notes
+     -----
+diff --git a/sklearn/linear_model/least_angle.py b/sklearn/linear_model/least_angle.py
+index bb7c12ab601a..88fae8aa7293 100644
+--- a/sklearn/linear_model/least_angle.py
++++ b/sklearn/linear_model/least_angle.py
+@@ -824,6 +824,7 @@ class LassoLars(Lars):
+     Lasso
+     LassoCV
+     LassoLarsCV
++    LassoLarsIC
+     sklearn.decomposition.sparse_encode
+ 
+     """
+diff --git a/sklearn/linear_model/logistic.py b/sklearn/linear_model/logistic.py
+index 7c8a8d9ae461..3de13a86b508 100644
+--- a/sklearn/linear_model/logistic.py
++++ b/sklearn/linear_model/logistic.py
+@@ -1120,6 +1120,7 @@ class LogisticRegression(BaseEstimator, LinearClassifierMixin,
+     SGDClassifier : incrementally trained logistic regression (when given
+         the parameter ``loss="log"``).
+     sklearn.svm.LinearSVC : learns SVM models using the same algorithm.
++    LogisticRegressionCV : Logistic regression with built-in cross validation
+ 
+     Notes
+     -----
+diff --git a/sklearn/linear_model/omp.py b/sklearn/linear_model/omp.py
+index 8fcbd4e211af..987010558079 100644
+--- a/sklearn/linear_model/omp.py
++++ b/sklearn/linear_model/omp.py
+@@ -598,7 +598,7 @@ class OrthogonalMatchingPursuit(LinearModel, RegressorMixin):
+     Lars
+     LassoLars
+     decomposition.sparse_encode
+-
++    OrthogonalMatchingPursuitCV
+     """
+     def __init__(self, n_nonzero_coefs=None, tol=None, fit_intercept=True,
+                  normalize=True, precompute='auto'):
+diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
+index 8a48cef65ce5..c46cdff7da2d 100644
+--- a/sklearn/linear_model/ridge.py
++++ b/sklearn/linear_model/ridge.py
+@@ -624,7 +624,10 @@ class Ridge(_BaseRidge, RegressorMixin):
+ 
+     See also
+     --------
+-    RidgeClassifier, RidgeCV, :class:`sklearn.kernel_ridge.KernelRidge`
++    RidgeClassifier : Ridge classifier
++    RidgeCV : Ridge regression with built-in cross validation
++    :class:`sklearn.kernel_ridge.KernelRidge` : Kernel ridge regression
++        combines ridge regression with the kernel trick
+ 
+     Examples
+     --------
+@@ -770,7 +773,8 @@ class RidgeClassifier(LinearClassifierMixin, _BaseRidge):
+ 
+     See also
+     --------
+-    Ridge, RidgeClassifierCV
++    Ridge : Ridge regression
++    RidgeClassifierCV :  Ridge classifier with built-in cross validation
+ 
+     Notes
+     -----
+@@ -1233,9 +1237,9 @@ class RidgeCV(_BaseRidgeCV, RegressorMixin):
+ 
+     See also
+     --------
+-    Ridge: Ridge regression
+-    RidgeClassifier: Ridge classifier
+-    RidgeClassifierCV: Ridge classifier with built-in cross validation
++    Ridge : Ridge regression
++    RidgeClassifier : Ridge classifier
++    RidgeClassifierCV : Ridge classifier with built-in cross validation
+     """
+     pass
+ 
+@@ -1318,9 +1322,9 @@ class RidgeClassifierCV(LinearClassifierMixin, _BaseRidgeCV):
+ 
+     See also
+     --------
+-    Ridge: Ridge regression
+-    RidgeClassifier: Ridge classifier
+-    RidgeCV: Ridge regression with built-in cross validation
++    Ridge : Ridge regression
++    RidgeClassifier : Ridge classifier
++    RidgeCV : Ridge regression with built-in cross validation
+ 
+     Notes
+     -----
+diff --git a/sklearn/manifold/locally_linear.py b/sklearn/manifold/locally_linear.py
+index 594e77af4398..03c844c4b707 100644
+--- a/sklearn/manifold/locally_linear.py
++++ b/sklearn/manifold/locally_linear.py
+@@ -589,11 +589,11 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
+ 
+     Attributes
+     ----------
+-    embedding_vectors_ : array-like, shape [n_components, n_samples]
++    embedding_ : array-like, shape [n_samples, n_components]
+         Stores the embedding vectors
+ 
+     reconstruction_error_ : float
+-        Reconstruction error associated with `embedding_vectors_`
++        Reconstruction error associated with `embedding_`
+ 
+     nbrs_ : NearestNeighbors object
+         Stores nearest neighbors instance, including BallTree or KDtree
+diff --git a/sklearn/naive_bayes.py b/sklearn/naive_bayes.py
+index 6aec725bd980..ae01ccb62f23 100644
+--- a/sklearn/naive_bayes.py
++++ b/sklearn/naive_bayes.py
+@@ -374,7 +374,7 @@ def _partial_fit(self, X, y, classes=None, _refit=False,
+                     raise ValueError('Number of priors must match number of'
+                                      ' classes.')
+                 # Check that the sum is 1
+-                if priors.sum() != 1.0:
++                if not np.isclose(priors.sum(), 1.0):
+                     raise ValueError('The sum of the priors should be 1.')
+                 # Check that the prior are non-negative
+                 if (priors < 0).any():
+diff --git a/sklearn/neural_network/multilayer_perceptron.py b/sklearn/neural_network/multilayer_perceptron.py
+index ae6df22c2fc5..c693c1161470 100644
+--- a/sklearn/neural_network/multilayer_perceptron.py
++++ b/sklearn/neural_network/multilayer_perceptron.py
+@@ -51,7 +51,8 @@ def __init__(self, hidden_layer_sizes, activation, solver,
+                  alpha, batch_size, learning_rate, learning_rate_init, power_t,
+                  max_iter, loss, shuffle, random_state, tol, verbose,
+                  warm_start, momentum, nesterovs_momentum, early_stopping,
+-                 validation_fraction, beta_1, beta_2, epsilon):
++                 validation_fraction, beta_1, beta_2, epsilon,
++                 n_iter_no_change):
+         self.activation = activation
+         self.solver = solver
+         self.alpha = alpha
+@@ -74,6 +75,7 @@ def __init__(self, hidden_layer_sizes, activation, solver,
+         self.beta_1 = beta_1
+         self.beta_2 = beta_2
+         self.epsilon = epsilon
++        self.n_iter_no_change = n_iter_no_change
+ 
+     def _unpack(self, packed_parameters):
+         """Extract the coefficients and intercepts from packed_parameters."""
+@@ -415,6 +417,9 @@ def _validate_hyperparameters(self):
+                              self.beta_2)
+         if self.epsilon <= 0.0:
+             raise ValueError("epsilon must be > 0, got %s." % self.epsilon)
++        if self.n_iter_no_change <= 0:
++            raise ValueError("n_iter_no_change must be > 0, got %s."
++                             % self.n_iter_no_change)
+ 
+         # raise ValueError if not registered
+         supported_activations = ('identity', 'logistic', 'tanh', 'relu')
+@@ -537,15 +542,17 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+                 # for learning rate that needs to be updated at iteration end
+                 self._optimizer.iteration_ends(self.t_)
+ 
+-                if self._no_improvement_count > 2:
+-                    # not better than last two iterations by tol.
++                if self._no_improvement_count > self.n_iter_no_change:
++                    # not better than last `n_iter_no_change` iterations by tol
+                     # stop or decrease learning rate
+                     if early_stopping:
+                         msg = ("Validation score did not improve more than "
+-                               "tol=%f for two consecutive epochs." % self.tol)
++                               "tol=%f for %d consecutive epochs." % (
++                                   self.tol, self.n_iter_no_change))
+                     else:
+                         msg = ("Training loss did not improve more than tol=%f"
+-                               " for two consecutive epochs." % self.tol)
++                               " for %d consecutive epochs." % (
++                                   self.tol, self.n_iter_no_change))
+ 
+                     is_stopping = self._optimizer.trigger_stopping(
+                         msg, self.verbose)
+@@ -780,9 +787,9 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
+ 
+     tol : float, optional, default 1e-4
+         Tolerance for the optimization. When the loss or score is not improving
+-        by at least tol for two consecutive iterations, unless `learning_rate`
+-        is set to 'adaptive', convergence is considered to be reached and
+-        training stops.
++        by at least ``tol`` for ``n_iter_no_change`` consecutive iterations,
++        unless ``learning_rate`` is set to 'adaptive', convergence is
++        considered to be reached and training stops.
+ 
+     verbose : bool, optional, default False
+         Whether to print progress messages to stdout.
+@@ -804,8 +811,8 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
+         Whether to use early stopping to terminate training when validation
+         score is not improving. If set to true, it will automatically set
+         aside 10% of training data as validation and terminate training when
+-        validation score is not improving by at least tol for two consecutive
+-        epochs.
++        validation score is not improving by at least tol for
++        ``n_iter_no_change`` consecutive epochs.
+         Only effective when solver='sgd' or 'adam'
+ 
+     validation_fraction : float, optional, default 0.1
+@@ -824,6 +831,12 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
+     epsilon : float, optional, default 1e-8
+         Value for numerical stability in adam. Only used when solver='adam'
+ 
++    n_iter_no_change : int, optional, default 10
++        Maximum number of epochs to not meet ``tol`` improvement.
++        Only effective when solver='sgd' or 'adam'
++
++        .. versionadded:: 0.20
++
+     Attributes
+     ----------
+     classes_ : array or list of array of shape (n_classes,)
+@@ -890,7 +903,7 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+                  verbose=False, warm_start=False, momentum=0.9,
+                  nesterovs_momentum=True, early_stopping=False,
+                  validation_fraction=0.1, beta_1=0.9, beta_2=0.999,
+-                 epsilon=1e-8):
++                 epsilon=1e-8, n_iter_no_change=10):
+ 
+         sup = super(MLPClassifier, self)
+         sup.__init__(hidden_layer_sizes=hidden_layer_sizes,
+@@ -903,7 +916,8 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+                      nesterovs_momentum=nesterovs_momentum,
+                      early_stopping=early_stopping,
+                      validation_fraction=validation_fraction,
+-                     beta_1=beta_1, beta_2=beta_2, epsilon=epsilon)
++                     beta_1=beta_1, beta_2=beta_2, epsilon=epsilon,
++                     n_iter_no_change=n_iter_no_change)
+ 
+     def _validate_input(self, X, y, incremental):
+         X, y = check_X_y(X, y, accept_sparse=['csr', 'csc', 'coo'],
+@@ -1157,9 +1171,9 @@ class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
+ 
+     tol : float, optional, default 1e-4
+         Tolerance for the optimization. When the loss or score is not improving
+-        by at least tol for two consecutive iterations, unless `learning_rate`
+-        is set to 'adaptive', convergence is considered to be reached and
+-        training stops.
++        by at least ``tol`` for ``n_iter_no_change`` consecutive iterations,
++        unless ``learning_rate`` is set to 'adaptive', convergence is
++        considered to be reached and training stops.
+ 
+     verbose : bool, optional, default False
+         Whether to print progress messages to stdout.
+@@ -1181,8 +1195,8 @@ class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
+         Whether to use early stopping to terminate training when validation
+         score is not improving. If set to true, it will automatically set
+         aside 10% of training data as validation and terminate training when
+-        validation score is not improving by at least tol for two consecutive
+-        epochs.
++        validation score is not improving by at least ``tol`` for
++        ``n_iter_no_change`` consecutive epochs.
+         Only effective when solver='sgd' or 'adam'
+ 
+     validation_fraction : float, optional, default 0.1
+@@ -1201,6 +1215,12 @@ class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
+     epsilon : float, optional, default 1e-8
+         Value for numerical stability in adam. Only used when solver='adam'
+ 
++    n_iter_no_change : int, optional, default 10
++        Maximum number of epochs to not meet ``tol`` improvement.
++        Only effective when solver='sgd' or 'adam'
++
++        .. versionadded:: 0.20
++
+     Attributes
+     ----------
+     loss_ : float
+@@ -1265,7 +1285,7 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+                  verbose=False, warm_start=False, momentum=0.9,
+                  nesterovs_momentum=True, early_stopping=False,
+                  validation_fraction=0.1, beta_1=0.9, beta_2=0.999,
+-                 epsilon=1e-8):
++                 epsilon=1e-8, n_iter_no_change=10):
+ 
+         sup = super(MLPRegressor, self)
+         sup.__init__(hidden_layer_sizes=hidden_layer_sizes,
+@@ -1278,7 +1298,8 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+                      nesterovs_momentum=nesterovs_momentum,
+                      early_stopping=early_stopping,
+                      validation_fraction=validation_fraction,
+-                     beta_1=beta_1, beta_2=beta_2, epsilon=epsilon)
++                     beta_1=beta_1, beta_2=beta_2, epsilon=epsilon,
++                     n_iter_no_change=n_iter_no_change)
+ 
+     def predict(self, X):
+         """Predict using the multi-layer perceptron model.
+diff --git a/sklearn/neural_network/tests/test_mlp.py b/sklearn/neural_network/tests/test_mlp.py
+index 9c42b7c930cd..b0d5ab587a08 100644
+--- a/sklearn/neural_network/tests/test_mlp.py
++++ b/sklearn/neural_network/tests/test_mlp.py
+@@ -420,6 +420,7 @@ def test_params_errors():
+     assert_raises(ValueError, clf(beta_2=1).fit, X, y)
+     assert_raises(ValueError, clf(beta_2=-0.5).fit, X, y)
+     assert_raises(ValueError, clf(epsilon=-0.5).fit, X, y)
++    assert_raises(ValueError, clf(n_iter_no_change=-1).fit, X, y)
+ 
+     assert_raises(ValueError, clf(solver='hadoken').fit, X, y)
+     assert_raises(ValueError, clf(learning_rate='converge').fit, X, y)
+@@ -588,3 +589,47 @@ def test_warm_start():
+                    'classes as in the previous call to fit.'
+                    ' Previously got [0 1 2], `y` has %s' % np.unique(y_i))
+         assert_raise_message(ValueError, message, clf.fit, X, y_i)
++
++
++def test_n_iter_no_change():
++    # test n_iter_no_change using binary data set
++    # the classifying fitting process is not prone to loss curve fluctuations
++    X = X_digits_binary[:100]
++    y = y_digits_binary[:100]
++    tol = 0.01
++    max_iter = 3000
++
++    # test multiple n_iter_no_change
++    for n_iter_no_change in [2, 5, 10, 50, 100]:
++        clf = MLPClassifier(tol=tol, max_iter=max_iter, solver='sgd',
++                            n_iter_no_change=n_iter_no_change)
++        clf.fit(X, y)
++
++        # validate n_iter_no_change
++        assert_equal(clf._no_improvement_count, n_iter_no_change + 1)
++        assert_greater(max_iter, clf.n_iter_)
++
++
++@ignore_warnings(category=ConvergenceWarning)
++def test_n_iter_no_change_inf():
++    # test n_iter_no_change using binary data set
++    # the fitting process should go to max_iter iterations
++    X = X_digits_binary[:100]
++    y = y_digits_binary[:100]
++
++    # set a ridiculous tolerance
++    # this should always trigger _update_no_improvement_count()
++    tol = 1e9
++
++    # fit
++    n_iter_no_change = np.inf
++    max_iter = 3000
++    clf = MLPClassifier(tol=tol, max_iter=max_iter, solver='sgd',
++                        n_iter_no_change=n_iter_no_change)
++    clf.fit(X, y)
++
++    # validate n_iter_no_change doesn't cause early stopping
++    assert_equal(clf.n_iter_, max_iter)
++
++    # validate _update_no_improvement_count() was always triggered
++    assert_equal(clf._no_improvement_count, clf.n_iter_ - 1)
+diff --git a/sklearn/preprocessing/_function_transformer.py b/sklearn/preprocessing/_function_transformer.py
+index 82955b697769..f2a129068599 100644
+--- a/sklearn/preprocessing/_function_transformer.py
++++ b/sklearn/preprocessing/_function_transformer.py
+@@ -2,6 +2,7 @@
+ 
+ from ..base import BaseEstimator, TransformerMixin
+ from ..utils import check_array
++from ..utils.testing import assert_allclose_dense_sparse
+ from ..externals.six import string_types
+ 
+ 
+@@ -19,8 +20,6 @@ class FunctionTransformer(BaseEstimator, TransformerMixin):
+     function. This is useful for stateless transformations such as taking the
+     log of frequencies, doing custom scaling, etc.
+ 
+-    A FunctionTransformer will not do any checks on its function's output.
+-
+     Note: If a lambda is used as the function, then the resulting
+     transformer will not be pickleable.
+ 
+@@ -59,6 +58,13 @@ class FunctionTransformer(BaseEstimator, TransformerMixin):
+ 
+         .. deprecated::0.19
+ 
++    check_inverse : bool, default=True
++       Whether to check that or ``func`` followed by ``inverse_func`` leads to
++       the original inputs. It can be used for a sanity check, raising a
++       warning when the condition is not fulfilled.
++
++       .. versionadded:: 0.20
++
+     kw_args : dict, optional
+         Dictionary of additional keyword arguments to pass to func.
+ 
+@@ -67,16 +73,30 @@ class FunctionTransformer(BaseEstimator, TransformerMixin):
+ 
+     """
+     def __init__(self, func=None, inverse_func=None, validate=True,
+-                 accept_sparse=False, pass_y='deprecated',
++                 accept_sparse=False, pass_y='deprecated', check_inverse=True,
+                  kw_args=None, inv_kw_args=None):
+         self.func = func
+         self.inverse_func = inverse_func
+         self.validate = validate
+         self.accept_sparse = accept_sparse
+         self.pass_y = pass_y
++        self.check_inverse = check_inverse
+         self.kw_args = kw_args
+         self.inv_kw_args = inv_kw_args
+ 
++    def _check_inverse_transform(self, X):
++        """Check that func and inverse_func are the inverse."""
++        idx_selected = slice(None, None, max(1, X.shape[0] // 100))
++        try:
++            assert_allclose_dense_sparse(
++                X[idx_selected],
++                self.inverse_transform(self.transform(X[idx_selected])))
++        except AssertionError:
++            warnings.warn("The provided functions are not strictly"
++                          " inverse of each other. If you are sure you"
++                          " want to proceed regardless, set"
++                          " 'check_inverse=False'.", UserWarning)
++
+     def fit(self, X, y=None):
+         """Fit transformer by checking X.
+ 
+@@ -92,7 +112,10 @@ def fit(self, X, y=None):
+         self
+         """
+         if self.validate:
+-            check_array(X, self.accept_sparse)
++            X = check_array(X, self.accept_sparse)
++        if (self.check_inverse and not (self.func is None or
++                                        self.inverse_func is None)):
++            self._check_inverse_transform(X)
+         return self
+ 
+     def transform(self, X, y='deprecated'):
+diff --git a/sklearn/preprocessing/target.py b/sklearn/preprocessing/target.py
+index 6dd4dc383ecb..7a050c43b6fd 100644
+--- a/sklearn/preprocessing/target.py
++++ b/sklearn/preprocessing/target.py
+@@ -124,7 +124,8 @@ def _fit_transformer(self, y):
+                 raise ValueError("When 'func' is not None, 'inverse_func'"
+                                  " cannot be None.")
+             self.transformer_ = FunctionTransformer(
+-                func=self.func, inverse_func=self.inverse_func, validate=True)
++                func=self.func, inverse_func=self.inverse_func, validate=True,
++                check_inverse=self.check_inverse)
+         # XXX: sample_weight is not currently passed to the
+         # transformer. However, if transformer starts using sample_weight, the
+         # code should be modified accordingly. At the time to consider the
+diff --git a/sklearn/preprocessing/tests/test_data.py b/sklearn/preprocessing/tests/test_data.py
+index fb912531265f..e777fb5ffe98 100644
+--- a/sklearn/preprocessing/tests/test_data.py
++++ b/sklearn/preprocessing/tests/test_data.py
+@@ -13,6 +13,7 @@
+ 
+ from sklearn.utils import gen_batches
+ 
++from sklearn.utils.testing import assert_raise_message
+ from sklearn.utils.testing import assert_almost_equal
+ from sklearn.utils.testing import clean_warning_registry
+ from sklearn.utils.testing import assert_array_almost_equal
+@@ -932,6 +933,10 @@ def test_quantile_transform_check_error():
+     assert_raises_regex(ValueError, "'output_distribution' has to be either"
+                         " 'normal' or 'uniform'. Got 'rnd' instead.",
+                         transformer.inverse_transform, X_tran)
++    # check that an error is raised if input is scalar
++    assert_raise_message(ValueError,
++                         'Expected 2D array, got scalar array instead',
++                         transformer.transform, 10)
+ 
+ 
+ def test_quantile_transform_sparse_ignore_zeros():
+@@ -1157,14 +1162,16 @@ def test_quantile_transform_bounds():
+     X = np.random.random((1000, 1))
+     transformer = QuantileTransformer()
+     transformer.fit(X)
+-    assert_equal(transformer.transform(-10), transformer.transform(np.min(X)))
+-    assert_equal(transformer.transform(10), transformer.transform(np.max(X)))
+-    assert_equal(transformer.inverse_transform(-10),
++    assert_equal(transformer.transform([[-10]]),
++                 transformer.transform([[np.min(X)]]))
++    assert_equal(transformer.transform([[10]]),
++                 transformer.transform([[np.max(X)]]))
++    assert_equal(transformer.inverse_transform([[-10]]),
+                  transformer.inverse_transform(
+-                     np.min(transformer.references_)))
+-    assert_equal(transformer.inverse_transform(10),
++                     [[np.min(transformer.references_)]]))
++    assert_equal(transformer.inverse_transform([[10]]),
+                  transformer.inverse_transform(
+-                     np.max(transformer.references_)))
++                     [[np.max(transformer.references_)]]))
+ 
+ 
+ def test_quantile_transform_and_inverse():
+diff --git a/sklearn/preprocessing/tests/test_function_transformer.py b/sklearn/preprocessing/tests/test_function_transformer.py
+index 4e9cb26b64a9..4d166457777c 100644
+--- a/sklearn/preprocessing/tests/test_function_transformer.py
++++ b/sklearn/preprocessing/tests/test_function_transformer.py
+@@ -1,8 +1,10 @@
+ import numpy as np
++from scipy import sparse
+ 
+ from sklearn.preprocessing import FunctionTransformer
+-from sklearn.utils.testing import assert_equal, assert_array_equal
+-from sklearn.utils.testing import assert_warns_message
++from sklearn.utils.testing import (assert_equal, assert_array_equal,
++                                   assert_allclose_dense_sparse)
++from sklearn.utils.testing import assert_warns_message, assert_no_warnings
+ 
+ 
+ def _make_func(args_store, kwargs_store, func=lambda X, *a, **k: X):
+@@ -126,3 +128,43 @@ def test_inverse_transform():
+         F.inverse_transform(F.transform(X)),
+         np.around(np.sqrt(X), decimals=3),
+     )
++
++
++def test_check_inverse():
++    X_dense = np.array([1, 4, 9, 16], dtype=np.float64).reshape((2, 2))
++
++    X_list = [X_dense,
++              sparse.csr_matrix(X_dense),
++              sparse.csc_matrix(X_dense)]
++
++    for X in X_list:
++        if sparse.issparse(X):
++            accept_sparse = True
++        else:
++            accept_sparse = False
++        trans = FunctionTransformer(func=np.sqrt,
++                                    inverse_func=np.around,
++                                    accept_sparse=accept_sparse,
++                                    check_inverse=True)
++        assert_warns_message(UserWarning,
++                             "The provided functions are not strictly"
++                             " inverse of each other. If you are sure you"
++                             " want to proceed regardless, set"
++                             " 'check_inverse=False'.",
++                             trans.fit, X)
++
++        trans = FunctionTransformer(func=np.expm1,
++                                    inverse_func=np.log1p,
++                                    accept_sparse=accept_sparse,
++                                    check_inverse=True)
++        Xt = assert_no_warnings(trans.fit_transform, X)
++        assert_allclose_dense_sparse(X, trans.inverse_transform(Xt))
++
++    # check that we don't check inverse when one of the func or inverse is not
++    # provided.
++    trans = FunctionTransformer(func=np.expm1, inverse_func=None,
++                                check_inverse=True)
++    assert_no_warnings(trans.fit, X_dense)
++    trans = FunctionTransformer(func=None, inverse_func=np.expm1,
++                                check_inverse=True)
++    assert_no_warnings(trans.fit, X_dense)
+diff --git a/sklearn/tests/test_base.py b/sklearn/tests/test_base.py
+index 580a4e2ecac9..4620dcbd0360 100644
+--- a/sklearn/tests/test_base.py
++++ b/sklearn/tests/test_base.py
+@@ -246,6 +246,14 @@ def set_params(self, **kwargs):
+                        estimator__min_samples_leaf=2)
+ 
+ 
++def test_set_params_updates_valid_params():
++    # Check that set_params tries to set SVC().C, not
++    # DecisionTreeClassifier().C
++    gscv = GridSearchCV(DecisionTreeClassifier(), {})
++    gscv.set_params(estimator=SVC(), estimator__C=42.0)
++    assert gscv.estimator.C == 42.0
++
++
+ def test_score_sample_weight():
+ 
+     rng = np.random.RandomState(0)
+diff --git a/sklearn/tests/test_naive_bayes.py b/sklearn/tests/test_naive_bayes.py
+index 97a119dca6ba..b2b1b63c98b1 100644
+--- a/sklearn/tests/test_naive_bayes.py
++++ b/sklearn/tests/test_naive_bayes.py
+@@ -114,6 +114,18 @@ def test_gnb_priors():
+     assert_array_almost_equal(clf.class_prior_, np.array([0.3, 0.7]))
+ 
+ 
++def test_gnb_priors_sum_isclose():
++    # test whether the class prior sum is properly tested"""
++    X = np.array([[-1, -1], [-2, -1], [-3, -2], [-4, -5], [-5, -4],
++                 [1, 1], [2, 1], [3, 2], [4, 4], [5, 5]])
++    priors = np.array([0.08, 0.14, 0.03, 0.16, 0.11, 0.16, 0.07, 0.14,
++                       0.11, 0.0])
++    Y = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
++    clf = GaussianNB(priors)
++    # smoke test for issue #9633
++    clf.fit(X, Y)
++
++
+ def test_gnb_wrong_nb_priors():
+     """ Test whether an error is raised if the number of prior is different
+     from the number of class"""
+diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
+index 55c88b660ea7..bdf15768cfa7 100644
+--- a/sklearn/utils/estimator_checks.py
++++ b/sklearn/utils/estimator_checks.py
+@@ -1051,20 +1051,25 @@ def check_clustering(name, clusterer_orig):
+     assert_in(pred.dtype, [np.dtype('int32'), np.dtype('int64')])
+     assert_in(pred2.dtype, [np.dtype('int32'), np.dtype('int64')])
+ 
++    # Add noise to X to test the possible values of the labels
++    rng = np.random.RandomState(7)
++    X_noise = np.concatenate([X, rng.uniform(low=-3, high=3, size=(5, 2))])
++    labels = clusterer.fit_predict(X_noise)
++
+     # There should be at least one sample in every cluster. Equivalently
+     # labels_ should contain all the consecutive values between its
+     # min and its max.
+-    pred_sorted = np.unique(pred)
+-    assert_array_equal(pred_sorted, np.arange(pred_sorted[0],
+-                                              pred_sorted[-1] + 1))
++    labels_sorted = np.unique(labels)
++    assert_array_equal(labels_sorted, np.arange(labels_sorted[0],
++                                                labels_sorted[-1] + 1))
+ 
+-    # labels_ should be greater than -1
+-    assert_greater_equal(pred_sorted[0], -1)
+-    # labels_ should be less than n_clusters - 1
++    # Labels are expected to start at 0 (no noise) or -1 (if noise)
++    assert_true(labels_sorted[0] in [0, -1])
++    # Labels should be less than n_clusters - 1
+     if hasattr(clusterer, 'n_clusters'):
+         n_clusters = getattr(clusterer, 'n_clusters')
+-        assert_greater_equal(n_clusters - 1, pred_sorted[-1])
+-    # else labels_ should be less than max(labels_) which is necessarily true
++        assert_greater_equal(n_clusters - 1, labels_sorted[-1])
++    # else labels should be less than max(labels_) which is necessarily true
+ 
+ 
+ @ignore_warnings(category=DeprecationWarning)
+diff --git a/sklearn/utils/testing.py b/sklearn/utils/testing.py
+index c5b6209cc572..035a2e3175ad 100644
+--- a/sklearn/utils/testing.py
++++ b/sklearn/utils/testing.py
+@@ -341,22 +341,7 @@ def __exit__(self, *exc_info):
+ assert_less = _dummy.assertLess
+ assert_greater = _dummy.assertGreater
+ 
+-
+-def _assert_allclose(actual, desired, rtol=1e-7, atol=0,
+-                     err_msg='', verbose=True):
+-    actual, desired = np.asanyarray(actual), np.asanyarray(desired)
+-    if np.allclose(actual, desired, rtol=rtol, atol=atol):
+-        return
+-    msg = ('Array not equal to tolerance rtol=%g, atol=%g: '
+-           'actual %s, desired %s') % (rtol, atol, actual, desired)
+-    raise AssertionError(msg)
+-
+-
+-if hasattr(np.testing, 'assert_allclose'):
+-    assert_allclose = np.testing.assert_allclose
+-else:
+-    assert_allclose = _assert_allclose
+-
++assert_allclose = np.testing.assert_allclose
+ 
+ def assert_raise_message(exceptions, message, function, *args, **kwargs):
+     """Helper function to test error messages in exceptions.
+diff --git a/sklearn/utils/tests/test_validation.py b/sklearn/utils/tests/test_validation.py
+index 37a0eb859f56..9e02c4c5610a 100644
+--- a/sklearn/utils/tests/test_validation.py
++++ b/sklearn/utils/tests/test_validation.py
+@@ -142,9 +142,13 @@ def test_check_array():
+     # ensure_2d=False
+     X_array = check_array([0, 1, 2], ensure_2d=False)
+     assert_equal(X_array.ndim, 1)
+-    # ensure_2d=True
++    # ensure_2d=True with 1d array
+     assert_raise_message(ValueError, 'Expected 2D array, got 1D array instead',
+                          check_array, [0, 1, 2], ensure_2d=True)
++    # ensure_2d=True with scalar array
++    assert_raise_message(ValueError,
++                         'Expected 2D array, got scalar array instead',
++                         check_array, 10, ensure_2d=True)
+     # don't allow ndim > 3
+     X_ndim = np.arange(8).reshape(2, 2, 2)
+     assert_raises(ValueError, check_array, X_ndim)
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 080c30fcf9b2..b3538a792589 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -459,13 +459,20 @@ def check_array(array, accept_sparse=False, dtype="numeric", order=None,
+         _ensure_no_complex_data(array)
+ 
+         if ensure_2d:
++            # If input is scalar raise error
++            if array.ndim == 0:
++                raise ValueError(
++                    "Expected 2D array, got scalar array instead:\narray={}.\n"
++                    "Reshape your data either using array.reshape(-1, 1) if "
++                    "your data has a single feature or array.reshape(1, -1) "
++                    "if it contains a single sample.".format(array))
++            # If input is 1D raise error
+             if array.ndim == 1:
+                 raise ValueError(
+                     "Expected 2D array, got 1D array instead:\narray={}.\n"
+                     "Reshape your data either using array.reshape(-1, 1) if "
+                     "your data has a single feature or array.reshape(1, -1) "
+                     "if it contains a single sample.".format(array))
+-            array = np.atleast_2d(array)
+             # To ensure that array flags are maintained
+             array = np.array(array, dtype=dtype, order=order, copy=copy)
+ 

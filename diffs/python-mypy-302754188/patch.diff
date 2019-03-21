@@ -1,0 +1,419 @@
+diff --git a/MANIFEST.in b/MANIFEST.in
+index f184bf5db0..30211b0fc3 100644
+--- a/MANIFEST.in
++++ b/MANIFEST.in
+@@ -4,3 +4,4 @@ recursive-include extensions *
+ recursive-include docs *
+ include runtests.py
+ include mypy_self_check.ini
++include LICENSE
+diff --git a/extensions/LICENSE b/extensions/LICENSE
+new file mode 100644
+index 0000000000..bdb7786b23
+--- /dev/null
++++ b/extensions/LICENSE
+@@ -0,0 +1,27 @@
++Mypy extensions are licensed under the terms of the MIT license, reproduced below.
++
++= = = = =
++
++The MIT License
++
++Copyright (c) 2016-2017 Jukka Lehtosalo and contributors
++
++Permission is hereby granted, free of charge, to any person obtaining a
++copy of this software and associated documentation files (the "Software"),
++to deal in the Software without restriction, including without limitation
++the rights to use, copy, modify, merge, publish, distribute, sublicense,
++and/or sell copies of the Software, and to permit persons to whom the
++Software is furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
++
++= = = = =
+diff --git a/extensions/MANIFEST.in b/extensions/MANIFEST.in
+new file mode 100644
+index 0000000000..1aba38f67a
+--- /dev/null
++++ b/extensions/MANIFEST.in
+@@ -0,0 +1 @@
++include LICENSE
+diff --git a/mypy/checker.py b/mypy/checker.py
+index 1d263fdfb6..333eb774ea 100644
+--- a/mypy/checker.py
++++ b/mypy/checker.py
+@@ -641,7 +641,7 @@ def check_func_def(self, defn: FuncItem, typ: CallableType, name: Optional[str])
+ 
+                 if name:  # Special method names
+                     if name in nodes.reverse_op_method_set:
+-                        self.check_reverse_op_method(item, typ, name)
++                        self.check_reverse_op_method(item, typ, name, defn)
+                     elif name in ('__getattr__', '__getattribute__'):
+                         self.check_getattr_method(typ, defn, name)
+                     elif name == '__setattr__':
+@@ -792,7 +792,11 @@ def is_unannotated_any(t: Type) -> bool:
+             if fdef.type is None and self.options.disallow_untyped_defs:
+                 self.fail(messages.FUNCTION_TYPE_EXPECTED, fdef)
+             elif isinstance(fdef.type, CallableType):
+-                if is_unannotated_any(fdef.type.ret_type):
++                ret_type = fdef.type.ret_type
++                if is_unannotated_any(ret_type):
++                    self.fail(messages.RETURN_TYPE_EXPECTED, fdef)
++                elif (fdef.is_coroutine and isinstance(ret_type, Instance) and
++                      is_unannotated_any(ret_type.args[0])):
+                     self.fail(messages.RETURN_TYPE_EXPECTED, fdef)
+                 if any(is_unannotated_any(t) for t in fdef.type.arg_types):
+                     self.fail(messages.ARGUMENT_TYPE_EXPECTED, fdef)
+@@ -816,13 +820,24 @@ def is_trivial_body(self, block: Block) -> bool:
+                  isinstance(stmt.expr, EllipsisExpr)))
+ 
+     def check_reverse_op_method(self, defn: FuncItem, typ: CallableType,
+-                                method: str) -> None:
++                                method: str, context: Context) -> None:
+         """Check a reverse operator method such as __radd__."""
+ 
+         # This used to check for some very obscure scenario.  It now
+         # just decides whether it's worth calling
+         # check_overlapping_op_methods().
+ 
++        # First check for a valid signature
++        method_type = CallableType([AnyType(TypeOfAny.special_form),
++                                    AnyType(TypeOfAny.special_form)],
++                                   [nodes.ARG_POS, nodes.ARG_POS],
++                                   [None, None],
++                                   AnyType(TypeOfAny.special_form),
++                                   self.named_type('builtins.function'))
++        if not is_subtype(typ, method_type):
++            self.msg.invalid_signature(typ, context)
++            return
++
+         if method in ('__eq__', '__ne__'):
+             # These are defined for all objects => can't cause trouble.
+             return
+@@ -835,9 +850,8 @@ def check_reverse_op_method(self, defn: FuncItem, typ: CallableType,
+         if isinstance(ret_type, Instance):
+             if ret_type.type.fullname() == 'builtins.object':
+                 return
+-        # Plausibly the method could have too few arguments, which would result
+-        # in an error elsewhere.
+-        if len(typ.arg_types) <= 2:
++
++        if len(typ.arg_types) == 2:
+             # TODO check self argument kind
+ 
+             # Check for the issue described above.
+diff --git a/mypy/checkexpr.py b/mypy/checkexpr.py
+index e3eb78d7a0..a4289804ac 100644
+--- a/mypy/checkexpr.py
++++ b/mypy/checkexpr.py
+@@ -1395,7 +1395,7 @@ def visit_comparison_expr(self, e: ComparisonExpr) -> Type:
+             method_type = None  # type: Optional[mypy.types.Type]
+ 
+             if operator == 'in' or operator == 'not in':
+-                right_type = self.accept(right)  # TODO only evaluate if needed
++                right_type = self.accept(right)  # always validate the right operand
+ 
+                 # Keep track of whether we get type check errors (these won't be reported, they
+                 # are just to verify whether something is valid typing wise).
+@@ -1429,6 +1429,7 @@ def visit_comparison_expr(self, e: ComparisonExpr) -> Type:
+                                                     allow_reverse=True)
+ 
+             elif operator == 'is' or operator == 'is not':
++                self.accept(right)  # validate the right operand
+                 sub_result = self.bool_type()
+                 method_type = None
+             else:
+diff --git a/mypy/constraints.py b/mypy/constraints.py
+index 0a79483b23..92a1f35b99 100644
+--- a/mypy/constraints.py
++++ b/mypy/constraints.py
+@@ -373,12 +373,8 @@ def visit_instance(self, template: Instance) -> List[Constraint]:
+                 cb = infer_constraints(template.args[0], item, SUPERTYPE_OF)
+                 res.extend(cb)
+             return res
+-        elif (isinstance(actual, TupleType) and template.type.is_protocol and
+-              self.direction == SUPERTYPE_OF):
+-            if mypy.subtypes.is_subtype(actual.fallback, erase_typevars(template)):
+-                res.extend(infer_constraints(template, actual.fallback, self.direction))
+-                return res
+-            return []
++        elif isinstance(actual, TupleType) and self.direction == SUPERTYPE_OF:
++            return infer_constraints(template, actual.fallback, self.direction)
+         else:
+             return []
+ 
+diff --git a/mypy/meet.py b/mypy/meet.py
+index 58e87a31b7..3fbd9c28b3 100644
+--- a/mypy/meet.py
++++ b/mypy/meet.py
+@@ -95,6 +95,13 @@ class C(A, B): ...
+     if isinstance(s, TypedDictType):
+         s = s.as_anonymous().fallback
+ 
++    if isinstance(t, UnionType):
++        return any(is_overlapping_types(item, s)
++                   for item in t.relevant_items())
++    if isinstance(s, UnionType):
++        return any(is_overlapping_types(t, item)
++                   for item in s.relevant_items())
++
+     # We must check for TupleTypes before Instances, since Tuple[A, ...]
+     # is an Instance
+     tup_overlap = is_overlapping_tuples(t, s, use_promotions)
+@@ -120,12 +127,6 @@ class C(A, B): ...
+             if s.type.is_protocol and is_protocol_implementation(t, s):
+                 return True
+             return False
+-    if isinstance(t, UnionType):
+-        return any(is_overlapping_types(item, s)
+-                   for item in t.relevant_items())
+-    if isinstance(s, UnionType):
+-        return any(is_overlapping_types(t, item)
+-                   for item in s.relevant_items())
+     if isinstance(t, TypeType) and isinstance(s, TypeType):
+         # If both types are TypeType, compare their inner types.
+         return is_overlapping_types(t.item, s.item, use_promotions)
+@@ -157,7 +158,7 @@ def is_overlapping_tuples(t: Type, s: Type, use_promotions: bool) -> Optional[bo
+                 if all(is_overlapping_types(ti, si, use_promotions)
+                        for ti, si in zip(t.items, s.items)):
+                     return True
+-        # TupleType and non-tuple Instances do not overlap
++        # TupleType and non-tuples do not overlap
+         return False
+     # No tuples are involved here
+     return None
+diff --git a/mypy/typeanal.py b/mypy/typeanal.py
+index 369fca9091..f5cfcc472d 100644
+--- a/mypy/typeanal.py
++++ b/mypy/typeanal.py
+@@ -467,7 +467,7 @@ def analyze_callable_type(self, t: UnboundType) -> Type:
+                 self.fail('The first argument to Callable must be a list of types or "..."', t)
+                 return AnyType(TypeOfAny.from_error)
+         else:
+-            self.fail('Invalid function type', t)
++            self.fail('Please use "Callable[[<parameters>], <return type>]" or "Callable"', t)
+             return AnyType(TypeOfAny.from_error)
+         assert isinstance(ret, CallableType)
+         return ret.accept(self)
+diff --git a/test-data/unit/check-classes.test b/test-data/unit/check-classes.test
+index 61e3ddf014..ba623eedc0 100644
+--- a/test-data/unit/check-classes.test
++++ b/test-data/unit/check-classes.test
+@@ -1639,6 +1639,18 @@ class C:
+     def __radd__(self, x: Any) -> int: pass
+ [out]
+ 
++[case testReverseOperatorMethodInvalid]
++from foo import *
++[file foo.pyi]
++class A: ...
++class B:
++    def __rmul__(self) -> A: ...
++class C:
++    def __radd__(self, other, oops) -> int: ...
++[out]
++tmp/foo.pyi:3: error: Invalid signature "def (foo.B) -> foo.A"
++tmp/foo.pyi:5: error: Invalid signature "def (foo.C, Any, Any) -> builtins.int"
++
+ [case testReverseOperatorMethodForwardIsAny]
+ from typing import Any
+ def deco(f: Any) -> Any: return f
+diff --git a/test-data/unit/check-expressions.test b/test-data/unit/check-expressions.test
+index e95416418f..06d3b45601 100644
+--- a/test-data/unit/check-expressions.test
++++ b/test-data/unit/check-expressions.test
+@@ -613,6 +613,13 @@ class A: pass
+ [out]
+ main:3: error: Incompatible types in assignment (expression has type "bool", variable has type "A")
+ 
++[case testIsRightOperand]
++
++1 is 1()
++[builtins fixtures/bool.pyi]
++[out]
++main:2: error: "int" not callable
++
+ [case testReverseBinaryOperator]
+ 
+ class A:
+diff --git a/test-data/unit/check-flags.test b/test-data/unit/check-flags.test
+index 6cffc8ec7e..198b68761a 100644
+--- a/test-data/unit/check-flags.test
++++ b/test-data/unit/check-flags.test
+@@ -10,12 +10,6 @@ def f(x) -> int: pass
+ [out]
+ main:2: error: Function is missing a type annotation for one or more arguments
+ 
+-[case testUnannotatedArgumentWithFastParser]
+-# flags: --disallow-untyped-defs
+-def f(x) -> int: pass
+-[out]
+-main:2: error: Function is missing a type annotation for one or more arguments
+-
+ [case testNoArgumentFunction]
+ # flags: --disallow-untyped-defs
+ def f() -> int: pass
+@@ -45,6 +39,31 @@ def f():
+ [out]
+ main:2: error: Function is missing a type annotation
+ 
++[case testUntypedAsyncDef]
++# flags: --disallow-untyped-defs
++async def f():  # E: Function is missing a type annotation
++    pass
++[builtins fixtures/async_await.pyi]
++[typing fixtures/typing-full.pyi]
++
++[case testAsyncUnannotatedArgument]
++# flags: --disallow-untyped-defs
++async def f(x) -> None:  # E: Function is missing a type annotation for one or more arguments
++    pass
++[builtins fixtures/async_await.pyi]
++[typing fixtures/typing-full.pyi]
++
++[case testAsyncUnannotatedReturn]
++# flags: --disallow-untyped-defs
++from typing import Any
++async def f(x: int):  # E: Function is missing a return type annotation
++    pass
++# Make sure explicit Any is allowed.
++async def g(x: int) -> Any:
++    pass
++[builtins fixtures/async_await.pyi]
++[typing fixtures/typing-full.pyi]
++
+ [case testDisallowUntypedDefsUntypedDecorator]
+ # flags: --disallow-untyped-decorators
+ def d(p):
+diff --git a/test-data/unit/check-generics.test b/test-data/unit/check-generics.test
+index 8deed6016f..8b9b4d52af 100644
+--- a/test-data/unit/check-generics.test
++++ b/test-data/unit/check-generics.test
+@@ -812,7 +812,7 @@ class Node(Generic[T]):
+     def __init__(self, x: T) -> None:
+         ...
+ 
+-BadC = Callable[T] # E: Invalid function type
++BadC = Callable[T] # E: Please use "Callable[[<parameters>], <return type>]" or "Callable"
+ 
+ C = Callable[..., T]
+ C2 = Callable[[T, T], Node[T]]
+diff --git a/test-data/unit/check-tuples.test b/test-data/unit/check-tuples.test
+index c8b698b25d..6886c26dd3 100644
+--- a/test-data/unit/check-tuples.test
++++ b/test-data/unit/check-tuples.test
+@@ -941,6 +941,21 @@ reveal_type(t[x:])  # E: Revealed type is 'Union[builtins.int, builtins.str]'
+ t[y:]  # E: Slice index must be an integer or None
+ [builtins fixtures/tuple.pyi]
+ 
++[case testInferTupleTypeFallbackAgainstInstance]
++from typing import TypeVar, Generic, Tuple
++T = TypeVar('T')
++
++class Base(Generic[T]): pass
++def f(x: Base[T]) -> T: pass
++
++class DT(Tuple[str, str], Base[int]):
++    pass
++
++reveal_type(f(DT())) # E: Revealed type is 'builtins.int*'
++
++[builtins fixtures/tuple.pyi]
++[out]
++
+ [case testTypeTupleClassmethod]
+ from typing import Tuple, Type
+ 
+diff --git a/test-data/unit/fixtures/async_await.pyi b/test-data/unit/fixtures/async_await.pyi
+index dcd25dea93..3cb45cb646 100644
+--- a/test-data/unit/fixtures/async_await.pyi
++++ b/test-data/unit/fixtures/async_await.pyi
+@@ -5,11 +5,12 @@ U = typing.TypeVar('U')
+ class list(typing.Sequence[T]): pass
+ 
+ class object:
+-    def __init__(self): pass
++    def __init__(self) -> None: pass
+ class type: pass
+ class function: pass
+ class int: pass
+ class str: pass
++class bool: pass
+ class dict(typing.Generic[T, U]): pass
+ class set(typing.Generic[T]): pass
+ class tuple(typing.Generic[T]): pass
+diff --git a/test-data/unit/fixtures/typing-full.pyi b/test-data/unit/fixtures/typing-full.pyi
+index fb6b1d3e59..5acba07cdf 100644
+--- a/test-data/unit/fixtures/typing-full.pyi
++++ b/test-data/unit/fixtures/typing-full.pyi
+@@ -140,6 +140,7 @@ def runtime(cls: T) -> T:
+ 
+ class ContextManager(Generic[T]):
+     def __enter__(self) -> T: pass
+-    def __exit__(self, exc_type, exc_value, traceback): pass
++    # Use Any because not all the precise types are in the fixtures.
++    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> Any: pass
+ 
+ TYPE_CHECKING = 1
+diff --git a/test-data/unit/pythoneval.test b/test-data/unit/pythoneval.test
+index 8f9ffd8e2b..990601b2ef 100644
+--- a/test-data/unit/pythoneval.test
++++ b/test-data/unit/pythoneval.test
+@@ -1418,6 +1418,17 @@ async def main() -> None:
+ _testAsyncioGatherPreciseType.py:9: error: Revealed type is 'builtins.str'
+ _testAsyncioGatherPreciseType.py:10: error: Revealed type is 'builtins.str'
+ 
++[case testMultipleInheritanceWorksWithTupleTypeGeneric]
++from typing import SupportsAbs, NamedTuple
++
++class Point(NamedTuple('Point', [('x', int), ('y', int)]), SupportsAbs[int]):
++    def __abs__(p) -> int:
++        return abs(p.x) + abs(p.y)
++
++def test(a: Point) -> bool:
++    return abs(a) == 2
++[out]
++
+ [case testNoCrashOnGenericUnionUnpacking]
+ from typing import Union, Dict
+ 
+diff --git a/test-data/unit/semanal-errors.test b/test-data/unit/semanal-errors.test
+index ccd13f1b30..5d77871e0d 100644
+--- a/test-data/unit/semanal-errors.test
++++ b/test-data/unit/semanal-errors.test
+@@ -819,8 +819,8 @@ y = None # type: Callable[int]
+ z = None # type: Callable[int, int, int]
+ [out]
+ main:2: error: The first argument to Callable must be a list of types or "..."
+-main:3: error: Invalid function type
+-main:4: error: Invalid function type
++main:3: error: Please use "Callable[[<parameters>], <return type>]" or "Callable"
++main:4: error: Please use "Callable[[<parameters>], <return type>]" or "Callable"
+ 
+ [case testAbstractGlobalFunction]
+ import typing
+diff --git a/test-requirements.txt b/test-requirements.txt
+index 484adee0a8..ea8bebb758 100644
+--- a/test-requirements.txt
++++ b/test-requirements.txt
+@@ -8,3 +8,4 @@ pytest-xdist>=1.18
+ pytest-cov>=2.4.0
+ typed-ast>=1.1.0,<1.2.0
+ typing>=3.5.2; python_version < '3.5'
++py<1.5.0; sys_platform == 'win32'
+diff --git a/typeshed b/typeshed
+index 735abe68dd..533a05be45 160000
+--- a/typeshed
++++ b/typeshed
+@@ -1 +1 @@
+-Subproject commit 735abe68dd8ea19adf568b12e28b7477f15ee6f7
++Subproject commit 533a05be45a83040b4ca561d80f51ebe4edc74c4

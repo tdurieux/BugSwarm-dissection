@@ -1,0 +1,457 @@
+diff --git a/modules/wyil/src/wyil/builders/VcGenerator.java b/modules/wyil/src/wyil/builders/VcGenerator.java
+index a6efbd17c..814d6ca72 100644
+--- a/modules/wyil/src/wyil/builders/VcGenerator.java
++++ b/modules/wyil/src/wyil/builders/VcGenerator.java
+@@ -749,7 +749,7 @@ private void joinAll(ArrayList<VcBranch> branches) {
+ 		// Now, run through loop body. This will produce several kinds of
+ 		// branch. Those which have terminated or branched out of the loop body,
+ 		// and those which have reached the end of the loop body. ).
+-		return transform(code.block(),0,loopPc, activeBranch, false, isInvariant, environment, labels, forest);
++		return transform(code.body(),0,loopPc, activeBranch, false, isInvariant, environment, labels, forest);
+ 	}
+ 
+ 	/**
+@@ -787,14 +787,14 @@ private void joinAll(ArrayList<VcBranch> branches) {
+ 			// Determine how many invariant blocks there are, as there might be
+ 			// more than one. In the case that there is more than one, they are
+ 			// assumed to be arranged consecutively one after the other.
+-			BytecodeForest.Block block = forest.get(code.block());
++			BytecodeForest.Block block = forest.get(code.body());
+ 			int numberOfInvariants = 0;
+ 			for (int i = invariantOffset; i < block.size()
+ 					&& block.get(i).first() instanceof Bytecode.Invariant; ++i) {
+ 				numberOfInvariants = numberOfInvariants+1;
+ 			}
+ 			//
+-			BytecodeForest.Index firstInvariantPc = new BytecodeForest.Index(code.block(), invariantOffset);
++			BytecodeForest.Index firstInvariantPc = new BytecodeForest.Index(code.body(), invariantOffset);
+ 			String invariantMacroPrefix = method.name() + "_loopinvariant_";
+ 			
+ 			// FIXME: this is a hack to determine which variables should be
+@@ -819,7 +819,7 @@ private void joinAll(ArrayList<VcBranch> branches) {
+ 			// invariant using the current branch state. At this point, we havoc
+ 			// modified variables and then assume the loop invariant, before
+ 			// running through the loop until the invariant is reached again.
+-			Pair<VcBranch, List<VcBranch>> p = transform(code.block(), 0, loopPc, branch, true, false, environment, labels, forest);
++			Pair<VcBranch, List<VcBranch>> p = transform(code.body(), 0, loopPc, branch, true, false, environment, labels, forest);
+ 			// At this point, any branch which has terminated or branched out of
+ 			// the loop represents a true execution path. Any branch which has
+ 			// failed corresponds to ensuring the loop invariant on entry.
+@@ -856,7 +856,7 @@ private void joinAll(ArrayList<VcBranch> branches) {
+ 			// Branches which prematurely exit the loop are passed into the list
+ 			// of exit branches. These are valid as they only have information
+ 			// from the loop invariant.
+-			p = transform(code.block(), invariantOffset + numberOfInvariants, loopPc, activeBranch, true, false,
++			p = transform(code.body(), invariantOffset + numberOfInvariants, loopPc, activeBranch, true, false,
+ 					environment, labels, forest);
+ 			activeBranch = p.first();
+ 			exitBranches.addAll(p.second());
+@@ -917,7 +917,7 @@ private void joinAll(ArrayList<VcBranch> branches) {
+ 		// and those which have reached the end of the loop body. All branches
+ 		// in the former case go straight onto the list of returned branches.
+ 		// Those in the latter case are discarded (as discussed above).
+-		Pair<VcBranch, List<VcBranch>> p = transform(code.block(), 0, loopPc, activeBranch, false, false, environment, labels,
++		Pair<VcBranch, List<VcBranch>> p = transform(code.body(), 0, loopPc, activeBranch, false, false, environment, labels,
+ 				forest);
+ 		fallThru.goTo(loopPc.next());
+ 		return new Pair<VcBranch, List<VcBranch>>(fallThru, p.second());
+@@ -955,7 +955,7 @@ private void buildInvariantMacro(BytecodeForest.Index invariantPC,
+ 			}
+ 		}
+ 		String pc = invariantPC.block() + "_" + invariantPC.offset();
+-		BytecodeForest.Index root = new BytecodeForest.Index(code.block(),0);
++		BytecodeForest.Index root = new BytecodeForest.Index(code.body(),0);
+ 		buildMacroBlock(method.name() + "_loopinvariant_" + pc, root, forest, types, true);
+ 	}
+ 
+@@ -997,7 +997,7 @@ private void buildInvariantMacro(BytecodeForest.Index invariantPC,
+ 	 * @return
+ 	 */
+ 	private int getInvariantOffset(Bytecode.Loop loop, BytecodeForest forest) {
+-		BytecodeForest.Block block = forest.get(loop.block());
++		BytecodeForest.Block block = forest.get(loop.body());
+ 		for (int i = 0; i != block.size(); ++i) {
+ 			if (block.get(i).first() instanceof Bytecode.Invariant) {
+ 				return i;
+@@ -1202,7 +1202,7 @@ public void havocVariables(int[] variables, VcBranch branch) {
+ 		// reached failed states and need to be turned into verification
+ 		// conditions (for asserts only).
+ 		BytecodeForest.Index pc = branch.pc();
+-		Pair<VcBranch, List<VcBranch>> p = transform(code.block(), 0, pc, branch, false, true, environment, labels,
++		Pair<VcBranch, List<VcBranch>> p = transform(code.body(), 0, pc, branch, false, true, environment, labels,
+ 				forest);
+ 		List<VcBranch> exitBranches = p.second();
+ 		// Second, examine the list of exit branches and decide what to do with
+diff --git a/modules/wyil/src/wyil/checks/DefiniteAssignmentCheck.java b/modules/wyil/src/wyil/checks/DefiniteAssignmentCheck.java
+index 1eec61fc0..7820ba5f7 100755
+--- a/modules/wyil/src/wyil/checks/DefiniteAssignmentCheck.java
++++ b/modules/wyil/src/wyil/checks/DefiniteAssignmentCheck.java
+@@ -170,7 +170,7 @@ public void apply(WyilFile module) {
+ 			in.add(fall.indexOperand());
+ 		}
+ 
+-		HashSet<Integer> r = propagate(loop.block(), in);
++		HashSet<Integer> r = propagate(loop.body(), in);
+ 		return join(in, r);
+ 	}
+ 
+diff --git a/modules/wyil/src/wyil/checks/ModuleCheck.java b/modules/wyil/src/wyil/checks/ModuleCheck.java
+index 473c5851f..01d63ef73 100755
+--- a/modules/wyil/src/wyil/checks/ModuleCheck.java
++++ b/modules/wyil/src/wyil/checks/ModuleCheck.java
+@@ -145,7 +145,10 @@ protected void checkFunctionPure(int blockID, BytecodeForest forest) {
+ 						e.attribute(SourceLocation.class));
+ 			} else if (code instanceof Bytecode.Compound) {
+ 				Bytecode.Compound a = (Bytecode.Compound) code;
+-				checkFunctionPure(a.block(), forest);
++				int[] blocks = a.blocks();
++				for(int j=0;j!=blocks.length;++j) {
++					checkFunctionPure(blocks[j], forest);
++				}
+ 			}
+ 		}
+ 	}
+diff --git a/modules/wyil/src/wyil/io/WyilFilePrinter.java b/modules/wyil/src/wyil/io/WyilFilePrinter.java
+index 317a16bb8..dc2480fc9 100755
+--- a/modules/wyil/src/wyil/io/WyilFilePrinter.java
++++ b/modules/wyil/src/wyil/io/WyilFilePrinter.java
+@@ -225,7 +225,9 @@ private void write(int indent, Bytecode c, BytecodeForest forest, PrintWriter ou
+ 		
+ 		if(c instanceof Bytecode.Compound) {
+ 			Bytecode.Compound cc = (Bytecode.Compound) c;
+-			write(indent+1,cc.block(),forest,out);
++			for(int block : cc.blocks()) {
++				write(indent+1,block,forest,out);
++			}
+ 		}
+ 	}
+ 
+diff --git a/modules/wyil/src/wyil/io/WyilFileReader.java b/modules/wyil/src/wyil/io/WyilFileReader.java
+index 28a523103..50b93def8 100644
+--- a/modules/wyil/src/wyil/io/WyilFileReader.java
++++ b/modules/wyil/src/wyil/io/WyilFileReader.java
+@@ -780,17 +780,21 @@ private Bytecode readBytecode(int offset, HashMap<Integer, Bytecode.Label> label
+ 				results[i] = namePool[nameIdx];
+ 				break;
+ 			}			
+-			case BLOCK: {
+-				int blockID = input.read_uv();
+-				results[i] = blockID;
+-				break;
+-			}
+ 			case TARGET: {
+ 				int target = input.read_uv();
+ 				Bytecode.Label l = findLabel(target, labels);
+ 				results[i] = l.label();
+ 				break;
+ 			}
++			case BLOCK_ARRAY: {
++				int nBlocks = input.read_uv();
++				int[] blocks = new int[nBlocks];
++				for(int j=0;j!=nBlocks;++j) {
++					blocks[j] = input.read_uv();
++				}
++				results[i] = blocks;
++				break;
++			}
+ 			case STRING_ARRAY: {
+ 				int nStrings = input.read_uv();
+ 				String[] strings = new String[nStrings];
+@@ -868,19 +872,22 @@ public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types
+ 				return new Bytecode.Fail();
+ 			}
+ 		};
+-		schemas[Bytecode.OPCODE_assert] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK){
++		schemas[Bytecode.OPCODE_assert] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK_ARRAY){
+ 			public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return new Bytecode.Assert((Integer) extras[0]);
++				int[] blocks = (int[]) extras[0];
++				return new Bytecode.Assert(blocks[0]);
+ 			}
+ 		};
+-		schemas[Bytecode.OPCODE_assume] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK){
++		schemas[Bytecode.OPCODE_assume] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK_ARRAY){
+ 			public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return new Bytecode.Assume((Integer) extras[0]);
++				int[] blocks = (int[]) extras[0];
++				return new Bytecode.Assume(blocks[0]);
+ 			}
+ 		};
+-		schemas[Bytecode.OPCODE_invariant] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK){
++		schemas[Bytecode.OPCODE_invariant] = new Schema(Targets.ZERO, Operands.ZERO, Types.ZERO, Extras.BLOCK_ARRAY){
+ 			public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return new Bytecode.Invariant((Integer) extras[0]);
++				int[] blocks = (int[]) extras[0];
++				return new Bytecode.Invariant(blocks[0]);
+ 			}
+ 		};
+ 
+@@ -1098,14 +1105,16 @@ public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types
+ 				return new Bytecode.Lambda((Type.FunctionOrMethod) types[0], targets[0], operands, (NameID) extras[0]);
+ 			}
+ 		};
+-		schemas[Bytecode.OPCODE_loop] = new Schema(Targets.MANY, Operands.MANY, Types.ONE, Extras.BLOCK){
++		schemas[Bytecode.OPCODE_loop] = new Schema(Targets.MANY, Operands.MANY, Types.ONE, Extras.BLOCK_ARRAY){
+ 			public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return new Bytecode.Loop(targets, (Integer) extras[0]);
++				int[] blocks = (int[]) extras[0];
++				return new Bytecode.Loop(targets, blocks[0]);
+ 			}
+ 		};
+-		schemas[Bytecode.OPCODE_quantify] = new Schema(Targets.MANY, Operands.MANY, Types.ONE, Extras.BLOCK){
++		schemas[Bytecode.OPCODE_quantify] = new Schema(Targets.MANY, Operands.MANY, Types.ONE, Extras.BLOCK_ARRAY){
+ 			public Bytecode construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return new Bytecode.Quantify(operands[0],operands[1],operands[2], targets, (Integer) extras[0]);
++				int[] blocks = (int[]) extras[0];
++				return new Bytecode.Quantify(operands[0],operands[1],operands[2], targets, blocks[0]);
+ 			}
+ 		};
+ 		schemas[Bytecode.OPCODE_update] = new Schema(Targets.MANY, Operands.MANY, Types.ONE, Extras.STRING_ARRAY){
+diff --git a/modules/wyil/src/wyil/io/WyilFileWriter.java b/modules/wyil/src/wyil/io/WyilFileWriter.java
+index 5fe14996e..9aac80de1 100644
+--- a/modules/wyil/src/wyil/io/WyilFileWriter.java
++++ b/modules/wyil/src/wyil/io/WyilFileWriter.java
+@@ -803,8 +803,12 @@ private void writeRest(Bytecode code, int offset, HashMap<String, Integer> label
+ 		// First, deal with special cases
+ 		if(code instanceof Bytecode.Compound) {
+ 			// Assert / Assume / Loop / Quantify
+-			Bytecode.Compound cb = (Bytecode.Compound) code; 
+-			output.write_uv(cb.block());
++			Bytecode.Compound cb = (Bytecode.Compound) code;
++			int[] blocks = cb.blocks();
++			output.write_uv(blocks.length);
++			for(int block : blocks) {
++				output.write_uv(block);
++			}
+ 		} else if(code instanceof Bytecode.Branching) {
+ 			Bytecode.Branching bb = (Bytecode.Branching) code;
+ 			int destination = labels.get(bb.destination());
+diff --git a/modules/wyil/src/wyil/lang/Bytecode.java b/modules/wyil/src/wyil/lang/Bytecode.java
+index 122fc71a8..6f81c7937 100755
+--- a/modules/wyil/src/wyil/lang/Bytecode.java
++++ b/modules/wyil/src/wyil/lang/Bytecode.java
+@@ -198,25 +198,29 @@ public int operand(int i) {
+ 	 *
+ 	 */
+ 	public static abstract class Compound extends Bytecode {
+-		protected final int block;
++		protected final int[] blocks;
+ 
+-		public Compound(int block, Type[] types, int[] targets, int... operands) {
++		public Compound(int[] blocks, Type[] types, int[] targets, int... operands) {
+ 			super(types, targets, operands);
+-			this.block = block;
++			this.blocks = blocks;
+ 		}
+ 
+-		public int block() {
+-			return block;
++		public int block(int i) {
++			return blocks[i];
++		}
++		
++		public int[] blocks() {
++			return blocks;
+ 		}
+ 		
+ 		public int hashCode() {
+-			return super.hashCode() ^ block;
++			return super.hashCode() ^ Arrays.hashCode(blocks);
+ 		}
+ 		
+ 		public boolean equals(Object o) {
+ 			if(o instanceof Compound) {
+ 				Compound abc = (Compound) o;
+-				return block == abc.block && super.equals(o);
++				return Arrays.equals(blocks, abc.blocks) && super.equals(o);
+ 			}
+ 			return false;
+ 		}
+@@ -686,7 +690,10 @@ public String toString() {
+ 	 */
+ 	public static abstract class AssertOrAssume extends Compound {
+ 		private AssertOrAssume(int block) {
+-			super(block, new Type[0], new int[0], new int[0]);
++			super(new int[] {block}, new Type[0], new int[0], new int[0]);
++		}
++		public int body() {
++			return block(0);
+ 		}
+ 	}
+ 
+@@ -707,7 +714,7 @@ public int opcode() {
+ 		}
+ 
+ 		public String toString() {
+-			return "assert #" + block;
++			return "assert #" + blocks[0];
+ 		}
+ 
+ 		public boolean equals(Object o) {
+@@ -732,7 +739,7 @@ public int opcode() {
+ 		}
+ 
+ 		public String toString() {
+-			return "assume #" + block;
++			return "assume #" + blocks[0];
+ 		}
+ 
+ 		public boolean equals(Object o) {
+@@ -1126,14 +1133,9 @@ public String toString() {
+ 			return "invariant";
+ 		}
+ 
+-		public int hashCode() {
+-			return block;
+-		}
+-
+ 		public boolean equals(Object o) {
+ 			if (o instanceof Invariant) {
+-				Invariant f = (Invariant) o;
+-				return block == f.block;
++				return super.equals(o);
+ 			}
+ 			return false;
+ 		}
+@@ -1338,7 +1340,7 @@ public String toString() {
+ 	public static class Loop extends Compound {
+ 
+ 		public Loop(int[] targets, int block, int... operands) {
+-			super(block, new Type[0], targets, operands);
++			super(new int[]{block}, new Type[0], targets, operands);
+ 		}
+ 
+ 		public int opcode() {
+@@ -1347,18 +1349,21 @@ public int opcode() {
+ 
+ 		public boolean equals(Object o) {
+ 			if (o instanceof Loop) {
+-				Loop f = (Loop) o;
+-				return block == f.block && super.equals(f);
++				return super.equals(o);
+ 			}
+ 			return false;
+ 		}
+ 
++		public int body() {
++			return blocks[0];
++		}
++		
+ 		public int[] modifiedOperands() {
+ 			return targets();
+ 		}
+ 
+ 		public String toString() {
+-			return "loop " + arrayToString(targets()) + " = " + block;
++			return "loop " + arrayToString(targets()) + " = " + blocks[0];
+ 		}
+ 	}
+ 
+@@ -1393,7 +1398,7 @@ public boolean equals(Object o) {
+ 		}
+ 
+ 		public String toString() {
+-			return "quantify " + arrayToString(targets()) + " = #" + block() + arrayToString(operands());
++			return "quantify " + arrayToString(targets()) + " = #" + blocks[0] + arrayToString(operands());
+ 		}
+ 	}
+ 
+@@ -1962,7 +1967,7 @@ private static String arrayToString(int... operands) {
+ 		CONSTANT, // index into constant pool
+ 		NAME, // index into name pool
+ 		TARGET, // branch target
+-		BLOCK, // block index
++		BLOCK_ARRAY, // block index
+ 		STRING_ARRAY, // determined on the fly
+ 		SWITCH_ARRAY, // determined on the fly
+ 	}
+diff --git a/modules/wyil/src/wyil/transforms/LoopVariants.java b/modules/wyil/src/wyil/transforms/LoopVariants.java
+index d04863a85..b23599a94 100644
+--- a/modules/wyil/src/wyil/transforms/LoopVariants.java
++++ b/modules/wyil/src/wyil/transforms/LoopVariants.java
+@@ -118,18 +118,19 @@ protected BitSet infer(int blockID, BytecodeForest forest) {
+ 			}
+ 			if (code instanceof Bytecode.Compound) {
+ 				Bytecode.Compound body = (Bytecode.Compound) code;
+-				BitSet loopModified = infer(body.block(), forest);
++				// FIXME: this is clearly broken.
++				BitSet loopModified = infer(body.block(0), forest);
+ 				if (code instanceof Bytecode.Quantify) {
+ 					// Unset the modified status of the index operand, it is
+ 					// already implied that this is modified.
+ 					Bytecode.Quantify qc = (Bytecode.Quantify) code;
+ 					loopModified.clear(qc.indexOperand());
+-					code = new Bytecode.Quantify(qc.startOperand(), qc.endOperand(), qc.indexOperand(), toArray(loopModified),
+-							qc.block());
++					code = new Bytecode.Quantify(qc.startOperand(), qc.endOperand(), qc.indexOperand(),
++							toArray(loopModified), qc.block(0));
+ 					block.set(i, code, e.attributes());
+ 				} else if (code instanceof Bytecode.Loop) {
+ 					Bytecode.Loop loop = (Bytecode.Loop) code;
+-					code = new Bytecode.Loop(toArray(loopModified), loop.block());
++					code = new Bytecode.Loop(toArray(loopModified), loop.block(0));
+ 					block.set(i, code, e.attributes());
+ 				}
+ 
+diff --git a/modules/wyil/src/wyil/util/interpreter/Interpreter.java b/modules/wyil/src/wyil/util/interpreter/Interpreter.java
+index 264c74faf..5b67bcda0 100644
+--- a/modules/wyil/src/wyil/util/interpreter/Interpreter.java
++++ b/modules/wyil/src/wyil/util/interpreter/Interpreter.java
+@@ -214,7 +214,7 @@ private Object execute(Constant[] frame, Context context) {
+ 	 */
+ 	private Object execute(Bytecode.AssertOrAssume bytecode, Constant[] frame, Context context) {
+ 		//
+-		BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.block(), 0);
++		BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.body(), 0);
+ 		Object r = executeAllWithin(frame, new Context(pc, context.forest));
+ 		//
+ 		if (r == null) {
+@@ -457,7 +457,7 @@ private Object execute(Bytecode.Quantify bytecode, Constant[] frame, Context con
+ 			// Assign the index variable
+ 			frame[bytecode.indexOperand()] = new Constant.Integer(BigInteger.valueOf(i));
+ 			// Execute loop body for one iteration
+-			BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.block(), 0);
++			BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.body(), 0);
+ 			Object r = executeAllWithin(frame, new Context(pc, context.forest));
+ 			// Now, check whether we fell through to the end or not. If not,
+ 			// then we must have exited somehow so return to signal that.
+@@ -712,7 +712,7 @@ private Object execute(Bytecode.Loop bytecode, Constant[] frame, Context context
+ 		Object r;
+ 		do {
+ 			// Keep executing the loop body until we exit it somehow.
+-			BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.block(), 0);
++			BytecodeForest.Index pc = new BytecodeForest.Index(bytecode.body(), 0);
+ 			r = executeAllWithin(frame, new Context(pc, context.forest));
+ 		} while (r == null);
+ 
+diff --git a/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java b/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
+index 23a135403..06b4a65a4 100755
+--- a/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
++++ b/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
+@@ -647,7 +647,7 @@ private int translate(BytecodeForest.Index pc, wyil.lang.Bytecode code, int free
+ 
+ 	private void translate(BytecodeForest.Index index, AssertOrAssume c,
+ 			int freeSlot, BytecodeForest forest, ArrayList<Bytecode> bytecodes) {
+-		BytecodeForest.Index pc = new BytecodeForest.Index(c.block(), 0);
++		BytecodeForest.Index pc = new BytecodeForest.Index(c.body(), 0);
+ 		if(c instanceof Invariant) {
+ 			// essentially a no-op for now			
+ 		} else {
+@@ -1095,7 +1095,7 @@ private void translate(BytecodeForest.Index index, Loop c, int freeSlot, Bytecod
+ 		bytecodes.add(new Bytecode.Label(loopHeader));
+ 		// Translate body of loop. The cast is required to ensure correct method
+ 		// is called.
+-		translate(new BytecodeForest.Index(c.block(), 0), freeSlot, forest, bytecodes);
++		translate(new BytecodeForest.Index(c.body(), 0), freeSlot, forest, bytecodes);
+ 		// Terminate loop by branching back to head of loop
+ 		bytecodes.add(new Bytecode.Goto(loopHeader));
+ 	}
+@@ -1123,7 +1123,7 @@ private int translate(BytecodeForest.Index index, Quantify c, int freeSlot,
+ 		bytecodes.add(new Bytecode.Store(c.indexOperand(), convertUnderlyingType(Type.T_INT)));
+ 		// Translate body of loop. The cast is required to ensure correct method
+ 		// is called.
+-		translate(new BytecodeForest.Index(c.block(), 0), freeSlot + 1, forest, bytecodes);
++		translate(new BytecodeForest.Index(c.body(), 0), freeSlot + 1, forest, bytecodes);
+ 		// Terminate loop by branching back to head of loop
+ 		bytecodes.add(new Bytecode.Goto(loopHeader));
+ 		bytecodes.add(new Bytecode.Label(loopExit));

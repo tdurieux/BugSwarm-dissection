@@ -1,0 +1,154 @@
+diff --git a/searx/data/useragents.json b/searx/data/useragents.json
+new file mode 100644
+index 000000000..ba80ce885
+--- /dev/null
++++ b/searx/data/useragents.json
+@@ -0,0 +1,15 @@
++{
++    "os": [
++        "Windows NT 10; WOW64", 
++        "X11; Linux x86_64"
++    ], 
++    "ua": "Mozilla/5.0 ({os}; rv:{version}) Gecko/20100101 Firefox/{version}", 
++    "versions": [
++        "59.0.2", 
++        "59.0.1", 
++        "59.0", 
++        "58.0.2", 
++        "58.0.1", 
++        "58.0"
++    ]
++}
+\ No newline at end of file
+diff --git a/searx/utils.py b/searx/utils.py
+index 8f095f3b0..c81a00ac9 100644
+--- a/searx/utils.py
++++ b/searx/utils.py
+@@ -9,8 +9,10 @@
+ from imp import load_source
+ from numbers import Number
+ from os.path import splitext, join
++from io import open
+ from random import choice
+ import sys
++import json
+ 
+ from searx.version import VERSION_STRING
+ from searx.languages import language_codes
+@@ -36,28 +38,11 @@
+ 
+ logger = logger.getChild('utils')
+ 
+-ua_versions = ('40.0',
+-               '41.0',
+-               '42.0',
+-               '43.0',
+-               '44.0',
+-               '45.0',
+-               '46.0',
+-               '47.0')
+-
+-ua_os = ('Windows NT 6.3; WOW64',
+-         'X11; Linux x86_64',
+-         'X11; Linux x86')
+-
+-ua = "Mozilla/5.0 ({os}; rv:{version}) Gecko/20100101 Firefox/{version}"
+-
+ blocked_tags = ('script',
+                 'style')
+ 
+-
+-def gen_useragent():
+-    # TODO
+-    return ua.format(os=choice(ua_os), version=choice(ua_versions))
++useragents = json.loads(open(os.path.dirname(os.path.realpath(__file__))
++                             + "/data/useragents.json", 'r', encoding='utf-8').read())
+ 
+ 
+ def searx_useragent():
+@@ -66,6 +51,10 @@ def searx_useragent():
+            suffix=settings['outgoing'].get('useragent_suffix', ''))
+ 
+ 
++def gen_useragent():
++    return str(useragents['ua'].format(os=choice(useragents['os']), version=choice(useragents['versions'])))
++
++
+ def highlight_content(content, query):
+ 
+     if not content:
+diff --git a/utils/fetch_firefox_version.py b/utils/fetch_firefox_version.py
+new file mode 100755
+index 000000000..21d6e82ff
+--- /dev/null
++++ b/utils/fetch_firefox_version.py
+@@ -0,0 +1,69 @@
++#!/usr/bin/env python
++
++# set path
++from sys import path
++from os.path import realpath, dirname
++path.append(realpath(dirname(realpath(__file__)) + '/../'))
++
++#
++import json
++import requests
++import re
++from distutils.version import LooseVersion, StrictVersion
++from lxml import html
++from searx.url_utils import urlparse, urljoin
++
++URL = 'https://ftp.mozilla.org/pub/firefox/releases/'
++RELEASE_PATH = '/pub/firefox/releases/'
++
++NORMAL_REGEX = re.compile('^[0-9]+\.[0-9](\.[0-9])?(esr)?$')
++# BETA_REGEX = re.compile('.*[0-9]b([0-9\-a-z]+)$')
++# ESR_REGEX = re.compile('^[0-9]+\.[0-9](\.[0-9])?esr$')
++
++# 
++useragent = {
++    "versions": (),
++    "os": ('Windows NT 10; WOW64',
++           'X11; Linux x86_64'),
++    "ua": "Mozilla/5.0 ({os}; rv:{version}) Gecko/20100101 Firefox/{version}"
++}
++
++
++def fetch_firefox_versions():
++    resp = requests.get(URL, timeout=2.0)
++    if resp.status_code != 200:
++        raise Exception("Error fetching firefox versions, HTTP code " + resp.status_code)
++    else:
++        dom = html.fromstring(resp.text)
++        versions = []
++
++        for link in dom.xpath('//a/@href'):
++            url = urlparse(urljoin(URL, link))
++            path = url.path
++            if path.startswith(RELEASE_PATH):
++                version = path[len(RELEASE_PATH):-1]
++                if NORMAL_REGEX.match(version):
++                    versions.append(LooseVersion(version))
++
++        list.sort(versions, reverse=True)
++        return versions
++
++
++def fetch_firefox_last_versions():
++    versions = fetch_firefox_versions()
++
++    result = []
++    major_last = versions[0].version[0]
++    major_list = (major_last, major_last - 1)
++    for version in versions:
++        major_current = version.version[0]
++        if major_current in major_list and 'esr' not in version.version:
++            result.append(version.vstring)
++
++    return result
++
++
++useragent["versions"] = fetch_firefox_last_versions()
++f = open("../searx/data/useragents.json", "wb")
++json.dump(useragent, f, sort_keys=True, indent=4, ensure_ascii=False, encoding="utf-8")
++f.close()

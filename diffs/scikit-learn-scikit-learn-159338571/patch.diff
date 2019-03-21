@@ -1,0 +1,604 @@
+diff --git a/doc/modules/classes.rst b/doc/modules/classes.rst
+index d1d8eec4dd4e..cc2ebd6dfadb 100644
+--- a/doc/modules/classes.rst
++++ b/doc/modules/classes.rst
+@@ -164,14 +164,14 @@ Splitter Classes
+    :template: class.rst
+ 
+    model_selection.KFold
+-   model_selection.LabelKFold
++   model_selection.GroupKFold
+    model_selection.StratifiedKFold
+-   model_selection.LeaveOneLabelOut
+-   model_selection.LeavePLabelOut
++   model_selection.LeaveOneGroupOut
++   model_selection.LeavePGroupsOut
+    model_selection.LeaveOneOut
+    model_selection.LeavePOut
+    model_selection.ShuffleSplit
+-   model_selection.LabelShuffleSplit
++   model_selection.GroupShuffleSplit
+    model_selection.StratifiedShuffleSplit
+    model_selection.PredefinedSplit
+    model_selection.TimeSeriesSplit
+diff --git a/doc/modules/neural_networks_supervised.rst b/doc/modules/neural_networks_supervised.rst
+index 036ea71cce76..6f083ab4a83f 100644
+--- a/doc/modules/neural_networks_supervised.rst
++++ b/doc/modules/neural_networks_supervised.rst
+@@ -107,14 +107,6 @@ contains the weight matrices that constitute the model parameters::
+     >>> [coef.shape for coef in clf.coefs_]
+     [(2, 5), (5, 2), (2, 1)]
+ 
+-To get the raw values before applying the output activation function, run the
+-following command,
+-
+-use :meth:`MLPClassifier.decision_function`::
+-
+-    >>> clf.decision_function([[2., 2.], [1., 2.]])  # doctest: +ELLIPSIS
+-    array([ 47.6...,  47.6...])
+-
+ Currently, :class:`MLPClassifier` supports only the
+ Cross-Entropy loss function, which allows probability estimates by running the
+ ``predict_proba`` method.
+@@ -125,23 +117,23 @@ classification, it minimizes the Cross-Entropy loss function, giving a vector
+ of probability estimates :math:`P(y|x)` per sample :math:`x`::
+ 
+     >>> clf.predict_proba([[2., 2.], [1., 2.]])  # doctest: +ELLIPSIS
+-    array([[ 0.,  1.],
+-           [ 0.,  1.]])
++    array([[  1.967...e-04,   9.998...-01],
++           [  1.967...e-04,   9.998...-01]])
+ 
+ :class:`MLPClassifier` supports multi-class classification by
+ applying `Softmax <https://en.wikipedia.org/wiki/Softmax_activation_function>`_
+ as the output function.
+ 
+ Further, the algorithm supports :ref:`multi-label classification <multiclass>`
+-in which a sample can belong to more than one class. For each class, the output
+-of :meth:`MLPClassifier.decision_function` passes through the
+-logistic function. Values larger or equal to `0.5` are rounded to `1`,
+-otherwise to `0`. For a predicted output of a sample, the indices where the
+-value is `1` represents the assigned classes of that sample::
++in which a sample can belong to more than one class. For each class, the raw
++output passes through the logistic function. Values larger or equal to `0.5`
++are rounded to `1`, otherwise to `0`. For a predicted output of a sample, the
++indices where the value is `1` represents the assigned classes of that sample::
+ 
+     >>> X = [[0., 0.], [1., 1.]]
+     >>> y = [[0, 1], [1, 1]]
+-    >>> clf = MLPClassifier(algorithm='l-bfgs', alpha=1e-5, hidden_layer_sizes=(15,), random_state=1)
++    >>> clf = MLPClassifier(algorithm='l-bfgs', alpha=1e-5,
++    ...                     hidden_layer_sizes=(15,), random_state=1)
+     >>> clf.fit(X, y)
+     MLPClassifier(activation='relu', algorithm='l-bfgs', alpha=1e-05,
+            batch_size='auto', beta_1=0.9, beta_2=0.999, early_stopping=False,
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index 58a6e66625c9..5693bf448645 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -800,9 +800,11 @@ class GridSearchCV(BaseSearchCV):
+            scoring=..., verbose=...)
+     >>> sorted(clf.cv_results_.keys())
+     ...                             # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+-    ['mean_test_score', 'mean_time', 'param_C', 'param_kernel',...
+-     'params', 'rank_test_score', 'split0_test_score', 'split1_test_score',...
+-     'split2_test_score', 'std_test_score', 'std_time'...]
++    ['mean_test_score', 'mean_time', 'mean_train_score', 'param_C',...
++     'param_kernel', 'params', 'rank_test_score', 'split0_test_score',...
++     'split0_train_score', 'split1_test_score', 'split1_train_score',...
++     'split2_test_score', 'split2_train_score', 'std_test_score',...
++     'std_time', 'std_train_score'...]
+ 
+     Attributes
+     ----------
+diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
+index f48a50cdf564..1b17a7710b20 100644
+--- a/sklearn/model_selection/_validation.py
++++ b/sklearn/model_selection/_validation.py
+@@ -27,39 +27,11 @@
+ from ..metrics.scorer import check_scoring
+ from ..exceptions import FitFailedWarning
+ 
+-from ._split import KFold
+-from ._split import GroupKFold
+-from ._split import LeaveOneGroupOut
+-from ._split import LeaveOneOut
+-from ._split import LeavePGroupsOut
+-from ._split import LeavePOut
+-from ._split import ShuffleSplit
+-from ._split import GroupShuffleSplit
+-from ._split import StratifiedKFold
+-from ._split import StratifiedShuffleSplit
+-from ._split import PredefinedSplit
+ from ._split import check_cv, _safe_split
+ 
+ __all__ = ['cross_val_score', 'cross_val_predict', 'permutation_test_score',
+            'learning_curve', 'validation_curve']
+ 
+-ALL_CVS = {'KFold': KFold,
+-           'GroupKFold': GroupKFold,
+-           'LeaveOneGroupOut': LeaveOneGroupOut,
+-           'LeaveOneOut': LeaveOneOut,
+-           'LeavePGroupsOut': LeavePGroupsOut,
+-           'LeavePOut': LeavePOut,
+-           'ShuffleSplit': ShuffleSplit,
+-           'GroupShuffleSplit': GroupShuffleSplit,
+-           'StratifiedKFold': StratifiedKFold,
+-           'StratifiedShuffleSplit': StratifiedShuffleSplit,
+-           'PredefinedSplit': PredefinedSplit}
+-
+-GROUP_CVS = {'GroupKFold': GroupKFold,
+-             'LeaveOneGroupOut': LeaveOneGroupOut,
+-             'LeavePGroupsOut': LeavePGroupsOut,
+-             'GroupShuffleSplit': GroupShuffleSplit}
+-
+ 
+ def cross_val_score(estimator, X, y=None, groups=None, scoring=None, cv=None,
+                     n_jobs=1, verbose=0, fit_params=None,
+@@ -505,11 +477,11 @@ def _check_is_permutation(indices, n_samples):
+     Returns
+     -------
+     is_partition : bool
+-        True iff sorted(locs) is range(n)
++        True iff sorted(indices) is np.arange(n)
+     """
+     if len(indices) != n_samples:
+         return False
+-    hit = np.zeros(n_samples, bool)
++    hit = np.zeros(n_samples, dtype=bool)
+     hit[indices] = True
+     if not np.all(hit):
+         return False
+diff --git a/sklearn/model_selection/tests/test_validation.py b/sklearn/model_selection/tests/test_validation.py
+index 67937711ec2d..4f45a079fbd7 100644
+--- a/sklearn/model_selection/tests/test_validation.py
++++ b/sklearn/model_selection/tests/test_validation.py
+@@ -731,13 +731,18 @@ def test_validation_curve():
+ 
+ 
+ def test_check_is_permutation():
++    rng = np.random.RandomState(0)
+     p = np.arange(100)
++    rng.shuffle(p)
+     assert_true(_check_is_permutation(p, 100))
+     assert_false(_check_is_permutation(np.delete(p, 23), 100))
+ 
+     p[0] = 23
+     assert_false(_check_is_permutation(p, 100))
+ 
++    # Check if the additional duplicate indices are caught
++    assert_false(_check_is_permutation(np.hstack((p, 0)), 100))
++
+ 
+ def test_cross_val_predict_sparse_prediction():
+     # check that cross_val_predict gives same result for sparse and dense input
+diff --git a/sklearn/neural_network/multilayer_perceptron.py b/sklearn/neural_network/multilayer_perceptron.py
+index 72562aafce02..f6cfabbd0594 100644
+--- a/sklearn/neural_network/multilayer_perceptron.py
++++ b/sklearn/neural_network/multilayer_perceptron.py
+@@ -13,7 +13,6 @@
+ import warnings
+ 
+ from ..base import BaseEstimator, ClassifierMixin, RegressorMixin
+-from ._base import logistic, softmax
+ from ._base import ACTIVATIONS, DERIVATIVES, LOSS_FUNCTIONS
+ from ._stochastic_optimizers import SGDOptimizer, AdamOptimizer
+ from ..model_selection import train_test_split
+@@ -81,7 +80,7 @@ def _unpack(self, packed_parameters):
+             start, end = self._intercept_indptr[i]
+             self.intercepts_[i] = packed_parameters[start:end]
+ 
+-    def _forward_pass(self, activations, with_output_activation=True):
++    def _forward_pass(self, activations):
+         """Perform a forward pass on the network by computing the values
+         of the neurons in the hidden layers and the output layer.
+ 
+@@ -107,9 +106,8 @@ def _forward_pass(self, activations, with_output_activation=True):
+                 activations[i + 1] = hidden_activation(activations[i + 1])
+ 
+         # For the last layer
+-        if with_output_activation:
+-            output_activation = ACTIVATIONS[self.out_activation_]
+-            activations[i + 1] = output_activation(activations[i + 1])
++        output_activation = ACTIVATIONS[self.out_activation_]
++        activations[i + 1] = output_activation(activations[i + 1])
+ 
+         return activations
+ 
+@@ -222,7 +220,10 @@ def _backprop(self, X, y, activations, deltas, coef_grads,
+         activations = self._forward_pass(activations)
+ 
+         # Get loss
+-        loss = LOSS_FUNCTIONS[self.loss](y, activations[-1])
++        loss_func_name = self.loss
++        if loss_func_name == 'log_loss' and self.out_activation_ == 'logistic':
++            loss_func_name = 'binary_log_loss'
++        loss = LOSS_FUNCTIONS[loss_func_name](y, activations[-1])
+         # Add L2 regularization term to loss
+         values = np.sum(
+             np.array([np.dot(s.ravel(), s.ravel()) for s in self.coefs_]))
+@@ -272,18 +273,14 @@ def _initialize(self, y, layer_units):
+         # Output for binary class and multi-label
+         else:
+             self.out_activation_ = 'logistic'
+-            if self.loss == 'log_loss':
+-                self.loss = 'binary_log_loss'
+ 
+         # Initialize coefficient and intercept layers
+         self.coefs_ = []
+         self.intercepts_ = []
+ 
+         for i in range(self.n_layers_ - 1):
+-            rng = check_random_state(self.random_state)
+             coef_init, intercept_init = self._init_coef(layer_units[i],
+-                                                        layer_units[i + 1],
+-                                                        rng)
++                                                        layer_units[i + 1])
+             self.coefs_.append(coef_init)
+             self.intercepts_.append(intercept_init)
+ 
+@@ -296,7 +293,7 @@ def _initialize(self, y, layer_units):
+             else:
+                 self.best_loss_ = np.inf
+ 
+-    def _init_coef(self, fan_in, fan_out, rng):
++    def _init_coef(self, fan_in, fan_out):
+         if self.activation == 'logistic':
+             # Use the initialization method recommended by
+             # Glorot et al.
+@@ -308,8 +305,10 @@ def _init_coef(self, fan_in, fan_out, rng):
+             raise ValueError("Unknown activation function %s" %
+                              self.activation)
+ 
+-        coef_init = rng.uniform(-init_bound, init_bound, (fan_in, fan_out))
+-        intercept_init = rng.uniform(-init_bound, init_bound, fan_out)
++        coef_init = self._random_state.uniform(-init_bound, init_bound,
++                                               (fan_in, fan_out))
++        intercept_init = self._random_state.uniform(-init_bound, init_bound,
++                                                    fan_out)
+         return coef_init, intercept_init
+ 
+     def _fit(self, X, y, incremental=False):
+@@ -337,6 +336,9 @@ def _fit(self, X, y, incremental=False):
+         layer_units = ([n_features] + hidden_layer_sizes +
+                        [self.n_outputs_])
+ 
++        # check random state
++        self._random_state = check_random_state(self.random_state)
++
+         if not hasattr(self, 'coefs_') or (not self.warm_start and not
+                                            incremental):
+             # First time training the model
+@@ -419,9 +421,11 @@ def _validate_hyperparameters(self):
+         if self.learning_rate not in ["constant", "invscaling", "adaptive"]:
+             raise ValueError("learning rate %s is not supported. " %
+                              self.learning_rate)
+-        if self.algorithm not in _STOCHASTIC_ALGOS + ["l-bfgs"]:
+-            raise ValueError("The algorithm %s is not supported. " %
+-                             self.algorithm)
++        supported_algorithms = _STOCHASTIC_ALGOS + ["l-bfgs"]
++        if self.algorithm not in supported_algorithms:
++            raise ValueError("The algorithm %s is not supported. "
++                             " Expected one of: %s" %
++                             (self.algorithm, ", ".join(supported_algorithms)))
+ 
+     def _fit_lbfgs(self, X, y, activations, deltas, coef_grads,
+                    intercept_grads, layer_units):
+@@ -465,7 +469,6 @@ def _fit_lbfgs(self, X, y, activations, deltas, coef_grads,
+ 
+     def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+                         intercept_grads, layer_units, incremental):
+-        rng = check_random_state(self.random_state)
+ 
+         if not incremental or not hasattr(self, '_optimizer'):
+             params = self.coefs_ + self.intercepts_
+@@ -483,7 +486,7 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+         early_stopping = self.early_stopping and not incremental
+         if early_stopping:
+             X, X_val, y, y_val = train_test_split(
+-                X, y, random_state=self.random_state,
++                X, y, random_state=self._random_state,
+                 test_size=self.validation_fraction)
+             if isinstance(self, ClassifierMixin):
+                 y_val = self.label_binarizer_.inverse_transform(y_val)
+@@ -500,7 +503,7 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+ 
+         try:
+             for it in range(self.max_iter):
+-                X, y = shuffle(X, y, random_state=rng)
++                X, y = shuffle(X, y, random_state=self._random_state)
+                 accumulated_loss = 0.0
+                 for batch_slice in gen_batches(n_samples, batch_size):
+                     activations[0] = X[batch_slice]
+@@ -629,14 +632,14 @@ def partial_fit(self):
+         """
+         if self.algorithm not in _STOCHASTIC_ALGOS:
+             raise AttributeError("partial_fit is only available for stochastic"
+-                                 "optimization algorithms. %s is not"
++                                 " optimization algorithms. %s is not"
+                                  " stochastic" % self.algorithm)
+         return self._partial_fit
+ 
+     def _partial_fit(self, X, y, classes=None):
+         return self._fit(X, y, incremental=True)
+ 
+-    def _decision_scores(self, X):
++    def _predict(self, X):
+         """Predict using the trained model
+ 
+         Parameters
+@@ -667,7 +670,7 @@ def _decision_scores(self, X):
+             activations.append(np.empty((X.shape[0],
+                                          layer_units[i + 1])))
+         # forward propagate
+-        self._forward_pass(activations, with_output_activation=False)
++        self._forward_pass(activations)
+         y_pred = activations[-1]
+ 
+         return y_pred
+@@ -913,27 +916,6 @@ def _validate_input(self, X, y, incremental):
+         y = self.label_binarizer_.transform(y)
+         return X, y
+ 
+-    def decision_function(self, X):
+-        """Decision function of the mlp model
+-
+-        Parameters
+-        ----------
+-        X : {array-like, sparse matrix}, shape (n_samples, n_features)
+-            The input data.
+-
+-        Returns
+-        -------
+-        y : array-like, shape (n_samples,) or (n_samples, n_classes)
+-            The values of decision function for each class in the model.
+-        """
+-        check_is_fitted(self, "coefs_")
+-        y_scores = self._decision_scores(X)
+-
+-        if self.n_outputs_ == 1:
+-            return y_scores.ravel()
+-        else:
+-            return y_scores
+-
+     def predict(self, X):
+         """Predict using the multi-layer perceptron classifier
+ 
+@@ -948,10 +930,12 @@ def predict(self, X):
+             The predicted classes.
+         """
+         check_is_fitted(self, "coefs_")
+-        y_scores = self.decision_function(X)
+-        y_scores = ACTIVATIONS[self.out_activation_](y_scores)
++        y_pred = self._predict(X)
+ 
+-        return self.label_binarizer_.inverse_transform(y_scores)
++        if self.n_outputs_ == 1:
++            y_pred = y_pred.ravel()
++
++        return self.label_binarizer_.inverse_transform(y_pred)
+ 
+     @property
+     def partial_fit(self):
+@@ -979,7 +963,7 @@ def partial_fit(self):
+         """
+         if self.algorithm not in _STOCHASTIC_ALGOS:
+             raise AttributeError("partial_fit is only available for stochastic"
+-                                 "optimization algorithms. %s is not"
++                                 " optimization algorithms. %s is not"
+                                  " stochastic" % self.algorithm)
+         return self._partial_fit
+ 
+@@ -1022,13 +1006,16 @@ def predict_proba(self, X):
+             The predicted probability of the sample for each class in the
+             model, where classes are ordered as they are in `self.classes_`.
+         """
+-        y_scores = self.decision_function(X)
++        check_is_fitted(self, "coefs_")
++        y_pred = self._predict(X)
++
++        if self.n_outputs_ == 1:
++            y_pred = y_pred.ravel()
+ 
+-        if y_scores.ndim == 1:
+-            y_scores = logistic(y_scores)
+-            return np.vstack([1 - y_scores, y_scores]).T
++        if y_pred.ndim == 1:
++            return np.vstack([1 - y_pred, y_pred]).T
+         else:
+-            return softmax(y_scores)
++            return y_pred
+ 
+ 
+ class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
+@@ -1258,7 +1245,7 @@ def predict(self, X):
+             The predicted values.
+         """
+         check_is_fitted(self, "coefs_")
+-        y_pred = self._decision_scores(X)
++        y_pred = self._predict(X)
+         if y_pred.shape[1] == 1:
+             return y_pred.ravel()
+         return y_pred
+diff --git a/sklearn/neural_network/tests/test_mlp.py b/sklearn/neural_network/tests/test_mlp.py
+index e4f080058173..484eee2d1228 100644
+--- a/sklearn/neural_network/tests/test_mlp.py
++++ b/sklearn/neural_network/tests/test_mlp.py
+@@ -51,7 +51,7 @@
+ 
+ 
+ def test_alpha():
+-    # Test that larger alpha yields weights closer to zero"""
++    # Test that larger alpha yields weights closer to zero
+     X = X_digits_binary[:100]
+     y = y_digits_binary[:100]
+ 
+@@ -71,7 +71,7 @@ def test_alpha():
+ 
+ 
+ def test_fit():
+-    # Test that the algorithm solution is equal to a worked out example."""
++    # Test that the algorithm solution is equal to a worked out example.
+     X = np.array([[0.6, 0.8, 0.7]])
+     y = np.array([0])
+     mlp = MLPClassifier(algorithm='sgd', learning_rate_init=0.1, alpha=0.1,
+@@ -160,7 +160,8 @@ def test_fit():
+     #            0.7 * -0.002244 + 0.09626) = 0.572
+     #  o1 = h * W2 + b21 = 0.677 * 0.04706 +
+     #             0.572 * 0.154089 + 0.9235 = 1.043
+-    assert_almost_equal(mlp.decision_function(X), 1.043, decimal=3)
++    #  prob = sigmoid(o1) = 0.739
++    assert_almost_equal(mlp.predict_proba(X)[0, 1], 0.739, decimal=3)
+ 
+ 
+ def test_gradient():
+@@ -248,7 +249,7 @@ def test_lbfgs_classification():
+ 
+ 
+ def test_lbfgs_regression():
+-    # Test lbfgs on the boston dataset, a regression problems."""
++    # Test lbfgs on the boston dataset, a regression problems.
+     X = Xboston
+     y = yboston
+     for activation in ACTIVATION_TYPES:
+@@ -264,7 +265,7 @@ def test_lbfgs_regression():
+ 
+ 
+ def test_learning_rate_warmstart():
+-    # Test that warm_start reuses past solution."""
++    # Tests that warm_start reuse past solutions.
+     X = [[3, 2], [1, 6], [5, 6], [-2, -4]]
+     y = [1, 1, 1, 0]
+     for learning_rate in ["invscaling", "constant"]:
+@@ -285,7 +286,7 @@ def test_learning_rate_warmstart():
+ 
+ 
+ def test_multilabel_classification():
+-    # Test that multi-label classification works as expected."""
++    # Test that multi-label classification works as expected.
+     # test fit method
+     X, y = make_multilabel_classification(n_samples=50, random_state=0,
+                                           return_indicator=True)
+@@ -305,7 +306,7 @@ def test_multilabel_classification():
+ 
+ 
+ def test_multioutput_regression():
+-    # Test that multi-output regression works as expected"""
++    # Test that multi-output regression works as expected
+     X, y = make_regression(n_samples=200, n_targets=5)
+     mlp = MLPRegressor(algorithm='l-bfgs', hidden_layer_sizes=50, max_iter=200,
+                        random_state=1)
+@@ -314,7 +315,7 @@ def test_multioutput_regression():
+ 
+ 
+ def test_partial_fit_classes_error():
+-    # Tests that passing different classes to partial_fit raises an error"""
++    # Tests that passing different classes to partial_fit raises an error
+     X = [[3, 2]]
+     y = [0]
+     clf = MLPClassifier(algorithm='sgd')
+@@ -371,7 +372,7 @@ def test_partial_fit_regression():
+ 
+ 
+ def test_partial_fit_errors():
+-    # Test partial_fit error handling."""
++    # Test partial_fit error handling.
+     X = [[3, 2], [1, 6]]
+     y = [1, 0]
+ 
+@@ -387,7 +388,7 @@ def test_partial_fit_errors():
+ 
+ 
+ def test_params_errors():
+-    # Test that invalid parameters raise value error"""
++    # Test that invalid parameters raise value error
+     X = [[3, 2], [1, 6]]
+     y = [1, 0]
+     clf = MLPClassifier
+@@ -397,6 +398,17 @@ def test_params_errors():
+     assert_raises(ValueError, clf(shuffle='true').fit, X, y)
+     assert_raises(ValueError, clf(alpha=-1).fit, X, y)
+     assert_raises(ValueError, clf(learning_rate_init=-1).fit, X, y)
++    assert_raises(ValueError, clf(momentum=2).fit, X, y)
++    assert_raises(ValueError, clf(momentum=-0.5).fit, X, y)
++    assert_raises(ValueError, clf(nesterovs_momentum='invalid').fit, X, y)
++    assert_raises(ValueError, clf(early_stopping='invalid').fit, X, y)
++    assert_raises(ValueError, clf(validation_fraction=1).fit, X, y)
++    assert_raises(ValueError, clf(validation_fraction=-0.5).fit, X, y)
++    assert_raises(ValueError, clf(beta_1=1).fit, X, y)
++    assert_raises(ValueError, clf(beta_1=-0.5).fit, X, y)
++    assert_raises(ValueError, clf(beta_2=1).fit, X, y)
++    assert_raises(ValueError, clf(beta_2=-0.5).fit, X, y)
++    assert_raises(ValueError, clf(epsilon=-0.5).fit, X, y)
+ 
+     assert_raises(ValueError, clf(algorithm='hadoken').fit, X, y)
+     assert_raises(ValueError, clf(learning_rate='converge').fit, X, y)
+@@ -404,7 +416,7 @@ def test_params_errors():
+ 
+ 
+ def test_predict_proba_binary():
+-    # Test that predict_proba works as expected for binary class."""
++    # Test that predict_proba works as expected for binary class.
+     X = X_digits_binary[:50]
+     y = y_digits_binary[:50]
+ 
+@@ -426,8 +438,8 @@ def test_predict_proba_binary():
+     assert_equal(roc_auc_score(y, y_proba[:, 1]), 1.0)
+ 
+ 
+-def test_predict_proba_multi():
+-    # Test that predict_proba works as expected for multi class."""
++def test_predict_proba_multiclass():
++    # Test that predict_proba works as expected for multi class.
+     X = X_digits_multi[:10]
+     y = y_digits_multi[:10]
+ 
+@@ -447,17 +459,41 @@ def test_predict_proba_multi():
+     assert_array_equal(y_log_proba, np.log(y_proba))
+ 
+ 
++def test_predict_proba_multilabel():
++    # Test that predict_proba works as expected for multilabel.
++    # Multilabel should not use softmax which makes probabilities sum to 1
++    X, Y = make_multilabel_classification(n_samples=50, random_state=0,
++                                          return_indicator=True)
++    n_samples, n_classes = Y.shape
++
++    clf = MLPClassifier(algorithm='l-bfgs', hidden_layer_sizes=30,
++                        random_state=0)
++    clf.fit(X, Y)
++    y_proba = clf.predict_proba(X)
++
++    assert_equal(y_proba.shape, (n_samples, n_classes))
++    assert_array_equal(y_proba > 0.5, Y)
++
++    y_log_proba = clf.predict_log_proba(X)
++    proba_max = y_proba.argmax(axis=1)
++    proba_log_max = y_log_proba.argmax(axis=1)
++
++    assert_greater((y_proba.sum(1) - 1).dot(y_proba.sum(1) - 1), 1e-10)
++    assert_array_equal(proba_max, proba_log_max)
++    assert_array_equal(y_log_proba, np.log(y_proba))
++
++
+ def test_sparse_matrices():
+-    # Test that sparse and dense input matrices output the same results."""
++    # Test that sparse and dense input matrices output the same results.
+     X = X_digits_binary[:50]
+     y = y_digits_binary[:50]
+     X_sparse = csr_matrix(X)
+-    mlp = MLPClassifier(random_state=1, hidden_layer_sizes=15)
+-    with ignore_warnings(category=ConvergenceWarning):
+-        mlp.fit(X, y)
+-        pred1 = mlp.decision_function(X)
+-        mlp.fit(X_sparse, y)
+-        pred2 = mlp.decision_function(X_sparse)
++    mlp = MLPClassifier(algorithm='l-bfgs', hidden_layer_sizes=15,
++                        random_state=1)
++    mlp.fit(X, y)
++    pred1 = mlp.predict(X)
++    mlp.fit(X_sparse, y)
++    pred2 = mlp.predict(X_sparse)
+     assert_almost_equal(pred1, pred2)
+     pred1 = mlp.predict(X)
+     pred2 = mlp.predict(X_sparse)

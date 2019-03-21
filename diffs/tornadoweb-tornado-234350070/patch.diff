@@ -1,0 +1,136 @@
+diff --git a/tornado/test/web_test.py b/tornado/test/web_test.py
+index d79ea52c1..de26c42ec 100644
+--- a/tornado/test/web_test.py
++++ b/tornado/test/web_test.py
+@@ -917,6 +917,10 @@ def test_default(self):
+             self.assertEqual(response.code, 503)
+             self.assertTrue(b"503: Service Unavailable" in response.body)
+ 
++            response = self.fetch("/default?status=435")
++            self.assertEqual(response.code, 435)
++            self.assertTrue(b"435: Unknown" in response.body)
++
+     def test_write_error(self):
+         with ExpectLog(app_log, "Uncaught exception"):
+             response = self.fetch("/write_error")
+@@ -1489,9 +1493,9 @@ def test_status(self):
+         response = self.fetch("/?code=682&reason=Bar")
+         self.assertEqual(response.code, 682)
+         self.assertEqual(response.reason, "Bar")
+-        with ExpectLog(app_log, 'Uncaught exception'):
+-            response = self.fetch("/?code=682")
+-        self.assertEqual(response.code, 500)
++        response = self.fetch("/?code=682")
++        self.assertEqual(response.code, 682)
++        self.assertEqual(response.reason, "Unknown")
+ 
+ 
+ @wsgi_safe
+diff --git a/tornado/test/websocket_test.py b/tornado/test/websocket_test.py
+index d47a74e65..e0b5573de 100644
+--- a/tornado/test/websocket_test.py
++++ b/tornado/test/websocket_test.py
+@@ -7,6 +7,7 @@
+ from tornado.concurrent import Future
+ from tornado import gen
+ from tornado.httpclient import HTTPError, HTTPRequest
++from tornado.iostream import StreamClosedError
+ from tornado.log import gen_log, app_log
+ from tornado.template import DictLoader
+ from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
+@@ -50,7 +51,10 @@ def on_close(self):
+ 
+ class EchoHandler(TestWebSocketHandler):
+     def on_message(self, message):
+-        self.write_message(message, isinstance(message, bytes))
++        try:
++            self.write_message(message, isinstance(message, bytes))
++        except StreamClosedError:
++            pass
+ 
+ 
+ class ErrorInOnMessageHandler(TestWebSocketHandler):
+@@ -327,6 +331,14 @@ def test_client_close_reason(self):
+         self.assertEqual(code, 1001)
+         self.assertEqual(reason, 'goodbye')
+ 
++    @gen_test
++    def test_write_after_close(self):
++        ws = yield self.ws_connect('/close_reason')
++        msg = yield ws.read_message()
++        self.assertIs(msg, None)
++        with self.assertRaises(StreamClosedError):
++            ws.write_message('hello')
++
+     @gen_test
+     def test_async_prepare(self):
+         # Previously, an async prepare method triggered a bug that would
+diff --git a/tornado/web.py b/tornado/web.py
+index d79889fa3..132f42dd5 100644
+--- a/tornado/web.py
++++ b/tornado/web.py
+@@ -319,10 +319,7 @@ def set_status(self, status_code, reason=None):
+         if reason is not None:
+             self._reason = escape.native_str(reason)
+         else:
+-            try:
+-                self._reason = httputil.responses[status_code]
+-            except KeyError:
+-                raise ValueError("unknown status code %d" % status_code)
++            self._reason = httputil.responses.get(status_code, "Unknown")
+ 
+     def get_status(self):
+         """Returns the status code for our response."""
+@@ -1561,11 +1558,7 @@ def _handle_request_exception(self, e):
+             # send a response.
+             return
+         if isinstance(e, HTTPError):
+-            if e.status_code not in httputil.responses and not e.reason:
+-                gen_log.error("Bad HTTP status code: %d", e.status_code)
+-                self.send_error(500, exc_info=sys.exc_info())
+-            else:
+-                self.send_error(e.status_code, exc_info=sys.exc_info())
++            self.send_error(e.status_code, exc_info=sys.exc_info())
+         else:
+             self.send_error(500, exc_info=sys.exc_info())
+ 
+diff --git a/tornado/websocket.py b/tornado/websocket.py
+index 69437ee4e..7600910c0 100644
+--- a/tornado/websocket.py
++++ b/tornado/websocket.py
+@@ -764,10 +764,7 @@ def _write_frame(self, fin, opcode, data, flags=0):
+             data = mask + _websocket_mask(mask, data)
+         frame += data
+         self._wire_bytes_out += len(frame)
+-        try:
+-            return self.stream.write(frame)
+-        except StreamClosedError:
+-            self._abort()
++        return self.stream.write(frame)
+ 
+     def write_message(self, message, binary=False):
+         """Sends the given message to the client of this Web Socket."""
+@@ -951,7 +948,10 @@ def _handle_message(self, opcode, data):
+             self.close(self.handler.close_code)
+         elif opcode == 0x9:
+             # Ping
+-            self._write_frame(True, 0xA, data)
++            try:
++                self._write_frame(True, 0xA, data)
++            except StreamClosedError:
++                self._abort()
+             self._run_callback(self.handler.on_ping, data)
+         elif opcode == 0xA:
+             # Pong
+@@ -972,7 +972,10 @@ def close(self, code=None, reason=None):
+                     close_data = struct.pack('>H', code)
+                 if reason is not None:
+                     close_data += utf8(reason)
+-                self._write_frame(True, 0x8, close_data)
++                try:
++                    self._write_frame(True, 0x8, close_data)
++                except StreamClosedError:
++                    self._abort()
+             self.server_terminated = True
+         if self.client_terminated:
+             if self._waiting is not None:

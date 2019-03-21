@@ -1,0 +1,217 @@
+diff --git a/doc/developers/tips.rst b/doc/developers/tips.rst
+index 1388edd44196..9e66174a7eff 100644
+--- a/doc/developers/tips.rst
++++ b/doc/developers/tips.rst
+@@ -103,6 +103,11 @@ replies <https://github.com/settings/replies/>`_ for reviewing:
+ ..
+     Note that putting this content on a single line in a literal is the easiest way to make it copyable and wrapped on screen.
+ 
++Issue: Usage questions
++    ::
++
++        You're asking a usage question. The issue tracker is mainly for bugs and new features. For usage questions, it is recommended to try [Stack Overflow](https://stackoverflow.com/questions/tagged/scikit-learn) or [the Mailing List](https://mail.python.org/mailman/listinfo/scikit-learn).
++
+ Issue: You're welcome to update the docs
+     ::
+ 
+diff --git a/sklearn/decomposition/dict_learning.py b/sklearn/decomposition/dict_learning.py
+index 6efd9d9a64ee..f9d664e4f6a4 100644
+--- a/sklearn/decomposition/dict_learning.py
++++ b/sklearn/decomposition/dict_learning.py
+@@ -160,7 +160,7 @@ def _sparse_encode(X, dictionary, gram, cov=None, algorithm='lasso_lars',
+         new_code = ((np.sign(cov) *
+                     np.maximum(np.abs(cov) - regularization, 0)).T)
+         if positive:
+-            new_code[new_code < 0] = 0
++            np.clip(new_code, 0, None, out=new_code)
+ 
+     elif algorithm == 'omp':
+         # TODO: Should verbose argument be passed to this?
+@@ -383,7 +383,7 @@ def _update_dict(dictionary, Y, code, verbose=False, return_r2=False,
+         R = ger(1.0, dictionary[:, k], code[k, :], a=R, overwrite_a=True)
+         dictionary[:, k] = np.dot(R, code[k, :].T)
+         if positive:
+-            dictionary[:, k][dictionary[:, k] < 0] = 0.0
++            np.clip(dictionary[:, k], 0, None, out=dictionary[:, k])
+         # Scale k'th atom
+         atom_norm_square = np.dot(dictionary[:, k], dictionary[:, k])
+         if atom_norm_square < 1e-20:
+@@ -394,7 +394,7 @@ def _update_dict(dictionary, Y, code, verbose=False, return_r2=False,
+                 print("Adding new random atom")
+             dictionary[:, k] = random_state.randn(n_features)
+             if positive:
+-                dictionary[:, k][dictionary[:, k] < 0] = 0.0
++                np.clip(dictionary[:, k], 0, None, out=dictionary[:, k])
+             # Setting corresponding coefs to 0
+             code[k, :] = 0.0
+             dictionary[:, k] /= sqrt(np.dot(dictionary[:, k],
+diff --git a/sklearn/decomposition/tests/test_nmf.py b/sklearn/decomposition/tests/test_nmf.py
+index 8ae157176647..207da5ff196e 100644
+--- a/sklearn/decomposition/tests/test_nmf.py
++++ b/sklearn/decomposition/tests/test_nmf.py
+@@ -278,7 +278,7 @@ def test_beta_divergence():
+     # initialization
+     rng = np.random.mtrand.RandomState(42)
+     X = rng.randn(n_samples, n_features)
+-    X[X < 0] = 0.
++    np.clip(X, 0, None, out=X)
+     X_csr = sp.csr_matrix(X)
+     W, H = nmf._initialize_nmf(X, n_components, init='random', random_state=42)
+ 
+@@ -298,7 +298,7 @@ def test_special_sparse_dot():
+     n_components = 3
+     rng = np.random.mtrand.RandomState(42)
+     X = rng.randn(n_samples, n_features)
+-    X[X < 0] = 0.
++    np.clip(X, 0, None, out=X)
+     X_csr = sp.csr_matrix(X)
+ 
+     W = np.abs(rng.randn(n_samples, n_components))
+@@ -377,7 +377,7 @@ def test_nmf_negative_beta_loss():
+ 
+     rng = np.random.mtrand.RandomState(42)
+     X = rng.randn(n_samples, n_features)
+-    X[X < 0] = 0
++    np.clip(X, 0, None, out=X)
+     X_csr = sp.csr_matrix(X)
+ 
+     def _assert_nmf_no_nan(X, beta_loss):
+diff --git a/sklearn/ensemble/weight_boosting.py b/sklearn/ensemble/weight_boosting.py
+index f13d16befb14..d01f8516d01b 100644
+--- a/sklearn/ensemble/weight_boosting.py
++++ b/sklearn/ensemble/weight_boosting.py
+@@ -285,7 +285,7 @@ def _samme_proba(estimator, n_classes, X):
+     # Displace zero probabilities so the log is defined.
+     # Also fix negative elements which may occur with
+     # negative sample weights.
+-    proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
++    np.clip(proba, np.finfo(proba.dtype).eps, None, out=proba)
+     log_proba = np.log(proba)
+ 
+     return (n_classes - 1) * (log_proba - (1. / n_classes)
+@@ -517,7 +517,7 @@ def _boost_real(self, iboost, X, y, sample_weight, random_state):
+         # Also fix negative elements which may occur with
+         # negative sample weights.
+         proba = y_predict_proba  # alias for readability
+-        proba[proba < np.finfo(proba.dtype).eps] = np.finfo(proba.dtype).eps
++        np.clip(proba, np.finfo(proba.dtype).eps, None, out=proba)
+ 
+         # Boost weight using multi-class AdaBoost SAMME.R alg
+         estimator_weight = (-1. * self.learning_rate
+diff --git a/sklearn/gaussian_process/correlation_models.py b/sklearn/gaussian_process/correlation_models.py
+index 3b954e2582b0..b0ff24749f2c 100644
+--- a/sklearn/gaussian_process/correlation_models.py
++++ b/sklearn/gaussian_process/correlation_models.py
+@@ -238,7 +238,7 @@ def cubic(theta, d):
+     else:
+         td = np.abs(d) * theta.reshape(1, n_features)
+ 
+-    td[td > 1.] = 1.
++    np.clip(td, None, 1., out=td)
+     ss = 1. - td ** 2. * (3. - 2. * td)
+     r = np.prod(ss, 1)
+ 
+@@ -290,7 +290,7 @@ def linear(theta, d):
+     else:
+         td = np.abs(d) * theta.reshape(1, n_features)
+ 
+-    td[td > 1.] = 1.
++    np.clip(td, None, 1., out=td)
+     ss = 1. - td
+     r = np.prod(ss, 1)
+ 
+diff --git a/sklearn/impute.py b/sklearn/impute.py
+index 836bfb0167ad..8acec9d010da 100644
+--- a/sklearn/impute.py
++++ b/sklearn/impute.py
+@@ -752,7 +752,7 @@ def _get_abs_corr_mat(self, X_filled, tolerance=1e-6):
+         # np.corrcoef is not defined for features with zero std
+         abs_corr_mat[np.isnan(abs_corr_mat)] = tolerance
+         # ensures exploration, i.e. at least some probability of sampling
+-        abs_corr_mat[abs_corr_mat < tolerance] = tolerance
++        np.clip(abs_corr_mat, tolerance, None, out=abs_corr_mat)
+         # features are not their own neighbors
+         np.fill_diagonal(abs_corr_mat, 0)
+         # needs to sum to 1 for np.random.choice sampling
+diff --git a/sklearn/metrics/classification.py b/sklearn/metrics/classification.py
+index 4e2d0ff399d7..a26ffcce1a24 100644
+--- a/sklearn/metrics/classification.py
++++ b/sklearn/metrics/classification.py
+@@ -1910,7 +1910,7 @@ def hinge_loss(y_true, pred_decision, labels=None, sample_weight=None):
+ 
+     losses = 1 - margin
+     # The hinge_loss doesn't penalize good enough predictions.
+-    losses[losses <= 0] = 0
++    np.clip(losses, 0, None, out=losses)
+     return np.average(losses, weights=sample_weight)
+ 
+ 
+diff --git a/sklearn/metrics/tests/test_classification.py b/sklearn/metrics/tests/test_classification.py
+index be4545eb0df1..8db86dea2ef5 100644
+--- a/sklearn/metrics/tests/test_classification.py
++++ b/sklearn/metrics/tests/test_classification.py
+@@ -1460,7 +1460,7 @@ def test_hinge_loss_multiclass():
+         1 - pred_decision[4][3] + pred_decision[4][2],
+         1 - pred_decision[5][2] + pred_decision[5][3]
+     ])
+-    dummy_losses[dummy_losses <= 0] = 0
++    np.clip(dummy_losses, 0, None, out=dummy_losses)
+     dummy_hinge_loss = np.mean(dummy_losses)
+     assert_equal(hinge_loss(y_true, pred_decision),
+                  dummy_hinge_loss)
+@@ -1498,7 +1498,7 @@ def test_hinge_loss_multiclass_with_missing_labels():
+         1 - pred_decision[3][1] + pred_decision[3][2],
+         1 - pred_decision[4][2] + pred_decision[4][3]
+     ])
+-    dummy_losses[dummy_losses <= 0] = 0
++    np.clip(dummy_losses, 0, None, out=dummy_losses)
+     dummy_hinge_loss = np.mean(dummy_losses)
+     assert_equal(hinge_loss(y_true, pred_decision, labels=labels),
+                  dummy_hinge_loss)
+@@ -1525,7 +1525,7 @@ def test_hinge_loss_multiclass_invariance_lists():
+         1 - pred_decision[4][3] + pred_decision[4][2],
+         1 - pred_decision[5][2] + pred_decision[5][3]
+     ])
+-    dummy_losses[dummy_losses <= 0] = 0
++    np.clip(dummy_losses, 0, None, out=dummy_losses)
+     dummy_hinge_loss = np.mean(dummy_losses)
+     assert_equal(hinge_loss(y_true, pred_decision),
+                  dummy_hinge_loss)
+diff --git a/sklearn/neighbors/nearest_centroid.py b/sklearn/neighbors/nearest_centroid.py
+index 48cd7a18fef9..73705bf64942 100644
+--- a/sklearn/neighbors/nearest_centroid.py
++++ b/sklearn/neighbors/nearest_centroid.py
+@@ -161,7 +161,7 @@ def fit(self, X, y):
+             # it becomes zero.
+             signs = np.sign(deviation)
+             deviation = (np.abs(deviation) - self.shrink_threshold)
+-            deviation[deviation < 0] = 0
++            np.clip(deviation, 0, None, out=deviation)
+             deviation *= signs
+             # Now adjust the centroids using the deviation
+             msd = ms * deviation
+diff --git a/sklearn/tests/test_site_joblib.py b/sklearn/tests/test_site_joblib.py
+index de87c5dd9f9e..ce79041e10ab 100644
+--- a/sklearn/tests/test_site_joblib.py
++++ b/sklearn/tests/test_site_joblib.py
+@@ -5,13 +5,12 @@
+ def test_old_pickle(tmpdir):
+     # Check that a pickle that references sklearn.external.joblib can load
+     f = tmpdir.join('foo.pkl')
+-    f.write(b'\x80\x03csklearn.externals.joblib.numpy_pickle\nNumpyArrayWrappe'
+-            b'r\nq\x00)\x81q\x01}q\x02(X\n\x00\x00\x00allow_mmapq\x03\x88X\x05'
+-            b'\x00\x00\x00shapeq\x04K\x01\x85q\x05X\x05\x00\x00\x00dtypeq\x06c'
+-            b'numpy\ndtype\nq\x07X\x02\x00\x00\x00i8q\x08K\x00K\x01\x87q\tRq\n'
+-            b'(K\x03X\x01\x00\x00\x00<q\x0bNNNJ\xff\xff\xff\xffJ\xff\xff\xff'
+-            b'\xffK\x00tq\x0cbX\x08\x00\x00\x00subclassq\rcnumpy\nndarray\nq'
+-            b'\x0eX\x05\x00\x00\x00orderq\x0fX\x01\x00\x00\x00Cq\x10ub\x01\x00'
+-            b'\x00\x00\x00\x00\x00\x00.', mode='wb')
++    f.write(b'\x80\x02csklearn.externals.joblib.numpy_pickle\nNumpyArrayWrappe'
++            b'r\nq\x00)\x81q\x01}q\x02(U\x05dtypeq\x03cnumpy\ndtype\nq\x04U'
++            b'\x02i8q\x05K\x00K\x01\x87q\x06Rq\x07(K\x03U\x01<q\x08NNNJ\xff'
++            b'\xff\xff\xffJ\xff\xff\xff\xffK\x00tq\tbU\x05shapeq\nK\x01\x85q'
++            b'\x0bU\x05orderq\x0cU\x01Cq\rU\x08subclassq\x0ecnumpy\nndarray\nq'
++            b'\x0fU\nallow_mmapq\x10\x88ub\x01\x00\x00\x00\x00\x00\x00\x00.',
++            mode='wb')
+ 
+     load(str(f))

@@ -1,0 +1,757 @@
+diff --git a/continuous_integration/appveyor/requirements.txt b/continuous_integration/appveyor/requirements.txt
+index 3de7bc279795..b8c41fc03dbe 100644
+--- a/continuous_integration/appveyor/requirements.txt
++++ b/continuous_integration/appveyor/requirements.txt
+@@ -2,7 +2,7 @@
+ # Those wheels were collected from http://www.lfd.uci.edu/~gohlke/pythonlibs/
+ # This is a temporary solution. As soon as numpy and scipy provide official
+ # wheel for windows we ca delete this --find-links line.
+---find-links http://28daf2247a33ed269873-7b1aad3fab3cc330e1fd9d109892382a.r6.cf2.rackcdn.com/index.html
++--find-links http://28daf2247a33ed269873-7b1aad3fab3cc330e1fd9d109892382a.r6.cf2.rackcdn.com/
+ 
+ # fix the versions of numpy to force the use of numpy and scipy to use the whl
+ # of the rackspace folder instead of trying to install from more recent
+diff --git a/doc/documentation.rst b/doc/documentation.rst
+index 5d29a0425ffd..9509440709ac 100644
+--- a/doc/documentation.rst
++++ b/doc/documentation.rst
+@@ -2,7 +2,7 @@
+ 
+   <div class="container-index">
+ 
+-Documentation of scikit-learn 0.17.dev0
++Documentation of scikit-learn 0.18.dev0
+ =======================================
+ 
+ .. raw:: html
+@@ -28,7 +28,7 @@ Documentation of scikit-learn 0.17.dev0
+                 <!-- doc versions -->
+                     <h2>Other Versions</h2>
+                     <ul>
+-                        <li>scikit-learn 0.17 (development)</li>
++                        <li>scikit-learn 0.18 (development)</li>
+                         <li><a href="http://scikit-learn.org/stable/documentation.html">scikit-learn 0.16 (stable)</a></li>
+                         <li><a href="http://scikit-learn.org/0.15/documentation.html">scikit-learn 0.15</a></li>
+                     </ul>
+diff --git a/doc/whats_new.rst b/doc/whats_new.rst
+index 360485d24df3..e468ddd4093d 100644
+--- a/doc/whats_new.rst
++++ b/doc/whats_new.rst
+@@ -1,11 +1,32 @@
+ .. currentmodule:: sklearn
+ 
+-.. _changes_0_17:
++.. _changes_0_18:
+ 
+ ===============
+ Release history
+ ===============
+ 
++Version 0.18
++============
++
++Changelog
++---------
++
++New features
++............
++ 
++Enhancements
++............
++ 
++Bug fixes
++.........
++
++API changes summary
++-------------------
++ 
++ 
++.. _changes_0_17:
++
+ Version 0.17
+ ============
+ 
+diff --git a/examples/applications/plot_tomography_l1_reconstruction.py b/examples/applications/plot_tomography_l1_reconstruction.py
+index 79541d95f14b..036d205583c7 100644
+--- a/examples/applications/plot_tomography_l1_reconstruction.py
++++ b/examples/applications/plot_tomography_l1_reconstruction.py
+@@ -56,7 +56,7 @@ def _weights(x, dx=1, orig=0):
+ 
+ 
+ def _generate_center_coordinates(l_x):
+-    X, Y = np.mgrid[:l_x, :l_x]
++    X, Y = np.mgrid[:l_x, :l_x].astype(np.float64)
+     center = l_x / 2.
+     X += 0.5 - center
+     Y += 0.5 - center
+diff --git a/examples/ensemble/plot_feature_transformation.py b/examples/ensemble/plot_feature_transformation.py
+index 7b6941846ab5..1d5b927e4898 100644
+--- a/examples/ensemble/plot_feature_transformation.py
++++ b/examples/ensemble/plot_feature_transformation.py
+@@ -34,10 +34,10 @@
+ from sklearn.linear_model import LogisticRegression
+ from sklearn.ensemble import (RandomTreesEmbedding, RandomForestClassifier,
+                               GradientBoostingClassifier)
+-from sklearn.feature_selection import SelectFromModel
+ from sklearn.preprocessing import OneHotEncoder
+ from sklearn.cross_validation import train_test_split
+ from sklearn.metrics import roc_curve
++from sklearn.pipeline import make_pipeline
+ 
+ n_estimator = 10
+ X, y = make_classification(n_samples=80000)
+@@ -51,13 +51,13 @@
+                                                             test_size=0.5)
+ 
+ # Unsupervised transformation based on totally random trees
+-rt = RandomTreesEmbedding(max_depth=3, n_estimators=n_estimator)
+-rt_lm = LogisticRegression()
+-rt.fit(X_train, y_train)
+-rt_lm.fit(SelectFromModel(rt, prefit=True).transform(X_train_lr), y_train_lr)
++rt = RandomTreesEmbedding(max_depth=3, n_estimators=n_estimator,
++	random_state=0)
+ 
+-y_pred_rt = rt_lm.predict_proba(
+-	SelectFromModel(rt, prefit=True).transform(X_test))[:, 1]
++rt_lm = LogisticRegression()
++pipeline = make_pipeline(rt, rt_lm)
++pipeline.fit(X_train, y_train)
++y_pred_rt = pipeline.predict_proba(X_test)[:, 1]
+ fpr_rt_lm, tpr_rt_lm, _ = roc_curve(y_test, y_pred_rt)
+ 
+ # Supervised transformation based on random forests
+diff --git a/examples/ensemble/plot_random_forest_embedding.py b/examples/ensemble/plot_random_forest_embedding.py
+index eef04ac3336c..ba6329d72905 100644
+--- a/examples/ensemble/plot_random_forest_embedding.py
++++ b/examples/ensemble/plot_random_forest_embedding.py
+@@ -30,7 +30,6 @@
+ from sklearn.datasets import make_circles
+ from sklearn.ensemble import RandomTreesEmbedding, ExtraTreesClassifier
+ from sklearn.decomposition import TruncatedSVD
+-from sklearn.feature_selection import SelectFromModel
+ from sklearn.naive_bayes import BernoulliNB
+ 
+ # make a synthetic dataset
+@@ -38,9 +37,7 @@
+ 
+ # use RandomTreesEmbedding to transform data
+ hasher = RandomTreesEmbedding(n_estimators=10, random_state=0, max_depth=3)
+-hasher.fit(X)
+-model = SelectFromModel(hasher, prefit=True)
+-X_transformed = model.transform(X)
++X_transformed = hasher.fit_transform(X)
+ 
+ # Visualize result using PCA
+ pca = TruncatedSVD(n_components=2)
+diff --git a/examples/linear_model/plot_theilsen.py b/examples/linear_model/plot_theilsen.py
+index fc0ba571cc76..bb9b09372180 100644
+--- a/examples/linear_model/plot_theilsen.py
++++ b/examples/linear_model/plot_theilsen.py
+@@ -48,6 +48,8 @@
+ estimators = [('OLS', LinearRegression()),
+               ('Theil-Sen', TheilSenRegressor(random_state=42)),
+               ('RANSAC', RANSACRegressor(random_state=42)), ]
++colors = {'OLS':'green', 'Theil-Sen':'blue', 'RANSAC':'red'}
++linestyle = {'OLS':'-', 'Theil-Sen':':', 'RANSAC':'--'}
+ 
+ ##############################################################################
+ # Outliers only in the y direction
+@@ -71,7 +73,7 @@
+     estimator.fit(X, y)
+     elapsed_time = time.time() - t0
+     y_pred = estimator.predict(line_x.reshape(2, 1))
+-    plt.plot(line_x, y_pred,
++    plt.plot(line_x, y_pred, color = colors[name], linestyle = linestyle[name],
+              label='%s (fit time: %.2fs)' % (name, elapsed_time))
+ 
+ plt.axis('tight')
+@@ -100,7 +102,7 @@
+     estimator.fit(X, y)
+     elapsed_time = time.time() - t0
+     y_pred = estimator.predict(line_x.reshape(2, 1))
+-    plt.plot(line_x, y_pred,
++    plt.plot(line_x, y_pred, color = colors[name], linestyle = linestyle[name],
+              label='%s (fit time: %.2fs)' % (name, elapsed_time))
+ 
+ plt.axis('tight')
+diff --git a/sklearn/__init__.py b/sklearn/__init__.py
+index ff2206ff5617..8828b12fadd7 100644
+--- a/sklearn/__init__.py
++++ b/sklearn/__init__.py
+@@ -37,7 +37,7 @@
+ # Dev branch marker is: 'X.Y.dev' or 'X.Y.devN' where N is an integer.
+ # 'X.Y.dev0' is the canonical version of 'X.Y.dev'
+ #
+-__version__ = '0.17.dev0'
++__version__ = '0.18.dev0'
+ 
+ 
+ try:
+diff --git a/sklearn/cluster/affinity_propagation_.py b/sklearn/cluster/affinity_propagation_.py
+index 799ff15489de..3a5d72540898 100644
+--- a/sklearn/cluster/affinity_propagation_.py
++++ b/sklearn/cluster/affinity_propagation_.py
+@@ -19,7 +19,7 @@
+ 
+ 
+ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,
+-                         damping=0.9, copy=True, verbose=False,
++                         damping=None, copy=True, verbose=False,
+                          return_n_iter=False):
+     """Perform Affinity Propagation Clustering of data
+ 
+@@ -47,7 +47,7 @@ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,
+     max_iter : int, optional, default: 200
+         Maximum number of iterations
+ 
+-    damping : float, optional, default: 0.9
++    damping : float, optional, default: 0.5
+         Damping factor between 0.5 and 1.
+ 
+     copy : boolean, optional, default: True
+@@ -82,6 +82,12 @@ def affinity_propagation(S, preference=None, convergence_iter=15, max_iter=200,
+     Brendan J. Frey and Delbert Dueck, "Clustering by Passing Messages
+     Between Data Points", Science Feb. 2007
+     """
++    if damping is None:
++        warnings.warn("damping=0.5 has been deprecated "
++                      "in favor of 0.9",
++                      DeprecationWarning)
++        damping = 0.5
++    
+     S = as_float_array(S, copy=copy)
+     n_samples = S.shape[0]
+ 
+@@ -204,7 +210,7 @@ class AffinityPropagation(BaseEstimator, ClusterMixin):
+ 
+     Parameters
+     ----------
+-    damping : float, optional, default: 0.9
++    damping : float, optional, default: 0.5
+         Damping factor between 0.5 and 1.
+ 
+     convergence_iter : int, optional, default: 15
+@@ -224,11 +230,12 @@ class AffinityPropagation(BaseEstimator, ClusterMixin):
+         preferences value. If the preferences are not passed as arguments,
+         they will be set to the median of the input similarities.
+ 
+-    affinity : string, optional, default=``euclidean``
+-        Which affinity to use. At the moment ``precomputed`` and
+-        ``euclidean`` are supported. ``euclidean`` uses the
+-        negative euclidean distance between points.
+-
++    affinity : string, optional, default=``sqeuclidean``
++        Which affinity to use. At the moment ``precomputed``, ``euclidean``,
++        and ``sqeuclidean`` are supported. ``sqeuclidean`` and ``euclidean``
++        use the negative squared euclidean distances between points.
++        ``euclidean`` will mean non-squared distances in future versions.
++        
+     verbose : boolean, optional, default: False
+         Whether to be verbose.
+ 
+@@ -264,8 +271,8 @@ class AffinityPropagation(BaseEstimator, ClusterMixin):
+     Between Data Points", Science Feb. 2007
+     """
+ 
+-    def __init__(self, damping=.9, max_iter=200, convergence_iter=15,
+-                 copy=True, preference=None, affinity='euclidean',
++    def __init__(self, damping=None, max_iter=200, convergence_iter=15,
++                 copy=True, preference=None, affinity='sqeuclidean',
+                  verbose=False):
+ 
+         self.damping = damping
+@@ -295,21 +302,25 @@ def fit(self, X, y=None):
+         if self.affinity == "precomputed":
+             self.affinity_matrix_ = X
+         elif self.affinity == "euclidean":
++            warnings.warn("Using squared distances. In the future please use " 
++                          "sqeuclidean for squared and euclidean for "
++                          "for non-squared distances.",
++                          DeprecationWarning)
+             self.affinity_matrix_ = -euclidean_distances(X, squared=False)
++        elif self.affinity == "sqeuclidean":
++            self.affinity_matrix_ = -euclidean_distances(X, squared=True)
+         else:
+             raise ValueError("Affinity must be 'precomputed' or "
+                              "'euclidean'. Got %s instead"
+                              % str(self.affinity))
+ 
+-        with warnings.catch_warnings():
+-            warnings.simplefilter('always', ConvergenceWarning)
+-            self.cluster_centers_indices_, self.labels_, self.n_iter_ = \
+-                affinity_propagation(
+-                    self.affinity_matrix_, self.preference,
+-                    max_iter=self.max_iter,
+-                    convergence_iter=self.convergence_iter,
+-                    damping=self.damping,
+-                    copy=self.copy, verbose=self.verbose, return_n_iter=True)
++        self.cluster_centers_indices_, self.labels_, self.n_iter_ = \
++            affinity_propagation(
++                self.affinity_matrix_, self.preference,
++                max_iter=self.max_iter,
++                convergence_iter=self.convergence_iter,
++                damping=self.damping,
++                copy=self.copy, verbose=self.verbose, return_n_iter=True)
+ 
+         if self.affinity != "precomputed":
+             self.cluster_centers_ = X[self.cluster_centers_indices_].copy()
+diff --git a/sklearn/cluster/k_means_.py b/sklearn/cluster/k_means_.py
+index d490db353d14..dd9058d966e8 100644
+--- a/sklearn/cluster/k_means_.py
++++ b/sklearn/cluster/k_means_.py
+@@ -31,6 +31,7 @@
+ from ..utils.random import choice
+ from ..externals.joblib import Parallel
+ from ..externals.joblib import delayed
++from ..externals.six import string_types
+ 
+ from . import _k_means
+ 
+@@ -269,7 +270,7 @@ def k_means(X, n_clusters, init='k-means++', precompute_distances='auto',
+ 
+     if max_iter <= 0:
+         raise ValueError('Number of iterations should be a positive number,'
+-        ' got %d instead' % max_iter)
++                         ' got %d instead' % max_iter)
+ 
+     best_inertia = np.infty
+     X = as_float_array(X, copy=copy_x)
+@@ -634,10 +635,10 @@ def _init_centroids(X, k, init, random_state=None, x_squared_norms=None,
+         raise ValueError(
+             "n_samples=%d should be larger than k=%d" % (n_samples, k))
+ 
+-    if init == 'k-means++':
++    if isinstance(init, string_types) and init == 'k-means++':
+         centers = _k_init(X, k, random_state=random_state,
+                           x_squared_norms=x_squared_norms)
+-    elif init == 'random':
++    elif isinstance(init, string_types) and init == 'random':
+         seeds = random_state.permutation(n_samples)[:k]
+         centers = X[seeds]
+     elif hasattr(init, '__array__'):
+diff --git a/sklearn/cluster/tests/test_affinity_propagation.py b/sklearn/cluster/tests/test_affinity_propagation.py
+index be76d597eef4..20bc6e09c4b1 100644
+--- a/sklearn/cluster/tests/test_affinity_propagation.py
++++ b/sklearn/cluster/tests/test_affinity_propagation.py
+@@ -24,7 +24,7 @@
+ def test_affinity_propagation():
+     # Affinity Propagation algorithm
+     # Compute similarities
+-    S = -euclidean_distances(X, squared=False)
++    S = -euclidean_distances(X, squared=True)
+     preference = np.median(S) * 10
+     # Compute Affinity Propagation
+     cluster_centers_indices, labels = affinity_propagation(
+@@ -67,13 +67,14 @@ def test_affinity_propagation_predict():
+     labels2 = af.predict(X)
+     assert_array_equal(labels, labels2)
+ 
++def test_affinity_propagation_deprecation_warning():
++    # Test DeprecationWarning for parameter 'euclidean'
++    af = AffinityPropagation(affinity="euclidean", damping=0.9)
++    assert_warns(DeprecationWarning, af.fit, X)
+     
+-def test_affinity_propagation_convergence_warning():
+-    # Test warning in AffinityPropagation.fit
+-    af = AffinityPropagation(affinity="euclidean", max_iter=1)
+-    assert_warns(ConvergenceWarning, af.fit, X)
+-    assert_raises(ValueError, af.predict, X)
+-    
++    # Test DeprecationWarning for default damping=0.5
++    af = AffinityPropagation()
++    assert_warns(DeprecationWarning, af.fit, X)
+     
+ def test_affinity_propagation_predict_error():
+     # Test exception in AffinityPropagation.predict
+diff --git a/sklearn/linear_model/base.py b/sklearn/linear_model/base.py
+index 3600735c7839..af107433ac40 100644
+--- a/sklearn/linear_model/base.py
++++ b/sklearn/linear_model/base.py
+@@ -34,13 +34,13 @@
+ from ..utils.seq_dataset import ArrayDataset, CSRDataset
+ 
+ 
+-###
+-### TODO: intercept for all models
+-### We should define a common function to center data instead of
+-### repeating the same code inside each fit method.
++#
++# TODO: intercept for all models
++# We should define a common function to center data instead of
++# repeating the same code inside each fit method.
+ 
+-### TODO: bayesian_ridge_regression and bayesian_regression_ard
+-### should be squashed into its respective objects.
++# TODO: bayesian_ridge_regression and bayesian_regression_ard
++# should be squashed into its respective objects.
+ 
+ SPARSE_INTERCEPT_DECAY = 0.01
+ # For sparse data intercept updates are scaled by this decay factor to avoid
+@@ -474,7 +474,7 @@ def _pre_fit(X, y, Xy, precompute, normalize, fit_intercept, copy):
+         Xy = None
+ 
+     # precompute if n_samples > n_features
+-    if precompute == 'auto':
++    if isinstance(precompute, six.string_types) and precompute == 'auto':
+         precompute = (n_samples > n_features)
+ 
+     if precompute is True:
+diff --git a/sklearn/linear_model/coordinate_descent.py b/sklearn/linear_model/coordinate_descent.py
+index a7b21ce7a327..0640e454bfb5 100644
+--- a/sklearn/linear_model/coordinate_descent.py
++++ b/sklearn/linear_model/coordinate_descent.py
+@@ -644,7 +644,8 @@ def fit(self, X, y, check_input=True):
+                           "well. You are advised to use the LinearRegression "
+                           "estimator", stacklevel=2)
+ 
+-        if self.precompute == 'auto':
++        if (isinstance(self.precompute, six.string_types)
++                and self.precompute == 'auto'):
+             warnings.warn("Setting precompute to 'auto', was found to be "
+                           "slower even when n_samples > n_features. Hence "
+                           "it will be removed in 0.18.",
+diff --git a/sklearn/linear_model/least_angle.py b/sklearn/linear_model/least_angle.py
+index d1898aee9e98..b27d60fefef4 100644
+--- a/sklearn/linear_model/least_angle.py
++++ b/sklearn/linear_model/least_angle.py
+@@ -26,6 +26,7 @@
+ from ..utils import ConvergenceWarning
+ from ..externals.joblib import Parallel, delayed
+ from ..externals.six.moves import xrange
++from ..externals.six import string_types
+ 
+ import scipy
+ solve_triangular_args = {}
+@@ -179,7 +180,7 @@ def lars_path(X, y, Xy=None, Gram=None, max_iter=500,
+             # speeds up the calculation of the (partial) Gram matrix
+             # and allows to easily swap columns
+             X = X.copy('F')
+-    elif Gram == 'auto':
++    elif isinstance(Gram, string_types) and Gram == 'auto':
+         Gram = None
+         if X.shape[0] > X.shape[1]:
+             Gram = np.dot(X.T, X)
+diff --git a/sklearn/metrics/regression.py b/sklearn/metrics/regression.py
+index 462349d5bd89..1a19e013e4ba 100644
+--- a/sklearn/metrics/regression.py
++++ b/sklearn/metrics/regression.py
+@@ -26,6 +26,7 @@
+ 
+ from ..utils.validation import check_array, check_consistent_length
+ from ..utils.validation import column_or_1d
++from ..externals.six import string_types
+ 
+ import warnings
+ 
+@@ -162,11 +163,12 @@ def mean_absolute_error(y_true, y_pred,
+         y_true, y_pred, multioutput)
+     output_errors = np.average(np.abs(y_pred - y_true),
+                                weights=sample_weight, axis=0)
+-    if multioutput == 'raw_values':
+-        return output_errors
+-    elif multioutput == 'uniform_average':
+-        # pass None as weights to np.average: uniform mean
+-        multioutput = None
++    if isinstance(multioutput, string_types):
++        if multioutput == 'raw_values':
++            return output_errors
++        elif multioutput == 'uniform_average':
++            # pass None as weights to np.average: uniform mean
++            multioutput = None
+ 
+     return np.average(output_errors, weights=multioutput)
+ 
+@@ -229,11 +231,12 @@ def mean_squared_error(y_true, y_pred,
+         y_true, y_pred, multioutput)
+     output_errors = np.average((y_true - y_pred) ** 2, axis=0,
+                                weights=sample_weight)
+-    if multioutput == 'raw_values':
+-        return output_errors
+-    elif multioutput == 'uniform_average':
+-        # pass None as weights to np.average: uniform mean
+-        multioutput = None
++    if isinstance(multioutput, string_types):
++        if multioutput == 'raw_values':
++            return output_errors
++        elif multioutput == 'uniform_average':
++            # pass None as weights to np.average: uniform mean
++            multioutput = None
+ 
+     return np.average(output_errors, weights=multioutput)
+ 
+@@ -464,20 +467,21 @@ def r2_score(y_true, y_pred,
+                       "to 'uniform_average' in 0.18.",
+                       DeprecationWarning)
+         multioutput = 'variance_weighted'
+-    if multioutput == 'raw_values':
+-        # return scores individually
+-        return output_scores
+-    elif multioutput == 'uniform_average':
+-        # passing None as weights results is uniform mean
+-        avg_weights = None
+-    elif multioutput == 'variance_weighted':
+-        avg_weights = denominator
+-        # avoid fail on constant y or one-element arrays
+-        if not np.any(nonzero_denominator):
+-            if not np.any(nonzero_numerator):
+-                return 1.0
+-            else:
+-                return 0.0
++    if isinstance(multioutput, string_types):
++        if multioutput == 'raw_values':
++            # return scores individually
++            return output_scores
++        elif multioutput == 'uniform_average':
++            # passing None as weights results is uniform mean
++            avg_weights = None
++        elif multioutput == 'variance_weighted':
++            avg_weights = denominator
++            # avoid fail on constant y or one-element arrays
++            if not np.any(nonzero_denominator):
++                if not np.any(nonzero_numerator):
++                    return 1.0
++                else:
++                    return 0.0
+     else:
+         avg_weights = multioutput
+ 
+diff --git a/sklearn/mixture/tests/test_gmm.py b/sklearn/mixture/tests/test_gmm.py
+index dd3a4380ffca..7d79c3c12abd 100644
+--- a/sklearn/mixture/tests/test_gmm.py
++++ b/sklearn/mixture/tests/test_gmm.py
+@@ -54,7 +54,6 @@ def test_sample_gaussian():
+     from sklearn.mixture import sample_gaussian
+     x = sample_gaussian([0, 0], [[4, 3], [1, .1]],
+                         covariance_type='full', random_state=42)
+-    print(x)
+     assert_true(np.isfinite(x).all())
+ 
+ 
+diff --git a/sklearn/preprocessing/data.py b/sklearn/preprocessing/data.py
+index eb7d7a1fb95f..a5e8e6d11bc6 100644
+--- a/sklearn/preprocessing/data.py
++++ b/sklearn/preprocessing/data.py
+@@ -252,6 +252,22 @@ def data_range(self):
+     def data_min(self):
+         return self.data_min_
+ 
++    def _reset(self):
++        """Reset internal data-dependent state of the scaler, if necessary.
++
++        __init__ parameters are not touched.
++        """
++
++        # Checking one attribute is enough, becase they are all set together
++        # in partial_fit
++        if hasattr(self, 'scale_'):
++            del self.scale_
++            del self.min_
++            del self.n_samples_seen_
++            del self.data_min_
++            del self.data_max_
++            del self.data_range_
++
+     def fit(self, X, y=None):
+         """Compute the minimum and maximum to be used for later scaling.
+ 
+@@ -261,6 +277,9 @@ def fit(self, X, y=None):
+             The data used to compute the per-feature minimum and maximum
+             used for later scaling along the features axis.
+         """
++
++        # Reset internal state before fitting
++        self._reset()
+         return self.partial_fit(X, y)
+ 
+     def partial_fit(self, X, y=None):
+@@ -489,6 +508,20 @@ def __init__(self, copy=True, with_mean=True, with_std=True):
+     def std_(self):
+         return self.scale_
+ 
++    def _reset(self):
++        """Reset internal data-dependent state of the scaler, if necessary.
++
++        __init__ parameters are not touched.
++        """
++
++        # Checking one attribute is enough, becase they are all set together
++        # in partial_fit
++        if hasattr(self, 'scale_'):
++            del self.scale_
++            del self.n_samples_seen_
++            del self.mean_
++            del self.var_
++
+     def fit(self, X, y=None):
+         """Compute the mean and std to be used for later scaling.
+ 
+@@ -500,6 +533,9 @@ def fit(self, X, y=None):
+ 
+         y: Passthrough for ``Pipeline`` compatibility.
+         """
++
++        # Reset internal state before fitting
++        self._reset()
+         return self.partial_fit(X, y)
+ 
+     def partial_fit(self, X, y=None):
+@@ -671,6 +707,19 @@ class MaxAbsScaler(BaseEstimator, TransformerMixin):
+     def __init__(self, copy=True):
+         self.copy = copy
+ 
++    def _reset(self):
++        """Reset internal data-dependent state of the scaler, if necessary.
++
++        __init__ parameters are not touched.
++        """
++
++        # Checking one attribute is enough, becase they are all set together
++        # in partial_fit
++        if hasattr(self, 'scale_'):
++            del self.scale_
++            del self.n_samples_seen_
++            del self.max_abs_
++
+     def fit(self, X, y=None):
+         """Compute the maximum absolute value to be used for later scaling.
+ 
+@@ -680,6 +729,9 @@ def fit(self, X, y=None):
+             The data used to compute the per-feature minimum and maximum
+             used for later scaling along the features axis.
+         """
++
++        # Reset internal state before fitting
++        self._reset()
+         return self.partial_fit(X, y)
+ 
+     def partial_fit(self, X, y=None):
+@@ -1553,7 +1605,7 @@ def _transform_selected(X, transform, selected="all", copy=True):
+     -------
+     X : array or sparse matrix, shape=(n_samples, n_features_new)
+     """
+-    if selected == "all":
++    if isinstance(selected, six.string_types) and selected == "all":
+         return transform(X)
+ 
+     X = check_array(X, accept_sparse='csc', copy=copy, dtype=FLOAT_DTYPES)
+diff --git a/sklearn/preprocessing/tests/test_data.py b/sklearn/preprocessing/tests/test_data.py
+index 3e951865017a..b44e66d2657b 100644
+--- a/sklearn/preprocessing/tests/test_data.py
++++ b/sklearn/preprocessing/tests/test_data.py
+@@ -1498,3 +1498,19 @@ def test_one_hot_encoder_unknown_transform():
+     oh = OneHotEncoder(handle_unknown='42')
+     oh.fit(X)
+     assert_raises(ValueError, oh.transform, y)
++
++
++def test_fit_cold_start():
++    X = iris.data
++    X_2d = X[:, :2]
++
++    # Scalers that have a partial_fit method
++    scalers = [StandardScaler(with_mean=False, with_std=False),
++               MinMaxScaler(),
++               MaxAbsScaler()]
++
++    for scaler in scalers:
++        scaler.fit_transform(X)
++        # with a different shape, this may break the scaler unless the internal
++        # state is reset
++        scaler.fit_transform(X_2d)
+diff --git a/sklearn/tests/test_discriminant_analysis.py b/sklearn/tests/test_discriminant_analysis.py
+index b00289472fbb..f704f4b427ff 100644
+--- a/sklearn/tests/test_discriminant_analysis.py
++++ b/sklearn/tests/test_discriminant_analysis.py
+@@ -1,10 +1,6 @@
+-try:
+-    # Python 2 compat
+-    reload
+-except NameError:
+-    # Regular Python 3+ import
+-    from importlib import reload
++import sys
+ import numpy as np
++from nose import SkipTest
+ 
+ from sklearn.utils.testing import assert_array_equal
+ from sklearn.utils.testing import assert_array_almost_equal
+@@ -22,6 +18,15 @@
+ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+ 
+ 
++# import reload
++version = sys.version_info
++if version[0] == 3:
++    # Python 3+ import for reload. Builtin in Python2
++    if version[1] == 3:
++        reload = None
++    from importlib import reload
++
++
+ # Data is just 6 separable points in the plane
+ X = np.array([[-2, -1], [-1, -1], [-1, -2], [1, 1], [1, 2], [2, 1]], dtype='f')
+ y = np.array([1, 1, 1, 2, 2, 2])
+@@ -298,6 +303,9 @@ def test_qda_regularization():
+ 
+ 
+ def test_deprecated_lda_qda_deprecation():
++    if reload is None:
++        SkipTest("Can't reload module on Python3.3")
++
+     def import_lda_module():
+         import sklearn.lda
+         # ensure that we trigger DeprecationWarning even if the sklearn.lda
+diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
+index 3828f85bcc70..3c141e5eb84c 100644
+--- a/sklearn/utils/estimator_checks.py
++++ b/sklearn/utils/estimator_checks.py
+@@ -38,7 +38,7 @@
+ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+ from sklearn.random_projection import BaseRandomProjection
+ from sklearn.feature_selection import SelectKBest
+-from sklearn.svm.base import BaseLibSVM, BaseSVC
++from sklearn.svm.base import BaseLibSVM
+ from sklearn.pipeline import make_pipeline
+ from sklearn.decomposition import NMF, ProjectedGradientNMF
+ from sklearn.utils.validation import DataConversionWarning
+@@ -66,7 +66,7 @@
+ # _LearntSelectorMixin is removed.
+ DEPRECATED_TRANSFORM = [
+     "RandomForestClassifier", "RandomForestRegressor", "ExtraTreesClassifier",
+-    "ExtraTreesRegressor", "RandomTreesEmbedding", "DecisionTreeClassifier",
++    "ExtraTreesRegressor", "DecisionTreeClassifier",
+     "DecisionTreeRegressor", "ExtraTreeClassifier", "ExtraTreeRegressor",
+     "LinearSVC", "SGDClassifier", "SGDRegressor", "Perceptron",
+     "LogisticRegression", "LogisticRegressionCV",
+@@ -479,7 +479,7 @@ def check_fit1d_1sample(name, Estimator):
+ 
+     try:
+         estimator.fit(X, y)
+-    except ValueError :
++    except ValueError:
+         pass
+ 
+ 
+@@ -1158,7 +1158,6 @@ def check_regressors_train(name, Regressor):
+     # and furthermore assumes the presence of outliers, hence
+     # skipped
+     if name not in ('PLSCanonical', 'CCA', 'RANSACRegressor'):
+-        print(regressor)
+         assert_greater(regressor.score(X, y_), 0.5)
+ 
+ 
+@@ -1501,6 +1500,7 @@ def fit(self, X, y):
+     assert_true(all(item in deep_params.items() for item in
+                     shallow_params.items()))
+ 
++
+ def check_classifiers_regression_target(name, Estimator):
+     # Check if classifier throws an exception when fed regression targets
+ 
+@@ -1508,4 +1508,4 @@ def check_classifiers_regression_target(name, Estimator):
+     X, y = boston.data, boston.target
+     e = Estimator()
+     msg = 'Unknown label type: '
+-    assert_raises_regex(ValueError, msg, e.fit, X, y)
+\ No newline at end of file
++    assert_raises_regex(ValueError, msg, e.fit, X, y)

@@ -1,0 +1,65 @@
+diff --git a/Orange/widgets/unsupervised/owkmeans.py b/Orange/widgets/unsupervised/owkmeans.py
+index 80cf0682a2..f8fa378168 100644
+--- a/Orange/widgets/unsupervised/owkmeans.py
++++ b/Orange/widgets/unsupervised/owkmeans.py
+@@ -428,24 +428,20 @@ def set_data(self, data):
+     def send_report(self):
+         # False positives (Setting is not recognized as int)
+         # pylint: disable=invalid-sequence-index
+-        k_clusters = self.k
+-        if self.optimize_k and self.optimization_runs and \
+-                self.selected_row() is not None:
++        if self.optimize_k and self.selected_row() is not None:
+             k_clusters = self.k_from + self.selected_row()
++        else:
++            k_clusters = self.k
+         self.report_items((
+             ("Number of clusters", k_clusters),
+-            ("Optimization",
+-             self.optimize_k != 0 and
+-             "{}, {} re-runs limited to {} steps".format(
+-                 self.INIT_METHODS[self.smart_init].lower(),
+-                 self.n_init, self.max_iterations))))
++            ("Optimization", "{}, {} re-runs limited to {} steps".format(
++                self.INIT_METHODS[self.smart_init].lower(),
++                self.n_init, self.max_iterations))))
+         if self.data:
+             self.report_data("Data", self.data)
+             if self.optimize_k:
+                 self.report_table(
+-                    "Scoring by {}".format(
+-                        self.SCORING_METHODS[self.scoring][0]),
+-                    self.table_view)
++                    "Scores for different numbers of clusters", self.table_view)
+ 
+ 
+ def main():
+diff --git a/doc/development/source/tutorial.rst b/doc/development/source/tutorial.rst
+index 85054f3ece..490b6ff739 100644
+--- a/doc/development/source/tutorial.rst
++++ b/doc/development/source/tutorial.rst
+@@ -52,13 +52,14 @@ We will start with a very simple example. A widget that will output
+ a single integer specified by the user.
+ 
+ .. code-block:: python
++
+     from Orange.widgets import widget, gui
+ 
+     class IntNumber(widget.OWWidget):
+         # Widget's name as displayed in the canvas
+         name = "Integer Number"
+         # Short widget description
+-        description "Lets the user input a number"
++        description = "Lets the user input a number"
+ 
+         # An icon resource file path for this widget
+         # (a path relative to the module where this widget is defined)
+@@ -136,7 +137,7 @@ How about displaying a number?
+        description = "Print out a number"
+        icon = "icons/print.svg"
+ 
+-       inputs = [("Number", int, "set_number")
++       inputs = [("Number", int, "set_number")]
+        outputs = []
+ 
+        want_main_area = False

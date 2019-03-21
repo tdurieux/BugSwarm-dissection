@@ -1,0 +1,569 @@
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
+index 2bb91ff76c..1c89dde60f 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
+@@ -113,6 +113,8 @@ public DefaultLogger(OutputStream infoStream,
+     /**
+      * Print an Emacs compliant line on the error stream.
+      * If the column number is non zero, then also display it.
++     *
++     * @param event the event details
+      * @see AuditListener
+      **/
+     @Override
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/AutomaticBean.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/AutomaticBean.java
+index 53b407061d..095f9a20fc 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/api/AutomaticBean.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/AutomaticBean.java
+@@ -116,6 +116,8 @@ private static BeanUtilsBean createBeanUtilsBean() {
+      * is called for each {@link Configuration#getChildren child Configuration}
+      * of {@code configuration}.
+      *
++     * @param config the configuration to use.
++     * @throws CheckstyleException if there is a configuration error.
+      * @see Configurable
+      */
+     @Override
+@@ -187,6 +189,9 @@ private void tryCopyProperty(String moduleName, String key, Object value, boolea
+ 
+     /**
+      * Implements the Contextualizable interface using bean introspection.
++     *
++     * @param context the context.
++     * @throws CheckstyleException if there is a contextualization error.
+      * @see Contextualizable
+      */
+     @Override
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheck.java
+index 40b9abe77f..dadaa85459 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheck.java
+@@ -21,6 +21,10 @@
+ 
+ import java.util.ArrayDeque;
+ import java.util.Deque;
++import java.util.LinkedList;
++import java.util.List;
++
++import org.apache.commons.lang3.StringUtils;
+ 
+ import com.puppycrawl.tools.checkstyle.api.Check;
+ import com.puppycrawl.tools.checkstyle.api.DetailAST;
+@@ -50,6 +54,11 @@
+      */
+     public static final String MSG_KEY = "final.class";
+ 
++    /**
++     * Character separate package names full name of java class.
++     */
++    public static final String PACKAGE_SEPARATOR = ".";
++
+     /** Keeps ClassDesc objects for stack of declared classes. */
+     private final Deque<ClassDesc> classes = new ArrayDeque<>();
+ 
+@@ -75,7 +84,18 @@ public void visitToken(DetailAST ast) {
+         if (ast.getType() == TokenTypes.CLASS_DEF) {
+             final boolean isFinal = modifiers.branchContains(TokenTypes.FINAL);
+             final boolean isAbstract = modifiers.branchContains(TokenTypes.ABSTRACT);
+-            classes.push(new ClassDesc(isFinal, isAbstract));
++
++            final String packageName = getPackageName(ast);
++            final String className = ast.findFirstToken(TokenTypes.IDENT).getText();
++            String outerClassFullName = null;
++            if (!classes.isEmpty()) {
++                outerClassFullName = classes.peek().getFullName();
++            }
++            final String fullClassName =
++                    getFullClassName(outerClassFullName, packageName, className);
++
++            reportNestedSubclass(ast);
++            classes.push(new ClassDesc(fullClassName, isFinal, isAbstract));
+         }
+         // ctors in enums don't matter
+         else if (!ScopeUtils.isInEnumBlock(ast)) {
+@@ -100,15 +120,137 @@ public void leaveToken(DetailAST ast) {
+             && !desc.isDeclaredAsAbstract()
+             && desc.isWithPrivateCtor()
+             && !desc.isWithNonPrivateCtor()
+-            && !ScopeUtils.isInInterfaceOrAnnotationBlock(ast)) {
++            && !ScopeUtils.isInInterfaceOrAnnotationBlock(ast)
++            && !desc.isWithNestedSubclass()) {
+             final String className =
+-                ast.findFirstToken(TokenTypes.IDENT).getText();
++                    desc.getFullName().substring(desc.getFullName().lastIndexOf('.') + 1);
+             log(ast.getLineNo(), MSG_KEY, className);
+         }
+     }
+ 
++    /**
++     * Report to super classes that nested class extends it.
++     * @param ast nested class
++     */
++    private void reportNestedSubclass(DetailAST ast) {
++        final DetailAST classExtend = ast.findFirstToken(TokenTypes.EXTENDS_CLAUSE);
++        if (classExtend != null) {
++            final String superToExtend = extractFullName(classExtend);
++            for (ClassDesc classDesc : classes) {
++                final String superClassName = classDesc.getFullName();
++                if (doesNameInExtendMatchSuperClassName(superClassName, superToExtend)) {
++                    classDesc.reportNestedSubclass();
++                }
++            }
++        }
++    }
++
++    /**
++     * Checks if given super class name in extend clause match super class full name.
++     * @param superClassFullName super class full name(with package)
++     * @param superClassInExtendClause name in extend clause
++     * @return true if given super class name in extend clause match super class full name,
++     *         false otherwise
++     */
++    private static boolean doesNameInExtendMatchSuperClassName(String superClassFullName,
++                                                               String superClassInExtendClause) {
++        String superClassNormalizedName = superClassFullName;
++        if (!superClassInExtendClause.contains(PACKAGE_SEPARATOR)) {
++            final int beginClassNameIndex = superClassFullName.lastIndexOf(PACKAGE_SEPARATOR) + 1;
++            superClassNormalizedName =
++                    superClassFullName.substring(beginClassNameIndex);
++        }
++        return superClassNormalizedName.equals(superClassInExtendClause);
++    }
++
++    /**
++     * Calculate full class name(package + class name) laying inside given
++     * outer class.
++     * @param outerClassFullName full name(package + class) of outer class,
++     *                           null if doesnt exist
++     * @param packageName package name, empty string on default package
++     * @param className class name
++     * @return full class name(package + class name)
++     */
++    private static String getFullClassName(String outerClassFullName,
++                                           String packageName, String className) {
++        final String fullClassName;
++
++        if (outerClassFullName == null) {
++            if (packageName.isEmpty()) {
++                fullClassName = className;
++            }
++            else {
++                fullClassName = packageName + PACKAGE_SEPARATOR + className;
++            }
++        }
++        else {
++            fullClassName = outerClassFullName + PACKAGE_SEPARATOR + className;
++        }
++        return fullClassName;
++    }
++
++    /**
++     * Get package name of given ast, on default package
++     * returns empty string.
++     * @param ast ast
++     * @return package name
++     */
++    private String getPackageName(DetailAST ast) {
++        DetailAST traversalAst = ast;
++
++        while (traversalAst.getParent() != null) {
++            traversalAst = traversalAst.getParent();
++        }
++
++        while (traversalAst.getPreviousSibling() != null) {
++            traversalAst = traversalAst.getPreviousSibling();
++        }
++
++        final String packageName;
++        if (traversalAst.getType() == TokenTypes.PACKAGE_DEF) {
++            packageName = extractFullName(traversalAst);
++        }
++        else {
++            packageName = "";
++        }
++
++        return packageName;
++    }
++
++    /**
++     * Get name of class(with full package if specified) in extend clause.
++     * @param classExtend extend clause to extract class name
++     * @return super class name
++     */
++    private String extractFullName(DetailAST classExtend) {
++        final String className;
++
++        if (classExtend.findFirstToken(TokenTypes.IDENT) == null) {
++            // Name specified with packages, have to traverse DOT
++            final DetailAST firstChild = classExtend.findFirstToken(TokenTypes.DOT);
++            final List<String> fullNameParts = new LinkedList<>();
++
++            fullNameParts.add(0, firstChild.findFirstToken(TokenTypes.IDENT).getText());
++            DetailAST traverse = firstChild.findFirstToken(TokenTypes.DOT);
++            while (traverse != null) {
++                fullNameParts.add(0, traverse.findFirstToken(TokenTypes.IDENT).getText());
++                traverse = traverse.findFirstToken(TokenTypes.DOT);
++            }
++            className = StringUtils.join(fullNameParts, PACKAGE_SEPARATOR);
++        }
++        else {
++            className = classExtend.findFirstToken(TokenTypes.IDENT).getText();
++        }
++
++        return className;
++    }
++
+     /** Maintains information about class' ctors. */
+     private static final class ClassDesc {
++        /** Full class name(with package). */
++        private final String fullName;
++
+         /** Is class declared as final. */
+         private final boolean declaredAsFinal;
+ 
+@@ -121,18 +263,31 @@ public void leaveToken(DetailAST ast) {
+         /** Does class have private ctors. */
+         private boolean withPrivateCtor;
+ 
++        /** Does class have nested subclass. */
++        private boolean withNestedSubclass;
++
+         /**
+          *  Create a new ClassDesc instance.
++         *  @param fullName full class name(with package)
+          *  @param declaredAsFinal indicates if the
+          *         class declared as final
+          *  @param declaredAsAbstract indicates if the
+          *         class declared as abstract
+          */
+-        ClassDesc(boolean declaredAsFinal, boolean declaredAsAbstract) {
++        ClassDesc(String fullName, boolean declaredAsFinal, boolean declaredAsAbstract) {
++            this.fullName = fullName;
+             this.declaredAsFinal = declaredAsFinal;
+             this.declaredAsAbstract = declaredAsAbstract;
+         }
+ 
++        /**
++         * Get full class name.
++         * @return full class name
++         */
++        private String getFullName() {
++            return fullName;
++        }
++
+         /** Adds private ctor. */
+         private void reportPrivateCtor() {
+             withPrivateCtor = true;
+@@ -143,6 +298,11 @@ private void reportNonPrivateCtor() {
+             withNonPrivateCtor = true;
+         }
+ 
++        /** Adds nested subclass. */
++        private void reportNestedSubclass() {
++            withNestedSubclass = true;
++        }
++
+         /**
+          *  Does class have private ctors.
+          *  @return true if class has private ctors
+@@ -159,6 +319,14 @@ private boolean isWithNonPrivateCtor() {
+             return withNonPrivateCtor;
+         }
+ 
++        /**
++         * Does class have nested subclass.
++         * @return true if class has nested subclass
++         */
++        private boolean isWithNestedSubclass() {
++            return withNestedSubclass;
++        }
++
+         /**
+          *  Is class declared as final.
+          *  @return true if class is declared as final
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheck.java
+index 5e0088a754..f5e0deab7f 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheck.java
+@@ -346,11 +346,6 @@ public boolean isCommentNodesRequired() {
+ 
+     @Override
+     protected final void processAST(DetailAST ast) {
+-        if ((ast.getType() == TokenTypes.METHOD_DEF || ast.getType() == TokenTypes.CTOR_DEF)
+-            && getMethodsNumberOfLine(ast) <= minLineCount
+-            || hasAllowedAnnotations(ast)) {
+-            return;
+-        }
+         final Scope theScope = calculateScope(ast);
+         if (shouldCheck(ast, theScope)) {
+             final FileContents contents = getFileContents();
+@@ -430,7 +425,20 @@ protected boolean isMissingJavadocAllowed(final DetailAST ast) {
+         return allowMissingJavadoc
+             || allowMissingPropertyJavadoc
+                 && (CheckUtils.isSetterMethod(ast) || CheckUtils.isGetterMethod(ast))
+-            || matchesSkipRegex(ast);
++            || matchesSkipRegex(ast)
++            || isContentsAllowMissingJavadoc(ast);
++    }
++
++    /**
++     * Checks if the Javadoc can be missing if the method or constructor is
++     * below the minimum line count or has a special annotation.
++     *
++     * @param ast the tree node for the method or constructor.
++     * @return True if this method or constructor doesn't need Javadoc.
++     */
++    private boolean isContentsAllowMissingJavadoc(DetailAST ast) {
++        return (ast.getType() == TokenTypes.METHOD_DEF || ast.getType() == TokenTypes.CTOR_DEF)
++                && (getMethodsNumberOfLine(ast) <= minLineCount || hasAllowedAnnotations(ast));
+     }
+ 
+     /**
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheck.java
+index a89753a665..05549818e8 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheck.java
+@@ -131,7 +131,9 @@ public void visitJavadocToken(DetailNode ast) {
+         String firstSentence = getFirstSentence(ast);
+         final int endOfSentence = firstSentence.lastIndexOf(period);
+         if (endOfSentence == -1) {
+-            log(ast.getLineNumber(), MSG_SUMMARY_FIRST_SENTENCE);
++            if (!firstSentence.trim().startsWith("{@inheritDoc}")) {
++                log(ast.getLineNumber(), MSG_SUMMARY_FIRST_SENTENCE);
++            }
+         }
+         else {
+             firstSentence = firstSentence.substring(0, endOfSentence);
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
+index a115e34d1f..563f870ad4 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
+@@ -211,6 +211,8 @@ public int getEditingRow() {
+ 
+     /**
+      * Overridden to pass the new rowHeight to the tree.
++     *
++     * @param newRowHeight new row height
+      */
+     @Override
+     public final void setRowHeight(int newRowHeight) {
+@@ -277,6 +279,9 @@ public Component getTableCellEditorComponent(JTable table,
+          * <p>By returning false we are also enforcing the policy that
+          * the tree will never be editable (at least by a key sequence).
+          *
++         * @param event the event the editor should use to consider
++         *              whether to begin editing or not
++         * @return true if editing can be started
+          * @see TableCellEditor
+          */
+         @Override
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTableCellRenderer.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTableCellRenderer.java
+index 9eda08ef70..602cad3a03 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTableCellRenderer.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTableCellRenderer.java
+@@ -81,6 +81,8 @@ public void updateUI() {
+     /**
+      * Sets the row height of the tree, and forwards the row height to
+      * the table.
++     *
++     * @param newRowHeight the height of each cell, in pixels
+      */
+     @Override
+     public void setRowHeight(int newRowHeight) {
+@@ -95,6 +97,11 @@ public void setRowHeight(int newRowHeight) {
+ 
+     /**
+      * This is overridden to set the height to match that of the JTable.
++     *
++     * @param x the new <i>x</i>-coordinate of this component
++     * @param y the new <i>y</i>-coordinate of this component
++     * @param w the new <code>width</code> of this component
++     * @param h the new <code>height</code> of this component
+      */
+     @Override
+     public void setBounds(int x, int y, int w, int h) {
+@@ -104,6 +111,8 @@ public void setBounds(int x, int y, int w, int h) {
+     /**
+      * Subclassed to translate the graphics such that the last visible
+      * row will be drawn at 0,0.
++     *
++     * @param graph  the <code>Graphics</code> context in which to paint
+      */
+     @Override
+     public void paint(Graphics graph) {
+@@ -113,6 +122,16 @@ public void paint(Graphics graph) {
+ 
+     /**
+      * TreeCellRenderer method. Overridden to update the visible row.
++     *
++     * @param   table           the <code>JTable</code> that is asking the
++     *                          renderer to draw; can be <code>null</code>
++     * @param   value           the value of the cell to be rendered.
++     * @param   isSelected      true if the cell is to be rendered with the
++     *                          selection highlighted; otherwise false
++     * @param   hasFocus        if true, render cell appropriately.
++     * @param   row             the row index of the cell being drawn.
++     * @param   column          the column index of the cell being drawn
++     * @return The component used for drawing the cell.
+      * @see TableCellRenderer
+      */
+     @Override
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheckTest.java
+index c02785d57d..75fae5556f 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheckTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/design/FinalClassCheckTest.java
+@@ -39,6 +39,12 @@ protected String getPath(String filename) throws IOException {
+                 + "design" + File.separator + filename);
+     }
+ 
++    @Override
++    protected String getNonCompilablePath(String filename) throws IOException {
++        return super.getNonCompilablePath("checks" + File.separator
++                + "design" + File.separator + filename);
++    }
++
+     @Test
+     public void testGetRequiredTokens() {
+         final FinalClassCheck checkObj = new FinalClassCheck();
+@@ -58,6 +64,32 @@ public void testFinalClass() throws Exception {
+         verify(checkConfig, getPath("InputFinalClass.java"), expected);
+     }
+ 
++    @Test
++    public void testClassWithPrivateCtorAndNestedExtendingSubclass() throws Exception {
++        final DefaultConfiguration checkConfig =
++                createCheckConfig(FinalClassCheck.class);
++        final String[] expected = {
++            "15: " + getCheckMessage(MSG_KEY, "C"),
++        };
++        verify(checkConfig,
++                getNonCompilablePath("InputClassWithPrivateCtorWithNestedExtendingClass.java"),
++                expected);
++    }
++
++    @Test
++    public void testClassWithPrivateCtorAndNestedExtendingSubclassWithoutPackage()
++            throws Exception {
++        final DefaultConfiguration checkConfig =
++                createCheckConfig(FinalClassCheck.class);
++        final String[] expected = {
++            "7: " + getCheckMessage(MSG_KEY, "C"),
++        };
++        verify(checkConfig,
++                getNonCompilablePath(
++                        "InputClassWithPrivateCtorWithNestedExtendingClassWithoutPackage.java"),
++                expected);
++    }
++
+     @Test
+     public void testGetAcceptableTokens() {
+         final FinalClassCheck obj = new FinalClassCheck();
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheckTest.java
+index 43028a151d..cf94405fed 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheckTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocMethodCheckTest.java
+@@ -571,4 +571,14 @@ public void testNotSkipAnythingWhenSkipRegexDoesNotMatch() throws Exception {
+         };
+         verify(checkConfig, getPath("InputJavadocMethodIgnoreNameRegex.java"), expected);
+     }
++
++    @Test
++    public void testMethodsNotSkipWrittenJavadocs() throws Exception {
++        checkConfig.addAttribute("allowedAnnotations", "MyAnnotation");
++        final String[] expected = {
++            "7:8: " + getCheckMessage(MSG_UNUSED_TAG, "@param", "BAD"),
++            "17:8: " + getCheckMessage(MSG_UNUSED_TAG, "@param", "BAD"),
++        };
++        verify(checkConfig, getPath("InputJavadocMethodsNotSkipWritten.java"), expected);
++    }
+ }
+diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClass.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClass.java
+new file mode 100644
+index 0000000000..bd84a4fe59
+--- /dev/null
++++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClass.java
+@@ -0,0 +1,19 @@
++package com.puppycrawl.tools.checkstyle.checks.design;
++
++public class InputClassWithPrivateCtorWithNestedExtendingClass {
++    class A {
++        private A() {}
++        private class ExtendA extends A {}
++    }
++
++    class B {
++        private B() {}
++        private class ExtendB extends
++                com.puppycrawl.tools.checkstyle.checks.design.InputClassWithPrivateCtorWithNestedExtendingClass.B {}
++    }
++
++    class C {
++        private C() {}
++        private class ExtendC extends com.nonexistent.packages.C {}
++    }
++}
+diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClassWithoutPackage.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClassWithoutPackage.java
+new file mode 100644
+index 0000000000..f8bbe9b5c9
+--- /dev/null
++++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/design/InputClassWithPrivateCtorWithNestedExtendingClassWithoutPackage.java
+@@ -0,0 +1,11 @@
++public class InputClassWithPrivateCtorWithNestedExtendingClassWithoutPackage {
++    class A {
++        private A() {}
++        private class ExtendA extends A {}
++    }
++
++    class C {
++        private C() {}
++        private class ExtendC extends com.nonexistent.packages.C {}
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputCorrectSummaryJavaDoc.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputCorrectSummaryJavaDoc.java
+index 93f441e991..0c5a130e76 100644
+--- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputCorrectSummaryJavaDoc.java
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputCorrectSummaryJavaDoc.java
+@@ -29,6 +29,9 @@ void foo5() {}
+      */
+     void foo6() {}
+ 
++    /** {@inheritDoc} */
++    void foo7() {}
++
+     /** 
+      * <a href="mailto:vlad@htmlbook.ru"/> 
+      */
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputJavadocMethodsNotSkipWritten.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputJavadocMethodsNotSkipWritten.java
+new file mode 100644
+index 0000000000..ced09283b1
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputJavadocMethodsNotSkipWritten.java
+@@ -0,0 +1,28 @@
++package com.puppycrawl.tools.checkstyle.checks.javadoc;
++
++public class InputJavadocMethodsNotSkipWritten {
++    /**
++     * Description.
++     * 
++     * @param BAD
++     *            This param doesn't exist.
++     */
++    @MyAnnotation
++    public void InputJavadocMethodsNotSkipWritten() {
++    }
++
++    /**
++     * Description.
++     * 
++     * @param BAD
++     *            This param doesn't exist.
++     */
++    @MyAnnotation
++    public void test() {
++    }
++
++    /** Description. */
++    @MyAnnotation
++    public void test2() {
++    }
++}

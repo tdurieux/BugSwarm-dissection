@@ -1,0 +1,216 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+index 5100a92e2b..44e93bc952 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+@@ -3265,6 +3265,9 @@ public void visit(int classFileVersionNumber,
+                             classFileVersion,
+                             ForInlining.this.classFileVersion);
+                     contextRegistry.setImplementationContext(implementationContext);
++                    if (!classFileVersion.isAtLeast(ClassFileVersion.JAVA_V8) && instrumentedType.isInterface()) {
++                        implementationContext.prohibitTypeInitializer();
++                    }
+                     super.visit(classFileVersionNumber,
+                             instrumentedType.getActualModifiers((modifiers & Opcodes.ACC_SUPER) != 0 && !instrumentedType.isInterface()),
+                             instrumentedType.getInternalName(),
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
+index 0740c84b17..a1f784b10a 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Implementation.java
+@@ -519,6 +519,11 @@ void drain(ClassVisitor classVisitor,
+                        InjectedCode injectedCode,
+                        AnnotationValueFilter.Factory annotationValueFilterFactory);
+ 
++            /**
++             * Prohibits any instrumentation of an instrumented class's type initializer.
++             */
++            void prohibitTypeInitializer();
++
+             /**
+              * When draining an implementation context, a type initializer might be written to the created class
+              * file. If any code must be explicitly invoked from within the type initializer, this can be achieved
+@@ -675,6 +680,11 @@ public TypeDescription register(AuxiliaryType auxiliaryType) {
+                 throw new IllegalStateException("Field values caching was disabled: " + fieldType);
+             }
+ 
++            @Override
++            public void prohibitTypeInitializer() {
++                /* do nothing */
++            }
++
+             @Override
+             public boolean equals(Object other) {
+                 return this == other || !(other == null || getClass() != other.getClass())
+@@ -795,6 +805,12 @@ public String toString() {
+              */
+             private boolean fieldCacheCanAppendEntries;
+ 
++            /**
++             * If {@code true}, this instance suggests the retention of the original type initializer and prohibits the definition of a custom initializer.
++             * This property is required for interfaces before the Java 8 byte code level where type initializers are not allowed.
++             */
++            private boolean prohibitTypeInitializer;
++
+             /**
+              * Creates a new default implementation context.
+              *
+@@ -821,6 +837,7 @@ protected Default(TypeDescription instrumentedType,
+                 registeredFieldCacheEntries = new HashMap<FieldCacheEntry, FieldDescription.InDefinedShape>();
+                 suffix = RandomString.make();
+                 fieldCacheCanAppendEntries = true;
++                prohibitTypeInitializer = false;
+             }
+ 
+             @Override
+@@ -868,7 +885,7 @@ public TypeDescription register(AuxiliaryType auxiliaryType) {
+ 
+             @Override
+             public boolean isRetainTypeInitializer() {
+-                return instrumentedType.isInterface() && !classFileVersion.isAtLeast(ClassFileVersion.JAVA_V8);
++                return prohibitTypeInitializer;
+             }
+ 
+             @Override
+@@ -916,7 +933,7 @@ public void drain(ClassVisitor classVisitor,
+                 } else if (typeInitializer.isDefined()) {
+                     initializerRecord = new TypeWriter.MethodPool.Record.ForDefinedMethod.WithBody(typeInitializerMethod, typeInitializer.withReturn());
+                 }
+-                if (isRetainTypeInitializer() && initializerRecord.getSort().isDefined()) {
++                if (prohibitTypeInitializer && initializerRecord.getSort().isDefined()) {
+                     throw new IllegalStateException("It is impossible to define a class initializer or cached values for " + instrumentedType);
+                 }
+                 initializerRecord.apply(classVisitor, this, annotationValueFilterFactory);
+@@ -925,6 +942,11 @@ public void drain(ClassVisitor classVisitor,
+                 }
+             }
+ 
++            @Override
++            public void prohibitTypeInitializer() {
++                prohibitTypeInitializer = true;
++            }
++
+             @Override
+             public String toString() {
+                 return "Implementation.Context.Default{" +
+@@ -941,6 +963,7 @@ public String toString() {
+                         ", registeredFieldCacheEntries=" + registeredFieldCacheEntries +
+                         ", suffix=" + suffix +
+                         ", fieldCacheCanAppendEntries=" + fieldCacheCanAppendEntries +
++                        ", prohibitTypeInitializer=" + prohibitTypeInitializer +
+                         '}';
+             }
+ 
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/utility/CompoundList.java b/byte-buddy-dep/src/main/java/net/bytebuddy/utility/CompoundList.java
+index b94c806fb9..f4aad0dcf2 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/utility/CompoundList.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/utility/CompoundList.java
+@@ -72,8 +72,8 @@ protected CompoundList(List<? extends T> left, List<? extends T> right) {
+     public T get(int index) {
+         int leftSize = left.size();
+         return leftSize - index > 0
+-                ? left.get(index)
+-                : right.get(index - leftSize);
++                ? (T) left.get(index)
++                : (T) right.get(index - leftSize);
+     }
+ 
+     @Override
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/TypeWriterDefaultTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/TypeWriterDefaultTest.java
+index 75b28aaef3..bc4923e8e0 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/TypeWriterDefaultTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/dynamic/scaffold/TypeWriterDefaultTest.java
+@@ -17,6 +17,7 @@
+ import net.bytebuddy.implementation.FixedValue;
+ import net.bytebuddy.implementation.StubMethod;
+ import net.bytebuddy.implementation.SuperMethodCall;
++import net.bytebuddy.test.utility.DebuggingWrapper;
+ import net.bytebuddy.test.utility.JavaVersionRule;
+ import net.bytebuddy.test.utility.ObjectPropertyAssertion;
+ import net.bytebuddy.utility.JavaConstant;
+@@ -334,7 +335,9 @@ public void testTypeInitializerOnInterface() throws Exception {
+                 .makeInterface()
+                 .invokable(isTypeInitializer())
+                 .intercept(StubMethod.INSTANCE)
+-                .make(), notNullValue(DynamicType.class));
++                .make()
++                .load(ClassLoadingStrategy.BOOTSTRAP_LOADER, ClassLoadingStrategy.Default.WRAPPER)
++                .getLoaded(), notNullValue(Class.class));
+     }
+ 
+     @Test
+@@ -343,7 +346,9 @@ public void testTypeInitializerOnAnnotation() throws Exception {
+                 .makeAnnotation()
+                 .invokable(isTypeInitializer())
+                 .intercept(StubMethod.INSTANCE)
+-                .make(), notNullValue(DynamicType.class));
++                .make()
++                .load(ClassLoadingStrategy.BOOTSTRAP_LOADER, ClassLoadingStrategy.Default.WRAPPER)
++                .getLoaded(), notNullValue(Class.class));
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultOtherTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultOtherTest.java
+index 4046f7dd8d..3d40e410bc 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultOtherTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultOtherTest.java
+@@ -39,29 +39,24 @@ public void testTypeInitializerNotRetained() throws Exception {
+ 
+     @Test
+     public void testFrozenTypeInitializerRetainsInitializer() throws Exception {
+-        TypeDescription instrumentedType = mock(TypeDescription.class);
+-        ClassFileVersion classFileVersion = mock(ClassFileVersion.class);
+-        Implementation.Context.ExtractableView implementationContext = new Implementation.Context.Default(instrumentedType,
+-                classFileVersion,
++        Implementation.Context.ExtractableView implementationContext = new Implementation.Context.Default(mock(TypeDescription.class),
++                mock(ClassFileVersion.class),
+                 mock(AuxiliaryType.NamingStrategy.class),
+                 mock(TypeInitializer.class),
+                 mock(ClassFileVersion.class));
+-        when(instrumentedType.isInterface()).thenReturn(true);
+-        when(classFileVersion.isAtLeast(ClassFileVersion.JAVA_V8)).thenReturn(false);
++        implementationContext.prohibitTypeInitializer();
+         assertThat(implementationContext.isRetainTypeInitializer(), is(true));
+     }
+ 
+     @Test(expected = IllegalStateException.class)
+     public void testFrozenTypeInitializerFrozenThrowsExceptionOnDrain() throws Exception {
+         TypeDescription instrumentedType = mock(TypeDescription.class);
+-        ClassFileVersion classFileVersion = mock(ClassFileVersion.class);
+         Implementation.Context.ExtractableView implementationContext = new Implementation.Context.Default(instrumentedType,
+-                classFileVersion,
++                mock(ClassFileVersion.class),
+                 mock(AuxiliaryType.NamingStrategy.class),
+                 mock(TypeInitializer.class),
+                 mock(ClassFileVersion.class));
+-        when(instrumentedType.isInterface()).thenReturn(true);
+-        when(classFileVersion.isAtLeast(ClassFileVersion.JAVA_V8)).thenReturn(false);
++        implementationContext.prohibitTypeInitializer();
+         TypeWriter.MethodPool methodPool = mock(TypeWriter.MethodPool.class);
+         TypeWriter.MethodPool.Record record = mock(TypeWriter.MethodPool.Record.class);
+         when(record.getSort()).thenReturn(TypeWriter.MethodPool.Record.Sort.DEFINED);
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultTest.java
+index ff8f24782b..9843218d6d 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDefaultTest.java
+@@ -267,7 +267,6 @@ public void setUp() throws Exception {
+         when(firstSpecialType.asErasure()).thenReturn(firstSpecialType);
+         when(secondSpecialMethod.getDeclaringType()).thenReturn(secondSpecialType);
+         when(secondSpecialType.asErasure()).thenReturn(secondSpecialType);
+-        when(classFileVersion.isAtLeast(ClassFileVersion.JAVA_V8)).thenReturn(true);
+     }
+ 
+     @Test
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDisabledTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDisabledTest.java
+index 9e1ef78b4f..a577e1fa7c 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDisabledTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/ImplementationContextDisabledTest.java
+@@ -78,8 +78,9 @@ public void testAuxiliaryTypes() throws Exception {
+     }
+ 
+     @Test
+-    public void testIsRetainTypeInitializer() throws Exception {
++    public void testFreezeHasNoEffect() throws Exception {
+         Implementation.Context.ExtractableView implementationContext = new Implementation.Context.Disabled(instrumentedType, classFileVersion);
++        implementationContext.prohibitTypeInitializer();
+         assertThat(implementationContext.isRetainTypeInitializer(), is(true));
+     }
+ 

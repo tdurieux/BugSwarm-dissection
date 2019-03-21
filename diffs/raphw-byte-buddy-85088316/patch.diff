@@ -1,0 +1,101 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+index e297e072c1..cb85cb5e96 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java
+@@ -2310,9 +2310,9 @@ protected ForInlining(TypeDescription instrumentedType,
+              */
+             private byte[] doCreate(Implementation.Context.ExtractableView implementationContext, byte[] binaryRepresentation) {
+                 ClassReader classReader = new ClassReader(binaryRepresentation);
+-                ClassWriter classWriter = new ClassWriter(classReader, classVisitorWrapper.wrapWriter(ASM_MANUAL_FLAG));
++                ClassWriter classWriter = new ClassWriter(classReader, classVisitorWrapper.mergeWriter(ASM_MANUAL_FLAG));
+                 classReader.accept(writeTo(classVisitorWrapper.wrap(new ValidatingClassVisitor(classWriter)), implementationContext),
+-                        classVisitorWrapper.wrapReader(ASM_MANUAL_FLAG));
++                        classVisitorWrapper.mergeReader(ASM_MANUAL_FLAG));
+                 return classWriter.toByteArray();
+             }
+ 
+@@ -2923,7 +2923,7 @@ protected ForCreation(TypeDescription instrumentedType,
+ 
+             @Override
+             public byte[] create(Implementation.Context.ExtractableView implementationContext) {
+-                ClassWriter classWriter = new ClassWriter(classVisitorWrapper.wrapWriter(ASM_MANUAL_FLAG));
++                ClassWriter classWriter = new ClassWriter(classVisitorWrapper.mergeWriter(ASM_MANUAL_FLAG));
+                 ClassVisitor classVisitor = classVisitorWrapper.wrap(new ValidatingClassVisitor(classWriter));
+                 classVisitor.visit(classFileVersion.getVersion(),
+                         instrumentedType.getActualModifiers(!instrumentedType.isInterface()),
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/ClassVisitorWrapperChainTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/ClassVisitorWrapperChainTest.java
+index 65d364af1b..371de32171 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/ClassVisitorWrapperChainTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/ClassVisitorWrapperChainTest.java
+@@ -31,12 +31,12 @@ public void setUp() throws Exception {
+         when(prepend.wrap(prependVisitor)).thenReturn(wrapperVisitor);
+         when(wrapper.wrap(wrapperVisitor)).thenReturn(appendVisitor);
+         when(append.wrap(appendVisitor)).thenReturn(resultVisitor);
+-        when(prepend.wrapReader(FOO)).thenReturn(BAR);
+-        when(wrapper.wrapReader(BAR)).thenReturn(QUX);
+-        when(append.wrapReader(QUX)).thenReturn(BAZ);
+-        when(prepend.wrapWriter(FOO)).thenReturn(BAR);
+-        when(wrapper.wrapWriter(BAR)).thenReturn(QUX);
+-        when(append.wrapWriter(QUX)).thenReturn(BAZ);
++        when(prepend.mergeReader(FOO)).thenReturn(BAR);
++        when(wrapper.mergeReader(BAR)).thenReturn(QUX);
++        when(append.mergeReader(QUX)).thenReturn(BAZ);
++        when(prepend.mergeWriter(FOO)).thenReturn(BAR);
++        when(wrapper.mergeWriter(BAR)).thenReturn(QUX);
++        when(append.mergeWriter(QUX)).thenReturn(BAZ);
+     }
+ 
+     @Test
+@@ -56,12 +56,12 @@ public void testWrapperChain() throws Exception {
+     public void testReaderHint() throws Exception {
+         ClassVisitorWrapper.Chain chain = new ClassVisitorWrapper.Chain();
+         chain = chain.append(wrapper).append(append).prepend(prepend);
+-        assertThat(chain.wrapReader(FOO), is(BAZ));
+-        verify(prepend).wrapReader(FOO);
++        assertThat(chain.mergeReader(FOO), is(BAZ));
++        verify(prepend).mergeReader(FOO);
+         verifyNoMoreInteractions(prepend);
+-        verify(wrapper).wrapReader(BAR);
++        verify(wrapper).mergeReader(BAR);
+         verifyNoMoreInteractions(wrapper);
+-        verify(append).wrapReader(QUX);
++        verify(append).mergeReader(QUX);
+         verifyNoMoreInteractions(append);
+     }
+ 
+@@ -69,12 +69,12 @@ public void testReaderHint() throws Exception {
+     public void testWriterHint() throws Exception {
+         ClassVisitorWrapper.Chain chain = new ClassVisitorWrapper.Chain();
+         chain = chain.append(wrapper).append(append).prepend(prepend);
+-        assertThat(chain.wrapWriter(FOO), is(BAZ));
+-        verify(prepend).wrapWriter(FOO);
++        assertThat(chain.mergeWriter(FOO), is(BAZ));
++        verify(prepend).mergeWriter(FOO);
+         verifyNoMoreInteractions(prepend);
+-        verify(wrapper).wrapWriter(BAR);
++        verify(wrapper).mergeWriter(BAR);
+         verifyNoMoreInteractions(wrapper);
+-        verify(append).wrapWriter(QUX);
++        verify(append).mergeWriter(QUX);
+         verifyNoMoreInteractions(append);
+     }
+ 
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/DebuggingWrapper.java b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/DebuggingWrapper.java
+index fbfd9b53c1..0915a84f87 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/DebuggingWrapper.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/test/utility/DebuggingWrapper.java
+@@ -32,12 +32,12 @@ public static ClassVisitorWrapper makeDefault() {
+     }
+ 
+     @Override
+-    public int wrapWriter(int hint) {
++    public int mergeWriter(int hint) {
+         return hint;
+     }
+ 
+     @Override
+-    public int wrapReader(int hint) {
++    public int mergeReader(int hint) {
+         return hint;
+     }
+ 

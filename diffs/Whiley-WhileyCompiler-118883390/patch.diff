@@ -1,0 +1,1318 @@
+diff --git a/modules/wyc/src/wyc/builder/CodeGenerator.java b/modules/wyc/src/wyc/builder/CodeGenerator.java
+index f4ef03ce4..b4a679e6e 100644
+--- a/modules/wyc/src/wyc/builder/CodeGenerator.java
++++ b/modules/wyc/src/wyc/builder/CodeGenerator.java
+@@ -1885,24 +1885,25 @@ private int generate(Expr.LocalVariable expr, Environment environment, CodeFores
+ 
+ 	private int generate(Expr.UnOp expr, Environment environment, CodeForest.Block block, CodeForest forest,
+ 			Context context) {
+-		int operand = generate(expr.mhs, environment, block, forest, context);
+-		int target = environment.allocate(expr.result().raw());
++		int[] operands = new int[] { generate(expr.mhs, environment, block, forest, context) };
++		int[] targets = new int[] { environment.allocate(expr.result().raw()) };
+ 		switch (expr.op) {
+ 		case NEG:
+-			block.add(Codes.UnaryOperator(expr.result().raw(), target, operand, Codes.UnaryOperatorKind.NEG),
++			block.add(Codes.Operator(expr.result().raw(), targets, operands, Codes.OperatorKind.NEG),
+ 					attributes(expr));
+ 			break;
+ 		case INVERT:
+-			block.add(Codes.Invert(expr.result().raw(), target, operand), attributes(expr));
++			block.add(Codes.Operator(expr.result().raw(), targets, operands, Codes.OperatorKind.INVERT),
++					attributes(expr));
+ 			break;
+ 		case NOT:
+ 			String falseLabel = CodeUtils.freshLabel();
+ 			String exitLabel = CodeUtils.freshLabel();
+ 			generateCondition(falseLabel, expr.mhs, environment, block, forest, context);
+-			block.add(Codes.Const(target, Constant.V_BOOL(true)), attributes(expr));
++			block.add(Codes.Const(targets[0], Constant.V_BOOL(true)), attributes(expr));
+ 			block.add(Codes.Goto(exitLabel));
+ 			block.add(Codes.Label(falseLabel));
+-			block.add(Codes.Const(target, Constant.V_BOOL(false)), attributes(expr));
++			block.add(Codes.Const(targets[0], Constant.V_BOOL(false)), attributes(expr));
+ 			block.add(Codes.Label(exitLabel));
+ 			break;
+ 		default:
+@@ -1910,7 +1911,7 @@ private int generate(Expr.UnOp expr, Environment environment, CodeForest.Block b
+ 			internalFailure("unexpected unary operator encountered", context, expr);
+ 			return -1;
+ 		}
+-		return target;
++		return targets[0];
+ 	}
+ 
+ 	private int generate(Expr.LengthOf expr, Environment environment, CodeForest.Block block, CodeForest forest,
+@@ -1923,10 +1924,11 @@ private int generate(Expr.LengthOf expr, Environment environment, CodeForest.Blo
+ 
+ 	private int generate(Expr.Dereference expr, Environment environment, CodeForest.Block block, CodeForest forest,
+ 			Context context) {
+-		int operand = generate(expr.src, environment, block, forest, context);
+-		int target = environment.allocate(expr.result().raw());
+-		block.add(Codes.Dereference(expr.srcType.raw(), target, operand), attributes(expr));
+-		return target;
++		int[] operands = new int[] { generate(expr.src, environment, block, forest, context) };
++		int[] targets = new int[] { environment.allocate(expr.result().raw()) };
++		block.add(Codes.Operator(expr.srcType.raw(), targets, operands, Codes.OperatorKind.DEREFERENCE),
++				attributes(expr));
++		return targets[0];
+ 	}
+ 
+ 	private int generate(Expr.IndexOf expr, Environment environment, CodeForest.Block block, CodeForest forest,
+@@ -1966,16 +1968,17 @@ private int generate(Expr.BinOp v, Environment environment, CodeForest.Block blo
+ 			return target;
+ 
+ 		} else {
+-
+-			int leftOperand = generate(v.lhs, environment, block, forest, context);
+-			int rightOperand = generate(v.rhs, environment, block, forest, context);
+ 			Type result = v.result().raw();
+-			int target = environment.allocate(result);
++			int[] targets = new int[] { environment.allocate(result) };
++			int[] operands = { 
++					generate(v.lhs, environment, block, forest, context),
++					generate(v.rhs, environment, block, forest, context) 
++			};
+ 
+-			block.add(Codes.BinaryOperator(result, target, leftOperand, rightOperand, OP2BOP(v.op, v, context)),
++			block.add(Codes.Operator(result, targets, operands, OP2BOP(v.op, v, context)),
+ 					attributes(v));
+ 
+-			return target;
++			return targets[0];
+ 		}
+ 	}
+ 
+@@ -2056,28 +2059,28 @@ private int generate(Expr.New expr, Environment environment, CodeForest.Block bl
+ 	// Helpers
+ 	// =========================================================================
+ 
+-	private Codes.BinaryOperatorKind OP2BOP(Expr.BOp bop, SyntacticElement elem, Context context) {
++	private Codes.OperatorKind OP2BOP(Expr.BOp bop, SyntacticElement elem, Context context) {
+ 		switch (bop) {
+ 		case ADD:
+-			return Codes.BinaryOperatorKind.ADD;
++			return Codes.OperatorKind.ADD;
+ 		case SUB:
+-			return Codes.BinaryOperatorKind.SUB;
++			return Codes.OperatorKind.SUB;
+ 		case MUL:
+-			return Codes.BinaryOperatorKind.MUL;
++			return Codes.OperatorKind.MUL;
+ 		case DIV:
+-			return Codes.BinaryOperatorKind.DIV;
++			return Codes.OperatorKind.DIV;
+ 		case REM:
+-			return Codes.BinaryOperatorKind.REM;
++			return Codes.OperatorKind.REM;
+ 		case BITWISEAND:
+-			return Codes.BinaryOperatorKind.BITWISEAND;
++			return Codes.OperatorKind.BITWISEAND;
+ 		case BITWISEOR:
+-			return Codes.BinaryOperatorKind.BITWISEOR;
++			return Codes.OperatorKind.BITWISEOR;
+ 		case BITWISEXOR:
+-			return Codes.BinaryOperatorKind.BITWISEXOR;
++			return Codes.OperatorKind.BITWISEXOR;
+ 		case LEFTSHIFT:
+-			return Codes.BinaryOperatorKind.LEFTSHIFT;
++			return Codes.OperatorKind.LEFTSHIFT;
+ 		case RIGHTSHIFT:
+-			return Codes.BinaryOperatorKind.RIGHTSHIFT;
++			return Codes.OperatorKind.RIGHTSHIFT;
+ 		default:
+ 			syntaxError(errorMessage(INVALID_BINARY_EXPRESSION), context, elem);
+ 		}
+diff --git a/modules/wyil/src/wyil/builders/VcExprGenerator.java b/modules/wyil/src/wyil/builders/VcExprGenerator.java
+index 852b48942..c1ada38d1 100644
+--- a/modules/wyil/src/wyil/builders/VcExprGenerator.java
++++ b/modules/wyil/src/wyil/builders/VcExprGenerator.java
+@@ -53,10 +53,8 @@ public void transform(Code code, CodeForest forest, VcBranch branch) {
+ 			if (code instanceof Codes.LengthOf) {
+ 				transformUnary(Expr.Unary.Op.LENGTHOF, (Codes.LengthOf) code,
+ 						branch, forest);
+-			} else if (code instanceof Codes.BinaryOperator) {
+-				Codes.BinaryOperator bc = (Codes.BinaryOperator) code;
+-				transformBinary(binaryOperatorMap[bc.kind.ordinal()], bc,
+-						branch, forest);
++			} else if (code instanceof Codes.Operator) {
++				transform((Codes.Operator) code, forest, branch);				
+ 			} else if (code instanceof Codes.ArrayGenerator) {
+ 				transform((Codes.ArrayGenerator) code, forest, branch);
+ 			} else if (code instanceof Codes.NewArray) {
+@@ -75,8 +73,6 @@ public void transform(Code code, CodeForest forest, VcBranch branch) {
+ 				transform((Codes.IndirectInvoke) code, forest, branch);
+ 			} else if (code instanceof Codes.Invoke) {
+ 				transform((Codes.Invoke) code, forest, branch);
+-			} else if (code instanceof Codes.Invert) {
+-				transform((Codes.Invert) code, forest, branch);
+ 			} else if (code instanceof Codes.Label) {
+ 				// skip
+ 			} else if (code instanceof Codes.IndexOf) {
+@@ -87,10 +83,6 @@ public void transform(Code code, CodeForest forest, VcBranch branch) {
+ 				transform((Codes.Assign) code, forest, branch);
+ 			} else if (code instanceof Codes.Update) {
+ 				transform((Codes.Update) code, forest, branch);
+-			} else if (code instanceof Codes.UnaryOperator) {
+-				transform((Codes.UnaryOperator) code, forest, branch);
+-			} else if (code instanceof Codes.Dereference) {
+-				transform((Codes.Dereference) code, forest, branch);
+ 			} else if (code instanceof Codes.Nop) {
+ 				// skip
+ 			} else if (code instanceof Codes.NewObject) {
+@@ -120,11 +112,15 @@ protected void transform(Codes.Assign code, CodeForest forest,
+ 	/**
+ 	 * Maps binary bytecodes into expression opcodes.
+ 	 */
+-	private static Expr.Binary.Op[] binaryOperatorMap = { Expr.Binary.Op.ADD,
++	private static Expr.Binary.Op[] binaryOperatorMap = {
++			null, // neg
++			null, // invert
++			null, // deref
++			Expr.Binary.Op.ADD,
+ 			Expr.Binary.Op.SUB, 
+ 			Expr.Binary.Op.MUL, 
+ 			Expr.Binary.Op.DIV,
+-			Expr.Binary.Op.REM, 
++			Expr.Binary.Op.REM,
+ 			null, 
+ 			null, // bitwise or
+ 			null, // bitwise xor
+@@ -133,6 +129,37 @@ protected void transform(Codes.Assign code, CodeForest forest,
+ 			null // right shift
+ 	};
+ 
++	protected void transform(Codes.Operator code, CodeForest forest, VcBranch branch) {
++		switch(code.kind) {
++		case NEG:{
++			Codes.Operator bc = (Codes.Operator) code;
++			transformUnary(Expr.Unary.Op.NEG, bc, branch, forest);
++			break;
++		}
++		case INVERT: 
++		case DEREFERENCE: {
++			branch.havoc(code.target(0));
++			break;
++		}
++		case ADD:
++		case SUB:
++		case MUL:
++		case DIV:
++		case REM:{
++			transformBinary(binaryOperatorMap[code.kind.ordinal()], code, branch, forest);
++			break;
++		}
++		case BITWISEAND:
++		case BITWISEOR:
++		case BITWISEXOR: 
++		case LEFTSHIFT:
++		case RIGHTSHIFT: {
++			branch.havoc(code.target(0));
++			break;
++		}
++		}
++	}
++	
+ 	protected void transform(Codes.Convert code, CodeForest forest, VcBranch branch) {
+ 		Collection<Attribute> attributes = VcUtils.toWycsAttributes(forest.get(branch.pc()).attributes());
+ 		Expr result = branch.read(code.operand(0));
+@@ -150,10 +177,6 @@ protected void transform(Codes.Debug code, CodeForest forest,
+ 		// do nout
+ 	}
+ 
+-	protected void transform(Codes.Dereference code, CodeForest forest, VcBranch branch) {
+-		branch.havoc(code.target(0));
+-	}
+-
+ 	protected void transform(Codes.FieldLoad code, CodeForest forest, VcBranch branch) {
+ 		ArrayList<String> fields = new ArrayList<String>(code.type(0).fields().keySet());
+ 		Collections.sort(fields);
+@@ -222,10 +245,6 @@ protected void transform(Codes.Invoke code, CodeForest forest,
+ 		}
+ 	}
+ 
+-	protected void transform(Codes.Invert code, CodeForest forest, VcBranch branch) {
+-		branch.havoc(code.target(0));
+-	}
+-
+ 	protected void transform(Codes.IndexOf code, CodeForest forest, VcBranch branch) {
+ 		Expr src = branch.read(code.operand(0));
+ 		Expr idx = branch.read(code.operand(1));
+@@ -266,16 +285,6 @@ protected void transform(Codes.Nop code, CodeForest forest,
+ 		// do nout
+ 	}
+ 
+-	protected void transform(Codes.UnaryOperator code, CodeForest forest, VcBranch branch) {
+-		switch (code.kind) {
+-		case NEG:
+-			transformUnary(Expr.Unary.Op.NEG, code, branch, forest);
+-			break;
+-		default:
+-			branch.havoc(code.target(0));
+-		}
+-	}
+-
+ 	protected void transform(Codes.Update code, CodeForest forest, VcBranch branch) {
+ 		Expr result = branch.read(code.result());
+ 		Expr oldSource = branch.read(code.target(0));
+diff --git a/modules/wyil/src/wyil/builders/VcUtils.java b/modules/wyil/src/wyil/builders/VcUtils.java
+index ddb321787..1af1a8590 100644
+--- a/modules/wyil/src/wyil/builders/VcUtils.java
++++ b/modules/wyil/src/wyil/builders/VcUtils.java
+@@ -368,7 +368,7 @@ public boolean containsNominal(Type t,
+ 			switch (code.opcode()) {
+ 			case Code.OPCODE_div:
+ 			case Code.OPCODE_rem:
+-				return divideByZeroCheck((Codes.BinaryOperator) code, branch);
++				return divideByZeroCheck((Codes.Operator) code, branch);
+ 			case Code.OPCODE_indexof:
+ 				return indexOutOfBoundsChecks((Codes.IndexOf) code, branch);
+ 			case Code.OPCODE_arrygen:
+@@ -395,7 +395,7 @@ public boolean containsNominal(Type t,
+ 	 *            --- The branch the division is on.
+ 	 * @return
+ 	 */
+-	public Pair<String, Expr>[] divideByZeroCheck(Codes.BinaryOperator binOp, VcBranch branch) {
++	public Pair<String, Expr>[] divideByZeroCheck(Codes.Operator binOp, VcBranch branch) {
+ 		Expr rhs = branch.read(binOp.operand(1));
+ 		Value zero;
+ 		if (binOp.type(0) instanceof Type.Int) {
+diff --git a/modules/wyil/src/wyil/checks/ModuleCheck.java b/modules/wyil/src/wyil/checks/ModuleCheck.java
+index 973ef42bc..e8ca8d0ca 100755
+--- a/modules/wyil/src/wyil/checks/ModuleCheck.java
++++ b/modules/wyil/src/wyil/checks/ModuleCheck.java
+@@ -140,10 +140,12 @@ protected void checkFunctionPure(int blockID, CodeForest forest) {
+ 				syntaxError(errorMessage(METHODCALL_NOT_PERMITTED_IN_FUNCTION), filename, e.attribute(SourceLocation.class));
+ 			} else if(code instanceof Codes.NewObject) {
+ 				syntaxError(errorMessage(ALLOCATION_NOT_PERMITTED_IN_FUNCTION), filename, e.attribute(SourceLocation.class));
+-			} else if(code instanceof Codes.Dereference){
+-				syntaxError(errorMessage(REFERENCE_ACCESS_NOT_PERMITTED_IN_FUNCTION), filename, e.attribute(SourceLocation.class));
+-			} else if(code instanceof Code.AbstractCompoundBytecode) {
+-				Code.AbstractCompoundBytecode a = (Code.AbstractCompoundBytecode) code; 
++			} else if (code instanceof Codes.Operator
++					&& ((Codes.Operator) code).kind == Codes.OperatorKind.DEREFERENCE) {
++				syntaxError(errorMessage(REFERENCE_ACCESS_NOT_PERMITTED_IN_FUNCTION), filename,
++						e.attribute(SourceLocation.class));
++			} else if (code instanceof Code.AbstractCompoundBytecode) {
++				Code.AbstractCompoundBytecode a = (Code.AbstractCompoundBytecode) code;
+ 				checkFunctionPure(a.block(), forest);
+ 			}
+ 		}
+diff --git a/modules/wyil/src/wyil/io/WyilFileReader.java b/modules/wyil/src/wyil/io/WyilFileReader.java
+index b205aa11d..b267a0b8d 100644
+--- a/modules/wyil/src/wyil/io/WyilFileReader.java
++++ b/modules/wyil/src/wyil/io/WyilFileReader.java
+@@ -935,12 +935,12 @@ public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Ob
+ 		};
+ 		schemas[Code.OPCODE_dereference] = new Schema(Targets.ONE, Operands.ONE, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.Dereference((Type.Reference) types[0], targets[0], operands[0]);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.DEREFERENCE);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_invert] = new Schema(Targets.ONE, Operands.ONE, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.Invert(types[0], targets[0], operands[0]);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.INVERT);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_lengthof] = new Schema(Targets.ONE, Operands.ONE, Types.ONE){
+@@ -950,12 +950,7 @@ public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Ob
+ 		};
+ 		schemas[Code.OPCODE_neg] = new Schema(Targets.ONE, Operands.ONE, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.UnaryOperator(types[0], targets[0], operands[0], Codes.UnaryOperatorKind.NEG);
+-			}
+-		};
+-		schemas[Code.OPCODE_not] = new Schema(Targets.ONE, Operands.ONE, Types.ONE){
+-			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.Not(targets[0], operands[0]);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.NEG);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_fieldload] = new Schema(Targets.ONE, Operands.ONE, Types.ONE, Extras.STRING){
+@@ -1013,52 +1008,52 @@ public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Ob
+ 		// =========================================================================
+ 		schemas[Code.OPCODE_add] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.ADD);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.ADD);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_sub] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.SUB);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.SUB);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_mul] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.MUL);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.MUL);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_div] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.DIV);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.DIV);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_rem] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.REM);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.REM);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_bitwiseor] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.BITWISEOR);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.BITWISEOR);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_bitwisexor] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.BITWISEXOR);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.BITWISEXOR);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_bitwiseand] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.BITWISEAND);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.BITWISEAND);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_lshr] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.LEFTSHIFT);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.LEFTSHIFT);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_rshr] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+ 			public Code construct(int opcode,int[] targets, int[] operands, Type[] types, Object[] extras) {
+-				return Codes.BinaryOperator(types[0], targets[0], operands[0], operands[1], Codes.BinaryOperatorKind.RIGHTSHIFT);
++				return Codes.Operator(types[0], targets, operands, Codes.OperatorKind.RIGHTSHIFT);
+ 			}
+ 		};
+ 		schemas[Code.OPCODE_indexof] = new Schema(Targets.ONE, Operands.TWO, Types.ONE){
+diff --git a/modules/wyil/src/wyil/lang/Code.java b/modules/wyil/src/wyil/lang/Code.java
+index 816c90480..050ce4c1f 100755
+--- a/modules/wyil/src/wyil/lang/Code.java
++++ b/modules/wyil/src/wyil/lang/Code.java
+@@ -346,13 +346,12 @@ public boolean equals(Object o) {
+ 	public static final int UNARY_ASSIGNABLE = UNARY_OPERATOR+5;
+ 	
+ 	public static final int OPCODE_assign      = UNARY_ASSIGNABLE+0;
+-	public static final int OPCODE_dereference = UNARY_ASSIGNABLE+1;
+-	public static final int OPCODE_invert      = UNARY_ASSIGNABLE+2;
++
+ 	public static final int OPCODE_lengthof    = UNARY_ASSIGNABLE+3;
+ 	public static final int OPCODE_move        = UNARY_ASSIGNABLE+4;
+ 	public static final int OPCODE_newobject   = UNARY_ASSIGNABLE+5;
+-	public static final int OPCODE_neg         = UNARY_ASSIGNABLE+6;
+-	public static final int OPCODE_not         = UNARY_ASSIGNABLE+7;
++	
++	//public static final int OPCODE_not         = UNARY_ASSIGNABLE+7;
+ 	public static final int OPCODE_fieldload   = UNARY_ASSIGNABLE+8;
+ 	public static final int OPCODE_convert     = UNARY_ASSIGNABLE+9;
+ 	public static final int OPCODE_const       = UNARY_ASSIGNABLE+10;
+@@ -374,23 +373,26 @@ public boolean equals(Object o) {
+ 	// =========================================================================
+ 	public static final int BINARY_ASSIGNABLE = BINARY_OPERATOR+6;
+ 	
+-	public static final int OPCODE_add         = BINARY_ASSIGNABLE+0;
+-	public static final int OPCODE_sub         = BINARY_ASSIGNABLE+1;
+-	public static final int OPCODE_mul         = BINARY_ASSIGNABLE+2;
+-	public static final int OPCODE_div         = BINARY_ASSIGNABLE+3;
+-	public static final int OPCODE_rem         = BINARY_ASSIGNABLE+4;
+-	public static final int OPCODE_bitwiseor   = BINARY_ASSIGNABLE+5;
+-	public static final int OPCODE_bitwisexor  = BINARY_ASSIGNABLE+6;
+-	public static final int OPCODE_bitwiseand  = BINARY_ASSIGNABLE+7;
+-	public static final int OPCODE_lshr        = BINARY_ASSIGNABLE+8;
+-	public static final int OPCODE_rshr        = BINARY_ASSIGNABLE+9;
+-	public static final int OPCODE_indexof     = BINARY_ASSIGNABLE+10;
+-	public static final int OPCODE_arrygen     = BINARY_ASSIGNABLE+11;
++	public static final int OPCODE_neg         = BINARY_ASSIGNABLE+0;
++	public static final int OPCODE_invert      = BINARY_ASSIGNABLE+1;	
++	public static final int OPCODE_dereference = BINARY_ASSIGNABLE+2;
++	public static final int OPCODE_add         = BINARY_ASSIGNABLE+3;
++	public static final int OPCODE_sub         = BINARY_ASSIGNABLE+4;
++	public static final int OPCODE_mul         = BINARY_ASSIGNABLE+5;
++	public static final int OPCODE_div         = BINARY_ASSIGNABLE+6;
++	public static final int OPCODE_rem         = BINARY_ASSIGNABLE+7;
++	public static final int OPCODE_bitwiseor   = BINARY_ASSIGNABLE+8;
++	public static final int OPCODE_bitwisexor  = BINARY_ASSIGNABLE+9;
++	public static final int OPCODE_bitwiseand  = BINARY_ASSIGNABLE+10;
++	public static final int OPCODE_lshr        = BINARY_ASSIGNABLE+11;
++	public static final int OPCODE_rshr        = BINARY_ASSIGNABLE+12;
++	public static final int OPCODE_indexof     = BINARY_ASSIGNABLE+13;
++	public static final int OPCODE_arrygen     = BINARY_ASSIGNABLE+14;
+ 
+ 	// =========================================================================
+ 	// Nary Assignables
+ 	// =========================================================================
+-	public static final int NARY_ASSIGNABLE = BINARY_ASSIGNABLE+12;
++	public static final int NARY_ASSIGNABLE = BINARY_ASSIGNABLE+15;
+ 	
+ 	public static final int OPCODE_newarray         = NARY_ASSIGNABLE+0;
+ 	public static final int OPCODE_newrecord        = NARY_ASSIGNABLE+1;
+diff --git a/modules/wyil/src/wyil/lang/Codes.java b/modules/wyil/src/wyil/lang/Codes.java
+index 188de6df2..2bdd93ce7 100644
+--- a/modules/wyil/src/wyil/lang/Codes.java
++++ b/modules/wyil/src/wyil/lang/Codes.java
+@@ -45,10 +45,8 @@ public static Assume Assume(int block) {
+ 		return new Assume(block);
+ 	}
+ 
+-	public static BinaryOperator BinaryOperator(Type type, int target, int leftOperand,
+-			int rightOperand, BinaryOperatorKind op) {
+-		return new BinaryOperator(type, target, leftOperand,
+-				rightOperand, op);
++	public static Operator Operator(Type type, int[] targets, int[] operands, OperatorKind op) {
++		return new Operator(type, targets, operands, op);
+ 	}
+ 
+ 	/**
+@@ -159,10 +157,6 @@ public static Lambda Lambda(Type.FunctionOrMethod fun, int target,
+ 		return new Lambda(fun, target, operands, name);
+ 	}
+ 
+-	public static Not Not(int target, int operand) {
+-		return new Not(target, operand);
+-	}
+-
+ 	public static LengthOf LengthOf(Type.EffectiveArray type, int target,
+ 			int operand) {
+ 		return new LengthOf(type, target, operand);
+@@ -286,10 +280,6 @@ public static IndirectInvoke IndirectInvoke(Type.FunctionOrMethod fun,
+ 		return new IndirectInvoke(fun, targets, operand, operands);
+ 	}
+ 
+-	public static Invert Invert(Type type, int target, int operand) {
+-		return new Invert(type, target, operand);
+-	}
+-
+ 	public static Label Label(String label) {
+ 		return new Label(label);
+ 	}
+@@ -318,11 +308,6 @@ public static NewObject NewObject(Type.Reference type, int target,
+ 		return new NewObject(type, target, operand);
+ 	}
+ 
+-	public static Dereference Dereference(Type.Reference type, int target,
+-			int operand) {
+-		return new Dereference(type, target, operand);
+-	}
+-
+ 	public static Quantify Quantify(int startOperand, int endOperand, int indexOperand, int[] modifiedOperands,
+ 			int block) {
+ 		return new Quantify(startOperand, endOperand, indexOperand, modifiedOperands, block);
+@@ -341,11 +326,6 @@ public static Update Update(Type beforeType, int target, int[] operands,
+ 				afterType, fields);
+ 	}
+ 
+-	public static UnaryOperator UnaryOperator(Type type, int target, int operand,
+-			UnaryOperatorKind uop) {
+-		return new UnaryOperator(type, target, operand, uop);
+-	}
+-
+ 	// ===============================================================
+ 	// Bytecode Implementations
+ 	// ===============================================================
+@@ -357,60 +337,77 @@ public static UnaryOperator UnaryOperator(Type type, int target, int operand,
+ 	 * @author David J. Pearce
+ 	 *
+ 	 */
+-	public enum BinaryOperatorKind {
+-		ADD(0) {
++	public enum OperatorKind {
++		// Unary
++		NEG(0) {
++			public String toString() {
++				return "neg";
++			}
++		},
++		INVERT(1) {
++			public String toString() {
++				return "invert";
++			}
++		},
++		DEREFERENCE(2) {
++			public String toString() {
++				return "deref";
++			}
++		},
++		// Binary
++		ADD(3) {
+ 			public String toString() {
+ 				return "add";
+ 			}
+ 		},
+-		SUB(1) {
++		SUB(4) {
+ 			public String toString() {
+ 				return "sub";
+ 			}
+ 		},
+-		MUL(2) {
++		MUL(5) {
+ 			public String toString() {
+ 				return "mul";
+ 			}
+ 		},
+-		DIV(3) {
++		DIV(6) {
+ 			public String toString() {
+ 				return "div";
+ 			}
+ 		},
+-		REM(4) {
++		REM(7) {
+ 			public String toString() {
+ 				return "rem";
+ 			}
+ 		},
+-		BITWISEOR(5) {
++		BITWISEOR(8) {
+ 			public String toString() {
+ 				return "or";
+ 			}
+ 		},
+-		BITWISEXOR(6) {
++		BITWISEXOR(9) {
+ 			public String toString() {
+ 				return "xor";
+ 			}
+ 		},
+-		BITWISEAND(7) {
++		BITWISEAND(10) {
+ 			public String toString() {
+ 				return "and";
+ 			}
+ 		},
+-		LEFTSHIFT(8) {
++		LEFTSHIFT(11) {
+ 			public String toString() {
+ 				return "shl";
+ 			}
+ 		},
+-		RIGHTSHIFT(9) {
++		RIGHTSHIFT(12) {
+ 			public String toString() {
+ 				return "shr";
+ 			}
+ 		};
+ 		public int offset;
+ 
+-		private BinaryOperatorKind(int offset) {
++		private OperatorKind(int offset) {
+ 			this.offset = offset;
+ 		}
+ 	};
+@@ -457,28 +454,27 @@ private BinaryOperatorKind(int offset) {
+ 	 * @author David J. Pearce
+ 	 *
+ 	 */
+-	public static final class BinaryOperator extends AbstractBytecode<Type> {
+-		public final BinaryOperatorKind kind;
++	public static final class Operator extends AbstractBytecode<Type> {
++		public final OperatorKind kind;
+ 
+-		private BinaryOperator(Type type, int target, int lhs, int rhs,
+-				BinaryOperatorKind bop) {
+-			super(type, target, lhs, rhs);
++		private Operator(Type type, int[] targets, int[] operands,
++				OperatorKind bop) {
++			super(new Type[]{ type }, targets, operands);
+ 			if (bop == null) {
+ 				throw new IllegalArgumentException(
+-						"BinOp bop argument cannot be null");
++						"Operator kind cannot be null");
+ 			}
+ 			this.kind = bop;
+ 		}
+ 
+ 		@Override
+-		public int opcode() {
+-			return OPCODE_add + kind.offset;
++		public int opcode() {			
++			return OPCODE_neg + kind.offset;
+ 		}
+ 
+ 		@Override
+ 		public Code clone(int[] nTargets, int[] nOperands) {
+-			return BinaryOperator(type(0), nTargets[0], nOperands[0], nOperands[1],
+-					kind);
++			return Operator(type(0), nTargets, nOperands, kind);
+ 		}
+ 
+ 		public int hashCode() {
+@@ -486,16 +482,15 @@ public int hashCode() {
+ 		}
+ 
+ 		public boolean equals(Object o) {
+-			if (o instanceof BinaryOperator) {
+-				BinaryOperator bo = (BinaryOperator) o;
++			if (o instanceof Operator) {
++				Operator bo = (Operator) o;
+ 				return kind.equals(bo.kind) && super.equals(bo);
+ 			}
+ 			return false;
+ 		}
+ 
+ 		public String toString() {
+-			return kind + " %" + target(0) + " = %" + operand(0) + ", %"
+-					+ operand(1) + " : " + type(0);
++			return kind + " %" + target(0) + " = " + arrayToString(operands()) + " : " + type(0);
+ 		}
+ 	}
+ 
+@@ -1339,62 +1334,6 @@ public Invariant clone() {
+ 		}
+ 	}
+ 
+-	/**
+-	 * Read a boolean value from the operand register, inverts it and writes the
+-	 * result to the target register. For example, the following Whiley code:
+-	 *
+-	 * <pre>
+-	 * function f(bool x) -> bool:
+-	 *     return !x
+-	 * </pre>
+-	 *
+-	 * can be translated into the following WyIL:
+-	 *
+-	 * <pre>
+-	 * function f(bool x) -> bool:
+-	 * body:
+-	 *     not %0 = %0     : int
+-	 *     return %0       : int
+-	 * </pre>
+-	 *
+-	 * This simply reads the parameter <code>x</code> stored in register
+-	 * <code>%0</code>, inverts it and then returns the inverted value.
+-	 *
+-	 * @author David J. Pearce
+-	 *
+-	 */
+-	public static final class Not extends AbstractBytecode<Type.Bool> {
+-
+-		private Not(int target, int operand) {
+-			super(Type.T_BOOL, target, operand);
+-		}
+-
+-		public int opcode() {
+-			return OPCODE_not;
+-		}
+-
+-		@Override
+-		public Code clone(int[] nTargets, int[] nOperands) {
+-			return Not(nTargets[0], nOperands[0]);
+-		}
+-
+-		public int hashCode() {
+-			return super.hashCode();
+-		}
+-
+-		public boolean equals(Object o) {
+-			if (o instanceof Not) {
+-				Not n = (Not) o;
+-				return super.equals(n);
+-			}
+-			return false;
+-		}
+-
+-		public String toString() {
+-			return "not %" + target(0) + " = %" + operand(0) + " : " + type(0);
+-		}
+-	}
+-
+ 	/**
+ 	 * Corresponds to a function or method call whose parameters are read from
+ 	 * zero or more operand registers. If a return value is required, this is
+@@ -2482,59 +2421,6 @@ public Code clone(int[] nTargets, int[] nOperands) {
+ 
+ 	}
+ 
+-	/**
+-	 * Corresponds to a bitwise inversion operation, which reads a byte value
+-	 * from the operand register, inverts it and writes the result to the target
+-	 * resgister. For example, the following Whiley code:
+-	 *
+-	 * <pre>
+-	 * function f(byte x) -> byte:
+-	 *    return ~x
+-	 * </pre>
+-	 *
+-	 * can be translated into the following WyIL code:
+-	 *
+-	 * <pre>
+-	 * function f(byte x) -> byte:
+-	 * body:
+-	 *     invert %0 = %0   : byte
+-	 *     return %0        : byte
+-	 * </pre>
+-	 *
+-	 * Here, the expression <code>~x</code> generates an <code>invert</code>
+-	 * bytecode.
+-	 *
+-	 * @author David J. Pearce
+-	 *
+-	 */
+-	public static final class Invert extends AbstractBytecode<Type> {
+-
+-		private Invert(Type type, int target, int operand) {
+-			super(type, target, operand);
+-		}
+-
+-		@Override
+-		public int opcode() {
+-			return OPCODE_invert;
+-		}
+-
+-		@Override
+-		protected Code clone(int[] nTargets, int[] nOperands) {
+-			return Invert(type(0), nTargets[0], nOperands[0]);
+-		}
+-
+-		public boolean equals(Object o) {
+-			if (o instanceof Invert) {
+-				return super.equals(o);
+-			}
+-			return false;
+-		}
+-
+-		public String toString() {
+-			return "invert %" + target(0) + " = %" + operand(0) + " : " + type(0);
+-		}
+-	}
+-
+ 	/**
+ 	 * Instantiate a new object from the value in a given operand register, and
+ 	 * write the result (a reference to that object) to a given target register.
+@@ -2591,118 +2477,6 @@ public String toString() {
+ 		}
+ 	}
+ 
+-	/**
+-	 * Reads a reference value from the operand register, dereferences it (i.e.
+-	 * extracts the value it refers to) and writes this to the target register.
+-	 *
+-	 * @author David J. Pearce
+-	 *
+-	 */
+-	public static final class Dereference extends AbstractBytecode<Type.Reference> {
+-
+-		private Dereference(Type.Reference type, int target, int operand) {
+-			super(type, target, operand);
+-		}
+-
+-		@Override
+-		public int opcode() {
+-			return OPCODE_dereference;
+-		}
+-
+-		protected Code clone(int[] nTargets, int[] nOperands) {
+-			return Dereference(type(0), nTargets[0], nOperands[0]);
+-		}
+-
+-		public boolean equals(Object o) {
+-			if (o instanceof Dereference) {
+-				return super.equals(o);
+-			}
+-			return false;
+-		}
+-
+-		public String toString() {
+-			return "deref %" + target(0) + " = %" + operand(0) + " : " + type(0);
+-		}
+-	}
+-
+-	public enum UnaryOperatorKind {
+-		NEG(0) {
+-			public String toString() {
+-				return "neg";
+-			}
+-		};
+-		
+-		public final int offset;
+-
+-		private UnaryOperatorKind(int offset) {
+-			this.offset = offset;
+-		}
+-	};
+-
+-	/**
+-	 * Read a number (int or real) from the operand register, perform a unary
+-	 * arithmetic operation on it (e.g. negation) and writes the result to the
+-	 * target register. For example, the following Whiley code:
+-	 *
+-	 * <pre>
+-	 * function f(int x) -> int:
+-	 *     return -x
+-	 * </pre>
+-	 *
+-	 * can be translated into the following WyIL:
+-	 *
+-	 * <pre>
+-	 * function f(int x) -> int:
+-	 * body:
+-	 *     neg %0 = %0     : int
+-	 *     return %0       : int
+-	 * </pre>
+-	 *
+-	 * This simply reads the parameter <code>x</code> stored in register
+-	 * <code>%0</code>, negates it and then returns the negated value.
+-	 *
+-	 * @author David J. Pearce
+-	 *
+-	 */
+-	public static final class UnaryOperator extends AbstractBytecode<Type> {
+-		public final UnaryOperatorKind kind;
+-
+-		private UnaryOperator(Type type, int target, int operand, UnaryOperatorKind uop) {
+-			super(type, target, operand);
+-			if (uop == null) {
+-				throw new IllegalArgumentException(
+-						"UnaryArithOp bop argument cannot be null");
+-			}
+-			this.kind = uop;
+-		}
+-
+-		@Override
+-		public int opcode() {
+-			return OPCODE_neg + kind.offset;
+-		}
+-
+-		@Override
+-		public Code clone(int[] nTargets, int[] nOperands) {
+-			return UnaryOperator(type(0), nTargets[0], nOperands[0], kind);
+-		}
+-
+-		public int hashCode() {
+-			return kind.hashCode() + super.hashCode();
+-		}
+-
+-		public boolean equals(Object o) {
+-			if (o instanceof UnaryOperator) {
+-				UnaryOperator bo = (UnaryOperator) o;
+-				return kind.equals(bo.kind) && super.equals(bo);
+-			}
+-			return false;
+-		}
+-
+-		public String toString() {
+-			return kind + " %" + target(0) + " = %" + operand(0) + " : " + type(0);
+-		}
+-	}
+-
+ 	// =============================================================
+ 	// Helpers
+ 	// =============================================================
+diff --git a/modules/wyil/src/wyil/util/Interpreter.java b/modules/wyil/src/wyil/util/Interpreter.java
+index ea85cc3cf..d33ba5002 100644
+--- a/modules/wyil/src/wyil/util/Interpreter.java
++++ b/modules/wyil/src/wyil/util/Interpreter.java
+@@ -161,16 +161,14 @@ private Object execute(Constant[] frame, Context context) {
+ 			return execute((Codes.AssertOrAssume) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Assign) {
+ 			return execute((Codes.Assign) bytecode, frame, context);
+-		} else if (bytecode instanceof Codes.BinaryOperator) {
+-			return execute((Codes.BinaryOperator) bytecode, frame, context);
++		} else if (bytecode instanceof Codes.Operator) {
++			return execute((Codes.Operator) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Const) {
+ 			return execute((Codes.Const) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Convert) {
+ 			return execute((Codes.Convert) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Debug) {
+ 			return execute((Codes.Debug) bytecode, frame, context);
+-		} else if (bytecode instanceof Codes.Dereference) {
+-			return execute((Codes.Dereference) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Fail) {
+ 			return execute((Codes.Fail) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.FieldLoad) {
+@@ -185,8 +183,6 @@ private Object execute(Constant[] frame, Context context) {
+ 			return execute((Codes.IndexOf) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.IndirectInvoke) {
+ 			return execute((Codes.IndirectInvoke) bytecode, frame, context);
+-		} else if (bytecode instanceof Codes.Invert) {
+-			return execute((Codes.Invert) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Invoke) {
+ 			return execute((Codes.Invoke) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Label) {
+@@ -216,8 +212,6 @@ private Object execute(Constant[] frame, Context context) {
+ 			return execute((Codes.Return) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Switch) {
+ 			return execute((Codes.Switch) bytecode, frame, context);
+-		} else if (bytecode instanceof Codes.UnaryOperator) {
+-			return execute((Codes.UnaryOperator) bytecode, frame, context);
+ 		} else if (bytecode instanceof Codes.Update) {
+ 			return execute((Codes.Update) bytecode, frame, context);
+ 		} else {
+@@ -283,22 +277,39 @@ private Object execute(Codes.Assign bytecode, Constant[] frame,
+ 	 *            --- Context in which bytecodes are executed
+ 	 * @return
+ 	 */
+-	private Object execute(Codes.BinaryOperator bytecode, Constant[] frame,
++	private Object execute(Codes.Operator bytecode, Constant[] frame,
+ 			Context context) {
+-		Constant op1 = frame[bytecode.operand(0)];
+-		Constant op2 = frame[bytecode.operand(1)];
+-
+ 		// Compute result
+ 		Constant result;
+-		if (op1 instanceof Constant.Integer) {
+-			checkType(op2, context, Constant.Integer.class);
+-			result = execute(bytecode.kind, (Constant.Integer) op1,
+-					(Constant.Integer) op2, context);
+-		} else if (op1 instanceof Constant.Byte) {
+-			checkType(op2, context, Constant.Byte.class, Constant.Integer.class);
+-			result = execute(bytecode.kind, (Constant.Byte) op1, op2, context);
+-		} else {
+-			return deadCode(context); // dead because of above checks
++		//
++		switch(bytecode.kind) {
++		case NEG:			
++		case INVERT:			
++		case DEREFERENCE:
++			result = executeUnary(bytecode.kind,frame[bytecode.operand(0)],context); 
++			break;
++		case ADD:
++		case SUB:
++		case MUL:
++		case DIV:
++		case REM: {
++			Constant.Integer lhs = checkType(frame[bytecode.operand(0)], context, Constant.Integer.class);
++			Constant.Integer rhs = checkType(frame[bytecode.operand(1)], context, Constant.Integer.class);
++			result = execute(bytecode.kind,lhs,rhs,context);
++			break;
++		}
++		case BITWISEXOR:
++		case BITWISEOR:
++		case BITWISEAND: 
++		case LEFTSHIFT:
++		case RIGHTSHIFT: {
++			Constant.Byte lhs = checkType(frame[bytecode.operand(0)], context, Constant.Byte.class);
++			Constant rhs = frame[bytecode.operand(1)];
++			result = execute(bytecode.kind,lhs,rhs,context);
++			break;
++		}
++		default:
++			return deadCode(context);		
+ 		}
+ 
+ 		// Write result to target
+@@ -307,6 +318,26 @@ private Object execute(Codes.BinaryOperator bytecode, Constant[] frame,
+ 		return context.pc.next();
+ 	}
+ 
++	private Constant executeUnary(Codes.OperatorKind kind,
++			Constant operand, Context context) {
++		switch(kind) {
++		case NEG: {
++			Constant.Integer i = checkType(operand, context, Constant.Integer.class);
++			return i.negate();
++		}
++		case INVERT: {
++			Constant.Byte b = checkType(operand, context, Constant.Byte.class);			
++			return Constant.V_BYTE((byte) ~b.value);
++		}
++		case DEREFERENCE: {
++			checkType(operand, context, ConstantObject.class);
++			ConstantObject ref = (ConstantObject) operand;
++			return ref.read();
++		}
++		}
++		return (Constant) deadCode(context);
++	}
++	
+ 	/**
+ 	 * Execute an integer binary operator
+ 	 *
+@@ -320,7 +351,7 @@ private Object execute(Codes.BinaryOperator bytecode, Constant[] frame,
+ 	 *            --- Context in which bytecodes are executed
+ 	 * @return
+ 	 */
+-	private Constant execute(Codes.BinaryOperatorKind kind,
++	private Constant execute(Codes.OperatorKind kind,
+ 			Constant.Integer i1, Constant.Integer i2, Context context) {
+ 		switch (kind) {
+ 		case ADD:
+@@ -351,7 +382,7 @@ private Constant execute(Codes.BinaryOperatorKind kind,
+ 	 *            --- Context in which bytecodes are executed            
+ 	 * @return
+ 	 */
+-	private Constant execute(Codes.BinaryOperatorKind kind, Constant.Byte i1,
++	private Constant execute(Codes.OperatorKind kind, Constant.Byte i1,
+ 			Constant i2, Context context) {
+ 		int result;
+ 		switch (kind) {
+@@ -557,15 +588,6 @@ private Object execute(Codes.Debug bytecode, Constant[] frame,
+ 		return context.pc.next();
+ 	}
+ 
+-	private Object execute(Codes.Dereference bytecode, Constant[] frame,
+-			Context context) {
+-		Constant operand = frame[bytecode.operand(0)];
+-		checkType(operand, context, ConstantObject.class);
+-		ConstantObject ref = (ConstantObject) operand;
+-		frame[bytecode.target(0)] = ref.read();
+-		return context.pc.next();
+-	}
+-
+ 	/**
+ 	 * Execute a fail bytecode instruction at a given point in the function or
+ 	 * method body. This will generate a runtime fault.
+@@ -901,30 +923,6 @@ private Object execute(Codes.Invariant bytecode, Constant[] frame,
+ 		return context.pc.next();
+ 	}
+ 
+-	/**
+-	 * Execute an Invert bytecode instruction at a given point in the function
+-	 * or method body. This checks the operand is a byte value.
+-	 *
+-	 * @param bytecode
+-	 *            --- The bytecode to execute
+-	 * @param frame
+-	 *            --- The current stack frame
+-	 * @param context
+-	 *            --- Context in which bytecodes are executed
+-	 * @return
+-	 */
+-	private Object execute(Codes.Invert bytecode, Constant[] frame,
+-			Context context) {
+-		Constant operand = frame[bytecode.operand(0)];
+-		// Check that we have a byte operand
+-		checkType(operand, context, Constant.Byte.class);
+-		// Write back the inverted value
+-		Constant.Byte b = (Constant.Byte) operand;
+-		frame[bytecode.target(0)] = Constant.V_BYTE((byte) ~b.value);
+-		// Done
+-		return context.pc.next();
+-	}
+-
+ 	/**
+ 	 * Execute an Invoke bytecode instruction at a given point in the function
+ 	 * or method body. This generates a recursive call to execute the given
+@@ -1164,27 +1162,6 @@ private Object execute(Codes.Switch bytecode, Constant[] frame, Context context)
+ 		return context.getLabel(bytecode.defaultTarget);
+ 	}
+ 
+-	private Object execute(Codes.UnaryOperator bytecode, Constant[] frame,
+-			Context context) {
+-		Constant _operand = frame[bytecode.operand(0)];
+-		Constant result;
+-		//
+-		switch (bytecode.kind) {
+-		case NEG:
+-			checkType(_operand, context, Constant.Integer.class);
+-			Constant.Integer operand = (Constant.Integer) _operand;
+-			result = operand.negate();			
+-			break;		
+-		default:
+-			return deadCode(context);
+-		}
+-		// Assign result to target register
+-		frame[bytecode.target(0)] = result;
+-		// Fall through to next bytecode
+-		return context.pc.next();
+-
+-	}
+-
+ 	private Object execute(Codes.Update bytecode, Constant[] frame,
+ 			Context context) {
+ 		Constant rhs = frame[bytecode.result()];
+@@ -1269,17 +1246,17 @@ private Constant update(Constant lhs, Iterator<Codes.LVal> descriptor,
+ 	 * @param types
+ 	 *            --- Types to be checked against
+ 	 */
+-	private void checkType(Constant operand, Context context,
+-			Class<? extends Constant>... types) {
++	private <T extends Constant> T checkType(Constant operand, Context context, Class<T>... types) {
+ 		// Got through each type in turn checking for a match
+ 		for (int i = 0; i != types.length; ++i) {
+ 			if (types[i].isInstance(operand)) {
+ 				// Matched!
+-				return;
++				return (T) operand;
+ 			}
+ 		}
+ 		// No match, therefore through an error
+ 		error("invalid operand", context);
++		return null;
+ 	}
+ 
+ 	/**
+diff --git a/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java b/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
+index 6d3b192de..d5bd2df28 100755
+--- a/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
++++ b/modules/wyjc/src/wyjc/Wyil2JavaBuilder.java
+@@ -581,8 +581,8 @@ private int translate(CodeForest.Index pc, Code code, int freeSlot, CodeForest f
+ 			ArrayList<Bytecode> bytecodes) {
+ 
+ 		try {
+-			if (code instanceof Codes.BinaryOperator) {
+-				translate(pc, (Codes.BinaryOperator) code, freeSlot, forest, bytecodes);
++			if (code instanceof Codes.Operator) {
++				translate(pc, (Codes.Operator) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Convert) {
+ 				translate(pc, (Codes.Convert) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Const) {
+@@ -609,8 +609,6 @@ private int translate(CodeForest.Index pc, Code code, int freeSlot, CodeForest f
+ 				translate(pc, (Codes.IndirectInvoke) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Invoke) {
+ 				translate(pc, (Codes.Invoke) code, freeSlot, forest, bytecodes);
+-			} else if (code instanceof Codes.Invert) {
+-				translate(pc, (Codes.Invert) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Label) {
+ 				translate(pc, (Codes.Label) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.ArrayGenerator) {
+@@ -633,10 +631,6 @@ private int translate(CodeForest.Index pc, Code code, int freeSlot, CodeForest f
+ 				translate(pc, (Codes.NewArray) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.NewRecord) {
+ 				translate(pc, (Codes.NewRecord) code, freeSlot, forest, bytecodes);
+-			} else if (code instanceof Codes.UnaryOperator) {
+-				translate(pc, (Codes.UnaryOperator) code, freeSlot, forest, bytecodes);
+-			} else if (code instanceof Codes.Dereference) {
+-				translate(pc, (Codes.Dereference) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Return) {
+ 				translate(pc, (Codes.Return) code, freeSlot, forest, bytecodes);
+ 			} else if (code instanceof Codes.Nop) {
+@@ -1302,14 +1296,23 @@ private void translate(CodeForest.Index index, Codes.FieldLoad c, int freeSlot,
+ 		bytecodes.add(new Bytecode.Store(c.target(0), convertUnderlyingType(c.fieldType())));
+ 	}
+ 
+-	private void translate(CodeForest.Index index, Codes.BinaryOperator c, int freeSlot, CodeForest forest,
++	private void translate(CodeForest.Index index, Codes.Operator c, int freeSlot, CodeForest forest,
+ 			ArrayList<Bytecode> bytecodes) {
+ 
+ 		JvmType type = convertUnderlyingType(c.type(0));
+-		JvmType.Function ftype = new JvmType.Function(type, type);
++		JvmType.Function ftype = null;
+ 
+ 		// first, load operands
+ 		switch (c.kind) {
++		case NEG:
++		case INVERT:
++			ftype = new JvmType.Function(type);
++			bytecodes.add(new Bytecode.Load(c.operand(0), type));
++			break;
++		case DEREFERENCE:
++			ftype = new JvmType.Function(JAVA_LANG_OBJECT);
++			bytecodes.add(new Bytecode.Load(c.operand(0), type));
++			break;			
+ 		case ADD:
+ 		case SUB:
+ 		case MUL:
+@@ -1318,11 +1321,13 @@ private void translate(CodeForest.Index index, Codes.BinaryOperator c, int freeS
+ 		case BITWISEAND:
+ 		case BITWISEOR:
+ 		case BITWISEXOR:
++			ftype = new JvmType.Function(type, type);
+ 			bytecodes.add(new Bytecode.Load(c.operand(0), type));
+ 			bytecodes.add(new Bytecode.Load(c.operand(1), type));
+ 			break;
+ 		case LEFTSHIFT:
+ 		case RIGHTSHIFT:
++			ftype = new JvmType.Function(type, WHILEYINT);
+ 			bytecodes.add(new Bytecode.Load(c.operand(0), type));
+ 			bytecodes.add(new Bytecode.Load(c.operand(1), WHILEYINT));
+ 			break;
+@@ -1330,6 +1335,18 @@ private void translate(CodeForest.Index index, Codes.BinaryOperator c, int freeS
+ 
+ 		// second, apply operation
+ 		switch (c.kind) {
++		case NEG:
++			bytecodes.add(new Bytecode.Invoke((JvmType.Clazz) type, "negate", ftype, Bytecode.InvokeMode.VIRTUAL));
++			break;
++		case INVERT:
++			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "compliment", ftype, Bytecode.InvokeMode.VIRTUAL));
++			break;
++		case DEREFERENCE:
++			bytecodes.add(new Bytecode.Invoke(WHILEYOBJECT, "state", ftype, Bytecode.InvokeMode.VIRTUAL));
++			// finally, we need to cast the object we got back appropriately.
++			Type.Reference pt = (Type.Reference) c.type(0);
++			addReadConversion(pt.element(), bytecodes);
++			break;
+ 		case ADD:
+ 			bytecodes.add(new Bytecode.Invoke((JvmType.Clazz) type, "add",
+ 					ftype, Bytecode.InvokeMode.VIRTUAL));
+@@ -1351,27 +1368,22 @@ private void translate(CodeForest.Index index, Codes.BinaryOperator c, int freeS
+ 					"remainder", ftype, Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+ 		case BITWISEAND:
+-			ftype = new JvmType.Function(type, type);
+ 			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "and", ftype,
+ 					Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+ 		case BITWISEOR:
+-			ftype = new JvmType.Function(type, type);
+ 			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "or", ftype,
+ 					Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+ 		case BITWISEXOR:
+-			ftype = new JvmType.Function(type, type);
+ 			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "xor", ftype,
+ 					Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+ 		case LEFTSHIFT:
+-			ftype = new JvmType.Function(type, WHILEYINT);
+ 			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "leftShift", ftype,
+ 					Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+ 		case RIGHTSHIFT:
+-			ftype = new JvmType.Function(type, WHILEYINT);
+ 			bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "rightShift", ftype,
+ 					Bytecode.InvokeMode.VIRTUAL));
+ 			break;
+@@ -1383,31 +1395,6 @@ private void translate(CodeForest.Index index, Codes.BinaryOperator c, int freeS
+ 		bytecodes.add(new Bytecode.Store(c.target(0), type));
+ 	}
+ 
+-	private void translate(CodeForest.Index index, Codes.Invert c, int freeSlot, CodeForest forest, ArrayList<Bytecode> bytecodes) {
+-		JvmType type = convertUnderlyingType(c.type(0));
+-		bytecodes.add(new Bytecode.Load(c.operand(0), type));
+-		JvmType.Function ftype = new JvmType.Function(type);
+-		bytecodes.add(new Bytecode.Invoke(WHILEYBYTE, "compliment", ftype, Bytecode.InvokeMode.VIRTUAL));
+-		bytecodes.add(new Bytecode.Store(c.target(0), type));
+-	}
+-
+-	private void translate(CodeForest.Index index, Codes.UnaryOperator c, int freeSlot, CodeForest forest,
+-			ArrayList<Bytecode> bytecodes) {
+-		JvmType srcType = convertUnderlyingType(c.type(0));
+-		JvmType targetType = null;
+-		String name = null;
+-		switch (c.kind) {
+-		case NEG:
+-			targetType = srcType;
+-			name = "negate";
+-			break;
+-		}
+-		JvmType.Function ftype = new JvmType.Function(targetType);
+-		bytecodes.add(new Bytecode.Load(c.operand(0), srcType));
+-		bytecodes.add(new Bytecode.Invoke((JvmType.Clazz) srcType, name, ftype, Bytecode.InvokeMode.VIRTUAL));
+-		bytecodes.add(new Bytecode.Store(c.target(0), targetType));
+-	}
+-
+ 	private void translate(CodeForest.Index index, Codes.NewObject c, int freeSlot, CodeForest forest, ArrayList<Bytecode> bytecodes) {
+ 		JvmType type = convertUnderlyingType(c.type(0));
+ 		bytecodes.add(new Bytecode.New(WHILEYOBJECT));
+@@ -1419,18 +1406,6 @@ private void translate(CodeForest.Index index, Codes.NewObject c, int freeSlot,
+ 		bytecodes.add(new Bytecode.Store(c.target(0), type));
+ 	}
+ 
+-	private void translate(CodeForest.Index index, Codes.Dereference c, int freeSlot, CodeForest forest,
+-			ArrayList<Bytecode> bytecodes) {
+-		JvmType type = convertUnderlyingType(c.type(0));
+-		JvmType.Function ftype = new JvmType.Function(JAVA_LANG_OBJECT);
+-		bytecodes.add(new Bytecode.Load(c.operand(0), type));
+-		bytecodes.add(new Bytecode.Invoke(WHILEYOBJECT, "state", ftype, Bytecode.InvokeMode.VIRTUAL));
+-		// finally, we need to cast the object we got back appropriately.
+-		Type.Reference pt = (Type.Reference) c.type(0);
+-		addReadConversion(pt.element(), bytecodes);
+-		bytecodes.add(new Bytecode.Store(c.target(0), convertUnderlyingType(c.type(0).element())));
+-	}
+-
+ 	protected void translate(CodeForest.Index index, Codes.NewArray c, int freeSlot, CodeForest forest, ArrayList<Bytecode> bytecodes) {
+ 		bytecodes.add(new Bytecode.New(WHILEYARRAY));
+ 		bytecodes.add(new Bytecode.Dup(WHILEYARRAY));

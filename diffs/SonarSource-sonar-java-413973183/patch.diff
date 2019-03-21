@@ -1,0 +1,146 @@
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/ReuseRandomCheck.java b/java-checks/src/main/java/org/sonar/java/checks/ReuseRandomCheck.java
+index 34518e8c70..e47ca6ff5b 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/ReuseRandomCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/ReuseRandomCheck.java
+@@ -21,7 +21,6 @@
+ 
+ import java.util.Collections;
+ import java.util.List;
+-import java.util.Optional;
+ import org.sonar.check.Rule;
+ import org.sonar.java.checks.methods.AbstractMethodDetection;
+ import org.sonar.java.matcher.MethodMatcher;
+@@ -44,35 +43,32 @@
+ 
+   @Override
+   protected void onConstructorFound(NewClassTree newClassTree) {
+-    lookupInitializedSymbol(newClassTree)
+-      .map(Optional::of).orElseGet(() -> lookupAssignedSymbol(newClassTree))
+-      .map(Symbol::owner)
+-      .filter(Symbol::isMethodSymbol)
+-      .filter(ReuseRandomCheck::isNotConstructorOrStaticMain)
+-      .ifPresent(owner -> reportIssue(newClassTree.identifier(), "Save and re-use this \"Random\"."));
++    if (assignedToLocalVariablesNotInConstructorOrStaticMain(newClassTree)) {
++      reportIssue(newClassTree.identifier(), "Save and re-use this \"Random\".");
++    }
+   }
+ 
+-  private static Optional<Symbol> lookupInitializedSymbol(ExpressionTree expression) {
+-    return Optional.of(expression)
+-      .map(Tree::parent)
+-      .filter(tree -> tree.is(Kind.VARIABLE))
+-      .map(VariableTree.class::cast)
+-      .map(VariableTree::symbol);
++  private static boolean assignedToLocalVariablesNotInConstructorOrStaticMain(Tree tree) {
++    Tree parent = tree.parent();
++    if (parent.is(Kind.ASSIGNMENT)) {
++      return isLocalVariableNotInConstructorOrStaticMain(((AssignmentExpressionTree) parent).variable()) &&
++        assignedToLocalVariablesNotInConstructorOrStaticMain(parent);
++    } else if (parent.is(Kind.VARIABLE)) {
++      return isLocalVariableNotInConstructorOrStaticMain(((VariableTree) parent).simpleName());
++    } else if (parent.is(Kind.PARENTHESIZED_EXPRESSION)) {
++      return assignedToLocalVariablesNotInConstructorOrStaticMain(parent);
++    } else {
++      return parent.is(Kind.EXPRESSION_STATEMENT);
++    }
+   }
+ 
+-  private static Optional<Symbol> lookupAssignedSymbol(ExpressionTree expression) {
+-    return Optional.of(expression)
+-      .map(Tree::parent)
+-      .filter(tree -> tree.is(Kind.ASSIGNMENT) && tree.parent().is(Kind.EXPRESSION_STATEMENT))
+-      .map(AssignmentExpressionTree.class::cast)
+-      .map(AssignmentExpressionTree::variable)
+-      .filter(tree -> tree.is(Kind.IDENTIFIER))
+-      .map(IdentifierTree.class::cast)
+-      .map(IdentifierTree::symbol);
+-  }
+-
+-  private static boolean isNotConstructorOrStaticMain(Symbol symbol) {
+-    return !("<init>".equals(symbol.name()) || ("main".equals(symbol.name()) && symbol.isStatic()));
++  private static boolean isLocalVariableNotInConstructorOrStaticMain(ExpressionTree expression) {
++    if (expression.is(Kind.IDENTIFIER)) {
++      Symbol symbol = ((IdentifierTree) expression).symbol().owner();
++      return symbol.isMethodSymbol() &&
++        !("<init>".equals(symbol.name()) || ("main".equals(symbol.name()) && symbol.isStatic()));
++    }
++    return false;
+   }
+ 
+ }
+diff --git a/java-checks/src/test/files/checks/ReuseRandomCheck.java b/java-checks/src/test/files/checks/ReuseRandomCheck.java
+index 0b5d9dc405..34d543bcb2 100644
+--- a/java-checks/src/test/files/checks/ReuseRandomCheck.java
++++ b/java-checks/src/test/files/checks/ReuseRandomCheck.java
+@@ -2,37 +2,43 @@
+ 
+ public class A {
+ 
+-  static Random s = new Random(); // Compliant for static field
+-  Random f = new Random(); // Compliant for field
++  static Random staticField = new Random(); // Compliant for static field
++  Random field = new Random(); // Compliant for field
+ 
+   A() {
+-    Random v = new Random(); // Compliant in constructor
++    Random localVar = new Random(); // Compliant in constructor
+   }
+ 
+-  void func(long seed, Random p) {
+-    Random a = new Random(); // Noncompliant [[sc=20;ec=26]] {{Save and re-use this "Random".}}
+-    Random b = new Random(seed); // Compliant for Random(long seed)
+-    Object c = new Object();
++  void func(long seed, Random param) {
++    Random localVar1 = new Random(); // Noncompliant [[sc=28;ec=34]] {{Save and re-use this "Random".}}
++    Random localVar2 = new Random(seed); // Compliant for Random(long seed)
++    Object localVar3 = new Object();
+ 
+-    s = new Random();
+-    f = new Random();
+-    thid.f = new Random();
++    staticField = new Random();
++    field = new Random();
++    thid.field = new Random();
+ 
+-    f = a = new Random();
+-    a = b = new Random(); // false-negative, a and b are local variables, corner case limitation
++    field = localVar1 = new Random();
++    field = (localVar1 = new Random());
++    localVar1 = localVar2 = new Random(); // Noncompliant
++    localVar1 = (localVar2 = new Random()); // Noncompliant
++    Random localVar4 = field = new Random();
++    Random localVar5 = localVar4 = new Random(); // Noncompliant
++    new Random(); // Noncompliant
+ 
+-    p = new Random(); // Noncompliant
++    param = new Random(); // Noncompliant
+ 
+     func(12, new Random());
++    func(12, localVar1 = new Random());
+   }
+ 
+   public static void main(String[] args) {
+-    Random v = new Random(); // Compliant in "main()"
++    Random localVar = new Random(); // Compliant in "main()"
+   }
+ 
+   public class B {
+     /*not static*/ void main() {
+-      Random v = new Random(); // Noncompliant
++      Random localVar = new Random(); // Noncompliant
+     }
+   }
+ 
+diff --git a/sonar-java-plugin/pom.xml b/sonar-java-plugin/pom.xml
+index ca42f64bcf..82cfec8064 100644
+--- a/sonar-java-plugin/pom.xml
++++ b/sonar-java-plugin/pom.xml
+@@ -112,7 +112,7 @@
+             <configuration>
+               <rules>
+                 <requireFilesSize>
+-                  <maxsize>9000000</maxsize>
++                  <maxsize>9030000</maxsize>
+                   <minsize>8800000</minsize>
+                   <files>
+                     <file>${project.build.directory}/${project.build.finalName}.jar</file>

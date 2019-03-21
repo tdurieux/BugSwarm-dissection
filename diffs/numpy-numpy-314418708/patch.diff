@@ -1,0 +1,59 @@
+diff --git a/numpy/core/tests/test_multiarray.py b/numpy/core/tests/test_multiarray.py
+index e54d67a0d50..690828cc86a 100644
+--- a/numpy/core/tests/test_multiarray.py
++++ b/numpy/core/tests/test_multiarray.py
+@@ -7086,21 +7086,14 @@ def test_1d_no_format(self):
+     def test_1d_format(self):
+         # until gh-5543, ensure that the behaviour matches what it used to be
+         a = np.array([np.pi])
+-
+-        def ret_and_exc(f, *args, **kwargs):
+-            try:
+-                return f(*args, **kwargs), None
+-            except Exception as e:
+-                # exceptions don't compare equal, so return type and args
+-                # which do
+-                return None, (type(e), e.args)
+-
+-        # Could switch on python version here, but all we care about is
+-        # that the behaviour hasn't changed
+-        assert_equal(
+-            ret_and_exc(object.__format__, a, '30'),
+-            ret_and_exc('{:30}'.format, a)
+-        )
++        if sys.version_info[:2] >= (3, 4):
++            assert_raises(TypeError, '{:30}'.format, a)
++        else:
++            with suppress_warnings() as sup:
++                sup.filter(PendingDeprecationWarning)
++                res = '{:30}'.format(a)
++                dst = object.__format__(a, '30')
++                assert_equal(res, dst)
+ 
+ 
+ class TestCTypes(object):
+diff --git a/numpy/testing/nose_tools/utils.py b/numpy/testing/nose_tools/utils.py
+index 973e3bb4bca..6c77e5e21e2 100644
+--- a/numpy/testing/nose_tools/utils.py
++++ b/numpy/testing/nose_tools/utils.py
+@@ -394,14 +394,17 @@ def assert_equal(actual, desired, err_msg='', verbose=True):
+         isdesnat = isnat(desired)
+         isactnat = isnat(actual)
+         dtypes_match = array(desired).dtype.type == array(actual).dtype.type
+-        if isdesnat and isactnat and dtypes_match:
++        if isdesnat and isactnat:
+             # If both are NaT (and have the same dtype -- datetime or
+             # timedelta) they are considered equal.
+-            return
++            if dtypes_match:
++                return
++            else:
++                raise AssertionError(msg)
++
+     except (TypeError, ValueError, NotImplementedError):
+         pass
+ 
+-
+     try:
+         # Explicitly use __eq__ for comparison, gh-2552
+         if not (desired == actual):

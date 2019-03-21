@@ -1,0 +1,83 @@
+diff --git a/examples/neural_networks/plot_mnist_filters.py b/examples/neural_networks/plot_mnist_filters.py
+index ab50d4e59a81..408e555443c5 100644
+--- a/examples/neural_networks/plot_mnist_filters.py
++++ b/examples/neural_networks/plot_mnist_filters.py
+@@ -28,6 +28,7 @@
+ 
+ # Load data from https://www.openml.org/d/554
+ X, y = fetch_openml('mnist_784', version=1, return_X_y=True)
++X = X / 255.
+ 
+ # rescale the data, use the traditional train/test split
+ X_train, X_test = X[:60000], X[60000:]
+diff --git a/sklearn/svm/tests/test_sparse.py b/sklearn/svm/tests/test_sparse.py
+index 2628cd741ab9..ce14bda1db34 100644
+--- a/sklearn/svm/tests/test_sparse.py
++++ b/sklearn/svm/tests/test_sparse.py
+@@ -1,8 +1,9 @@
+ import pytest
++
+ import numpy as np
+-from scipy import sparse
+ from numpy.testing import (assert_array_almost_equal, assert_array_equal,
+                            assert_equal)
++from scipy import sparse
+ 
+ from sklearn import datasets, svm, linear_model, base
+ from sklearn.datasets import make_classification, load_digits, make_blobs
+@@ -12,7 +13,6 @@
+ from sklearn.utils.testing import (assert_raises, assert_true, assert_false,
+                                    assert_warns, assert_raise_message,
+                                    ignore_warnings, skip_if_32bit)
+-import pytest
+ 
+ 
+ # test sample 1
+diff --git a/sklearn/utils/sparsefuncs_fast.pyx b/sklearn/utils/sparsefuncs_fast.pyx
+index 9eecad9a6e1b..b40b843e9432 100644
+--- a/sklearn/utils/sparsefuncs_fast.pyx
++++ b/sklearn/utils/sparsefuncs_fast.pyx
+@@ -27,8 +27,8 @@ ctypedef np.float64_t DOUBLE
+ 
+ def csr_row_norms(X):
+     """L2 norm of each row in CSR matrix X."""
+-    if X.dtype != np.float32:
+-        X = X.astype(np.float64, copy=False)
++    if X.dtype not in [np.float32, np.float64]:
++        X = X.astype(np.float64)
+     return _csr_row_norms(X.data, X.shape, X.indices, X.indptr)
+ 
+ 
+@@ -72,8 +72,8 @@ def csr_mean_variance_axis0(X):
+         Feature-wise variances
+ 
+     """
+-    if X.dtype != np.float32:
+-        X = X.astype(np.float64, copy=False)
++    if X.dtype not in [np.float32, np.float64]:
++        X = X.astype(np.float64)
+     means, variances, _ =  _csr_mean_variance_axis0(X.data, X.shape[0],
+                                                     X.shape[1], X.indices)
+     return means, variances
+@@ -152,8 +152,8 @@ def csc_mean_variance_axis0(X):
+         Feature-wise variances
+ 
+     """
+-    if X.dtype != np.float32:
+-        X = X.astype(np.float64, copy=False)
++    if X.dtype not in [np.float32, np.float64]:
++        X = X.astype(np.float64)
+     means, variances, _ = _csc_mean_variance_axis0(X.data, X.shape[0],
+                                                    X.shape[1], X.indices,
+                                                   X.indptr)
+@@ -260,8 +260,8 @@ def incr_mean_variance_axis0(X, last_mean, last_var, last_n):
+     `utils.extmath._batch_mean_variance_update`.
+ 
+     """
+-    if X.dtype != np.float32:
+-        X = X.astype(np.float64, copy=False)
++    if X.dtype not in [np.float32, np.float64]:
++        X = X.astype(np.float64)
+     return _incr_mean_variance_axis0(X.data, X.shape[0], X.shape[1], X.indices,
+                                      X.indptr, X.format, last_mean, last_var,
+                                      last_n)

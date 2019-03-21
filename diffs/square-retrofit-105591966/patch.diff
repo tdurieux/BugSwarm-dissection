@@ -1,0 +1,224 @@
+diff --git a/retrofit/src/main/java/retrofit2/BuiltInConverters.java b/retrofit/src/main/java/retrofit2/BuiltInConverters.java
+index 2d224f8ec..a1c450597 100644
+--- a/retrofit/src/main/java/retrofit2/BuiltInConverters.java
++++ b/retrofit/src/main/java/retrofit2/BuiltInConverters.java
+@@ -47,7 +47,8 @@
+     return null;
+   }
+ 
+-  @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++  @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++      Retrofit retrofit) {
+     if (type == String.class) {
+       return StringConverter.INSTANCE;
+     }
+diff --git a/retrofit/src/main/java/retrofit2/Converter.java b/retrofit/src/main/java/retrofit2/Converter.java
+index b3ed88613..ee7fe4484 100644
+--- a/retrofit/src/main/java/retrofit2/Converter.java
++++ b/retrofit/src/main/java/retrofit2/Converter.java
+@@ -69,7 +69,8 @@
+      * {@link Header @Header}, {@link Path @Path}, {@link Query @Query}, and
+      * {@link QueryMap @QueryMap} values.
+      */
+-    public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++    public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++        Retrofit retrofit) {
+       return null;
+     }
+   }
+diff --git a/retrofit/src/main/java/retrofit2/Retrofit.java b/retrofit/src/main/java/retrofit2/Retrofit.java
+index 624f00b2f..7a73f3d44 100644
+--- a/retrofit/src/main/java/retrofit2/Retrofit.java
++++ b/retrofit/src/main/java/retrofit2/Retrofit.java
+@@ -343,7 +343,7 @@ public BaseUrl baseUrl() {
+ 
+     for (int i = 0, count = converterFactories.size(); i < count; i++) {
+       Converter<?, String> converter =
+-          converterFactories.get(i).stringConverter(type, annotations);
++          converterFactories.get(i).stringConverter(type, annotations, this);
+       if (converter != null) {
+         //noinspection unchecked
+         return (Converter<T, String>) converter;
+diff --git a/retrofit/src/test/java/retrofit2/RetrofitTest.java b/retrofit/src/test/java/retrofit2/RetrofitTest.java
+index 12cd48e0d..a44d5939f 100644
+--- a/retrofit/src/test/java/retrofit2/RetrofitTest.java
++++ b/retrofit/src/test/java/retrofit2/RetrofitTest.java
+@@ -354,7 +354,8 @@
+   @Test public void parameterAnnotationsPassedToStringConverter() {
+     final AtomicReference<Annotation[]> annotationsRef = new AtomicReference<>();
+     class MyConverterFactory extends Converter.Factory {
+-      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++          Retrofit retrofit) {
+         annotationsRef.set(annotations);
+ 
+         return new Converter<Object, String>() {
+@@ -377,7 +378,8 @@
+ 
+   @Test public void stringConverterNotCalledForString() {
+     class MyConverterFactory extends Converter.Factory {
+-      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++          Retrofit retrofit) {
+         throw new AssertionError();
+       }
+     }
+@@ -394,7 +396,8 @@
+   @Test public void stringConverterReturningNullResultsInDefault() {
+     final AtomicBoolean factoryCalled = new AtomicBoolean();
+     class MyConverterFactory extends Converter.Factory {
+-      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++      @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++          Retrofit retrofit) {
+         factoryCalled.set(true);
+         return null;
+       }
+@@ -945,12 +948,12 @@
+         .addConverterFactory(factory)
+         .build();
+ 
+-    doReturn(expectedAdapter).when(factory).stringConverter(type, annotations);
++    doReturn(expectedAdapter).when(factory).stringConverter(type, annotations, retrofit);
+ 
+     Converter<?, String> actualAdapter = retrofit.stringConverter(type, annotations);
+     assertThat(actualAdapter).isSameAs(expectedAdapter);
+ 
+-    verify(factory).stringConverter(type, annotations);
++    verify(factory).stringConverter(type, annotations, retrofit);
+     verifyNoMoreInteractions(factory);
+   }
+ 
+diff --git a/retrofit/src/test/java/retrofit2/helpers/NonMatchingConverterFactory.java b/retrofit/src/test/java/retrofit2/helpers/NonMatchingConverterFactory.java
+index 78357aeec..6b86e794e 100644
+--- a/retrofit/src/test/java/retrofit2/helpers/NonMatchingConverterFactory.java
++++ b/retrofit/src/test/java/retrofit2/helpers/NonMatchingConverterFactory.java
+@@ -39,7 +39,8 @@
+     return null;
+   }
+ 
+-  @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations) {
++  @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++      Retrofit retrofit) {
+     called = true;
+     return null;
+   }
+diff --git a/samples/src/main/java/com/example/retrofit/JsonQueryParameters.java b/samples/src/main/java/com/example/retrofit/JsonQueryParameters.java
+new file mode 100644
+index 000000000..a1609a9dd
+--- /dev/null
++++ b/samples/src/main/java/com/example/retrofit/JsonQueryParameters.java
+@@ -0,0 +1,114 @@
++/*
++ * Copyright (C) 2016 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.example.retrofit;
++
++import java.io.IOException;
++import java.lang.annotation.Annotation;
++import java.lang.annotation.Retention;
++import java.lang.reflect.Type;
++import okhttp3.RequestBody;
++import okhttp3.ResponseBody;
++import okhttp3.mockwebserver.MockResponse;
++import okhttp3.mockwebserver.MockWebServer;
++import okhttp3.mockwebserver.RecordedRequest;
++import okio.Buffer;
++import retrofit2.Call;
++import retrofit2.Converter;
++import retrofit2.Response;
++import retrofit2.Retrofit;
++import retrofit2.converter.gson.GsonConverterFactory;
++import retrofit2.http.GET;
++import retrofit2.http.Query;
++
++import static java.lang.annotation.RetentionPolicy.RUNTIME;
++
++public final class JsonQueryParameters {
++  @Retention(RUNTIME)
++  @interface Json {
++  }
++
++  static class JsonStringConverterFactory extends Converter.Factory {
++    private final Converter.Factory delegateFactory;
++
++    JsonStringConverterFactory(Converter.Factory delegateFactory) {
++      this.delegateFactory = delegateFactory;
++    }
++
++    @Override public Converter<?, String> stringConverter(Type type, Annotation[] annotations,
++        Retrofit retrofit) {
++      for (Annotation annotation : annotations) {
++        if (annotation instanceof Json) {
++          // NOTE: If you also have a JSON converter factory installed in addition to this factory,
++          // you can call retrofit.requestBodyConverter(type, annotations) instead of having a
++          // reference to it explicitly as a field.
++          Converter<?, RequestBody> delegate =
++              delegateFactory.requestBodyConverter(type, annotations, retrofit);
++          return new DelegateToStringConverter<>(delegate);
++        }
++      }
++      return null;
++    }
++
++    static class DelegateToStringConverter<T> implements Converter<T, String> {
++      private final Converter<T, RequestBody> delegate;
++
++      DelegateToStringConverter(Converter<T, RequestBody> delegate) {
++        this.delegate = delegate;
++      }
++
++      @Override public String convert(T value) throws IOException {
++        Buffer buffer = new Buffer();
++        delegate.convert(value).writeTo(buffer);
++        return buffer.readUtf8();
++      }
++    }
++  }
++
++  static class Filter {
++    public final String userId;
++
++    public Filter(String userId) {
++      this.userId = userId;
++    }
++  }
++
++  interface Service {
++    @GET("/filter")
++    Call<ResponseBody> example(@Json @Query("value") Filter value);
++  }
++
++  public static void main(String... args) throws IOException, InterruptedException {
++    MockWebServer server = new MockWebServer();
++    server.start();
++    server.enqueue(new MockResponse());
++
++    Retrofit retrofit = new Retrofit.Builder()
++        .baseUrl(server.url("/"))
++        .addConverterFactory(new JsonStringConverterFactory(GsonConverterFactory.create()))
++        .build();
++    Service service = retrofit.create(Service.class);
++
++    Call<ResponseBody> call = service.example(new Filter("123"));
++    Response<ResponseBody> response = call.execute();
++    // TODO handle user response...
++
++    // Print the request path that the server saw to show the JSON query param:
++    RecordedRequest recordedRequest = server.takeRequest();
++    System.out.println(recordedRequest.getPath());
++
++    server.shutdown();
++  }
++}

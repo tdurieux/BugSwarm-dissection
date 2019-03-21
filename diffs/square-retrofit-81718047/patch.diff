@@ -1,0 +1,550 @@
+diff --git a/retrofit-adapters/rxjava/src/main/java/retrofit/RxJavaCallAdapterFactory.java b/retrofit-adapters/rxjava/src/main/java/retrofit/RxJavaCallAdapterFactory.java
+index 0449dd70b..fa179761d 100644
+--- a/retrofit-adapters/rxjava/src/main/java/retrofit/RxJavaCallAdapterFactory.java
++++ b/retrofit-adapters/rxjava/src/main/java/retrofit/RxJavaCallAdapterFactory.java
+@@ -38,7 +38,8 @@ public static RxJavaCallAdapterFactory create() {
+   private RxJavaCallAdapterFactory() {
+   }
+ 
+-  @Override public CallAdapter<?> get(Type returnType, Annotation[] annotations) {
++  @Override
++  public CallAdapter<?> get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
+     Class<?> rawType = Utils.getRawType(returnType);
+     boolean isSingle = "rx.Single".equals(rawType.getCanonicalName());
+     if (rawType != Observable.class && !isSingle) {
+diff --git a/retrofit-adapters/rxjava/src/test/java/retrofit/RxJavaCallAdapterFactoryTest.java b/retrofit-adapters/rxjava/src/test/java/retrofit/RxJavaCallAdapterFactoryTest.java
+index 142c4c9d6..b37b3c467 100644
+--- a/retrofit-adapters/rxjava/src/test/java/retrofit/RxJavaCallAdapterFactoryTest.java
++++ b/retrofit-adapters/rxjava/src/test/java/retrofit/RxJavaCallAdapterFactoryTest.java
+@@ -52,10 +52,11 @@
+     @GET("/") Single<Result<String>> singleResult();
+   }
+ 
++  private Retrofit retrofit;
+   private Service service;
+ 
+   @Before public void setUp() {
+-    Retrofit retrofit = new Retrofit.Builder()
++    retrofit = new Retrofit.Builder()
+         .baseUrl(server.url("/"))
+         .addConverterFactory(new StringConverterFactory())
+         .addCallAdapterFactory(RxJavaCallAdapterFactory.create())
+@@ -159,21 +160,25 @@
+   @Test public void responseType() {
+     CallAdapter.Factory factory = RxJavaCallAdapterFactory.create();
+     Type classType = new TypeToken<Observable<String>>() {}.getType();
+-    assertThat(factory.get(classType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(classType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+     Type wilcardType = new TypeToken<Observable<? extends String>>() {}.getType();
+-    assertThat(factory.get(wilcardType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(wilcardType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+     Type genericType = new TypeToken<Observable<List<String>>>() {}.getType();
+-    assertThat(factory.get(genericType, NO_ANNOTATIONS).responseType()) //
++    assertThat(factory.get(genericType, NO_ANNOTATIONS, retrofit).responseType())
+         .isEqualTo(new TypeToken<List<String>>() {}.getType());
+     Type responseType = new TypeToken<Observable<Response<String>>>() {}.getType();
+-    assertThat(factory.get(responseType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(responseType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+     Type resultType = new TypeToken<Observable<Response<String>>>() {}.getType();
+-    assertThat(factory.get(resultType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(resultType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+   }
+ 
+   @Test public void nonObservableTypeReturnsNull() {
+     CallAdapter.Factory factory = RxJavaCallAdapterFactory.create();
+-    CallAdapter<?> adapter = factory.get(String.class, NO_ANNOTATIONS);
++    CallAdapter<?> adapter = factory.get(String.class, NO_ANNOTATIONS, retrofit);
+     assertThat(adapter).isNull();
+   }
+ 
+@@ -181,14 +186,14 @@
+     CallAdapter.Factory factory = RxJavaCallAdapterFactory.create();
+     Type observableType = new TypeToken<Observable>() {}.getType();
+     try {
+-      factory.get(observableType, NO_ANNOTATIONS);
++      factory.get(observableType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Observable return type must be parameterized as Observable<Foo> or Observable<? extends Foo>");
+     }
+     Type singleType = new TypeToken<Single>() {}.getType();
+     try {
+-      factory.get(singleType, NO_ANNOTATIONS);
++      factory.get(singleType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Single return type must be parameterized as Single<Foo> or Single<? extends Foo>");
+@@ -199,14 +204,14 @@
+     CallAdapter.Factory factory = RxJavaCallAdapterFactory.create();
+     Type observableType = new TypeToken<Observable<Response>>() {}.getType();
+     try {
+-      factory.get(observableType, NO_ANNOTATIONS);
++      factory.get(observableType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Response must be parameterized as Response<Foo> or Response<? extends Foo>");
+     }
+     Type singleType = new TypeToken<Single<Response>>() {}.getType();
+     try {
+-      factory.get(singleType, NO_ANNOTATIONS);
++      factory.get(singleType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Response must be parameterized as Response<Foo> or Response<? extends Foo>");
+@@ -217,14 +222,14 @@
+     CallAdapter.Factory factory = RxJavaCallAdapterFactory.create();
+     Type observableType = new TypeToken<Observable<Result>>() {}.getType();
+     try {
+-      factory.get(observableType, NO_ANNOTATIONS);
++      factory.get(observableType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Result must be parameterized as Result<Foo> or Result<? extends Foo>");
+     }
+     Type singleType = new TypeToken<Single<Result>>() {}.getType();
+     try {
+-      factory.get(singleType, NO_ANNOTATIONS);
++      factory.get(singleType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalStateException e) {
+       assertThat(e).hasMessage("Result must be parameterized as Result<Foo> or Result<? extends Foo>");
+diff --git a/retrofit/src/main/java/retrofit/CallAdapter.java b/retrofit/src/main/java/retrofit/CallAdapter.java
+index 4fd172a6b..d8dba7b00 100644
+--- a/retrofit/src/main/java/retrofit/CallAdapter.java
++++ b/retrofit/src/main/java/retrofit/CallAdapter.java
+@@ -38,6 +38,6 @@
+      * Returns a call adapter for interface methods that return {@code returnType}, or null if this
+      * factory doesn't adapt that type.
+      */
+-    CallAdapter<?> get(Type returnType, Annotation[] annotations);
++    CallAdapter<?> get(Type returnType, Annotation[] annotations, Retrofit retrofit);
+   }
+ }
+diff --git a/retrofit/src/main/java/retrofit/DefaultCallAdapter.java b/retrofit/src/main/java/retrofit/DefaultCallAdapter.java
+index 220169a48..64f9bf913 100644
+--- a/retrofit/src/main/java/retrofit/DefaultCallAdapter.java
++++ b/retrofit/src/main/java/retrofit/DefaultCallAdapter.java
+@@ -24,8 +24,9 @@
+  * is a thread provided by OkHttp's dispatcher.
+  */
+ final class DefaultCallAdapter implements CallAdapter<Call<?>> {
+-  public static final Factory FACTORY = new Factory() {
+-    @Override public CallAdapter<?> get(Type returnType, Annotation[] annotations) {
++  static final Factory FACTORY = new Factory() {
++    @Override
++    public CallAdapter<?> get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
+       if (Utils.getRawType(returnType) != Call.class) {
+         return null;
+       }
+diff --git a/retrofit/src/main/java/retrofit/ExecutorCallAdapterFactory.java b/retrofit/src/main/java/retrofit/ExecutorCallAdapterFactory.java
+index 655f60e25..218fc1f78 100644
+--- a/retrofit/src/main/java/retrofit/ExecutorCallAdapterFactory.java
++++ b/retrofit/src/main/java/retrofit/ExecutorCallAdapterFactory.java
+@@ -27,7 +27,8 @@
+     this.callbackExecutor = callbackExecutor;
+   }
+ 
+-  @Override public CallAdapter<Call<?>> get(Type returnType, Annotation[] annotations) {
++  @Override
++  public CallAdapter<Call<?>> get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
+     if (Utils.getRawType(returnType) != Call.class) {
+       return null;
+     }
+diff --git a/retrofit/src/main/java/retrofit/MethodHandler.java b/retrofit/src/main/java/retrofit/MethodHandler.java
+index 2312996f6..b269a7ccf 100644
+--- a/retrofit/src/main/java/retrofit/MethodHandler.java
++++ b/retrofit/src/main/java/retrofit/MethodHandler.java
+@@ -24,19 +24,17 @@
+ 
+ final class MethodHandler<T> {
+   @SuppressWarnings("unchecked")
+-  static MethodHandler<?> create(Method method, OkHttpClient client, BaseUrl baseUrl,
+-      List<CallAdapter.Factory> callAdapterFactories, List<Converter.Factory> converterFactories) {
+-    CallAdapter<Object> callAdapter =
+-        (CallAdapter<Object>) createCallAdapter(method, callAdapterFactories);
++  static MethodHandler<?> create(Retrofit retrofit, Method method) {
++    CallAdapter<Object> callAdapter = (CallAdapter<Object>) createCallAdapter(method, retrofit);
+     Converter<ResponseBody, Object> responseConverter =
+         (Converter<ResponseBody, Object>) createResponseConverter(method,
+-            callAdapter.responseType(), converterFactories);
+-    RequestFactory requestFactory = RequestFactoryParser.parse(method, baseUrl, converterFactories);
+-    return new MethodHandler<>(client, requestFactory, callAdapter, responseConverter);
++            callAdapter.responseType(), retrofit.converterFactories());
++    RequestFactory requestFactory =
++        RequestFactoryParser.parse(method, retrofit.baseUrl(), retrofit.converterFactories());
++    return new MethodHandler<>(retrofit.client(), requestFactory, callAdapter, responseConverter);
+   }
+ 
+-  private static CallAdapter<?> createCallAdapter(Method method,
+-      List<CallAdapter.Factory> adapterFactories) {
++  private static CallAdapter<?> createCallAdapter(Method method, Retrofit retrofit) {
+     Type returnType = method.getGenericReturnType();
+     if (Utils.hasUnresolvableType(returnType)) {
+       throw Utils.methodError(method,
+@@ -47,7 +45,7 @@
+     }
+     Annotation[] annotations = method.getAnnotations();
+     try {
+-      return Utils.resolveCallAdapter(adapterFactories, returnType, annotations);
++      return retrofit.callAdapter(returnType, annotations);
+     } catch (RuntimeException e) { // Wide exception range because factories are user code.
+       throw Utils.methodError(e, method, "Unable to create call adapter for %s", returnType);
+     }
+diff --git a/retrofit/src/main/java/retrofit/Retrofit.java b/retrofit/src/main/java/retrofit/Retrofit.java
+index 765a9c5d5..2205b6146 100644
+--- a/retrofit/src/main/java/retrofit/Retrofit.java
++++ b/retrofit/src/main/java/retrofit/Retrofit.java
+@@ -19,9 +19,11 @@
+ import com.squareup.okhttp.OkHttpClient;
+ import com.squareup.okhttp.RequestBody;
+ import com.squareup.okhttp.ResponseBody;
++import java.lang.annotation.Annotation;
+ import java.lang.reflect.InvocationHandler;
+ import java.lang.reflect.Method;
+ import java.lang.reflect.Proxy;
++import java.lang.reflect.Type;
+ import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.LinkedHashMap;
+@@ -131,8 +133,7 @@ private Retrofit(OkHttpClient client, BaseUrl baseUrl, List<Converter.Factory> c
+     synchronized (methodHandlerCache) {
+       handler = methodHandlerCache.get(method);
+       if (handler == null) {
+-        handler =
+-            MethodHandler.create(method, client, baseUrl, adapterFactories, converterFactories);
++        handler = MethodHandler.create(this, method);
+         methodHandlerCache.put(method, handler);
+       }
+     }
+@@ -147,6 +148,51 @@ public BaseUrl baseUrl() {
+     return baseUrl;
+   }
+ 
++  public List<CallAdapter.Factory> callAdapterFactories() {
++    return Collections.unmodifiableList(adapterFactories);
++  }
++
++  /**
++   * Returns the {@link CallAdapter} for {@code returnType} from the available {@linkplain
++   * #callAdapterFactories() factories}.
++   */
++  public CallAdapter<?> callAdapter(Type returnType, Annotation[] annotations) {
++    return nextCallAdapter(null, returnType, annotations);
++  }
++
++  /**
++   * Returns the {@link CallAdapter} for {@code returnType} from the available {@linkplain
++   * #callAdapterFactories() factories} except {@code skipPast}.
++   */
++  public CallAdapter<?> nextCallAdapter(CallAdapter.Factory skipPast, Type returnType,
++      Annotation[] annotations) {
++    checkNotNull(returnType, "returnType == null");
++    checkNotNull(annotations, "annotations == null");
++
++    for (int i = 0, count = adapterFactories.size(); i < count; i++) {
++      CallAdapter.Factory factory = adapterFactories.get(i);
++      if (factory == skipPast) continue;
++
++      CallAdapter<?> adapter = factory.get(returnType, annotations, this);
++      if (adapter != null) {
++        return adapter;
++      }
++    }
++
++    StringBuilder builder = new StringBuilder("Could not locate call adapter for ")
++        .append(returnType)
++        .append(". Tried:");
++    for (CallAdapter.Factory adapterFactory : adapterFactories) {
++      if (adapterFactory != skipPast) {
++        builder.append("\n * ").append(adapterFactory.getClass().getName());
++      }
++    }
++    if (skipPast != null) {
++      builder.append("\nSkipped:\n * ").append(skipPast);
++    }
++    throw new IllegalArgumentException(builder.toString());
++  }
++
+   /**
+    * TODO
+    */
+@@ -154,10 +200,6 @@ public BaseUrl baseUrl() {
+     return Collections.unmodifiableList(converterFactories);
+   }
+ 
+-  public List<CallAdapter.Factory> callAdapterFactories() {
+-    return Collections.unmodifiableList(adapterFactories);
+-  }
+-
+   public Executor callbackExecutor() {
+     return callbackExecutor;
+   }
+diff --git a/retrofit/src/main/java/retrofit/Utils.java b/retrofit/src/main/java/retrofit/Utils.java
+index 053b12d0d..751b9b115 100644
+--- a/retrofit/src/main/java/retrofit/Utils.java
++++ b/retrofit/src/main/java/retrofit/Utils.java
+@@ -62,24 +62,6 @@ static boolean isAnnotationPresent(Annotation[] annotations,
+     return false;
+   }
+ 
+-  static CallAdapter<?> resolveCallAdapter(List<CallAdapter.Factory> adapterFactories, Type type,
+-      Annotation[] annotations) {
+-    for (int i = 0, count = adapterFactories.size(); i < count; i++) {
+-      CallAdapter<?> adapter = adapterFactories.get(i).get(type, annotations);
+-      if (adapter != null) {
+-        return adapter;
+-      }
+-    }
+-
+-    StringBuilder builder = new StringBuilder("Could not locate call adapter for ")
+-        .append(type)
+-        .append(". Tried:");
+-    for (CallAdapter.Factory adapterFactory : adapterFactories) {
+-      builder.append("\n * ").append(adapterFactory.getClass().getName());
+-    }
+-    throw new IllegalArgumentException(builder.toString());
+-  }
+-
+   static Converter<?, RequestBody> resolveRequestBodyConverter(
+       List<Converter.Factory> converterFactories, Type type, Annotation[] annotations) {
+     for (int i = 0, count = converterFactories.size(); i < count; i++) {
+diff --git a/retrofit/src/test/java/retrofit/ExecutorCallAdapterFactoryTest.java b/retrofit/src/test/java/retrofit/ExecutorCallAdapterFactoryTest.java
+index 1032cf461..393077d82 100644
+--- a/retrofit/src/test/java/retrofit/ExecutorCallAdapterFactoryTest.java
++++ b/retrofit/src/test/java/retrofit/ExecutorCallAdapterFactoryTest.java
+@@ -35,6 +35,9 @@
+ public final class ExecutorCallAdapterFactoryTest {
+   private static final Annotation[] NO_ANNOTATIONS = new Annotation[0];
+ 
++  private final Retrofit retrofit = new Retrofit.Builder()
++      .baseUrl("http://localhost:1")
++      .build();
+   private final Callback<String> callback = mock(Callback.class);
+   private final Executor callbackExecutor = spy(new Executor() {
+     @Override public void execute(Runnable runnable) {
+@@ -45,7 +48,7 @@
+ 
+   @Test public void rawTypeThrows() {
+     try {
+-      factory.get(Call.class, NO_ANNOTATIONS);
++      factory.get(Call.class, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalArgumentException e) {
+       assertThat(e).hasMessage("Call return type must be parameterized as Call<Foo> or Call<? extends Foo>");
+@@ -55,7 +58,7 @@
+   @Test public void responseThrows() {
+     Type returnType = new TypeToken<Call<Response<String>>>() {}.getType();
+     try {
+-      factory.get(returnType, NO_ANNOTATIONS);
++      factory.get(returnType, NO_ANNOTATIONS, retrofit);
+       fail();
+     } catch (IllegalArgumentException e) {
+       assertThat(e).hasMessage("Call<T> cannot use Response as its generic parameter. "
+@@ -65,17 +68,20 @@
+ 
+   @Test public void responseType() {
+     Type classType = new TypeToken<Call<String>>() {}.getType();
+-    assertThat(factory.get(classType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(classType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+     Type wilcardType = new TypeToken<Call<? extends String>>() {}.getType();
+-    assertThat(factory.get(wilcardType, NO_ANNOTATIONS).responseType()).isEqualTo(String.class);
++    assertThat(factory.get(wilcardType, NO_ANNOTATIONS, retrofit).responseType())
++        .isEqualTo(String.class);
+     Type genericType = new TypeToken<Call<List<String>>>() {}.getType();
+-    assertThat(factory.get(genericType, NO_ANNOTATIONS).responseType()) //
++    assertThat(factory.get(genericType, NO_ANNOTATIONS, retrofit).responseType())
+         .isEqualTo(new TypeToken<List<String>>() {}.getType());
+   }
+ 
+   @Test public void adaptedCallExecute() throws IOException {
+     Type returnType = new TypeToken<Call<String>>() {}.getType();
+-    CallAdapter<Call<?>> adapter = (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS);
++    CallAdapter<Call<?>> adapter =
++        (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS, retrofit);
+     final Response<String> response = Response.success("Hi");
+     Call<String> call = (Call<String>) adapter.adapt(new EmptyCall() {
+       @Override public Response<String> execute() throws IOException {
+@@ -87,7 +93,8 @@
+ 
+   @Test public void adaptedCallEnqueueUsesExecutorForSuccessCallback() {
+     Type returnType = new TypeToken<Call<String>>() {}.getType();
+-    CallAdapter<Call<?>> adapter = (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS);
++    CallAdapter<Call<?>> adapter =
++        (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS, retrofit);
+     final Response<String> response = Response.success("Hi");
+     Call<String> call = (Call<String>) adapter.adapt(new EmptyCall() {
+       @Override public void enqueue(Callback<String> callback) {
+@@ -101,7 +108,8 @@
+ 
+   @Test public void adaptedCallEnqueueUsesExecutorForFailureCallback() {
+     Type returnType = new TypeToken<Call<String>>() {}.getType();
+-    CallAdapter<Call<?>> adapter = (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS);
++    CallAdapter<Call<?>> adapter =
++        (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS, retrofit);
+     final Throwable throwable = new IOException();
+     Call<String> call = (Call<String>) adapter.adapt(new EmptyCall() {
+       @Override public void enqueue(Callback<String> callback) {
+@@ -117,7 +125,8 @@
+ 
+   @Test public void adaptedCallCloneDeepCopy() {
+     Type returnType = new TypeToken<Call<String>>() {}.getType();
+-    CallAdapter<Call<?>> adapter = (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS);
++    CallAdapter<Call<?>> adapter =
++        (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS, retrofit);
+     Call<String> delegate = mock(Call.class);
+     Call<String> call = (Call<String>) adapter.adapt(delegate);
+     Call<String> cloned = call.clone();
+@@ -128,7 +137,8 @@
+ 
+   @Test public void adaptedCallCancel() {
+     Type returnType = new TypeToken<Call<String>>() {}.getType();
+-    CallAdapter<Call<?>> adapter = (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS);
++    CallAdapter<Call<?>> adapter =
++        (CallAdapter<Call<?>>) factory.get(returnType, NO_ANNOTATIONS, retrofit);
+     Call<String> delegate = mock(Call.class);
+     Call<String> call = (Call<String>) adapter.adapt(delegate);
+     call.cancel();
+diff --git a/retrofit/src/test/java/retrofit/RetrofitTest.java b/retrofit/src/test/java/retrofit/RetrofitTest.java
+index b80efc941..6b57518c1 100644
+--- a/retrofit/src/test/java/retrofit/RetrofitTest.java
++++ b/retrofit/src/test/java/retrofit/RetrofitTest.java
+@@ -34,6 +34,7 @@
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ import static org.mockito.Matchers.any;
++import static org.mockito.Mockito.doReturn;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.spy;
+ import static org.mockito.Mockito.verify;
+@@ -126,7 +127,8 @@
+     final AtomicBoolean factoryCalled = new AtomicBoolean();
+     final AtomicBoolean adapterCalled = new AtomicBoolean();
+     class MyCallAdapterFactory implements CallAdapter.Factory {
+-      @Override public CallAdapter<?> get(final Type returnType, Annotation[] annotations) {
++      @Override public CallAdapter<?> get(final Type returnType, Annotation[] annotations,
++          Retrofit retrofit) {
+         factoryCalled.set(true);
+         if (Utils.getRawType(returnType) != Call.class) {
+           return null;
+@@ -156,7 +158,8 @@
+ 
+   @Test public void customCallAdapter() {
+     class GreetingCallAdapterFactory implements CallAdapter.Factory {
+-      @Override public CallAdapter<String> get(Type returnType, Annotation[] annotations) {
++      @Override public CallAdapter<String> get(Type returnType, Annotation[] annotations,
++          Retrofit retrofit) {
+         if (Utils.getRawType(returnType) != String.class) {
+           return null;
+         }
+@@ -184,7 +187,8 @@
+   @Test public void methodAnnotationsPassedToCallAdapter() {
+     final AtomicReference<Annotation[]> annotationsRef = new AtomicReference<>();
+     class MyCallAdapterFactory implements CallAdapter.Factory {
+-      @Override public CallAdapter<?> get(Type returnType, Annotation[] annotations) {
++      @Override public CallAdapter<?> get(Type returnType, Annotation[] annotations,
++          Retrofit retrofit) {
+         annotationsRef.set(annotations);
+         return null;
+       }
+@@ -545,6 +549,81 @@
+     assertThat(retrofit.callAdapterFactories()).contains(factory);
+   }
+ 
++  @Test public void callAdapterFactoryQueried() {
++    Type type = String.class;
++    Annotation[] annotations = new Annotation[0];
++
++    CallAdapter<?> expectedAdapter = mock(CallAdapter.class);
++    CallAdapter.Factory factory = mock(CallAdapter.Factory.class);
++
++    Retrofit retrofit = new Retrofit.Builder()
++        .baseUrl("http://example.com/")
++        .addCallAdapterFactory(factory)
++        .build();
++
++    doReturn(expectedAdapter).when(factory).get(type, annotations, retrofit);
++
++    CallAdapter<?> actualAdapter = retrofit.callAdapter(type, annotations);
++    assertThat(actualAdapter).isSameAs(expectedAdapter);
++
++    verify(factory).get(type, annotations, retrofit);
++    verifyNoMoreInteractions(factory);
++  }
++
++  @Test public void callAdapterFactoryQueriedCanDelegate() {
++    Type type = String.class;
++    Annotation[] annotations = new Annotation[0];
++
++    CallAdapter<?> expectedAdapter = mock(CallAdapter.class);
++    CallAdapter.Factory factory2 = mock(CallAdapter.Factory.class);
++    CallAdapter.Factory factory1 = spy(new CallAdapter.Factory() {
++      @Override
++      public CallAdapter<?> get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
++        return retrofit.nextCallAdapter(this, returnType, annotations);
++      }
++    });
++
++    Retrofit retrofit = new Retrofit.Builder()
++        .baseUrl("http://example.com/")
++        .addCallAdapterFactory(factory1)
++        .addCallAdapterFactory(factory2)
++        .build();
++
++    doReturn(expectedAdapter).when(factory2).get(type, annotations, retrofit);
++
++    CallAdapter<?> actualAdapter = retrofit.callAdapter(type, annotations);
++    assertThat(actualAdapter).isSameAs(expectedAdapter);
++
++    verify(factory1).get(type, annotations, retrofit);
++    verifyNoMoreInteractions(factory1);
++    verify(factory2).get(type, annotations, retrofit);
++    verifyNoMoreInteractions(factory2);
++  }
++
++  @Test public void callAdapterFactoryNoMatchThrows() {
++    Type type = String.class;
++    Annotation[] annotations = new Annotation[0];
++
++    CallAdapter.Factory factory = mock(CallAdapter.Factory.class);
++
++    Retrofit retrofit = new Retrofit.Builder()
++        .baseUrl("http://example.com/")
++        .addCallAdapterFactory(factory)
++        .build();
++
++    doReturn(null).when(factory).get(type, annotations, retrofit);
++
++    try {
++      retrofit.callAdapter(type, annotations);
++    } catch (IllegalArgumentException e) {
++      assertThat(e).hasMessageStartingWith(
++          "Could not locate call adapter for class java.lang.String. Tried:");
++    }
++
++    verify(factory).get(type, annotations, retrofit);
++    verifyNoMoreInteractions(factory);
++  }
++
+   @Test public void callbackExecutorNullThrows() {
+     try {
+       new Retrofit.Builder().callbackExecutor(null);
+diff --git a/samples/src/main/java/com/example/retrofit/CustomCallAdapter.java b/samples/src/main/java/com/example/retrofit/CustomCallAdapter.java
+index eba5385fa..a3a8ba28f 100644
+--- a/samples/src/main/java/com/example/retrofit/CustomCallAdapter.java
++++ b/samples/src/main/java/com/example/retrofit/CustomCallAdapter.java
+@@ -36,8 +36,8 @@
+  */
+ public final class CustomCallAdapter {
+   public static class ListenableFutureCallAdapterFactory implements CallAdapter.Factory {
+-    @Override
+-    public CallAdapter<ListenableFuture<?>> get(Type returnType, Annotation[] annotations) {
++    @Override public CallAdapter<ListenableFuture<?>> get(Type returnType, Annotation[] annotations,
++        Retrofit retrofit) {
+       TypeToken<?> token = TypeToken.of(returnType);
+       if (token.getRawType() != ListenableFuture.class) {
+         return null;

@@ -1,0 +1,88 @@
+diff --git a/java-frontend/src/main/java/org/sonar/java/bytecode/se/BytecodeEGWalker.java b/java-frontend/src/main/java/org/sonar/java/bytecode/se/BytecodeEGWalker.java
+index b740a08dc8..0fec8373b4 100644
+--- a/java-frontend/src/main/java/org/sonar/java/bytecode/se/BytecodeEGWalker.java
++++ b/java-frontend/src/main/java/org/sonar/java/bytecode/se/BytecodeEGWalker.java
+@@ -312,7 +312,7 @@ private void execute(String signature, SquidClassLoader classLoader) {
+     BytecodeCFGMethodVisitor cfgVisitor = new BytecodeCFGMethodVisitor();
+     MethodLookup lookup = MethodLookup.lookup(signature, classLoader, cfgVisitor);
+     if (lookup == null) {
+-      LOG.debug("Method lookup failed for %s", signature);
++      LOG.debug("Method body not found: %s", signature);
+       return;
+     }
+     methodBehavior.setDeclaredExceptions(lookup.declaredExceptions);
+diff --git a/java-frontend/src/main/java/org/sonar/java/se/xproc/BehaviorCache.java b/java-frontend/src/main/java/org/sonar/java/se/xproc/BehaviorCache.java
+index dedf3db2c2..5cbeb2d68e 100644
+--- a/java-frontend/src/main/java/org/sonar/java/se/xproc/BehaviorCache.java
++++ b/java-frontend/src/main/java/org/sonar/java/se/xproc/BehaviorCache.java
+@@ -129,7 +129,7 @@ private MethodBehavior get(String signature, @Nullable Symbol.MethodSymbol symbo
+     }
+ 
+     // disabled x-file analysis, behavior based on source code can still be used
+-    if (!crossFileEnabled && !isknownSignature(WHITELIST, signature)) {
++    if (!crossFileEnabled && !isKnownSignature(signature)) {
+       return null;
+     }
+ 
+@@ -139,8 +139,8 @@ private MethodBehavior get(String signature, @Nullable Symbol.MethodSymbol symbo
+     return bytecodeBehaviors.get(signature);
+   }
+ 
+-  private static boolean isknownSignature(Set<String> list, String signature) {
+-    return list.stream().anyMatch(signature::startsWith);
++  private static boolean isKnownSignature(String signature) {
++    return WHITELIST.stream().anyMatch(signature::startsWith);
+   }
+ 
+ }
+diff --git a/java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookup.java b/java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookupTestData.java
+similarity index 95%
+rename from java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookup.java
+rename to java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookupTestData.java
+index 294b6b3d17..92a1a1bdc8 100644
+--- a/java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookup.java
++++ b/java-frontend/src/test/java/org/sonar/java/bytecode/cfg/testdata/MethodLookupTestData.java
+@@ -26,7 +26,7 @@
+ /**
+  * Test data for {@link org.sonar.java.bytecode.se.MethodLookup}
+  */
+-public class MethodLookup extends SuperClass implements Iface {
++public class MethodLookupTestData extends SuperClass implements Iface {
+ 
+   void throwing() throws IOException {}
+ 
+diff --git a/java-frontend/src/test/java/org/sonar/java/bytecode/se/MethodLookupTest.java b/java-frontend/src/test/java/org/sonar/java/bytecode/se/MethodLookupTest.java
+index e65d5e6aa8..dd407f4ce7 100644
+--- a/java-frontend/src/test/java/org/sonar/java/bytecode/se/MethodLookupTest.java
++++ b/java-frontend/src/test/java/org/sonar/java/bytecode/se/MethodLookupTest.java
+@@ -24,14 +24,13 @@
+ import org.junit.Test;
+ import org.objectweb.asm.MethodVisitor;
+ import org.objectweb.asm.Opcodes;
+-import org.objectweb.asm.util.Printer;
+ import org.sonar.java.bytecode.loader.SquidClassLoader;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+ 
+ public class MethodLookupTest {
+ 
+-  private static final String TESTCLASS = "org.sonar.java.bytecode.cfg.testdata.MethodLookup#";
++  private static final String TESTCLASS = "org.sonar.java.bytecode.cfg.testdata.MethodLookupTestData#";
+   private static final MethodVisitor NOP_VISITOR = new MethodVisitor(Opcodes.ASM5) {};
+ 
+   SquidClassLoader squidClassLoader = new SquidClassLoader(Lists.newArrayList(new File("target/test-classes"), new File("target/classes")));
+@@ -56,14 +55,4 @@ public void lookup_method_from_superclass() {
+     lookup = MethodLookup.lookup(TESTCLASS + "ifaceMethod2()V", squidClassLoader, NOP_VISITOR);
+     assertThat(lookup.declaredExceptions).containsExactly("java.lang.UnsupportedOperationException");
+   }
+-
+-  @Test
+-  public void superclass_first() {
+-    MethodLookup lookup = MethodLookup.lookup(TESTCLASS + "superClassFirst()I", squidClassLoader, new MethodVisitor(Opcodes.ASM5) {
+-      @Override
+-      public void visitInsn(int opcode) {
+-        System.out.println(Printer.OPCODES[opcode]);
+-      }
+-    });
+-  }
+ }

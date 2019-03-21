@@ -1,0 +1,651 @@
+diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
+index 5b13f824280b..db7b59d6c1d3 100644
+--- a/doc/modules/model_evaluation.rst
++++ b/doc/modules/model_evaluation.rst
+@@ -94,7 +94,7 @@ Usage examples:
+     >>> model = svm.SVC()
+     >>> cross_val_score(model, X, y, scoring='wrong_choice')
+     Traceback (most recent call last):
+-    ValueError: 'wrong_choice' is not a valid scoring value. Valid options are ['accuracy', 'adjusted_rand_score', 'average_precision', 'f1', 'f1_macro', 'f1_micro', 'f1_samples', 'f1_weighted', 'neg_log_loss', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_mean_squared_log_error', 'neg_median_absolute_error', 'precision', 'precision_macro', 'precision_micro', 'precision_samples', 'precision_weighted', 'r2', 'recall', 'recall_macro', 'recall_micro', 'recall_samples', 'recall_weighted', 'roc_auc']
++    ValueError: 'wrong_choice' is not a valid scoring value. Valid options are ['accuracy', 'adjusted_mutual_info_score', 'adjusted_rand_score', 'average_precision', 'completeness_score', 'f1', 'f1_macro', 'f1_micro', 'f1_samples', 'f1_weighted', 'fowlkes_mallows_score', 'homogeneity_score', 'mutual_info_score', 'neg_log_loss', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_mean_squared_log_error', 'neg_median_absolute_error', 'normalized_mutual_info_score', 'precision', 'precision_macro', 'precision_micro', 'precision_samples', 'precision_weighted', 'r2', 'recall', 'recall_macro', 'recall_micro', 'recall_samples', 'recall_weighted', 'roc_auc', 'v_measure_score']
+ 
+ .. note::
+ 
+diff --git a/doc/whats_new.rst b/doc/whats_new.rst
+index 9a9d3a07d4ee..66e8212947cf 100644
+--- a/doc/whats_new.rst
++++ b/doc/whats_new.rst
+@@ -49,6 +49,10 @@ New features
+ Enhancements
+ ............
+ 
++   - :class:`multioutput.MultiOutputRegressor` and :class:`multioutput.MultiOutputClassifier`
++     now support online learning using `partial_fit`.
++     issue: `8053` by :user:`Peng Yu <yupbank>`.
++
+    - :class:`decomposition.PCA`, :class:`decomposition.IncrementalPCA` and
+      :class:`decomposition.TruncatedSVD` now expose the singular values
+      from the underlying SVD. They are stored in the attribute
+diff --git a/sklearn/cluster/hierarchical.py b/sklearn/cluster/hierarchical.py
+index 9c65c6418d12..14c03e70d5c7 100644
+--- a/sklearn/cluster/hierarchical.py
++++ b/sklearn/cluster/hierarchical.py
+@@ -660,7 +660,7 @@ class AgglomerativeClustering(BaseEstimator, ClusterMixin):
+     """
+ 
+     def __init__(self, n_clusters=2, affinity="euclidean",
+-                 memory=Memory(cachedir=None, verbose=0),
++                 memory=None,
+                  connectivity=None, compute_full_tree='auto',
+                  linkage='ward', pooling_func=np.mean):
+         self.n_clusters = n_clusters
+@@ -685,8 +685,13 @@ def fit(self, X, y=None):
+         """
+         X = check_array(X, ensure_min_samples=2, estimator=self)
+         memory = self.memory
+-        if isinstance(memory, six.string_types):
++        if memory is None:
++            memory = Memory(cachedir=None, verbose=0)
++        elif isinstance(memory, six.string_types):
+             memory = Memory(cachedir=memory, verbose=0)
++        elif not isinstance(memory, Memory):
++            raise ValueError('`memory` has to be a `str` or a `joblib.Memory`'
++                             ' instance')
+ 
+         if self.n_clusters <= 0:
+             raise ValueError("n_clusters should be an integer greater than 0."
+diff --git a/sklearn/cluster/tests/test_hierarchical.py b/sklearn/cluster/tests/test_hierarchical.py
+index cbafac1bc355..986b92e0ce9f 100644
+--- a/sklearn/cluster/tests/test_hierarchical.py
++++ b/sklearn/cluster/tests/test_hierarchical.py
+@@ -115,6 +115,17 @@ def test_height_linkage_tree():
+         assert_true(len(children) + n_leaves == n_nodes)
+ 
+ 
++def test_agglomerative_clustering_wrong_arg_memory():
++    # Test either if an error is raised when memory is not
++    # either a str or a joblib.Memory instance
++    rng = np.random.RandomState(0)
++    n_samples = 100
++    X = rng.randn(n_samples, 50)
++    memory = 5
++    clustering = AgglomerativeClustering(memory=memory)
++    assert_raises(ValueError, clustering.fit, X)
++
++
+ def test_agglomerative_clustering():
+     # Check that we obtain the correct number of clusters with
+     # agglomerative clustering.
+diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
+index d570d56ecc3a..84ec97056a41 100644
+--- a/sklearn/linear_model/ridge.py
++++ b/sklearn/linear_model/ridge.py
+@@ -885,7 +885,7 @@ def _errors_and_values_helper(self, alpha, y, v, Q, QT_y):
+         constant_column = np.var(Q, 0) < 1.e-12
+         # detect constant columns
+         w[constant_column] = 0  # cancel the regularization for the intercept
+-        w[v == 0] = 0
++
+         c = np.dot(Q, self._diag_dot(w, QT_y))
+         G_diag = self._decomp_diag(w, Q)
+         # handle case where y is 2-d
+diff --git a/sklearn/metrics/scorer.py b/sklearn/metrics/scorer.py
+index 4aeea1710d01..3a163d967c54 100644
+--- a/sklearn/metrics/scorer.py
++++ b/sklearn/metrics/scorer.py
+@@ -27,7 +27,16 @@
+                mean_squared_error, mean_squared_log_error, accuracy_score,
+                f1_score, roc_auc_score, average_precision_score,
+                precision_score, recall_score, log_loss)
++
+ from .cluster import adjusted_rand_score
++from .cluster import homogeneity_score
++from .cluster import completeness_score
++from .cluster import v_measure_score
++from .cluster import mutual_info_score
++from .cluster import adjusted_mutual_info_score
++from .cluster import normalized_mutual_info_score
++from .cluster import fowlkes_mallows_score
++
+ from ..utils.multiclass import type_of_target
+ from ..externals import six
+ from ..base import is_regressor
+@@ -393,6 +402,14 @@ def make_scorer(score_func, greater_is_better=True, needs_proba=False,
+ 
+ # Clustering scores
+ adjusted_rand_scorer = make_scorer(adjusted_rand_score)
++homogeneity_scorer = make_scorer(homogeneity_score)
++completeness_scorer = make_scorer(completeness_score)
++v_measure_scorer = make_scorer(v_measure_score)
++mutual_info_scorer = make_scorer(mutual_info_score)
++adjusted_mutual_info_scorer = make_scorer(adjusted_mutual_info_score)
++normalized_mutual_info_scorer = make_scorer(normalized_mutual_info_score)
++fowlkes_mallows_scorer = make_scorer(fowlkes_mallows_score)
++
+ 
+ SCORERS = dict(r2=r2_scorer,
+                neg_median_absolute_error=neg_median_absolute_error_scorer,
+@@ -406,7 +423,16 @@ def make_scorer(score_func, greater_is_better=True, needs_proba=False,
+                average_precision=average_precision_scorer,
+                log_loss=log_loss_scorer,
+                neg_log_loss=neg_log_loss_scorer,
+-               adjusted_rand_score=adjusted_rand_scorer)
++               # Cluster metrics that use supervised evaluation
++               adjusted_rand_score=adjusted_rand_scorer,
++               homogeneity_score=homogeneity_scorer,
++               completeness_score=completeness_scorer,
++               v_measure_score=v_measure_scorer,
++               mutual_info_score=mutual_info_scorer,
++               adjusted_mutual_info_score=adjusted_mutual_info_scorer,
++               normalized_mutual_info_score=normalized_mutual_info_scorer,
++               fowlkes_mallows_score=fowlkes_mallows_scorer)
++
+ 
+ for name, metric in [('precision', precision_score),
+                      ('recall', recall_score), ('f1', f1_score)]:
+diff --git a/sklearn/metrics/tests/test_score_objects.py b/sklearn/metrics/tests/test_score_objects.py
+index 17a4811f5265..461bdadf3d6e 100644
+--- a/sklearn/metrics/tests/test_score_objects.py
++++ b/sklearn/metrics/tests/test_score_objects.py
+@@ -18,7 +18,7 @@
+ from sklearn.base import BaseEstimator
+ from sklearn.metrics import (f1_score, r2_score, roc_auc_score, fbeta_score,
+                              log_loss, precision_score, recall_score)
+-from sklearn.metrics.cluster import adjusted_rand_score
++from sklearn.metrics import cluster as cluster_module
+ from sklearn.metrics.scorer import (check_scoring, _PredictScorer,
+                                     _passthrough_scorer)
+ from sklearn.metrics import make_scorer, get_scorer, SCORERS
+@@ -47,9 +47,17 @@
+                'roc_auc', 'average_precision', 'precision',
+                'precision_weighted', 'precision_macro', 'precision_micro',
+                'recall', 'recall_weighted', 'recall_macro', 'recall_micro',
+-               'neg_log_loss', 'log_loss',
+-               'adjusted_rand_score'  # not really, but works
+-               ]
++               'neg_log_loss', 'log_loss']
++
++# All supervised cluster scorers (They behave like classification metric)
++CLUSTER_SCORERS = ["adjusted_rand_score",
++                   "homogeneity_score",
++                   "completeness_score",
++                   "v_measure_score",
++                   "mutual_info_score",
++                   "adjusted_mutual_info_score",
++                   "normalized_mutual_info_score",
++                   "fowlkes_mallows_score"]
+ 
+ MULTILABEL_ONLY_SCORERS = ['precision_samples', 'recall_samples', 'f1_samples']
+ 
+@@ -65,6 +73,7 @@ def _make_estimators(X_train, y_train, y_ml_train):
+     return dict(
+         [(name, sensible_regr) for name in REGRESSION_SCORERS] +
+         [(name, sensible_clf) for name in CLF_SCORERS] +
++        [(name, sensible_clf) for name in CLUSTER_SCORERS] +
+         [(name, sensible_ml_clf) for name in MULTILABEL_ONLY_SCORERS]
+     )
+ 
+@@ -330,16 +339,16 @@ def test_thresholded_scorers_multilabel_indicator_data():
+     assert_almost_equal(score1, score2)
+ 
+ 
+-def test_unsupervised_scorers():
++def test_supervised_cluster_scorers():
+     # Test clustering scorers against gold standard labeling.
+-    # We don't have any real unsupervised Scorers yet.
+     X, y = make_blobs(random_state=0, centers=2)
+     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
+     km = KMeans(n_clusters=3)
+     km.fit(X_train)
+-    score1 = get_scorer('adjusted_rand_score')(km, X_test, y_test)
+-    score2 = adjusted_rand_score(y_test, km.predict(X_test))
+-    assert_almost_equal(score1, score2)
++    for name in CLUSTER_SCORERS:
++        score1 = get_scorer(name)(km, X_test, y_test)
++        score2 = getattr(cluster_module, name)(y_test, km.predict(X_test))
++        assert_almost_equal(score1, score2)
+ 
+ 
+ @ignore_warnings
+@@ -445,4 +454,4 @@ def test_scoring_is_not_metric():
+     assert_raises_regexp(ValueError, 'make_scorer', check_scoring,
+                          Ridge(), r2_score)
+     assert_raises_regexp(ValueError, 'make_scorer', check_scoring,
+-                         KMeans(), adjusted_rand_score)
++                         KMeans(), cluster_module.adjusted_rand_score)
+diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
+index 49d1d566bd50..117b81a35ae2 100644
+--- a/sklearn/model_selection/tests/test_search.py
++++ b/sklearn/model_selection/tests/test_search.py
+@@ -542,6 +542,12 @@ def test_unsupervised_grid_search():
+     # ARI can find the right number :)
+     assert_equal(grid_search.best_params_["n_clusters"], 3)
+ 
++    grid_search = GridSearchCV(km, param_grid=dict(n_clusters=[2, 3, 4]),
++                               scoring='fowlkes_mallows_score')
++    grid_search.fit(X, y)
++    # So can FMS ;)
++    assert_equal(grid_search.best_params_["n_clusters"], 3)
++
+     # Now without a score, and without y
+     grid_search = GridSearchCV(km, param_grid=dict(n_clusters=[2, 3, 4]))
+     grid_search.fit(X)
+diff --git a/sklearn/multioutput.py b/sklearn/multioutput.py
+index 001bda251b70..826ece6d50d9 100644
+--- a/sklearn/multioutput.py
++++ b/sklearn/multioutput.py
+@@ -22,6 +22,7 @@
+ from .utils import check_array, check_X_y
+ from .utils.fixes import parallel_helper
+ from .utils.validation import check_is_fitted, has_fit_parameter
++from .utils.metaestimators import if_delegate_has_method
+ from .externals.joblib import Parallel, delayed
+ from .externals import six
+ 
+@@ -37,12 +38,86 @@ def _fit_estimator(estimator, X, y, sample_weight=None):
+     return estimator
+ 
+ 
++def _partial_fit_estimator(estimator, X, y, classes=None, sample_weight=None,
++                           first_time=True):
++    if first_time:
++        estimator = clone(estimator)
++
++    if sample_weight is not None:
++        if classes is not None:
++            estimator.partial_fit(X, y, classes=classes,
++                                  sample_weight=sample_weight)
++        else:
++            estimator.partial_fit(X, y, sample_weight=sample_weight)
++    else:
++        if classes is not None:
++            estimator.partial_fit(X, y, classes=classes)
++        else:
++            estimator.partial_fit(X, y)
++    return estimator
++
++
+ class MultiOutputEstimator(six.with_metaclass(ABCMeta, BaseEstimator)):
+ 
+     def __init__(self, estimator, n_jobs=1):
+         self.estimator = estimator
+         self.n_jobs = n_jobs
+ 
++    @if_delegate_has_method('estimator')
++    def partial_fit(self, X, y, classes=None, sample_weight=None):
++        """Incrementally fit the model to data.
++        Fit a separate model for each output variable.
++
++        Parameters
++        ----------
++        X : (sparse) array-like, shape (n_samples, n_features)
++            Data.
++
++        y : (sparse) array-like, shape (n_samples, n_outputs)
++            Multi-output targets.
++
++        classes : list of numpy arrays, shape (n_outputs)
++            Each array is unique classes for one output in str/int
++            Can be obtained by via
++            ``[np.unique(y[:, i]) for i in range(y.shape[1])]``, where y is the
++            target matrix of the entire dataset.
++            This argument is required for the first call to partial_fit
++            and can be omitted in the subsequent calls.
++            Note that y doesn't need to contain all labels in `classes`.
++
++        sample_weight : array-like, shape = (n_samples) or None
++            Sample weights. If None, then samples are equally weighted.
++            Only supported if the underlying regressor supports sample
++            weights.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        X, y = check_X_y(X, y,
++                         multi_output=True,
++                         accept_sparse=True)
++
++        if y.ndim == 1:
++            raise ValueError("y must have at least two dimensions for "
++                             "multi-output regression but has only one.")
++
++        if (sample_weight is not None and
++                not has_fit_parameter(self.estimator, 'sample_weight')):
++            raise ValueError("Underlying estimator does not support"
++                             " sample weights.")
++
++        first_time = not hasattr(self, 'estimators_')
++
++        self.estimators_ = Parallel(n_jobs=self.n_jobs)(
++            delayed(_partial_fit_estimator)(
++                self.estimators_[i] if not first_time else self.estimator,
++                X, y[:, i],
++                classes[i] if classes is not None else None,
++                sample_weight, first_time) for i in range(y.shape[1]))
++        return self
++
+     def fit(self, X, y, sample_weight=None):
+         """ Fit the model to data.
+         Fit a separate model for each output variable.
+@@ -76,15 +151,17 @@ def fit(self, X, y, sample_weight=None):
+ 
+         if y.ndim == 1:
+             raise ValueError("y must have at least two dimensions for "
+-                             "multi target regression but has only one.")
++                             "multi-output regression but has only one.")
+ 
+         if (sample_weight is not None and
+                 not has_fit_parameter(self.estimator, 'sample_weight')):
+-            raise ValueError("Underlying regressor does not support"
++            raise ValueError("Underlying estimator does not support"
+                              " sample weights.")
+ 
+-        self.estimators_ = Parallel(n_jobs=self.n_jobs)(delayed(_fit_estimator)(
+-            self.estimator, X, y[:, i], sample_weight) for i in range(y.shape[1]))
++        self.estimators_ = Parallel(n_jobs=self.n_jobs)(
++            delayed(_fit_estimator)(
++                self.estimator, X, y[:, i], sample_weight)
++            for i in range(y.shape[1]))
+         return self
+ 
+     def predict(self, X):
+@@ -108,8 +185,9 @@ def predict(self, X):
+ 
+         X = check_array(X, accept_sparse=True)
+ 
+-        y = Parallel(n_jobs=self.n_jobs)(delayed(parallel_helper)(e, 'predict', X)
+-                                         for e in self.estimators_)
++        y = Parallel(n_jobs=self.n_jobs)(
++            delayed(parallel_helper)(e, 'predict', X)
++            for e in self.estimators_)
+ 
+         return np.asarray(y).T
+ 
+@@ -133,9 +211,35 @@ class MultiOutputRegressor(MultiOutputEstimator, RegressorMixin):
+         using `n_jobs>1` can result in slower performance due
+         to the overhead of spawning processes.
+     """
++
+     def __init__(self, estimator, n_jobs=1):
+         super(MultiOutputRegressor, self).__init__(estimator, n_jobs)
+ 
++    def partial_fit(self, X, y, sample_weight=None):
++        """Incrementally fit the model to data.
++        Fit a separate model for each output variable.
++
++        Parameters
++        ----------
++        X : (sparse) array-like, shape (n_samples, n_features)
++            Data.
++
++        y : (sparse) array-like, shape (n_samples, n_outputs)
++            Multi-output targets.
++
++        sample_weight : array-like, shape = (n_samples) or None
++            Sample weights. If None, then samples are equally weighted.
++            Only supported if the underlying regressor supports sample
++            weights.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        super(MultiOutputRegressor, self).partial_fit(
++            X, y, sample_weight=sample_weight)
++
+     def score(self, X, y, sample_weight=None):
+         """Returns the coefficient of determination R^2 of the prediction.
+ 
+diff --git a/sklearn/neighbors/classification.py b/sklearn/neighbors/classification.py
+index d9ea8275eae5..5573c96d0c4c 100644
+--- a/sklearn/neighbors/classification.py
++++ b/sklearn/neighbors/classification.py
+@@ -143,7 +143,6 @@ def predict(self, X):
+         X = check_array(X, accept_sparse='csr')
+ 
+         neigh_dist, neigh_ind = self.kneighbors(X)
+-        print(neigh_ind.dtype)
+         classes_ = self.classes_
+         _y = self._y
+         if not self.outputs_2d_:
+diff --git a/sklearn/neighbors/tests/test_neighbors.py b/sklearn/neighbors/tests/test_neighbors.py
+index 0e827d9bb886..a53b2760fcd7 100644
+--- a/sklearn/neighbors/tests/test_neighbors.py
++++ b/sklearn/neighbors/tests/test_neighbors.py
+@@ -149,7 +149,6 @@ def test_precomputed(random_state=42):
+                 neighbors.RadiusNeighborsClassifier,
+                 neighbors.KNeighborsRegressor,
+                 neighbors.RadiusNeighborsRegressor):
+-        print(Est)
+         est = Est(metric='euclidean')
+         est.radius = est.n_neighbors = 1
+         pred_X = est.fit(X, target).predict(Y)
+diff --git a/sklearn/tests/test_multioutput.py b/sklearn/tests/test_multioutput.py
+index 208477c9cfe6..163363155ca3 100644
+--- a/sklearn/tests/test_multioutput.py
++++ b/sklearn/tests/test_multioutput.py
+@@ -1,16 +1,23 @@
++from __future__ import division
+ import numpy as np
+ import scipy.sparse as sp
+ from sklearn.utils import shuffle
+ from sklearn.utils.testing import assert_almost_equal
+ from sklearn.utils.testing import assert_raises
++from sklearn.utils.testing import assert_false
+ from sklearn.utils.testing import assert_raises_regex
+ from sklearn.utils.testing import assert_array_equal
+ from sklearn.utils.testing import assert_equal
++from sklearn.utils.testing import assert_not_equal
++from sklearn.utils.testing import assert_array_almost_equal
+ from sklearn.exceptions import NotFittedError
+ from sklearn import datasets
+ from sklearn.base import clone
+ from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
+-from sklearn.linear_model import Lasso, LogisticRegression
++from sklearn.linear_model import Lasso
++from sklearn.linear_model import SGDClassifier
++from sklearn.linear_model import SGDRegressor
++from sklearn.linear_model import LogisticRegression
+ from sklearn.svm import LinearSVC
+ from sklearn.multiclass import OneVsRestClassifier
+ from sklearn.multioutput import MultiOutputRegressor, MultiOutputClassifier
+@@ -25,7 +32,7 @@ def test_multi_target_regression():
+     for n in range(3):
+         rgr = GradientBoostingRegressor(random_state=0)
+         rgr.fit(X_train, y_train[:, n])
+-        references[:,n] = rgr.predict(X_test)
++        references[:, n] = rgr.predict(X_test)
+ 
+     rgr = MultiOutputRegressor(GradientBoostingRegressor(random_state=0))
+     rgr.fit(X_train, y_train)
+@@ -34,20 +41,40 @@ def test_multi_target_regression():
+     assert_almost_equal(references, y_pred)
+ 
+ 
++def test_multi_target_regression_partial_fit():
++    X, y = datasets.make_regression(n_targets=3)
++    X_train, y_train = X[:50], y[:50]
++    X_test, y_test = X[50:], y[50:]
++
++    references = np.zeros_like(y_test)
++    half_index = 25
++    for n in range(3):
++        sgr = SGDRegressor(random_state=0)
++        sgr.partial_fit(X_train[:half_index], y_train[:half_index, n])
++        sgr.partial_fit(X_train[half_index:], y_train[half_index:, n])
++        references[:, n] = sgr.predict(X_test)
++
++    sgr = MultiOutputRegressor(SGDRegressor(random_state=0))
++
++    sgr.partial_fit(X_train[:half_index], y_train[:half_index])
++    sgr.partial_fit(X_train[half_index:], y_train[half_index:])
++
++    y_pred = sgr.predict(X_test)
++    assert_almost_equal(references, y_pred)
++
++
+ def test_multi_target_regression_one_target():
+     # Test multi target regression raises
+     X, y = datasets.make_regression(n_targets=1)
+-    X_train, y_train = X[:50], y[:50]
+-    X_test, y_test = X[50:], y[50:]
+ 
+     rgr = MultiOutputRegressor(GradientBoostingRegressor(random_state=0))
+-    assert_raises(ValueError, rgr.fit, X_train, y_train)
++    assert_raises(ValueError, rgr.fit, X, y)
+ 
+ 
+ def test_multi_target_sparse_regression():
+     X, y = datasets.make_regression(n_targets=3)
+     X_train, y_train = X[:50], y[:50]
+-    X_test, y_test = X[50:], y[50:]
++    X_test = X[50:]
+ 
+     for sparse in [sp.csr_matrix, sp.csc_matrix, sp.coo_matrix, sp.dok_matrix,
+                    sp.lil_matrix]:
+@@ -57,11 +84,12 @@ def test_multi_target_sparse_regression():
+         rgr.fit(X_train, y_train)
+         rgr_sparse.fit(sparse(X_train), y_train)
+ 
+-        assert_almost_equal(rgr.predict(X_test), rgr_sparse.predict(sparse(X_test)))
++        assert_almost_equal(rgr.predict(X_test),
++                            rgr_sparse.predict(sparse(X_test)))
+ 
+ 
+ def test_multi_target_sample_weights_api():
+-    X = [[1,2,3], [4,5,6]]
++    X = [[1, 2, 3], [4, 5, 6]]
+     y = [[3.141, 2.718], [2.718, 3.141]]
+     w = [0.8, 0.6]
+ 
+@@ -74,23 +102,40 @@ def test_multi_target_sample_weights_api():
+     rgr.fit(X, y, w)
+ 
+ 
++def test_multi_target_sample_weight_partial_fit():
++    # weighted regressor
++    X = [[1, 2, 3], [4, 5, 6]]
++    y = [[3.141, 2.718], [2.718, 3.141]]
++    w = [2., 1.]
++    rgr_w = MultiOutputRegressor(SGDRegressor(random_state=0))
++    rgr_w.partial_fit(X, y, w)
++
++    # weighted with different weights
++    w = [2., 2.]
++    rgr = MultiOutputRegressor(SGDRegressor(random_state=0))
++    rgr.partial_fit(X, y, w)
++
++    assert_not_equal(rgr.predict(X)[0][0], rgr_w.predict(X)[0][0])
++
++
+ def test_multi_target_sample_weights():
+     # weighted regressor
+-    Xw = [[1,2,3], [4,5,6]]
++    Xw = [[1, 2, 3], [4, 5, 6]]
+     yw = [[3.141, 2.718], [2.718, 3.141]]
+     w = [2., 1.]
+     rgr_w = MultiOutputRegressor(GradientBoostingRegressor(random_state=0))
+     rgr_w.fit(Xw, yw, w)
+ 
+     # unweighted, but with repeated samples
+-    X = [[1,2,3], [1,2,3], [4,5,6]]
++    X = [[1, 2, 3], [1, 2, 3], [4, 5, 6]]
+     y = [[3.141, 2.718], [3.141, 2.718], [2.718, 3.141]]
+     rgr = MultiOutputRegressor(GradientBoostingRegressor(random_state=0))
+     rgr.fit(X, y)
+ 
+-    X_test = [[1.5,2.5,3.5], [3.5,4.5,5.5]]
++    X_test = [[1.5, 2.5, 3.5], [3.5, 4.5, 5.5]]
+     assert_almost_equal(rgr.predict(X_test), rgr_w.predict(X_test))
+ 
++
+ # Import the data
+ iris = datasets.load_iris()
+ # create a multiple targets by randomized shuffling and concatenating y.
+@@ -102,6 +147,57 @@ def test_multi_target_sample_weights():
+ n_samples, n_features = X.shape
+ n_outputs = y.shape[1]
+ n_classes = len(np.unique(y1))
++classes = list(map(np.unique, (y1, y2, y3)))
++
++
++def test_multi_output_classification_partial_fit_parallelism():
++    sgd_linear_clf = SGDClassifier(loss='log', random_state=1)
++    mor = MultiOutputClassifier(sgd_linear_clf, n_jobs=-1)
++    mor.partial_fit(X, y, classes)
++    est1 = mor.estimators_[0]
++    mor.partial_fit(X, y)
++    est2 = mor.estimators_[0]
++    # parallelism requires this to be the case for a sane implementation
++    assert_false(est1 is est2)
++
++
++def test_multi_output_classification_partial_fit():
++    # test if multi_target initializes correctly with base estimator and fit
++    # assert predictions work as expected for predict
++
++    sgd_linear_clf = SGDClassifier(loss='log', random_state=1)
++    multi_target_linear = MultiOutputClassifier(sgd_linear_clf)
++
++    # train the multi_target_linear and also get the predictions.
++    half_index = X.shape[0] // 2
++    multi_target_linear.partial_fit(
++        X[:half_index], y[:half_index], classes=classes)
++
++    first_predictions = multi_target_linear.predict(X)
++    assert_equal((n_samples, n_outputs), first_predictions.shape)
++
++    multi_target_linear.partial_fit(X[half_index:], y[half_index:])
++    second_predictions = multi_target_linear.predict(X)
++    assert_equal((n_samples, n_outputs), second_predictions.shape)
++
++    # train the linear classification with each column and assert that
++    # predictions are equal after first partial_fit and second partial_fit
++    for i in range(3):
++        # create a clone with the same state
++        sgd_linear_clf = clone(sgd_linear_clf)
++        sgd_linear_clf.partial_fit(
++            X[:half_index], y[:half_index, i], classes=classes[i])
++        assert_array_equal(sgd_linear_clf.predict(X), first_predictions[:, i])
++        sgd_linear_clf.partial_fit(X[half_index:], y[half_index:, i])
++        assert_array_equal(sgd_linear_clf.predict(X), second_predictions[:, i])
++
++
++def test_mutli_output_classifiation_partial_fit_no_first_classes_exception():
++    sgd_linear_clf = SGDClassifier(loss='log', random_state=1)
++    multi_target_linear = MultiOutputClassifier(sgd_linear_clf)
++    assert_raises_regex(ValueError, "classes must be passed on the first call "
++                                    "to partial_fit.",
++                        multi_target_linear.partial_fit, X, y)
+ 
+ 
+ def test_multi_output_classification():
+@@ -209,6 +305,25 @@ def test_multi_output_classification_sample_weights():
+     assert_almost_equal(clf.predict(X_test), clf_w.predict(X_test))
+ 
+ 
++def test_multi_output_classification_partial_fit_sample_weights():
++    # weighted classifier
++    Xw = [[1, 2, 3], [4, 5, 6], [1.5, 2.5, 3.5]]
++    yw = [[3, 2], [2, 3], [3, 2]]
++    w = np.asarray([2., 1., 1.])
++    sgd_linear_clf = SGDClassifier(random_state=1)
++    clf_w = MultiOutputClassifier(sgd_linear_clf)
++    clf_w.fit(Xw, yw, w)
++
++    # unweighted, but with repeated samples
++    X = [[1, 2, 3], [1, 2, 3], [4, 5, 6], [1.5, 2.5, 3.5]]
++    y = [[3, 2], [3, 2], [2, 3], [3, 2]]
++    sgd_linear_clf = SGDClassifier(random_state=1)
++    clf = MultiOutputClassifier(sgd_linear_clf)
++    clf.fit(X, y)
++    X_test = [[1.5, 2.5, 3.5]]
++    assert_array_almost_equal(clf.predict(X_test), clf_w.predict(X_test))
++
++
+ def test_multi_output_exceptions():
+     # NotFittedError when fit is not done but score, predict and
+     # and predict_proba are called

@@ -1,0 +1,518 @@
+diff --git a/examples/model_selection/plot_multi_metric_evaluation.py b/examples/model_selection/plot_multi_metric_evaluation.py
+index eaec4c8d1834..e1b5cbb30312 100644
+--- a/examples/model_selection/plot_multi_metric_evaluation.py
++++ b/examples/model_selection/plot_multi_metric_evaluation.py
+@@ -43,7 +43,7 @@
+ # Setting refit='AUC', refits an estimator on the whole dataset with the
+ # parameter setting that has the best cross-validated AUC score.
+ # That estimator is made available at ``gs.best_estimator_`` along with
+-# parameters like ``gs.best_score_``, ``gs.best_parameters_`` and
++# parameters like ``gs.best_score_``, ``gs.best_params_`` and
+ # ``gs.best_index_``
+ gs = GridSearchCV(DecisionTreeClassifier(random_state=42),
+                   param_grid={'min_samples_split': range(2, 403, 10)},
+diff --git a/sklearn/datasets/openml.py b/sklearn/datasets/openml.py
+index 4849ddee1b17..44d8d4cb3e4c 100644
+--- a/sklearn/datasets/openml.py
++++ b/sklearn/datasets/openml.py
+@@ -25,7 +25,7 @@
+ __all__ = ['fetch_openml']
+ 
+ _OPENML_PREFIX = "https://openml.org/"
+-_SEARCH_NAME = "api/v1/json/data/list/data_name/{}/limit/1"
++_SEARCH_NAME = "api/v1/json/data/list/data_name/{}/limit/2"
+ _DATA_INFO = "api/v1/json/data/{}"
+ _DATA_FEATURES = "api/v1/json/data/features/{}"
+ _DATA_FILE = "data/v1/download/{}"
+@@ -50,8 +50,9 @@ def _open_openml_url(openml_path, data_home):
+     result : stream
+         A stream to the OpenML resource
+     """
++    req = Request(_OPENML_PREFIX + openml_path)
+     if data_home is None:
+-        return urlopen(_OPENML_PREFIX + openml_path)
++        return urlopen(req)
+     local_path = os.path.join(data_home, 'openml.org', openml_path + ".gz")
+     if not os.path.exists(local_path):
+         try:
+@@ -62,7 +63,6 @@ def _open_openml_url(openml_path, data_home):
+ 
+         try:
+             with open(local_path, 'wb') as fdst:
+-                req = Request(_OPENML_PREFIX + openml_path)
+                 req.add_header('Accept-encoding', 'gzip')
+                 fsrc = urlopen(req)
+                 shutil.copyfileobj(fsrc, fdst)
+@@ -252,7 +252,13 @@ def _get_data_info_by_name(name, version, data_home):
+         error_msg = "No active dataset {} found.".format(name)
+         json_data = _get_json_content_from_openml_api(url, error_msg, True,
+                                                       data_home)
+-        return json_data['data']['dataset'][0]
++        res = json_data['data']['dataset']
++        if len(res) > 1:
++            warn("Multiple active versions of the dataset matching the name"
++                 " {name} exist. Versions may be fundamentally different, "
++                 "returning version"
++                 " {version}.".format(name=name, version=res[0]['version']))
++        return res[0]
+ 
+     # an integer version has been provided
+     url = (_SEARCH_NAME + "/data_version/{}").format(name, version)
+@@ -366,7 +372,10 @@ def fetch_openml(name=None, version='active', data_id=None, data_home=None,
+ 
+     version : integer or 'active', default='active'
+         Version of the dataset. Can only be provided if also ``name`` is given.
+-        If 'active' the oldest version that's still active is used.
++        If 'active' the oldest version that's still active is used. Since
++        there may be more than one active version of a dataset, and those
++        versions may fundamentally be different from one another, setting an
++        exact version is highly recommended.
+ 
+     data_id : int or None
+         OpenML ID of the dataset. The most specific way of retrieving a
+diff --git a/sklearn/datasets/tests/data/openml/2/data_list__anneal_1_active.json.gz b/sklearn/datasets/tests/data/openml/2/data_list__anneal_1_active.json.gz
+index d19e4a633740..a95a8131dde4 100644
+Binary files a/sklearn/datasets/tests/data/openml/2/data_list__anneal_1_active.json.gz and b/sklearn/datasets/tests/data/openml/2/data_list__anneal_1_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/2/data_list__anneal_None_active.json.gz b/sklearn/datasets/tests/data/openml/2/data_list__anneal_None_active.json.gz
+index ee94aa32a3fc..e85c1b5ff9d8 100644
+Binary files a/sklearn/datasets/tests/data/openml/2/data_list__anneal_None_active.json.gz and b/sklearn/datasets/tests/data/openml/2/data_list__anneal_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/292/data_list__australian_1_deactivated.json.gz b/sklearn/datasets/tests/data/openml/292/data_list__australian_1_deactivated.json.gz
+index 5ee200d7c056..8cb61626e1bb 100644
+Binary files a/sklearn/datasets/tests/data/openml/292/data_list__australian_1_deactivated.json.gz and b/sklearn/datasets/tests/data/openml/292/data_list__australian_1_deactivated.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/292/data_list__australian_None_active.json.gz b/sklearn/datasets/tests/data/openml/292/data_list__australian_None_active.json.gz
+index 08d319727fb5..b91949b9e48b 100644
+Binary files a/sklearn/datasets/tests/data/openml/292/data_list__australian_None_active.json.gz and b/sklearn/datasets/tests/data/openml/292/data_list__australian_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/40589/data_list__emotions_3_active.json.gz b/sklearn/datasets/tests/data/openml/40589/data_list__emotions_3_active.json.gz
+index c5d35604ce95..01e6648a91ce 100644
+Binary files a/sklearn/datasets/tests/data/openml/40589/data_list__emotions_3_active.json.gz and b/sklearn/datasets/tests/data/openml/40589/data_list__emotions_3_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/40589/data_list__emotions_None_active.json.gz b/sklearn/datasets/tests/data/openml/40589/data_list__emotions_None_active.json.gz
+index 5a27505c5d2f..0fc8d5ba1f7e 100644
+Binary files a/sklearn/datasets/tests/data/openml/40589/data_list__emotions_None_active.json.gz and b/sklearn/datasets/tests/data/openml/40589/data_list__emotions_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/40675/data_list__glass2_1_deactivated.json.gz b/sklearn/datasets/tests/data/openml/40675/data_list__glass2_1_deactivated.json.gz
+index 2f48ea985b4c..f038de419649 100644
+Binary files a/sklearn/datasets/tests/data/openml/40675/data_list__glass2_1_deactivated.json.gz and b/sklearn/datasets/tests/data/openml/40675/data_list__glass2_1_deactivated.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_4_active.json.gz b/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_4_active.json.gz
+index 6c292b4196d0..0931e0b2dadd 100644
+Binary files a/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_4_active.json.gz and b/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_4_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_None_active.json.gz b/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_None_active.json.gz
+index 712545f0b72d..190571cb65d9 100644
+Binary files a/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_None_active.json.gz and b/sklearn/datasets/tests/data/openml/40966/data_list__miceprotein_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/561/data_list__cpu_1_active.json.gz b/sklearn/datasets/tests/data/openml/561/data_list__cpu_1_active.json.gz
+index bb0f8103b807..872c5a82052e 100644
+Binary files a/sklearn/datasets/tests/data/openml/561/data_list__cpu_1_active.json.gz and b/sklearn/datasets/tests/data/openml/561/data_list__cpu_1_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/561/data_list__cpu_None_active.json.gz b/sklearn/datasets/tests/data/openml/561/data_list__cpu_None_active.json.gz
+index 4436afa6bc76..99a631470ef4 100644
+Binary files a/sklearn/datasets/tests/data/openml/561/data_list__cpu_None_active.json.gz and b/sklearn/datasets/tests/data/openml/561/data_list__cpu_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/61/data_list__iris_1_active.json.gz b/sklearn/datasets/tests/data/openml/61/data_list__iris_1_active.json.gz
+index 6dd5e202aecc..71b0c876adc8 100644
+Binary files a/sklearn/datasets/tests/data/openml/61/data_list__iris_1_active.json.gz and b/sklearn/datasets/tests/data/openml/61/data_list__iris_1_active.json.gz differ
+diff --git a/sklearn/datasets/tests/data/openml/61/data_list__iris_None_active.json.gz b/sklearn/datasets/tests/data/openml/61/data_list__iris_None_active.json.gz
+index b1824cde71fe..7ea17070fbb5 100644
+Binary files a/sklearn/datasets/tests/data/openml/61/data_list__iris_None_active.json.gz and b/sklearn/datasets/tests/data/openml/61/data_list__iris_None_active.json.gz differ
+diff --git a/sklearn/datasets/tests/test_openml.py b/sklearn/datasets/tests/test_openml.py
+index 7f978ef0595c..b1c564109c40 100644
+--- a/sklearn/datasets/tests/test_openml.py
++++ b/sklearn/datasets/tests/test_openml.py
+@@ -139,28 +139,36 @@ def _monkey_patch_webbased_functions(context, data_id, gziped_files):
+         path_suffix = '.gz'
+         read_fn = gzip.open
+ 
+-    def _mock_urlopen_data_description(url):
++    def _mock_urlopen_data_description(url, has_gzip_header):
+         assert url.startswith(url_prefix_data_description)
+ 
+         path = os.path.join(currdir, 'data', 'openml', str(data_id),
+                             'data_description.json%s' % path_suffix)
++
++        if has_gzip_header:
++            return open(path, 'rb')
+         return read_fn(path, 'rb')
+ 
+-    def _mock_urlopen_data_features(url):
++    def _mock_urlopen_data_features(url, has_gzip_header):
+         assert url.startswith(url_prefix_data_features)
+-
+         path = os.path.join(currdir, 'data', 'openml', str(data_id),
+                             'data_features.json%s' % path_suffix)
++
++        if has_gzip_header:
++            return open(path, 'rb')
+         return read_fn(path, 'rb')
+ 
+-    def _mock_urlopen_download_data(url):
++    def _mock_urlopen_download_data(url, has_gzip_header):
+         assert (url.startswith(url_prefix_download_data))
+ 
+         path = os.path.join(currdir, 'data', 'openml', str(data_id),
+                             'data.arff%s' % path_suffix)
++
++        if has_gzip_header:
++            return open(path, 'rb')
+         return read_fn(path, 'rb')
+ 
+-    def _mock_urlopen_data_list(url):
++    def _mock_urlopen_data_list(url, has_gzip_header):
+         # url contains key value pairs of attributes, e.g.,
+         # openml.org/api/v1/json/data_name/iris/data_version/1 should
+         # ideally become {data_name: 'iris', data_version: '1'}
+@@ -184,17 +192,22 @@ def _mock_urlopen_data_list(url):
+             raise HTTPError(url=None, code=412,
+                             msg='Simulated mock error',
+                             hdrs=None, fp=None)
++
++        if has_gzip_header:
++            return open(json_file_path, 'rb')
+         return read_fn(json_file_path, 'rb')
+ 
+-    def _mock_urlopen(url):
++    def _mock_urlopen(request):
++        url = request.get_full_url()
++        has_gzip_header = request.get_header('Accept-encoding') == "gzip"
+         if url.startswith(url_prefix_data_list):
+-            return _mock_urlopen_data_list(url)
++            return _mock_urlopen_data_list(url, has_gzip_header)
+         elif url.startswith(url_prefix_data_features):
+-            return _mock_urlopen_data_features(url)
++            return _mock_urlopen_data_features(url, has_gzip_header)
+         elif url.startswith(url_prefix_download_data):
+-            return _mock_urlopen_download_data(url)
++            return _mock_urlopen_download_data(url, has_gzip_header)
+         elif url.startswith(url_prefix_data_description):
+-            return _mock_urlopen_data_description(url)
++            return _mock_urlopen_data_description(url, has_gzip_header)
+         else:
+             raise ValueError('Unknown mocking URL pattern: %s' % url)
+ 
+@@ -214,11 +227,23 @@ def test_fetch_openml_iris(monkeypatch):
+     expected_missing = 0
+ 
+     _monkey_patch_webbased_functions(monkeypatch, data_id, test_gzip)
+-    _fetch_dataset_from_openml(data_id, data_name, data_version, target_column,
+-                               expected_observations, expected_features,
+-                               expected_missing,
+-                               np.float64, object, expect_sparse=False,
+-                               compare_default_target=True)
++    assert_warns_message(
++        UserWarning,
++        "Multiple active versions of the dataset matching the name"
++        " iris exist. Versions may be fundamentally different, "
++        "returning version 1.",
++        _fetch_dataset_from_openml,
++        **{'data_id': data_id, 'data_name': data_name,
++           'data_version': data_version,
++           'target_column': target_column,
++           'expected_observations': expected_observations,
++           'expected_features': expected_features,
++           'expected_missing': expected_missing,
++           'expect_sparse': False,
++           'expected_data_dtype': np.float64,
++           'expected_target_dtype': object,
++           'compare_default_target': True}
++    )
+ 
+ 
+ def test_decode_iris():
+diff --git a/sklearn/externals/_arff.py b/sklearn/externals/_arff.py
+index 6225dfc3691c..7fb445ef9d5a 100644
+--- a/sklearn/externals/_arff.py
++++ b/sklearn/externals/_arff.py
+@@ -146,7 +146,7 @@
+ __author_email__ = ('renato.ppontes@gmail.com, '
+                     'feurerm@informatik.uni-freiburg.de, '
+                     'joel.nothman@gmail.com')
+-__version__ = '2.3'
++__version__ = '2.3.1'
+ 
+ import re
+ import sys
+@@ -171,7 +171,7 @@
+ 
+ 
+ def _build_re_values():
+-    quoted_re = r'''(?x)
++    quoted_re = r'''
+                     "      # open quote followed by zero or more of:
+                     (?:
+                         (?<!\\)    # no additional backslash
+@@ -185,7 +185,7 @@ def _build_re_values():
+                     "      # close quote
+                     '''
+     # a value is surrounded by " or by ' or contains no quotables
+-    value_re = r'''(?x)(?:
++    value_re = r'''(?:
+         %s|          # a value may be surrounded by "
+         %s|          # or by '
+         [^,\s"'{}]+  # or may contain no characters requiring quoting
+@@ -253,7 +253,7 @@ def _parse_values(s):
+             for match in _RE_SPARSE_KEY_VALUES.finditer(s):
+                 if not match.group(1):
+                     raise BadLayout('Error parsing %r' % match.group())
+-            raise
++            raise BadLayout('Unknown parsing error')
+     else:
+         # an ARFF syntax error
+         for match in _RE_DENSE_VALUES.finditer(s):
+@@ -310,7 +310,7 @@ def __init__(self, value):
+         )
+ 
+ class BadAttributeType(ArffException):
+-    '''Error raised when some invalid type is provided into the attribute
++    '''Error raised when some invalid type is provided into the attribute 
+     declaration.'''
+     message = 'Bad @ATTRIBUTE type, at line %d.'
+ 
+@@ -327,7 +327,7 @@ def __init__(self, value, value2):
+         )
+ 
+ class BadNominalValue(ArffException):
+-    '''Error raised when a value in used in some data instance but is not
++    '''Error raised when a value in used in some data instance but is not 
+     declared into it respective attribute declaration.'''
+ 
+     def __init__(self, value):
+@@ -347,7 +347,7 @@ def __init__(self, value):
+         )
+ 
+ class BadNumericalValue(ArffException):
+-    '''Error raised when and invalid numerical value is used in some data
++    '''Error raised when and invalid numerical value is used in some data 
+     instance.'''
+     message = 'Invalid numerical value, at line %d.'
+ 
+@@ -365,14 +365,14 @@ def __init__(self, msg=''):
+             self.message = BadLayout.message + ' ' + msg.replace('%', '%%')
+ 
+ class BadObject(ArffException):
+-    '''Error raised when the object representing the ARFF file has something
++    '''Error raised when the object representing the ARFF file has something 
+     wrong.'''
+ 
+     def __str__(self):
+         return 'Invalid object.'
+ 
+ class BadObject(ArffException):
+-    '''Error raised when the object representing the ARFF file has something
++    '''Error raised when the object representing the ARFF file has something 
+     wrong.'''
+     def __init__(self, msg=''):
+         self.msg = msg
+@@ -636,7 +636,7 @@ def _decode_comment(self, s):
+         characters.
+ 
+         This method must receive a normalized string, i.e., a string without
+-        padding, including the "\r\n" characters.
++        padding, including the "\r\n" characters. 
+ 
+         :param s: a normalized string.
+         :return: a string with the decoded comment.
+@@ -647,13 +647,13 @@ def _decode_comment(self, s):
+     def _decode_relation(self, s):
+         '''(INTERNAL) Decodes a relation line.
+ 
+-        The relation declaration is a line with the format ``@RELATION
++        The relation declaration is a line with the format ``@RELATION 
+         <relation-name>``, where ``relation-name`` is a string. The string must
+         start with alphabetic character and must be quoted if the name includes
+         spaces, otherwise this method will raise a `BadRelationFormat` exception.
+ 
+         This method must receive a normalized string, i.e., a string without
+-        padding, including the "\r\n" characters.
++        padding, including the "\r\n" characters. 
+ 
+         :param s: a normalized string.
+         :return: a string with the decoded relation name.
+@@ -670,12 +670,12 @@ def _decode_relation(self, s):
+     def _decode_attribute(self, s):
+         '''(INTERNAL) Decodes an attribute line.
+ 
+-        The attribute is the most complex declaration in an arff file. All
++        The attribute is the most complex declaration in an arff file. All 
+         attributes must follow the template::
+ 
+              @attribute <attribute-name> <datatype>
+ 
+-        where ``attribute-name`` is a string, quoted if the name contains any
++        where ``attribute-name`` is a string, quoted if the name contains any 
+         whitespace, and ``datatype`` can be:
+ 
+         - Numerical attributes as ``NUMERIC``, ``INTEGER`` or ``REAL``.
+@@ -683,13 +683,13 @@ def _decode_attribute(self, s):
+         - Dates (NOT IMPLEMENTED).
+         - Nominal attributes with format:
+ 
+-            {<nominal-name1>, <nominal-name2>, <nominal-name3>, ...}
++            {<nominal-name1>, <nominal-name2>, <nominal-name3>, ...} 
+ 
+         The nominal names follow the rules for the attribute names, i.e., they
+         must be quoted if the name contains whitespaces.
+ 
+         This method must receive a normalized string, i.e., a string without
+-        padding, including the "\r\n" characters.
++        padding, including the "\r\n" characters. 
+ 
+         :param s: a normalized string.
+         :return: a tuple (ATTRIBUTE_NAME, TYPE_OR_VALUES).
+@@ -874,8 +874,8 @@ def _encode_comment(self, s=''):
+     def _encode_relation(self, name):
+         '''(INTERNAL) Decodes a relation line.
+ 
+-        The relation declaration is a line with the format ``@RELATION
+-        <relation-name>``, where ``relation-name`` is a string.
++        The relation declaration is a line with the format ``@RELATION 
++        <relation-name>``, where ``relation-name`` is a string. 
+ 
+         :param name: a string.
+         :return: a string with the encoded relation declaration.
+@@ -901,7 +901,7 @@ def _encode_attribute(self, name, type_):
+         - Dates (NOT IMPLEMENTED).
+         - Nominal attributes with format:
+ 
+-            {<nominal-name1>, <nominal-name2>, <nominal-name3>, ...}
++            {<nominal-name1>, <nominal-name2>, <nominal-name3>, ...} 
+ 
+         This method must receive a the name of the attribute and its type, if
+         the attribute type is nominal, ``type`` must be a list of values.
+@@ -936,7 +936,7 @@ def encode(self, obj):
+     def iter_encode(self, obj):
+         '''The iterative version of `arff.ArffEncoder.encode`.
+ 
+-        This encodes iteratively a given object and return, one-by-one, the
++        This encodes iteratively a given object and return, one-by-one, the 
+         lines of the ARFF file.
+ 
+         :param obj: the object containing the ARFF information.
+diff --git a/sklearn/manifold/isomap.py b/sklearn/manifold/isomap.py
+index cc2bca1c1c0c..9f9096806f17 100644
+--- a/sklearn/manifold/isomap.py
++++ b/sklearn/manifold/isomap.py
+@@ -80,6 +80,18 @@ class Isomap(BaseEstimator, TransformerMixin):
+     dist_matrix_ : array-like, shape (n_samples, n_samples)
+         Stores the geodesic distance matrix of training data.
+ 
++    Examples
++    --------
++    >>> from sklearn.datasets import load_digits
++    >>> from sklearn.manifold import Isomap
++    >>> X, _ = load_digits(return_X_y=True)
++    >>> X.shape
++    (1797, 64)
++    >>> embedding = Isomap(n_components=2)
++    >>> X_transformed = embedding.fit_transform(X[:100])
++    >>> X_transformed.shape
++    (100, 2)
++
+     References
+     ----------
+ 
+diff --git a/sklearn/manifold/locally_linear.py b/sklearn/manifold/locally_linear.py
+index a30084abd506..b38f7499baca 100644
+--- a/sklearn/manifold/locally_linear.py
++++ b/sklearn/manifold/locally_linear.py
+@@ -598,6 +598,18 @@ class LocallyLinearEmbedding(BaseEstimator, TransformerMixin):
+         Stores nearest neighbors instance, including BallTree or KDtree
+         if applicable.
+ 
++    Examples
++    --------
++    >>> from sklearn.datasets import load_digits
++    >>> from sklearn.manifold import LocallyLinearEmbedding
++    >>> X, _ = load_digits(return_X_y=True)
++    >>> X.shape
++    (1797, 64)
++    >>> embedding = LocallyLinearEmbedding(n_components=2)
++    >>> X_transformed = embedding.fit_transform(X[:100])
++    >>> X_transformed.shape
++    (100, 2)
++
+     References
+     ----------
+ 
+diff --git a/sklearn/manifold/mds.py b/sklearn/manifold/mds.py
+index 3ef750d4cb9f..1f5ef8d2e9f7 100644
+--- a/sklearn/manifold/mds.py
++++ b/sklearn/manifold/mds.py
+@@ -340,6 +340,17 @@ class MDS(BaseEstimator):
+         The final value of the stress (sum of squared distance of the
+         disparities and the distances for all constrained points).
+ 
++    Examples
++    --------
++    >>> from sklearn.datasets import load_digits
++    >>> from sklearn.manifold import MDS
++    >>> X, _ = load_digits(return_X_y=True)
++    >>> X.shape
++    (1797, 64)
++    >>> embedding = MDS(n_components=2)
++    >>> X_transformed = embedding.fit_transform(X[:100])
++    >>> X_transformed.shape
++    (100, 2)
+ 
+     References
+     ----------
+diff --git a/sklearn/manifold/spectral_embedding_.py b/sklearn/manifold/spectral_embedding_.py
+index d23a988cc3a5..62922b060f07 100644
+--- a/sklearn/manifold/spectral_embedding_.py
++++ b/sklearn/manifold/spectral_embedding_.py
+@@ -395,6 +395,18 @@ class SpectralEmbedding(BaseEstimator):
+     affinity_matrix_ : array, shape = (n_samples, n_samples)
+         Affinity_matrix constructed from samples or precomputed.
+ 
++    Examples
++    --------
++    >>> from sklearn.datasets import load_digits
++    >>> from sklearn.manifold import SpectralEmbedding
++    >>> X, _ = load_digits(return_X_y=True)
++    >>> X.shape
++    (1797, 64)
++    >>> embedding = SpectralEmbedding(n_components=2)
++    >>> X_transformed = embedding.fit_transform(X[:100])
++    >>> X_transformed.shape
++    (100, 2)
++
+     References
+     ----------
+ 
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index d7bf45c61677..7be1c204d057 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -467,7 +467,7 @@ def _check_is_fitted(self, method_name):
+                                  'with refit=False. %s is '
+                                  'available only after refitting on the best '
+                                  'parameters. You can refit an estimator '
+-                                 'manually using the ``best_parameters_`` '
++                                 'manually using the ``best_params_`` '
+                                  'attribute'
+                                  % (type(self).__name__, method_name))
+         else:
+@@ -969,7 +969,7 @@ class GridSearchCV(BaseSearchCV):
+         ``GridSearchCV`` instance.
+ 
+         Also for multiple metric evaluation, the attributes ``best_index_``,
+-        ``best_score_`` and ``best_parameters_`` will only be available if
++        ``best_score_`` and ``best_params_`` will only be available if
+         ``refit`` is set and all of them will be determined w.r.t this specific
+         scorer.
+ 
+@@ -1313,7 +1313,7 @@ class RandomizedSearchCV(BaseSearchCV):
+         ``RandomizedSearchCV`` instance.
+ 
+         Also for multiple metric evaluation, the attributes ``best_index_``,
+-        ``best_score_`` and ``best_parameters_`` will only be available if
++        ``best_score_`` and ``best_params_`` will only be available if
+         ``refit`` is set and all of them will be determined w.r.t this specific
+         scorer.
+ 
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index 2cc80f47cf8a..4a2edada4c1d 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -150,7 +150,7 @@ def _check_input_size(n_components, n_features):
+                          n_components)
+     if n_features <= 0:
+         raise ValueError("n_features must be strictly positive, got %d" %
+-                         n_components)
++                         n_features)
+ 
+ 
+ def gaussian_random_matrix(n_components, n_features, random_state=None):

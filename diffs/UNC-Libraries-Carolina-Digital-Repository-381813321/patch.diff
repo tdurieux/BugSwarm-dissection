@@ -1,0 +1,2790 @@
+diff --git a/access-common/pom.xml b/access-common/pom.xml
+index 9a700dbaa..6c1f7deab 100644
+--- a/access-common/pom.xml
++++ b/access-common/pom.xml
+@@ -112,6 +112,12 @@
+             <type>test-jar</type>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>edu.unc.lib.cdr</groupId>
++            <artifactId>fcrepo-clients</artifactId>
++            <type>test-jar</type>
++            <scope>test</scope>
++        </dependency>
+         <dependency>
+             <groupId>org.apache.solr</groupId>
+             <artifactId>solr-core</artifactId>
+diff --git a/access-common/src/main/java/edu/unc/lib/dl/ui/service/FedoraContentService.java b/access-common/src/main/java/edu/unc/lib/dl/ui/service/FedoraContentService.java
+index 99f74931a..88a467601 100644
+--- a/access-common/src/main/java/edu/unc/lib/dl/ui/service/FedoraContentService.java
++++ b/access-common/src/main/java/edu/unc/lib/dl/ui/service/FedoraContentService.java
+@@ -15,235 +15,101 @@
+  */
+ package edu.unc.lib.dl.ui.service;
+ 
++import static edu.unc.lib.dl.acl.fcrepo4.DatastreamPermissionUtil.getPermissionForDatastream;
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.ORIGINAL_FILE;
++import static org.apache.http.HttpHeaders.CONTENT_LENGTH;
++import static org.apache.http.HttpHeaders.CONTENT_TYPE;
++
+ import java.io.IOException;
+-import java.util.Arrays;
+-import java.util.List;
++import java.io.OutputStream;
+ 
+ import javax.servlet.http.HttpServletResponse;
+ 
++import org.apache.commons.io.IOUtils;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+-import org.springframework.beans.factory.annotation.Autowired;
+ 
++import edu.unc.lib.dl.acl.service.AccessControlService;
+ import edu.unc.lib.dl.acl.util.AccessGroupSet;
+-import edu.unc.lib.dl.acl.util.GroupsThreadStore;
+-import edu.unc.lib.dl.fedora.AccessClient;
+-import edu.unc.lib.dl.fedora.AuthorizationException;
+-import edu.unc.lib.dl.fedora.FedoraException;
+-import edu.unc.lib.dl.search.solr.model.BriefObjectMetadataBean;
+-import edu.unc.lib.dl.search.solr.model.Datastream;
+-import edu.unc.lib.dl.search.solr.model.SimpleIdRequest;
+-import edu.unc.lib.dl.search.solr.util.SearchFieldKeys;
+-import edu.unc.lib.dl.search.solr.util.SearchSettings;
+-import edu.unc.lib.dl.ui.exception.InvalidRecordRequestException;
+-import edu.unc.lib.dl.ui.exception.ResourceNotFoundException;
+-import edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil;
+-import edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil.AnalyticsUserData;
+-import edu.unc.lib.dl.util.ContentModelHelper;
+-import edu.unc.lib.dl.util.ContentModelHelper.DatastreamCategory;
++import edu.unc.lib.dl.fcrepo4.BinaryObject;
++import edu.unc.lib.dl.fcrepo4.FileObject;
++import edu.unc.lib.dl.fcrepo4.RepositoryObjectLoader;
++import edu.unc.lib.dl.fedora.PID;
+ 
+ /**
+- * Connects to and streams datastreams from Fedora.
++ * Streams binary content from repository objects.
+  *
+  * @author bbpennel
+  */
+ public class FedoraContentService {
+     private static final Logger LOG = LoggerFactory.getLogger(FedoraContentService.class);
+ 
+-    private AccessClient accessClient;
+-
+-    private String fedoraHost;
+-
+-    @Autowired
+-    private SearchSettings searchSettings;
+-    @Autowired
+-    protected SolrQueryLayerService queryLayer;
+-
+-    @Autowired(required = false)
+-    protected AnalyticsTrackerUtil analyticsTracker;
+-
+-    private final int numberOfRetries = 1;
++    private static final int BUFFER_SIZE = 4096;
++
++    public static final String CONTENT_DISPOSITION = "Content-Disposition";
++
++    private AccessControlService accessControlService;
++
++    private RepositoryObjectLoader repositoryObjectLoader;
++
++    /**
++     * Set content headers and stream the binary content of the specified
++     * datastream from the object identified by pid.
++     *
++     * @param pid pid of object containing datastream
++     * @param dsName name of datastream being requested. If null, then original
++     *            file datastream is assumed.
++     * @param principals principals of requesting client
++     * @param asAttachment if true, then content-disposition header will specify
++     *            as "attachment" instead of "inline"
++     * @param response response content and headers will be added to.
++     * @throws IOException if unable to stream content to the response.
++     */
++    public void streamData(PID pid, String dsName, AccessGroupSet principals, boolean asAttachment,
++            HttpServletResponse response) throws IOException {
++        // Default datastream is DATA_FILE
++        String datastream = dsName == null ? ORIGINAL_FILE : dsName;
+ 
+-    private static List<String> resultFields = Arrays.asList(SearchFieldKeys.ID.name(),
+-            SearchFieldKeys.DATASTREAM.name(), SearchFieldKeys.LABEL.name(), SearchFieldKeys.RESOURCE_TYPE.name(),
+-            SearchFieldKeys.ROLE_GROUP.name(), SearchFieldKeys.PARENT_COLLECTION.name(),
+-            SearchFieldKeys.ANCESTOR_PATH.name(), SearchFieldKeys.TITLE.name());
++        accessControlService.assertHasAccess("Insufficient permissions to access " + datastream + " for object " + pid,
++                pid, principals, getPermissionForDatastream(datastream));
+ 
+-    public void streamData(String pid, String datastream, boolean download, AnalyticsUserData userData,
+-            HttpServletResponse response) {
+-        AccessGroupSet accessGroups = GroupsThreadStore.getGroups();
++        LOG.debug("Streaming datastream {} from object {}", datastream, pid);
+ 
+-        // Default datastream is DATA_FILE
+-        if (datastream == null) {
+-            datastream = ContentModelHelper.Datastream.DATA_FILE.toString();
++        FileObject fileObj = repositoryObjectLoader.getFileObject(pid);
++        BinaryObject binObj;
++        if (ORIGINAL_FILE.equals(datastream)) {
++            binObj = fileObj.getOriginalFile();
++        } else {
++            binObj = fileObj.getBinaryObject(datastream);
+         }
+ 
+-        // Use solr to check if the user is allowed to view this item.
+-        SimpleIdRequest idRequest = new SimpleIdRequest(pid, resultFields, accessGroups);
+-
+-        BriefObjectMetadataBean briefObject = queryLayer.getObjectById(idRequest);
+-        // If the record isn't accessible then invalid record exception.
+-        if (briefObject == null) {
+-            throw new InvalidRecordRequestException();
+-        }
+-        // Block access to thumbnails for non-containers,
+-        // TODO Perform ACL check before allowing streaming
+-//        if (AccessUtil.hasListAccessOnly(accessGroups, briefObject)
+-//                && (searchSettings.resourceTypeFile.equals(briefObject.getResourceType())
+-//                        || searchSettings.resourceTypeAggregate.equals(briefObject.getResourceType()))) {
+-//            throw new InvalidRecordRequestException();
+-//        }
+-
+-        // If a label is available, use it for the filename
+-        String filename = briefObject.getLabel();
+-
+-        try {
+-            edu.unc.lib.dl.search.solr.model.Datastream datastreamResult = briefObject.getDatastreamObject(datastream);
+-            if (datastreamResult == null) {
+-                throw new ResourceNotFoundException("Datastream " + datastream + " was not found on object " + pid);
+-            }
+-
+-            // Track the download event if the request is for the original content
+-            if (analyticsTracker != null && datastreamResult.getDatastreamCategory() != null
+-                    && datastreamResult.getDatastreamCategory().equals(DatastreamCategory.ORIGINAL)) {
+-                analyticsTracker.trackEvent(userData, briefObject.getParentCollection() == null ? "(no collection)"
+-                        : briefObject.getParentCollectionName(),
+-                        "download", briefObject.getTitle() + "|" + pid, null);
+-            }
+-
+-            this.streamData(pid, datastreamResult, filename, response, download, numberOfRetries);
+-        } catch (AuthorizationException e) {
+-            throw new InvalidRecordRequestException(e);
+-        } catch (ResourceNotFoundException e) {
+-            LOG.info("Resource not found while attempting to stream datastream", e);
+-            throw e;
+-        } catch (Exception e) {
+-            LOG.error("Failed to retrieve content for " + pid + " datastream: " + datastream, e);
+-            throw new ResourceNotFoundException();
++        // Set binary detail response headers
++        response.setHeader(CONTENT_LENGTH, Long.toString(binObj.getFilesize()));
++        response.setHeader(CONTENT_TYPE, binObj.getMimetype());
++        String binaryName = binObj.getFilename();
++        String filename = binaryName == null ? pid.getId() : binaryName;
++        if (asAttachment) {
++            response.setHeader(CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
++        } else {
++            response.setHeader(CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"");
+         }
+-    }
+-
+-    private void streamData(String simplepid, Datastream datastream, String filename, HttpServletResponse response,
+-            boolean asAttachment, int retryServerError) throws FedoraException, IOException {
+-//        OutputStream outStream = response.getOutputStream();
+-//
+-//        String dataUrl = fedoraUtil.getFedoraUrl() + "/objects/" + simplepid + "/datastreams/" + datastream.getName()
+-//                + "/content";
+-//
+-//        CloseableHttpClient client = HttpClientUtil
+-//                .getAuthenticatedClient(fedoraHost, accessClient.getUsername(),
+-//                accessClient.getPassword());
+-//        HttpGet method = new HttpGet(dataUrl);
+-//        method.addHeader(HttpClientUtil.FORWARDED_GROUPS_HEADER, GroupsThreadStore.getGroupString());
+-//
+-//        try (CloseableHttpResponse httpResp = client.execute(method)) {
+-//
+-//            if (httpResp.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+-//                if (response != null) {
+-//                    PID pid = new PID(simplepid);
+-//
+-//                    // Adjusting content related headers
+-//
+-//                    // Use the content length from Fedora it is not provided or negative, in which case use solr's
+-//                    long contentLength;
+-//                    try {
+-//                        String contentLengthString = httpResp.getFirstHeader("content-length").getValue();
+-//                        contentLength = Long.parseLong(contentLengthString);
+-//                    } catch (Exception e) {
+-//                        // If the content length wasn't provided or wasn't a number, set it to -1
+-//                        contentLength = -1L;
+-//                    }
+-//                    if (contentLength < 0L) {
+-//                        contentLength = datastream.getFilesize();
+-//                    }
+-//                    response.setHeader("Content-Length", Long.toString(contentLength));
+-//
+-//                    // Use Fedora's content type unless it is unset or octet-stream
+-//                    String mimeType;
+-//                    try {
+-//                        mimeType = httpResp.getFirstHeader("content-type").getValue();
+-//                        if (mimeType == null || "application/octet-stream".equals(mimeType)) {
+-//                            if ("mp3".equals(datastream.getExtension())) {
+-//                                mimeType = "audio/mpeg";
+-//                            } else {
+-//                                mimeType = datastream.getMimetype();
+-//                            }
+-//                        }
+-//                    } catch (Exception e) {
+-//                        mimeType = datastream.getMimetype();
+-//                    }
+-//                    response.setHeader("Content-Type", mimeType);
+-//
+-//                    // Setting the filename header for the response
+-//                    if (filename != null) {
+-//                        filename = StringFormatUtil.makeToken(filename, "_");
+-//                    } else {
+-//                        filename = pid.getId();
+-//                    }
+-//
+-//                    // For metadata types files, append the datastream name
+-//                    if (datastream.getDatastreamCategory().equals(DatastreamCategory.METADATA)
+-//                            || datastream.getDatastreamCategory().equals(DatastreamCategory.ADMINISTRATIVE)) {
+-//                        filename += "_" + datastream.getName();
+-//                    }
+-//                    // Add the file extension unless its already in there.
+-//                    if (datastream.getExtension() != null && datastream.getExtension().length() > 0
+-//                            && !filename.toLowerCase().endsWith("." + datastream.getExtension())
+-//                            && !"unknown".equals(datastream.getExtension())) {
+-//                        filename += "." + datastream.getExtension();
+-//                    }
+-//                    if (asAttachment) {
+-//                        response.setHeader("content-disposition", "attachment; filename=\"" + filename + "\"");
+-//                    } else {
+-//                        response.setHeader("content-disposition", "inline; filename=\"" + filename + "\"");
+-//                    }
+-//                }
+-//
+-//                // Stream the content
+-//                FileIOUtil.stream(outStream, httpResp);
+-//            } else if (httpResp.getStatusLine().getStatusCode() == HttpStatus.SC_FORBIDDEN) {
+-//                throw new AuthorizationException(
+-//                        "User does not have sufficient permissions to retrieve the specified object");
+-//            } else {
+-//                // Retry server errors
+-//                if (httpResp.getStatusLine().getStatusCode() == 500 && retryServerError > 0) {
+-//                    LOG.warn("Failed to retrieve " + dataUrl + ", retrying.");
+-//                    this.streamData(simplepid, datastream, filename, response, asAttachment, retryServerError - 1);
+-//                } else {
+-//                    throw new ResourceNotFoundException("Failure to stream fedora content due to response of: "
+-//                            + httpResp.getStatusLine().toString() + "\nPath was: " + dataUrl);
+-//                }
+-//            }
+-//        } catch (ClientAbortException e) {
+-//            if (LOG.isDebugEnabled()) {
+-//                LOG.debug("User client aborted request to stream Fedora content for " + simplepid, e);
+-//            }
+-//        } catch (IOException e) {
+-//            LOG.warn("Problem retrieving " + dataUrl + " for " + simplepid, e);
+-//        }
+-    }
+-
+-    public void setAccessClient(edu.unc.lib.dl.fedora.AccessClient accessClient) {
+-        this.accessClient = accessClient;
+-    }
+-
+-    public void setSearchSettings(SearchSettings searchSettings) {
+-        this.searchSettings = searchSettings;
+-    }
+-
+-    public void setQueryLayer(SolrQueryLayerService queryLayer) {
+-        this.queryLayer = queryLayer;
+-    }
+ 
+-    public void setAnalyticsTracker(AnalyticsTrackerUtil analyticsTracker) {
+-        this.analyticsTracker = analyticsTracker;
++        // Stream binary content to http response
++        OutputStream outStream = response.getOutputStream();
++        IOUtils.copy(binObj.getBinaryStream(), outStream, BUFFER_SIZE);
+     }
+ 
+-    public String getFedoraHost() {
+-        return fedoraHost;
++    /**
++     * @param accessControlService the accessControlService to set
++     */
++    public void setAccessControlService(AccessControlService accessControlService) {
++        this.accessControlService = accessControlService;
+     }
+ 
+-    public void setFedoraHost(String fedoraHost) {
+-        this.fedoraHost = fedoraHost;
++    /**
++     * @param repositoryObjectLoader the repositoryObjectLoader to set
++     */
++    public void setRepositoryObjectLoader(RepositoryObjectLoader repositoryObjectLoader) {
++        this.repositoryObjectLoader = repositoryObjectLoader;
+     }
+ }
+\ No newline at end of file
+diff --git a/access-common/src/main/java/edu/unc/lib/dl/ui/util/AnalyticsTrackerUtil.java b/access-common/src/main/java/edu/unc/lib/dl/ui/util/AnalyticsTrackerUtil.java
+index ae61bffef..bcb0d4c3c 100644
+--- a/access-common/src/main/java/edu/unc/lib/dl/ui/util/AnalyticsTrackerUtil.java
++++ b/access-common/src/main/java/edu/unc/lib/dl/ui/util/AnalyticsTrackerUtil.java
+@@ -37,6 +37,12 @@
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
++import edu.unc.lib.dl.acl.util.AccessGroupSet;
++import edu.unc.lib.dl.fedora.PID;
++import edu.unc.lib.dl.search.solr.model.BriefObjectMetadata;
++import edu.unc.lib.dl.search.solr.model.SimpleIdRequest;
++import edu.unc.lib.dl.search.solr.service.SolrSearchService;
++
+ /**
+  * Utility for performing asynchronous analytics tracking events when unable to use the javascript api
+  *
+@@ -58,6 +64,8 @@
+     private final HttpClientConnectionManager httpManager;
+     private final CloseableHttpClient httpClient;
+ 
++    private SolrSearchService solrSearchService;
++
+     public AnalyticsTrackerUtil() {
+ 
+         // Use a threaded manager with timeouts
+@@ -82,6 +90,30 @@ public void setGaTrackingID(String trackingID) {
+         this.gaTrackingID = trackingID;
+     }
+ 
++    /**
++     * Track an event with the specified action for object pid for the active user on the request.
++     *
++     * @param request request
++     * @param action action for the event
++     * @param pid pid identifying the object involved in the event
++     * @param principals authorization principals
++     */
++    public void trackEvent(HttpServletRequest request, String action, PID pid, AccessGroupSet principals) {
++        try {
++            AnalyticsUserData userData = new AnalyticsUserData(request);
++
++            BriefObjectMetadata briefObject = solrSearchService.getObjectById(new SimpleIdRequest(pid, principals));
++            String parentCollection = briefObject.getParentCollection() == null ?
++                    "(no collection)"
++                    : briefObject.getParentCollectionName();
++            String viewedObjectLabel = briefObject.getTitle() + "|" + pid;
++            trackEvent(userData, parentCollection, "download", viewedObjectLabel, null);
++        } catch (Exception e) {
++            // Prevent analytics exceptions from impacting user
++            log.warn("An exception occurred while recording {} event on {}", action, pid, e);
++        }
++    }
++
+     public void trackEvent(AnalyticsUserData userData, String category, String action, String label, Integer value) {
+ 
+         // Use a default customer ID if none was provided, since it is required
+@@ -94,8 +126,17 @@ public void trackEvent(AnalyticsUserData userData, String category, String actio
+         trackerThread.start();
+     }
+ 
++    /**
++     * @param solrSearchService the solrSearchService to set
++     */
++    public void setSolrSearchService(SolrSearchService solrSearchService) {
++        this.solrSearchService = solrSearchService;
++    }
++
+     public static class AnalyticsUserData {
++        // ip of client
+         public String uip;
++        // client id
+         public String cid;
+         public String userAgent;
+ 
+@@ -165,7 +206,7 @@ public EventTrackerRunnable(AnalyticsUserData userData, String category, String
+         public void run() {
+             if (log.isDebugEnabled()) {
+                 log.debug("Tracking user {} with event {} in category {} with label {}",
+-                        new String[] { userData.cid, action, category, label });
++                        userData.cid, action, category, label);
+             }
+ 
+             URIBuilder builder;
+@@ -176,6 +217,7 @@ public void run() {
+                 return;
+             }
+ 
++            // See https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters
+             List<NameValuePair> params = new ArrayList<>();
+             params.add(new BasicNameValuePair("v", "1"));
+             params.add(new BasicNameValuePair("tid", gaTrackingID));
+@@ -187,7 +229,7 @@ public void run() {
+             params.add(new BasicNameValuePair("de", "UTF-8"));
+             params.add(new BasicNameValuePair("ul", "en-us"));
+             log.debug("Tracking user {} with event {} in category {} with label {}",
+-                    new String[] { userData.cid, action, category, label });
++                    userData.cid, action, category, label);
+             log.debug("Tracking:{} {} {} {}", new Object[] { GA_URL, gaTrackingID, userData.cid, userData.uip});
+ 
+             if (category != null) {
+diff --git a/access-common/src/main/java/edu/unc/lib/dl/ui/util/FedoraUtil.java b/access-common/src/main/java/edu/unc/lib/dl/ui/util/DatastreamUtil.java
+similarity index 57%
+rename from access-common/src/main/java/edu/unc/lib/dl/ui/util/FedoraUtil.java
+rename to access-common/src/main/java/edu/unc/lib/dl/ui/util/DatastreamUtil.java
+index 078051543..c062b2c97 100644
+--- a/access-common/src/main/java/edu/unc/lib/dl/ui/util/FedoraUtil.java
++++ b/access-common/src/main/java/edu/unc/lib/dl/ui/util/DatastreamUtil.java
+@@ -15,49 +15,37 @@
+  */
+ package edu.unc.lib.dl.ui.util;
+ 
+-import java.util.Arrays;
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.ORIGINAL_FILE;
++import static java.util.Arrays.asList;
++import static org.apache.commons.lang3.StringUtils.isBlank;
++
+ import java.util.List;
+ 
+ import edu.unc.lib.dl.search.solr.model.BriefObjectMetadata;
+ import edu.unc.lib.dl.search.solr.model.Datastream;
+-import edu.unc.lib.dl.util.ContentModelHelper;
+ 
+ /**
++ * Utility methods for presenting datastreams in views.
+  *
+- * @author count0
++ * @author bbpennel
+  *
+  */
+-public class FedoraUtil {
+-    private String fedoraUrl;
++public class DatastreamUtil {
+ 
+-    public static String getDatastreamUrl(Object object, String datastream, FedoraUtil fedoraUtil) {
+-        if (object instanceof String) {
+-            return fedoraUtil.getDatastreamUrl((String) object, datastream);
+-        }
+-        if (object instanceof BriefObjectMetadata) {
+-            return fedoraUtil.getDatastreamUrl((BriefObjectMetadata) object, datastream);
+-        }
+-        return null;
++    private static final List<String> INDEXABLE_EXTENSIONS = asList(
++            "doc", "docx", "htm", "html", "pdf", "ppt", "pptx", "rtf", "txt", "xls", "xlsx", "xml");
++
++    private DatastreamUtil() {
+     }
+ 
+     /**
+-     * Returns a URL for a specific datastream of the object identified by pid, according to the RESTful Fedora API.
+-     * Example: <fedoraBaseURL>/objects/uuid:5fdc16d9-8272-41f7-a7da-a953192174df/datastreams/DC/content
++     * Returns a URL for retrieving a specific datastream of the provided object.
+      *
+-     * @param pid
+-     * @param datastream
+-     * @return
++     * @param metadata metadata record for object
++     * @param datastreamName name of datastream to return
++     * @return url for accessing the datastream.
+      */
+-    public String getDatastreamUrl(String pid, String datastream) {
+-        StringBuilder url = new StringBuilder();
+-        url.append("content/").append(pid);
+-        if (!ContentModelHelper.Datastream.DATA_FILE.getName().equals(datastream)) {
+-            url.append("/").append(datastream);
+-        }
+-        return url.toString();
+-    }
+-
+-    public String getDatastreamUrl(BriefObjectMetadata metadata, String datastreamName) {
++    public static String getDatastreamUrl(BriefObjectMetadata metadata, String datastreamName) {
+         // Prefer the matching datastream from this object over the same datastream with a different pid prefix
+         Datastream preferredDS = getPreferredDatastream(metadata, datastreamName);
+ 
+@@ -67,26 +55,35 @@ public String getDatastreamUrl(BriefObjectMetadata metadata, String datastreamNa
+ 
+         StringBuilder url = new StringBuilder();
+ 
+-        if (preferredDS.getExtension() != null) {
+-            int extensionIndex = Arrays.binarySearch(new String[] { "doc", "docx", "htm", "html", "pdf", "ppt", "pptx",
+-                    "rtf", "txt", "xls", "xlsx", "xml" }, preferredDS.getExtension());
+-            if (extensionIndex >= 0) {
++        if (!isBlank(preferredDS.getExtension())) {
++            if (INDEXABLE_EXTENSIONS.contains(preferredDS.getExtension())) {
+                 url.append("indexable");
+             }
+         }
+ 
+         url.append("content/");
+-        if (preferredDS.getOwner() == null) {
++        if (isBlank(preferredDS.getOwner())) {
+             url.append(metadata.getId());
+         } else {
+             url.append(preferredDS.getOwner());
+         }
+-        if (!ContentModelHelper.Datastream.DATA_FILE.getName().equals(datastreamName)) {
++        if (!ORIGINAL_FILE.equals(preferredDS.getName())) {
+             url.append("/").append(preferredDS.getName());
+         }
+         return url.toString();
+     }
+ 
++    /**
++     * Returns a URL for retrieving the original file datastream of the provided
++     * object if present, otherwise a blank string is returned.
++     *
++     * @param metadata metadata record for object
++     * @return url for accessing the datastream.
++     */
++    public static String getOriginalFileUrl(BriefObjectMetadata metadata) {
++        return getDatastreamUrl(metadata, ORIGINAL_FILE);
++    }
++
+     /**
+      * Finds the preferred instance of the datastream identified by datastreamName. The preferred datastream is the
+      * datastream owned by the object itself, rather then a reference to a datastream owed by another object.  This
+@@ -117,12 +114,4 @@ public static Datastream getPreferredDatastream(BriefObjectMetadata metadata, St
+         return preferredDS;
+     }
+ 
+-    public String getFedoraUrl() {
+-        return fedoraUrl;
+-    }
+-
+-    public void setFedoraUrl(String fedoraUrl) {
+-        this.fedoraUrl = fedoraUrl;
+-    }
+-
+ }
+diff --git a/access-common/src/main/resources/META-INF/cdrUI.tld b/access-common/src/main/resources/META-INF/cdrUI.tld
+index aad83d2a0..589ac63bb 100644
+--- a/access-common/src/main/resources/META-INF/cdrUI.tld
++++ b/access-common/src/main/resources/META-INF/cdrUI.tld
+@@ -57,14 +57,21 @@
+ 	</function>
+ 	<function>
+ 		<name>getDatastreamUrl</name>
+-		<function-class>edu.unc.lib.dl.ui.util.FedoraUtil</function-class>
++		<function-class>edu.unc.lib.dl.ui.util.DatastreamUtil</function-class>
+ 		<function-signature>
+-			java.lang.String getDatastreamUrl(java.lang.Object, java.lang.String, edu.unc.lib.dl.ui.util.FedoraUtil)
++			java.lang.String getDatastreamUrl(edu.unc.lib.dl.search.solr.model.BriefObjectMetadata, java.lang.String)
++		</function-signature>
++	</function>
++	<function>
++		<name>getOriginalFileUrl</name>
++		<function-class>edu.unc.lib.dl.ui.util.DatastreamUtil</function-class>
++		<function-signature>
++			java.lang.String getOriginalFileUrl(edu.unc.lib.dl.search.solr.model.BriefObjectMetadata)
+ 		</function-signature>
+ 	</function>
+ 	<function>
+ 		<name>getPreferredDatastream</name>
+-		<function-class>edu.unc.lib.dl.ui.util.FedoraUtil</function-class>
++		<function-class>edu.unc.lib.dl.ui.util.DatastreamUtil</function-class>
+ 		<function-signature>
+ 			edu.unc.lib.dl.search.solr.model.Datastream getPreferredDatastream(edu.unc.lib.dl.search.solr.model.BriefObjectMetadata, java.lang.String)
+ 		</function-signature>
+diff --git a/access-common/src/test/java/edu/unc/lib/dl/ui/util/DatastreamUtilTest.java b/access-common/src/test/java/edu/unc/lib/dl/ui/util/DatastreamUtilTest.java
+new file mode 100644
+index 000000000..e1de845aa
+--- /dev/null
++++ b/access-common/src/test/java/edu/unc/lib/dl/ui/util/DatastreamUtilTest.java
+@@ -0,0 +1,72 @@
++/**
++ * Copyright 2008 The University of North Carolina at Chapel Hill
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *         http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package edu.unc.lib.dl.ui.util;
++
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.ORIGINAL_FILE;
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.TECHNICAL_METADATA;
++import static edu.unc.lib.dl.test.TestHelper.makePid;
++import static java.util.Arrays.asList;
++import static org.junit.Assert.assertEquals;
++
++import org.junit.Test;
++
++import edu.unc.lib.dl.fedora.PID;
++import edu.unc.lib.dl.search.solr.model.BriefObjectMetadataBean;
++
++/**
++ *
++ * @author bbpennel
++ *
++ */
++public class DatastreamUtilTest {
++
++    private final static String ORIGINAL_DS = ORIGINAL_FILE + "|image/jpg|image|jpg|555||";
++    private final static String ORIGINAL_INDEXABLE = ORIGINAL_FILE + "|application/pdf|doc.pdf|pdf|5555||";
++    private final static String FITS_DS = TECHNICAL_METADATA + "|text/xml|fits.xml|xml|5555||";
++
++    @Test
++    public void testGetOriginalFileUrl() {
++        PID pid = makePid();
++        BriefObjectMetadataBean mdObj = new BriefObjectMetadataBean();
++        mdObj.setId(pid.getId());
++        mdObj.setDatastream(asList(ORIGINAL_DS));
++
++        String url = DatastreamUtil.getOriginalFileUrl(mdObj);
++        assertEquals("content/" + pid.getId(), url);
++    }
++
++    @Test
++    public void testGetOriginalFileIndexableUrl() {
++        PID pid = makePid();
++        BriefObjectMetadataBean mdObj = new BriefObjectMetadataBean();
++        mdObj.setId(pid.getId());
++        mdObj.setDatastream(asList(ORIGINAL_INDEXABLE));
++
++        String url = DatastreamUtil.getOriginalFileUrl(mdObj);
++        assertEquals("indexablecontent/" + pid.getId(), url);
++    }
++
++    @Test
++    public void testGetDatastreamUrl() {
++        PID pid = makePid();
++        BriefObjectMetadataBean mdObj = new BriefObjectMetadataBean();
++        mdObj.setId(pid.getId());
++        mdObj.setDatastream(asList(FITS_DS));
++
++        String url = DatastreamUtil.getDatastreamUrl(mdObj, TECHNICAL_METADATA);
++        assertEquals("indexablecontent/" + pid.getId() + "/techmd_fits", url);
++    }
++}
+diff --git a/access-common/src/test/java/edu/unc/lib/dl/ui/util/SerializationUtilTest.java b/access-common/src/test/java/edu/unc/lib/dl/ui/util/SerializationUtilTest.java
+index 01ce55f51..a8eebb0e7 100644
+--- a/access-common/src/test/java/edu/unc/lib/dl/ui/util/SerializationUtilTest.java
++++ b/access-common/src/test/java/edu/unc/lib/dl/ui/util/SerializationUtilTest.java
+@@ -46,7 +46,7 @@
+ @RunWith(MockitoJUnitRunner.class)
+ public class SerializationUtilTest extends Assert {
+     private static final List<String> DATASTREAMS =
+-            singletonList("datastream|image/jpeg|jpg|orig|582753|");
++            singletonList("datastream|image/jpeg|image.jpg|jpg|orig|582753|");
+ 
+     private static final String API_PATH = "http://example.com/api/";
+ 
+diff --git a/access/pom.xml b/access/pom.xml
+index 407ef23e0..2e158c4dc 100644
+--- a/access/pom.xml
++++ b/access/pom.xml
+@@ -94,6 +94,27 @@
+                     </webResources>
+                 </configuration>
+             </plugin>
++            
++            <plugin>
++                <artifactId>maven-failsafe-plugin</artifactId>
++                <configuration>
++                    <!--Set reuseForks=false due to the need for different instances of the -->
++                    <!--Singleton ServletContainerAuthenticationProvider -->
++                    <reuseForks>false</reuseForks>
++                    <argLine>${jacoco.agent.it.arg}</argLine>
++                    <systemPropertyVariables>
++                        <project.build.outputDirectory>${project.build.outputDirectory}</project.build.outputDirectory>
++                    </systemPropertyVariables>
++                </configuration>
++                <executions>
++                    <execution>
++                        <goals>
++                            <goal>integration-test</goal>
++                            <goal>verify</goal>
++                        </goals>
++                    </execution>
++                </executions>
++            </plugin>
+         </plugins>
+     </build>
+     <dependencies>
+@@ -225,6 +246,18 @@
+             <version>${spring.version}</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>edu.unc.lib.cdr</groupId>
++            <artifactId>metadata</artifactId>
++            <type>test-jar</type>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>edu.unc.lib.cdr</groupId>
++            <artifactId>fcrepo-clients</artifactId>
++            <scope>test</scope>
++            <type>test-jar</type>
++        </dependency>
+ 
+         <!-- CDR -->
+         <dependency>
+@@ -252,5 +285,87 @@
+             <artifactId>solr-search</artifactId>
+             <version>${cdr.version}</version>
+         </dependency>
++        <!-- integration testing -->
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-http-commons</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++            <type>test-jar</type>
++            <exclusions>
++                <exclusion>
++                    <groupId>commons-lang</groupId>
++                    <artifactId>commons-lang</artifactId>
++                </exclusion>
++            </exclusions>
++        </dependency>
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-auth-common</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.glassfish.grizzly</groupId>
++            <artifactId>grizzly-http-servlet</artifactId>
++            <version>${grizzly.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.glassfish.jersey.core</groupId>
++            <artifactId>jersey-common</artifactId>
++            <version>${jersey.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.glassfish.jersey.ext</groupId>
++            <artifactId>jersey-spring3</artifactId>
++            <version>${jersey.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.glassfish.jersey.test-framework.providers</groupId>
++            <artifactId>jersey-test-framework-provider-grizzly2</artifactId>
++            <version>${jersey.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.mock-server</groupId>
++            <artifactId>mockserver-client-java</artifactId>
++            <version>${mock.server.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.mock-server</groupId>
++            <artifactId>mockserver-netty</artifactId>
++            <version>${mock.server.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-kernel-modeshape</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++            <classifier>tests</classifier>
++        </dependency>
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-http-api</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-http-commons</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++            <type>test-jar</type>
++        </dependency>
++        <dependency>
++            <groupId>org.fcrepo</groupId>
++            <artifactId>fcrepo-auth-common</artifactId>
++            <version>${fcrepo4.version}</version>
++            <scope>test</scope>
++        </dependency>
+     </dependencies>
+ </project>
+diff --git a/access/src/main/java/edu/unc/lib/dl/ui/controller/FedoraContentController.java b/access/src/main/java/edu/unc/lib/dl/ui/controller/FedoraContentController.java
+index 1accd567f..9b1dc64b0 100644
+--- a/access/src/main/java/edu/unc/lib/dl/ui/controller/FedoraContentController.java
++++ b/access/src/main/java/edu/unc/lib/dl/ui/controller/FedoraContentController.java
+@@ -15,9 +15,18 @@
+  */
+ package edu.unc.lib.dl.ui.controller;
+ 
++import static edu.unc.lib.dl.acl.util.GroupsThreadStore.getAgentPrincipals;
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.ORIGINAL_FILE;
++
++import java.io.IOException;
++
+ import javax.servlet.http.HttpServletRequest;
+ import javax.servlet.http.HttpServletResponse;
+ 
++import org.apache.commons.lang3.StringUtils;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.http.HttpStatus;
+ import org.springframework.stereotype.Controller;
+ import org.springframework.web.bind.annotation.ExceptionHandler;
+@@ -26,8 +35,15 @@
+ import org.springframework.web.bind.annotation.RequestParam;
+ import org.springframework.web.bind.annotation.ResponseStatus;
+ 
+-import edu.unc.lib.dl.ui.exception.InvalidRecordRequestException;
++import edu.unc.lib.dl.acl.exception.AccessRestrictionException;
++import edu.unc.lib.dl.acl.util.AccessGroupSet;
++import edu.unc.lib.dl.fcrepo4.PIDs;
++import edu.unc.lib.dl.fedora.NotFoundException;
++import edu.unc.lib.dl.fedora.ObjectTypeMismatchException;
++import edu.unc.lib.dl.fedora.PID;
+ import edu.unc.lib.dl.ui.exception.ResourceNotFoundException;
++import edu.unc.lib.dl.ui.service.FedoraContentService;
++import edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil;
+ 
+ /**
+  * Controller which handles requests for specific content datastreams from Fedora and streams the results back as the
+@@ -37,64 +53,73 @@
+  */
+ @Controller
+ public class FedoraContentController {
+-//    @Autowired
+-//    private FedoraContentService fedoraContentService;
++    private static final Logger log = LoggerFactory.getLogger(FedoraContentController.class);
+ 
+-    @RequestMapping("/indexablecontent/{pid}")
+-    public void getDefaultIndexableContent(@PathVariable("pid") String pid,
+-            @RequestParam(value = "dl", defaultValue = "false") boolean download,
+-            HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(pid, ContentModelHelper.Datastream.DATA_FILE.getName(), download,
+-//                new AnalyticsUserData(request), response);
+-    }
++    @Autowired
++    private FedoraContentService fedoraContentService;
++    @Autowired
++    private AnalyticsTrackerUtil analyticsTracker;
+ 
+-    @RequestMapping("/indexablecontent/{pid}/{datastream}")
+-    public void getIndexableContent(@PathVariable("pid") String pid, @PathVariable("datastream") String datastream,
++    @RequestMapping(value = {"/content/{pid}", "/indexablecontent/{pid}"})
++    public void getDefaultDatastream(@PathVariable("pid") String pid,
+             @RequestParam(value = "dl", defaultValue = "false") boolean download,
+             HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(pid, datastream, download, new AnalyticsUserData(request), response);
++        streamData(pid, ORIGINAL_FILE, download, request, response);
+     }
+ 
+-    @RequestMapping("/indexablecontent")
+-    public void getIndexableContentByParameters(@RequestParam("id") String id, @RequestParam("ds") String datastream,
++    @RequestMapping(value = {"/content/{pid}/{datastream}", "/indexablecontent/{pid}/{datastream}"})
++    public void getDatastream(@PathVariable("pid") String pid, @PathVariable("datastream") String datastream,
+             @RequestParam(value = "dl", defaultValue = "false") boolean download,
+             HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(id, datastream, download, new AnalyticsUserData(request), response);
++        streamData(pid, datastream, download, request, response);
+     }
+ 
+-    @RequestMapping("/content/{pid}")
+-    public void getDefaultDatastream(@PathVariable("pid") String pid,
++    @RequestMapping(value = {"/indexablecontent", "/content"})
++    public void getDatastreamByParameters(@RequestParam("id") String id, @RequestParam("ds") String datastream,
+             @RequestParam(value = "dl", defaultValue = "false") boolean download,
+             HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(pid, ContentModelHelper.Datastream.DATA_FILE.getName(), download,
+-//                new AnalyticsUserData(request), response);
++        streamData(id, ORIGINAL_FILE, download, request, response);
+     }
+ 
+-    @RequestMapping("/content/{pid}/{datastream}")
+-    public void getDatastream(@PathVariable("pid") String pid, @PathVariable("datastream") String datastream,
+-            @RequestParam(value = "dl", defaultValue = "false") boolean download,
+-            HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(pid, datastream, download, new AnalyticsUserData(request), response);
++    private void streamData(String pidString, String datastream, boolean asAttachment, HttpServletRequest request,
++            HttpServletResponse response) {
++        PID pid = PIDs.get(pidString);
++        AccessGroupSet principals = getAgentPrincipals().getPrincipals();
++
++        try {
++            fedoraContentService.streamData(pid, datastream, principals, asAttachment, response);
++            recordDownloadEvent(pid, datastream, principals, request);
++        } catch (IOException e) {
++            log.error("Problem retrieving {} for {}", pid.toString(), datastream, e);
++        }
+     }
+ 
+-    @RequestMapping("/content")
+-    public void getDatastreamByParameters(@RequestParam("id") String id, @RequestParam("ds") String datastream,
+-            @RequestParam(value = "dl", defaultValue = "false") boolean download,
+-            HttpServletRequest request, HttpServletResponse response) {
+-//        fedoraContentService.streamData(id, datastream, download, new AnalyticsUserData(request), response);
++    private void recordDownloadEvent(PID pid, String datastream, AccessGroupSet principals,
++            HttpServletRequest request) {
++        if (!(StringUtils.isBlank(datastream) || ORIGINAL_FILE.equals(datastream))) {
++            return;
++        }
++        analyticsTracker.trackEvent(request, "download", pid, principals);
+     }
+ 
+     @ResponseStatus(value = HttpStatus.NOT_FOUND)
+-    @ExceptionHandler(ResourceNotFoundException.class)
++    @ExceptionHandler({ResourceNotFoundException.class, NotFoundException.class})
+     public String handleResourceNotFound(HttpServletRequest request) {
+         request.setAttribute("pageSubtitle", "Invalid content");
+         return "error/invalidRecord";
+     }
+ 
+     @ResponseStatus(value = HttpStatus.FORBIDDEN)
+-    @ExceptionHandler(InvalidRecordRequestException.class)
++    @ExceptionHandler(AccessRestrictionException.class)
+     public String handleInvalidRecordRequest(HttpServletRequest request) {
+         request.setAttribute("pageSubtitle", "Invalid content");
+         return "error/invalidRecord";
+     }
++
++    @ResponseStatus(value = HttpStatus.BAD_REQUEST)
++    @ExceptionHandler(ObjectTypeMismatchException.class)
++    public String handleObjectTypeMismatchException(HttpServletRequest request) {
++        request.setAttribute("pageSubtitle", "Invalid content");
++        return "error/invalidRecord";
++    }
+ }
+\ No newline at end of file
+diff --git a/access/src/main/webapp/WEB-INF/access-fedora-context.xml b/access/src/main/webapp/WEB-INF/access-fedora-context.xml
+index ed551fa57..bc482a64e 100644
+--- a/access/src/main/webapp/WEB-INF/access-fedora-context.xml
++++ b/access/src/main/webapp/WEB-INF/access-fedora-context.xml
+@@ -29,13 +29,9 @@
+         <property name="ignoreResourceNotFound" value="false" />
+     </bean>
+     
+-    <bean id="fedoraUtil" class="edu.unc.lib.dl.ui.util.FedoraUtil">
+-        <property name="fedoraUrl"
+-            value="${fcrepo.baseUrl}" />
+-    </bean>
+-    
+     <bean id="analyticsTracker" class="edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil">
+         <property name="gaTrackingID" ref="gaTrackingID" />
++        <property name="solrSearchService" ref="unrestrictedSolrSearchService" />
+     </bean>
+ 
+     <bean id="applicationPathSettings" class="edu.unc.lib.dl.ui.util.ApplicationPathSettings">
+@@ -144,4 +140,9 @@
+         <property name="cacheMaxSize" value="50" />
+         <property name="repositoryObjectCacheLoader" ref="repositoryObjectCacheLoader" />
+     </bean>
++    
++    <bean id="fedoraContentService" class="edu.unc.lib.dl.ui.service.FedoraContentService">
++        <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
++        <property name="accessControlService" ref="aclService" />
++    </bean>
+ </beans>
+diff --git a/access/src/main/webapp/WEB-INF/jsp/common/thumbnail.jsp b/access/src/main/webapp/WEB-INF/jsp/common/thumbnail.jsp
+index 43f85e22c..2f388b14b 100644
+--- a/access/src/main/webapp/WEB-INF/jsp/common/thumbnail.jsp
++++ b/access/src/main/webapp/WEB-INF/jsp/common/thumbnail.jsp
+@@ -37,7 +37,7 @@
+ <c:set var="href">
+ 	<c:choose>
+ 		<c:when test="${param.target == 'file' && permsHelper.hasOriginalAccess(requestScope.accessGroupSet, thumbnailObject)}">
+-			<c:out value="${cdr:getDatastreamUrl(thumbnailObject, 'DATA_FILE', fedoraUtil)}" />
++			<c:out value="${cdr:getOriginalFileUrl(thumbnailObject)}" />
+ 		</c:when>
+ 		<c:when test="${param.target == 'record'}">
+ 			<c:out value="record/${thumbnailObject.id}" />
+@@ -68,10 +68,10 @@
+ <c:set var="src">
+ 	<c:choose>
+ 		<c:when test="${param.size == 'large' && permsHelper.hasThumbnailAccess(requestScope.accessGroupSet, thumbnailObject)}">
+-			<c:out value="${cdr:getDatastreamUrl(thumbnailObject, 'THUMB_LARGE', fedoraUtil)}" />
++			<c:out value="${cdr:getDatastreamUrl(thumbnailObject, 'THUMB_LARGE')}" />
+ 		</c:when>
+ 		<c:when test="${param.size == 'small' && permsHelper.hasThumbnailAccess(requestScope.accessGroupSet, thumbnailObject)}">
+-			<c:out value="${cdr:getDatastreamUrl(thumbnailObject, 'THUMB_SMALL', fedoraUtil)}" />
++			<c:out value="${cdr:getDatastreamUrl(thumbnailObject, 'THUMB_SMALL')}" />
+ 		</c:when>
+ 	</c:choose>
+ </c:set>
+diff --git a/access/src/main/webapp/WEB-INF/jsp/fullRecord/aggregateRecord.jsp b/access/src/main/webapp/WEB-INF/jsp/fullRecord/aggregateRecord.jsp
+index 0b9614837..3f0dde07b 100644
+--- a/access/src/main/webapp/WEB-INF/jsp/fullRecord/aggregateRecord.jsp
++++ b/access/src/main/webapp/WEB-INF/jsp/fullRecord/aggregateRecord.jsp
+@@ -31,7 +31,7 @@
+ 	</c:otherwise>
+ </c:choose>
+ 
+-<c:set var="dataFileUrl">${cdr:getDatastreamUrl(briefObject, 'original_file', fedoraUtil)}</c:set>
++<c:set var="dataFileUrl">${cdr:getOriginalFileUrl(briefObject)}</c:set>
+ 
+ <div class="onecol full_record_top">
+ 	<div class="contentarea">
+diff --git a/access/src/main/webapp/WEB-INF/jsp/fullRecord/fileRecord.jsp b/access/src/main/webapp/WEB-INF/jsp/fullRecord/fileRecord.jsp
+index 6b78226bd..c472b5163 100644
+--- a/access/src/main/webapp/WEB-INF/jsp/fullRecord/fileRecord.jsp
++++ b/access/src/main/webapp/WEB-INF/jsp/fullRecord/fileRecord.jsp
+@@ -66,11 +66,11 @@
+ 			<c:choose>
+ 				<c:when test="${permsHelper.hasOriginalAccess(requestScope.accessGroupSet, briefObject)}">
+ 					<div class="actionlink left download">
+-						<a href="${cdr:getDatastreamUrl(briefObject, 'original_file', fedoraUtil)}?dl=true">Download</a>
++						<a href="${cdr:getOriginalFileUrl(briefObject)}?dl=true">Download</a>
+ 					</div>
+ 					<c:if test="${briefObject.contentTypeFacet[0].displayValue == 'mp4'}">
+ 						<div class="actionlink left">
+-							<a href="${cdr:getDatastreamUrl(briefObject, 'original_file', fedoraUtil)}">View</a>
++							<a href="${cdr:getOriginalFileUrl(briefObject)}">View</a>
+ 						</div>
+ 					</c:if>
+ 				</c:when>
+@@ -91,12 +91,12 @@
+ 					<c:choose>
+ 						<c:when test="${briefObject.contentTypeFacet[0].searchKey == 'pdf'}">
+ 							<div class="actionlink left">
+-								<a href="${cdr:getDatastreamUrl(briefObject, 'original_file', fedoraUtil)}">View</a>
++								<a href="${cdr:getOriginalFileUrl(briefObject)}">View</a>
+ 							</div>
+ 						</c:when>
+ 						<c:when test="${briefObject.contentTypeFacet[0].displayValue == 'mp3'}">
+ 							<div class="clear_space"></div>
+-							<audio class="audio_player inline_viewer" src="${cdr:getDatastreamUrl(briefObject, 'original_file', fedoraUtil)}">
++							<audio class="audio_player inline_viewer" src="${cdr:getOriginalFileUrl(briefObject)}">
+ 							</audio>
+ 						</c:when>
+ 					</c:choose>
+diff --git a/access/src/main/webapp/WEB-INF/jsp/searchResults/searchResultEntry.jsp b/access/src/main/webapp/WEB-INF/jsp/searchResults/searchResultEntry.jsp
+index d89587551..79762b9e0 100644
+--- a/access/src/main/webapp/WEB-INF/jsp/searchResults/searchResultEntry.jsp
++++ b/access/src/main/webapp/WEB-INF/jsp/searchResults/searchResultEntry.jsp
+@@ -181,7 +181,7 @@
+ 					<c:choose>
+ 						<c:when test="${permsHelper.hasOriginalAccess(requestScope.accessGroupSet, metadata)}">
+ 							<div class="actionlink right download">
+-								<a href="${cdr:getDatastreamUrl(metadata, 'original_file', fedoraUtil)}?dl=true">Download</a>
++								<a href="${cdr:getOriginalFileUrl(metadata)}?dl=true">Download</a>
+ 							</div>
+ 						</c:when>
+ 						<c:when test="${not empty embargoDate}">
+diff --git a/access/src/main/webapp/WEB-INF/jsp/searchResults/selectedContainerEntry.jsp b/access/src/main/webapp/WEB-INF/jsp/searchResults/selectedContainerEntry.jsp
+index c7a6de856..2b4d8374d 100644
+--- a/access/src/main/webapp/WEB-INF/jsp/searchResults/selectedContainerEntry.jsp
++++ b/access/src/main/webapp/WEB-INF/jsp/searchResults/selectedContainerEntry.jsp
+@@ -87,7 +87,7 @@
+ 					<c:choose>
+ 						<c:when test="${permsHelper.hasOriginalAccess(requestScope.accessGroupSet, metadata)}">
+ 							<div class="actionlink right download">
+-								<a href="${cdr:getDatastreamUrl(metadata, 'DATA_FILE', fedoraUtil)}?dl=true">Download</a>
++								<a href="${cdr:getOriginalFileUrl(metadata)}?dl=true">Download</a>
+ 							</div>
+ 						</c:when>
+ 						<c:otherwise>
+diff --git a/access/src/main/webapp/WEB-INF/service-context.xml b/access/src/main/webapp/WEB-INF/service-context.xml
+index 52835d85b..154c4787b 100644
+--- a/access/src/main/webapp/WEB-INF/service-context.xml
++++ b/access/src/main/webapp/WEB-INF/service-context.xml
+@@ -111,7 +111,6 @@
+                 <value>searchSettings</value>
+                 <value>externalContentSettings</value>
+                 <value>permsHelper</value>
+-                <value>fedoraUtil</value>
+                 <value>gaTrackingID</value>
+                 <value>accessBaseUrl</value>
+                 <value>adminBaseUrl</value>
+diff --git a/access/src/main/webapp/WEB-INF/solr-search-context.xml b/access/src/main/webapp/WEB-INF/solr-search-context.xml
+index 5cef40671..b0967e68d 100644
+--- a/access/src/main/webapp/WEB-INF/solr-search-context.xml
++++ b/access/src/main/webapp/WEB-INF/solr-search-context.xml
+@@ -122,6 +122,19 @@
+         <property name="accessRestrictionUtil" ref="solrAccessRestrictionUtil" />
+     </bean>
+     
++    <bean id="unrestrictedSolrAccessRestrictionUtil" class="edu.unc.lib.dl.search.solr.util.AccessRestrictionUtil">
++        <property name="searchSettings" ref="searchSettings" />
++        <property name="disablePermissionFiltering" value="true" />
++    </bean>
++    
++    <bean id="unrestrictedSolrSearchService" class="edu.unc.lib.dl.search.solr.service.SolrSearchService"
++        init-method="initializeSolrServer">
++        <property name="solrSettings" ref="solrSettings" />
++        <property name="searchSettings" ref="searchSettings" />
++        <property name="facetFieldUtil" ref="facetFieldUtil" />
++        <property name="accessRestrictionUtil" ref="unrestrictedSolrAccessRestrictionUtil" />
++    </bean>
++    
+      <bean id="pathFactory" class="edu.unc.lib.dl.search.solr.service.ObjectPathFactory">
+         <property name="search" ref="queryLayer" />
+         <property name="cacheSize" value="2000" />
+diff --git a/access/src/test/java/edu/unc/lib/dl/ui/controller/FedoraContentControllerIT.java b/access/src/test/java/edu/unc/lib/dl/ui/controller/FedoraContentControllerIT.java
+new file mode 100644
+index 000000000..235b89ef4
+--- /dev/null
++++ b/access/src/test/java/edu/unc/lib/dl/ui/controller/FedoraContentControllerIT.java
+@@ -0,0 +1,261 @@
++/**
++ * Copyright 2008 The University of North Carolina at Chapel Hill
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *         http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package edu.unc.lib.dl.ui.controller;
++
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.TECHNICAL_METADATA;
++import static edu.unc.lib.dl.test.TestHelper.makePid;
++import static edu.unc.lib.dl.ui.service.FedoraContentService.CONTENT_DISPOSITION;
++import static org.junit.Assert.assertEquals;
++import static org.mockito.Matchers.any;
++import static org.mockito.Matchers.anyString;
++import static org.mockito.Matchers.eq;
++import static org.mockito.Mockito.doThrow;
++import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++
++import org.fusesource.hawtbuf.ByteArrayInputStream;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.mock.web.MockHttpServletResponse;
++import org.springframework.test.context.ContextConfiguration;
++import org.springframework.test.context.ContextHierarchy;
++import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
++import org.springframework.test.context.web.WebAppConfiguration;
++import org.springframework.test.web.servlet.MockMvc;
++import org.springframework.test.web.servlet.MvcResult;
++import org.springframework.test.web.servlet.setup.MockMvcBuilders;
++import org.springframework.web.context.WebApplicationContext;
++
++import edu.unc.lib.dl.acl.exception.AccessRestrictionException;
++import edu.unc.lib.dl.acl.service.AccessControlService;
++import edu.unc.lib.dl.acl.util.AccessGroupSet;
++import edu.unc.lib.dl.acl.util.GroupsThreadStore;
++import edu.unc.lib.dl.acl.util.Permission;
++import edu.unc.lib.dl.fcrepo4.FileObject;
++import edu.unc.lib.dl.fcrepo4.RepositoryObjectFactory;
++import edu.unc.lib.dl.fedora.PID;
++import edu.unc.lib.dl.test.TestHelper;
++
++/**
++ *
++ * @author bbpennel
++ *
++ */
++@RunWith(SpringJUnit4ClassRunner.class)
++@WebAppConfiguration
++@ContextHierarchy({
++    @ContextConfiguration("/spring-test/test-fedora-container.xml"),
++    @ContextConfiguration("/spring-test/cdr-client-container.xml"),
++    @ContextConfiguration("/fedora-content-it-servlet.xml")
++})
++public class FedoraContentControllerIT {
++
++    private static final String BINARY_CONTENT = "binary content";
++
++    @Autowired
++    private RepositoryObjectFactory repositoryObjectFactory;
++    @Autowired
++    private AccessControlService accessControlService;
++
++    protected MockMvc mvc;
++    @Autowired
++    protected WebApplicationContext context;
++
++    @Before
++    public void init() {
++
++        mvc = MockMvcBuilders
++                .webAppContextSetup(context)
++                .build();
++
++        TestHelper.setContentBase("http://localhost:48085/rest");
++
++        GroupsThreadStore.storeUsername("test_user");
++        GroupsThreadStore.storeGroups(new AccessGroupSet("adminGroup"));
++
++    }
++
++    @Test
++    public void testGetDatastream() throws Exception {
++        PID filePid = makePid();
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), "file.txt", "text/plain", null, null);
++
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId()))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        // Verify content was retrieved
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals(BINARY_CONTENT, response.getContentAsString());
++
++        assertEquals(BINARY_CONTENT.length(), response.getContentLength());
++        assertEquals("text/plain", response.getContentType());
++        assertEquals("inline; filename=\"file.txt\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++
++    @Test
++    public void testGetDatastreamDownload() throws Exception {
++        PID filePid = makePid();
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), "file.txt", "text/plain", null, null);
++
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId())
++                .param("dl", "true"))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        // Verify content was retrieved
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals(BINARY_CONTENT, response.getContentAsString());
++
++        assertEquals(BINARY_CONTENT.length(), response.getContentLength());
++        assertEquals("text/plain", response.getContentType());
++        assertEquals("attachment; filename=\"file.txt\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++
++    @Test
++    public void testGetDatastreamNoFilename() throws Exception {
++        PID filePid = makePid();
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), null, "text/plain", null, null);
++
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId())
++                .param("dl", "true"))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        // Verify content was retrieved
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals(BINARY_CONTENT, response.getContentAsString());
++
++        assertEquals(BINARY_CONTENT.length(), response.getContentLength());
++        assertEquals("text/plain", response.getContentType());
++        assertEquals("attachment; filename=\"" + filePid.getId() + "\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++
++    @Test
++    public void testGetDatastreamInsufficientPermissions() throws Exception {
++        PID filePid = makePid();
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), null, "text/plain", null, null);
++
++        doThrow(new AccessRestrictionException()).when(accessControlService)
++                .assertHasAccess(anyString(), eq(filePid), any(AccessGroupSet.class), eq(Permission.viewOriginal));
++
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId()))
++                .andExpect(status().isForbidden())
++                .andReturn();
++
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals("Must not return file content", "", response.getContentAsString());
++    }
++
++    @Test
++    public void testGetMultipleDatastreams() throws Exception {
++        testGetMultipleDatastreams("/content/");
++    }
++
++    @Test
++    public void testGetMultipleIndexableDatastreams() throws Exception {
++        testGetMultipleDatastreams("/indexablecontent/");
++    }
++
++    private void testGetMultipleDatastreams(String requestPath) throws Exception {
++        PID filePid = makePid();
++
++        String content = "<fits>content</fits>";
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), null, "text/plain", null, null);
++        fileObj.addBinary(TECHNICAL_METADATA, new ByteArrayInputStream(content.getBytes()),
++                "fits.xml", "application/xml", null, null, null);
++
++        // Verify original file content retrievable
++        MvcResult result1 = mvc.perform(get(requestPath + filePid.getId()))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        assertEquals(BINARY_CONTENT, result1.getResponse().getContentAsString());
++
++        // Verify administrative datastream retrievable
++        MvcResult result2 = mvc.perform(get(requestPath + filePid.getId() + "/" + TECHNICAL_METADATA))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        MockHttpServletResponse response = result2.getResponse();
++        assertEquals(content, response.getContentAsString());
++
++        assertEquals(content.length(), response.getContentLength());
++        assertEquals("application/xml", response.getContentType());
++        assertEquals("inline; filename=\"fits.xml\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++
++    @Test
++    public void testGetAdministrativeDatastreamNoPermissions() throws Exception {
++        PID filePid = makePid();
++
++        String content = "<fits>content</fits>";
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addBinary(TECHNICAL_METADATA, new ByteArrayInputStream(content.getBytes()),
++                "fits.xml", "application/xml", null, null, null);
++
++        // Requires viewHidden permission
++        doThrow(new AccessRestrictionException()).when(accessControlService)
++                .assertHasAccess(anyString(), eq(filePid), any(AccessGroupSet.class), eq(Permission.viewHidden));
++
++        // Verify administrative datastream retrievable
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId() + "/" + TECHNICAL_METADATA))
++                .andExpect(status().isForbidden())
++                .andReturn();
++
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals("Must not return file content", "", response.getContentAsString());
++    }
++
++    @Test
++    public void testInvalidDatastream() throws Exception {
++        PID filePid = makePid();
++
++        repositoryObjectFactory.createFileObject(filePid, null);
++
++        // Verify administrative datastream retrievable
++        MvcResult result = mvc.perform(get("/content/" + filePid.getId() + "/some_ds"))
++                .andExpect(status().isNotFound())
++                .andReturn();
++
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals("Must not return file content", "", response.getContentAsString());
++    }
++
++    @Test
++    public void testGetContentNonFile() throws Exception {
++        PID objPid = makePid();
++
++        repositoryObjectFactory.createWorkObject(objPid, null);
++
++        mvc.perform(get("/content/" + objPid.getId()))
++                .andExpect(status().isBadRequest())
++                .andReturn();
++    }
++}
+diff --git a/access/src/test/resources/fedora-content-it-servlet.xml b/access/src/test/resources/fedora-content-it-servlet.xml
+new file mode 100644
+index 000000000..bfdd8e3e5
+--- /dev/null
++++ b/access/src/test/resources/fedora-content-it-servlet.xml
+@@ -0,0 +1,39 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++
++    Copyright 2008 The University of North Carolina at Chapel Hill
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++            http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++
++-->
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++    xmlns:mvc="http://www.springframework.org/schema/mvc"
++    xmlns:context="http://www.springframework.org/schema/context"
++    xsi:schemaLocation="
++        http://www.springframework.org/schema/beans
++        http://www.springframework.org/schema/beans/spring-beans.xsd
++        http://www.springframework.org/schema/context 
++        http://www.springframework.org/schema/context/spring-context-3.0.xsd
++        http://www.springframework.org/schema/mvc
++        http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd">
++        
++    <mvc:annotation-driven/>
++
++    <context:component-scan resource-pattern="**/FedoraContentController*" base-package="edu.unc.lib.dl.ui.controller"/>
++    
++    <bean id="fedoraContentService" class="edu.unc.lib.dl.ui.service.FedoraContentService">
++        <property name="accessControlService" ref="aclService" />
++        <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
++    </bean>
++</beans>
+diff --git a/access/src/test/resources/spring-test/cdr-client-container.xml b/access/src/test/resources/spring-test/cdr-client-container.xml
+new file mode 100644
+index 000000000..adcc7a680
+--- /dev/null
++++ b/access/src/test/resources/spring-test/cdr-client-container.xml
+@@ -0,0 +1,90 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
++    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
++  http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
++
++    <context:property-placeholder />
++    
++    <bean id="baseAddress" class="java.lang.String">
++        <constructor-arg
++            value="http://localhost:48085/rest/" />
++    </bean>
++    
++    <bean id="fcrepoClientFactory" class="edu.unc.lib.dl.fcrepo4.FcrepoClientFactory" factory-method="factory">
++        <constructor-arg ref="baseAddress" />
++    </bean>
++    
++    <bean id="fcrepoClient" class="org.fcrepo.client.FcrepoClient"
++            factory-bean="fcrepoClientFactory" factory-method="makeClient">
++    </bean>
++    
++    <bean id="ldpContainerFactory" class="edu.unc.lib.dl.fcrepo4.LdpContainerFactory">
++        <property name="client" ref="fcrepoClient" />
++    </bean>
++    
++    <bean id="repositoryPIDMinter" class="edu.unc.lib.dl.fcrepo4.RepositoryPIDMinter"></bean>
++    
++    <bean id="fedoraSparqlUpdateService" class="edu.unc.lib.dl.sparql.FedoraSparqlUpdateService">
++        <property name="fcrepoClient" ref="fcrepoClient" />
++    </bean>
++
++    <bean id="repositoryObjectFactory" class="edu.unc.lib.dl.fcrepo4.RepositoryObjectFactory">
++        <property name="client" ref="fcrepoClient" />
++        <property name="ldpFactory" ref="ldpContainerFactory" />
++        <property name="pidMinter" ref="repositoryPIDMinter" />
++        <property name="repositoryObjectDriver" ref="repositoryObjectDriver" />
++        <property name="sparqlUpdateService" ref="fedoraSparqlUpdateService" />
++    </bean>
++    
++    <bean id="cacheTimeToLive" class="java.lang.Long">
++        <constructor-arg value="100" />
++    </bean>
++    
++    <bean id="cacheMaxSize" class="java.lang.Long">
++        <constructor-arg value="5" />
++    </bean>
++    
++    <bean id="repositoryObjectLoader" class="edu.unc.lib.dl.fcrepo4.RepositoryObjectLoader" init-method="init">
++        <property name="repositoryObjectCacheLoader" ref="repositoryObjectCacheLoader" />
++        <property name="cacheTimeToLive" ref="cacheTimeToLive" />
++        <property name="cacheMaxSize" ref="cacheMaxSize" />
++    </bean>
++    
++    <bean id="repositoryObjectDriver" class="edu.unc.lib.dl.fcrepo4.RepositoryObjectDriver">
++        <property name="client" ref="fcrepoClient" />
++        <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
++        <property name="repositoryObjectFactory" ref="repositoryObjectFactory" />
++        <property name="sparqlQueryService" ref="sparqlQueryService" />
++        <property name="pidMinter" ref="repositoryPIDMinter" />
++    </bean>
++
++    <bean id="queryModel" class="org.apache.jena.rdf.model.ModelFactory" factory-method="createDefaultModel">
++    </bean>
++    
++    <bean id="sparqlQueryService" class="edu.unc.lib.dl.sparql.JenaSparqlQueryServiceImpl">
++        <constructor-arg ref="queryModel" />
++    </bean>
++    
++    <bean id="repositoryObjectCacheLoader" class="edu.unc.lib.dl.fcrepo4.RepositoryObjectCacheLoader">
++        <property name="client" ref="fcrepoClient" />
++        <property name="repositoryObjectDriver" ref="repositoryObjectDriver" />
++        <property name="repositoryObjectFactory" ref="repositoryObjectFactory" />
++    </bean>
++    
++    <bean id="transactionManager" class="edu.unc.lib.dl.fcrepo4.TransactionManager">
++        <property name="client" ref="fcrepoClient" />
++    </bean>
++    
++    <bean id="sparqlUpdateService" class="edu.unc.lib.dl.sparql.FedoraSparqlUpdateService">
++        <property name="fcrepoClient" ref="fcrepoClient" />
++    </bean>
++    
++    <bean id="analyticsTracker" class="org.mockito.Mockito" factory-method="mock">
++        <constructor-arg value="edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil" />
++    </bean>
++    
++    <bean id="aclService" class="org.mockito.Mockito" factory-method="mock">
++        <constructor-arg value="edu.unc.lib.dl.acl.fcrepo4.AccessControlServiceImpl" />
++    </bean>
++</beans>
+diff --git a/access/src/test/resources/spring-test/master.xml b/access/src/test/resources/spring-test/master.xml
+new file mode 100644
+index 000000000..f9f6f8401
+--- /dev/null
++++ b/access/src/test/resources/spring-test/master.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<beans xmlns="http://www.springframework.org/schema/beans"
++  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++  xmlns:context="http://www.springframework.org/schema/context"
++  xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
++    http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
++
++  <context:property-placeholder location="classpath:application.properties"/>
++
++  <!-- Master context for fcrepo4. -->
++
++  <import resource="${fcrepo.spring.repo.configuration:classpath:/spring-test/repo.xml}"/>
++  <import resource="${fcrepo.spring.rest.configuration:classpath:/spring-test/rest.xml}"/>
++
++</beans>
+diff --git a/access/src/test/resources/spring-test/repo.xml b/access/src/test/resources/spring-test/repo.xml
+new file mode 100644
+index 000000000..d18c7829b
+--- /dev/null
++++ b/access/src/test/resources/spring-test/repo.xml
+@@ -0,0 +1,23 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
++    xmlns:p="http://www.springframework.org/schema/p"
++    xsi:schemaLocation="
++    http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
++    http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd">
++
++    <!-- Context that supports the actual ModeShape JCR itself -->
++
++    <context:annotation-config />
++
++    <bean name="modeshapeRepofactory"
++        class="org.fcrepo.kernel.modeshape.spring.ModeShapeRepositoryFactoryBean"
++        p:repositoryConfiguration="${fcrepo.modeshape.configuration:repository-test.json}" />
++
++    <bean class="org.modeshape.jcr.ModeShapeEngine" init-method="start" />
++
++    <bean id="connectionManager"
++        class="org.apache.http.impl.conn.PoolingHttpClientConnectionManager" />
++
++</beans>
++
+diff --git a/access/src/test/resources/spring-test/rest.xml b/access/src/test/resources/spring-test/rest.xml
+new file mode 100644
+index 000000000..1ddf10f58
+--- /dev/null
++++ b/access/src/test/resources/spring-test/rest.xml
+@@ -0,0 +1,26 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
++    xmlns:util="http://www.springframework.org/schema/util"
++    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
++    http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
++
++    <context:property-placeholder />
++
++    <!-- Context that houses JAX-RS Resources that compose the API as well as 
++        some utility gear. -->
++
++    <context:annotation-config />
++
++    <bean class="org.fcrepo.http.commons.session.SessionFactory" />
++
++    <!-- Identifier translation chain -->
++    <util:list id="translationChain"
++        value-type="org.fcrepo.kernel.api.identifiers.InternalIdentifierConverter">
++        <bean class="org.fcrepo.kernel.modeshape.identifiers.HashConverter" />
++        <bean class="org.fcrepo.kernel.modeshape.identifiers.NamespaceConverter" />
++    </util:list>
++
++    <context:component-scan base-package="org.fcrepo" />
++
++</beans>
+diff --git a/access/src/test/resources/spring-test/test-fedora-container.xml b/access/src/test/resources/spring-test/test-fedora-container.xml
+new file mode 100644
+index 000000000..7fd6e23ca
+--- /dev/null
++++ b/access/src/test/resources/spring-test/test-fedora-container.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
++    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
++  http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
++
++    <context:property-placeholder />
++
++    <!-- show stack traces for easier debugging -->
++    <bean id="wildcardExceptionmapper"
++        class="org.fcrepo.http.commons.exceptionhandlers.WildcardExceptionMapper">
++        <property name="showStackTrace" value="true" />
++    </bean>
++
++    <bean id="containerWrapper" class="org.fcrepo.http.commons.test.util.ContainerWrapper"
++        init-method="start" destroy-method="stop">
++        <property name="port" value="48085" />
++        <property name="configLocation" value="classpath:spring-test/web.xml" />
++    </bean>
++
++</beans>
+diff --git a/access/src/test/resources/spring-test/web.xml b/access/src/test/resources/spring-test/web.xml
+new file mode 100644
+index 000000000..f1b5fc942
+--- /dev/null
++++ b/access/src/test/resources/spring-test/web.xml
+@@ -0,0 +1,35 @@
++<?xml version="1.0" encoding="UTF-8"?>
++
++<web-app xmlns="http://java.sun.com/xml/ns/javaee"
++         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
++         version="3.0" metadata-complete="false">
++
++  <display-name>Fedora-on-ModeShape</display-name>
++
++  <context-param>
++    <param-name>contextConfigLocation</param-name>
++    <param-value>classpath:spring-test/master.xml</param-value>
++  </context-param>
++
++  <listener>
++    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
++  </listener>
++
++  <servlet>
++    <servlet-name>jersey-servlet</servlet-name>
++    <servlet-class>org.glassfish.jersey.servlet.ServletContainer</servlet-class>
++
++    <init-param>
++      <param-name>javax.ws.rs.Application</param-name>
++      <param-value>org.fcrepo.http.commons.FedoraApplication</param-value>
++    </init-param>
++
++    <load-on-startup>1</load-on-startup>
++  </servlet>
++
++  <servlet-mapping>
++    <servlet-name>jersey-servlet</servlet-name>
++    <url-pattern>/rest/*</url-pattern>
++  </servlet-mapping>
++</web-app>
+diff --git a/admin/src/main/webapp/WEB-INF/jsp/edit/description.jsp b/admin/src/main/webapp/WEB-INF/jsp/edit/description.jsp
+index 87c48ac29..61000e23c 100644
+--- a/admin/src/main/webapp/WEB-INF/jsp/edit/description.jsp
++++ b/admin/src/main/webapp/WEB-INF/jsp/edit/description.jsp
+@@ -26,7 +26,7 @@
+ 		config: {
+ 			'editDescription' : {
+ 				'recordUrl' : '${accessBaseUrl}/record/${resultObject.id}',
+-				'originalUrl' : '${accessBaseUrl}/${cdr:getDatastreamUrl(resultObject, "DATA_FILE", fedoraUtil)}'
++				'originalUrl' : '${accessBaseUrl}/${cdr:getOriginalFileUrl(resultObject)}'
+ 			}
+ 		}
+ 	};
+diff --git a/admin/src/main/webapp/WEB-INF/service-context.xml b/admin/src/main/webapp/WEB-INF/service-context.xml
+index 36479d263..3af8d9852 100644
+--- a/admin/src/main/webapp/WEB-INF/service-context.xml
++++ b/admin/src/main/webapp/WEB-INF/service-context.xml
+@@ -80,7 +80,6 @@
+             <list>
+                 <value>searchSettings</value>
+                 <value>externalContentSettings</value>
+-                <value>fedoraUtil</value>
+                 <value>accessGroupConstants</value>
+                 <value>accessBaseUrl</value>
+                 <value>adminBaseUrl</value>
+diff --git a/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/FileObject.java b/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/FileObject.java
+index 0f797b132..921519615 100644
+--- a/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/FileObject.java
++++ b/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/FileObject.java
+@@ -32,6 +32,7 @@
+ import org.apache.jena.vocabulary.RDF;
+ 
+ import edu.unc.lib.dl.fedora.FedoraException;
++import edu.unc.lib.dl.fedora.NotFoundException;
+ import edu.unc.lib.dl.fedora.ObjectTypeMismatchException;
+ import edu.unc.lib.dl.fedora.PID;
+ import edu.unc.lib.dl.rdf.Cdr;
+@@ -181,4 +182,32 @@ public BinaryObject addBinary(String slug, InputStream contentStream, String fil
+ 
+         return binaries;
+     }
++
++    /**
++     * Retrieve binary object by name from the set of binaries contained by this
++     * FileObject.
++     *
++     * @param name name of the binary object to retrieve
++     * @return BinaryObject identified by name
++     * @throws NotFoundException thrown if no datastream with the given name is
++     *             present in this FileObject.
++     */
++    public BinaryObject getBinaryObject(String name) throws NotFoundException {
++        Resource resc = getResource();
++
++        StmtIterator it = resc.listProperties(PcdmModels.hasFile);
++        try {
++            for (; it.hasNext(); ) {
++                PID binaryPid = PIDs.get(it.nextStatement().getResource().getURI());
++
++                if (binaryPid.getComponentPath().endsWith("/" + name)) {
++                    return driver.getRepositoryObject(binaryPid, BinaryObject.class);
++                }
++            }
++        } finally {
++            it.close();
++        }
++
++        throw new NotFoundException("No such binary " + name + " contained by " + pid);
++    }
+ }
+diff --git a/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/RepositoryObjectLoader.java b/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/RepositoryObjectLoader.java
+index c1c5c91ad..e1e524482 100644
+--- a/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/RepositoryObjectLoader.java
++++ b/fcrepo-clients/src/main/java/edu/unc/lib/dl/fcrepo4/RepositoryObjectLoader.java
+@@ -65,7 +65,7 @@ public void setRepositoryObjectFactory(RepositoryObjectFactory repoObjFactory) {
+     public AdminUnit getAdminUnit(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof AdminUnit)) {
+-            throw new FedoraException("Object with pid " + pid + "is not an admin unit");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not an admin unit");
+         }
+         return (AdminUnit) repoObj;
+     }
+@@ -73,7 +73,7 @@ public AdminUnit getAdminUnit(PID pid) {
+     public CollectionObject getCollectionObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof CollectionObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not a collection");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a collection");
+         }
+         return (CollectionObject) repoObj;
+     }
+@@ -81,7 +81,7 @@ public CollectionObject getCollectionObject(PID pid) {
+     public ContentRootObject getContentRootObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof ContentRootObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not the content root");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not the content root");
+         }
+         return (ContentRootObject) repoObj;
+     }
+@@ -89,7 +89,7 @@ public ContentRootObject getContentRootObject(PID pid) {
+     public FolderObject getFolderObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof FolderObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not a folder");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a folder");
+         }
+         return (FolderObject) repoObj;
+     }
+@@ -97,7 +97,7 @@ public FolderObject getFolderObject(PID pid) {
+     public WorkObject getWorkObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof WorkObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not a work");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a work");
+         }
+         return (WorkObject) repoObj;
+     }
+@@ -105,7 +105,7 @@ public WorkObject getWorkObject(PID pid) {
+     public FileObject getFileObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof FileObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not a file");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a file");
+         }
+         return (FileObject) repoObj;
+     }
+@@ -113,7 +113,7 @@ public FileObject getFileObject(PID pid) {
+     public BinaryObject getBinaryObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof BinaryObject)) {
+-            throw new FedoraException("Object with pid " + pid + "is not a binary");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a binary");
+         }
+         return (BinaryObject) repoObj;
+     }
+@@ -121,7 +121,7 @@ public BinaryObject getBinaryObject(PID pid) {
+     public PremisEventObject getPremisEventObject(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof PremisEventObject)) {
+-            throw new FedoraException("Object with pid " + pid + " is not a premis event");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a premis event");
+         }
+         return (PremisEventObject) repoObj;
+     }
+@@ -129,7 +129,7 @@ public PremisEventObject getPremisEventObject(PID pid) {
+     public DepositRecord getDepositRecord(PID pid) {
+         RepositoryObject repoObj = getRepositoryObject(pid);
+         if (!(repoObj instanceof DepositRecord)) {
+-            throw new ObjectTypeMismatchException("Object with pid " + pid + "is not a deposit record");
++            throw new ObjectTypeMismatchException("Object with pid " + pid + " is not a deposit record");
+         }
+         return (DepositRecord) repoObj;
+     }
+diff --git a/fcrepo-clients/src/test/java/edu/unc/lib/dl/fcrepo4/FileObjectIT.java b/fcrepo-clients/src/test/java/edu/unc/lib/dl/fcrepo4/FileObjectIT.java
+index 242a17b79..a4fa213e4 100644
+--- a/fcrepo-clients/src/test/java/edu/unc/lib/dl/fcrepo4/FileObjectIT.java
++++ b/fcrepo-clients/src/test/java/edu/unc/lib/dl/fcrepo4/FileObjectIT.java
+@@ -122,6 +122,17 @@ public void getMultipleBinariesTest() throws Exception {
+         verifyOriginalFile(rObj3);
+     }
+ 
++    @Test
++    public void testGetBinaryByName() throws Exception {
++        FileObject fileObj = repoObjFactory.createFileObject(null);
++
++        InputStream contentStream = new ByteArrayInputStream(origBodyString.getBytes());
++        fileObj.addBinary("some_binary", contentStream, origFilename, origMimetype, null, null, null);
++
++        BinaryObject binObj = fileObj.getBinaryObject("some_binary");
++        verifyFile(binObj, origFilename, origMimetype, origBodyString);
++    }
++
+     @Test(expected = ObjectTypeMismatchException.class)
+     public void getNonFileObject() throws Exception {
+         PID objPid = PIDs.get("uuid:" + UUID.randomUUID().toString());
+diff --git a/fcrepo-clients/src/test/java/edu/unc/lib/dl/test/TestHelper.java b/fcrepo-clients/src/test/java/edu/unc/lib/dl/test/TestHelper.java
+index 2464debc2..fd4b2645b 100644
+--- a/fcrepo-clients/src/test/java/edu/unc/lib/dl/test/TestHelper.java
++++ b/fcrepo-clients/src/test/java/edu/unc/lib/dl/test/TestHelper.java
+@@ -17,8 +17,11 @@
+ 
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
++import java.util.UUID;
+ 
++import edu.unc.lib.dl.fcrepo4.PIDs;
+ import edu.unc.lib.dl.fcrepo4.RepositoryPaths;
++import edu.unc.lib.dl.fedora.PID;
+ 
+ /**
+  *  Helper method for IT tests
+@@ -42,4 +45,7 @@ public static void setContentBase(String uri) {
+         }
+     }
+ 
++    public static PID makePid() {
++        return PIDs.get(UUID.randomUUID().toString());
++    }
+ }
+diff --git a/persistence/src/main/java/edu/unc/lib/dl/persist/services/destroy/DestroyProxyService.java b/persistence/src/main/java/edu/unc/lib/dl/persist/services/destroy/DestroyProxyService.java
+index 6d6b80bfb..b5c792d42 100644
+--- a/persistence/src/main/java/edu/unc/lib/dl/persist/services/destroy/DestroyProxyService.java
++++ b/persistence/src/main/java/edu/unc/lib/dl/persist/services/destroy/DestroyProxyService.java
+@@ -19,9 +19,6 @@
+ 
+ import java.io.IOException;
+ import java.net.URI;
+-import java.util.ArrayList;
+-import java.util.Collection;
+-import java.util.Map;
+ 
+ import org.apache.jena.query.QueryExecution;
+ import org.apache.jena.query.QuerySolution;
+@@ -31,12 +28,12 @@
+ import org.fcrepo.client.FcrepoOperationFailedException;
+ import org.fcrepo.client.FcrepoResponse;
+ 
+-import edu.unc.lib.dl.fcrepo4.PIDs;
+ import edu.unc.lib.dl.fedora.PID;
+ import edu.unc.lib.dl.fedora.ServiceException;
+ import edu.unc.lib.dl.sparql.SparqlQueryService;
+ 
+ /**
++ * Service for destroying membership proxies from ldp IndirectContainers.
+  *
+  * @author bbpennel
+  * @author harring
+@@ -44,19 +41,21 @@
+  */
+ public class DestroyProxyService {
+ 
+-    private Map<String, Collection<PID>> sourceToPid;
+     private SparqlQueryService sparqlQueryService;
+     private FcrepoClient fcrepoClient;
+ 
+-    public DestroyProxyService(Map<String, Collection<PID>> sourceToPid, SparqlQueryService sparqlQueryService,
+-            FcrepoClient fcrepoClient) {
+-        this.sourceToPid = sourceToPid;
+-        this.sparqlQueryService = sparqlQueryService;
+-        this.fcrepoClient = fcrepoClient;
++    public DestroyProxyService() {
+     }
+ 
+-    public void destroyProxy(PID objPid) {
+-        URI proxyUri = getProxyUri(objPid);
++    /**
++     * Destroys the membership proxy referencing objPid.
++     *
++     * @param objPid pid of the object whose proxy will be destroyed.
++     * @return the path of the parent object the proxy was removed from.
++     */
++    public String destroyProxy(PID objPid) {
++        ProxyInfo proxyInfo = getProxyInfo(objPid);
++        URI proxyUri = proxyInfo.proxyUri;
+ 
+         try (FcrepoResponse resp = fcrepoClient.delete(proxyUri).perform()) {
+         } catch (FcrepoOperationFailedException | IOException e) {
+@@ -68,6 +67,8 @@ public void destroyProxy(PID objPid) {
+         } catch (FcrepoOperationFailedException | IOException e) {
+             throw new ServiceException("Unable to clean up proxy tombstone for " + objPid, e);
+         }
++
++        return proxyInfo.sourcePath;
+     }
+ 
+     private final static String PROXY_QUERY =
+@@ -78,7 +79,7 @@ public void destroyProxy(PID objPid) {
+             "  FILTER regex(str(?proxyuri), \"/member\")\n" +
+             "}";
+ 
+-    private URI getProxyUri(PID pid) {
++    private ProxyInfo getProxyInfo(PID pid) {
+         String query = String.format(PROXY_QUERY, pid.getRepositoryPath());
+ 
+         try (QueryExecution exec = sparqlQueryService.executeQuery(query)) {
+@@ -89,23 +90,34 @@ private URI getProxyUri(PID pid) {
+                 Resource proxyUri = soln.getResource("proxyuri");
+                 Resource parentResc = soln.getResource("parent");
+ 
+-                // Store the pid of the content container owning this proxy as a move source
+-                addPidToSource(pid, parentResc.getURI());
+-
+-                return URI.create(proxyUri.getURI());
++                return new ProxyInfo(URI.create(proxyUri.getURI()), parentResc.getURI());
+             }
+         }
+         return null;
+     }
+ 
+-        private void addPidToSource(PID pid, String sourcePath) {
+-            String sourceId = PIDs.get(sourcePath).getId();
+-            Collection<PID> pidsForSource = sourceToPid.get(sourceId);
+-            if (pidsForSource == null) {
+-                pidsForSource = new ArrayList<>();
+-                sourceToPid.put(sourceId, pidsForSource);
+-            }
+-            pidsForSource.add(pid);
++    /**
++     * @param sparqlQueryService the sparqlQueryService to set
++     */
++    public void setSparqlQueryService(SparqlQueryService sparqlQueryService) {
++        this.sparqlQueryService = sparqlQueryService;
++    }
++
++    /**
++     * @param fcrepoClient the fcrepoClient to set
++     */
++    public void setFcrepoClient(FcrepoClient fcrepoClient) {
++        this.fcrepoClient = fcrepoClient;
++    }
++
++    private static class ProxyInfo {
++        public URI proxyUri;
++        public String sourcePath;
++
++        public ProxyInfo(URI proxyUri, String sourcePath) {
++            this.proxyUri = proxyUri;
++            this.sourcePath = sourcePath;
+         }
+ 
++    }
+ }
+diff --git a/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsJob.java b/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsJob.java
+index 5a13a1ddb..0ab56add8 100644
+--- a/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsJob.java
++++ b/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsJob.java
+@@ -18,6 +18,7 @@
+ import java.io.IOException;
+ import java.security.SecureRandom;
+ import java.text.ParseException;
++import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Date;
+ import java.util.HashMap;
+@@ -25,7 +26,6 @@
+ import java.util.Map;
+ import java.util.stream.Collectors;
+ 
+-import org.fcrepo.client.FcrepoClient;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -48,7 +48,6 @@
+ import edu.unc.lib.dl.search.solr.model.ObjectPath;
+ import edu.unc.lib.dl.search.solr.service.ObjectPathFactory;
+ import edu.unc.lib.dl.services.OperationsMessageSender;
+-import edu.unc.lib.dl.sparql.SparqlQueryService;
+ import edu.unc.lib.dl.util.DateTimeUtil;
+ import io.dropwizard.metrics5.Timer;
+ 
+@@ -66,8 +65,6 @@
+     private AccessControlService aclService;
+     private RepositoryObjectLoader repositoryObjectLoader;
+     private TransactionManager transactionManager;
+-    private SparqlQueryService sparqlQueryService;
+-    private FcrepoClient fcrepoClient;
+     private OperationsMessageSender operationsMessageSender;
+     private ObjectPathFactory objectPathFactory;
+     private ActivityMetricsClient operationMetrics;
+@@ -85,11 +82,10 @@
+ 
+     private static final Timer timer = TimerFactory.createTimerForClass(MoveObjectsJob.class);
+ 
+-    public MoveObjectsJob(AgentPrincipals agent, PID destination, List<PID> pids, DestroyProxyService proxyService) {
++    public MoveObjectsJob(AgentPrincipals agent, PID destination, List<PID> pids) {
+         this.agent = agent;
+         this.destinationPid = destination;
+         this.pids = pids;
+-        this.proxyService = proxyService;
+         sourceToPid = new HashMap<>();
+         moveId = Long.toString(new SecureRandom().nextLong());
+     }
+@@ -145,11 +141,23 @@ private void moveObject(PID objPid) {
+ 
+         ContentObject moveContent = (ContentObject) repositoryObjectLoader.getRepositoryObject(objPid);
+ 
+-        proxyService.destroyProxy(objPid);
++        String sourcePath = proxyService.destroyProxy(objPid);
++        // Store the pid of the content container owning this proxy as a move source
++        addPidToSource(objPid, sourcePath);
+ 
+         destContainer.addMember(moveContent);
+     }
+ 
++    private void addPidToSource(PID pid, String sourcePath) {
++        String sourceId = PIDs.get(sourcePath).getId();
++        Collection<PID> pidsForSource = sourceToPid.get(sourceId);
++        if (pidsForSource == null) {
++            pidsForSource = new ArrayList<>();
++            sourceToPid.put(sourceId, pidsForSource);
++        }
++        pidsForSource.add(pid);
++    }
++
+     private void logMoveAction() {
+         Map<String, Object> logEntry = new HashMap<>();
+         logEntry.put("event", "moved");
+@@ -215,20 +223,6 @@ public void setTransactionManager(TransactionManager transactionManager) {
+         this.transactionManager = transactionManager;
+     }
+ 
+-    /**
+-     * @param sparqlQueryService the sparqlQueryService to set
+-     */
+-    public void setSparqlQueryService(SparqlQueryService sparqlQueryService) {
+-        this.sparqlQueryService = sparqlQueryService;
+-    }
+-
+-    /**
+-     * @param fcrepoClient the fcrepoClient to set
+-     */
+-    public void setFcrepoClient(FcrepoClient fcrepoClient) {
+-        this.fcrepoClient = fcrepoClient;
+-    }
+-
+     /**
+      * @param operationsMessageSender the operationsMessageSender to set
+      */
+@@ -256,4 +250,11 @@ public void setOperationMetrics(ActivityMetricsClient operationMetrics) {
+     public String getMoveId() {
+         return moveId;
+     }
++
++    /**
++     * @param proxyService the proxyService to set
++     */
++    public void setProxyService(DestroyProxyService proxyService) {
++        this.proxyService = proxyService;
++    }
+ }
+diff --git a/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsService.java b/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsService.java
+index 082550e00..2d4b588d4 100644
+--- a/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsService.java
++++ b/persistence/src/main/java/edu/unc/lib/dl/persist/services/move/MoveObjectsService.java
+@@ -18,7 +18,6 @@
+ import java.util.List;
+ import java.util.concurrent.ExecutorService;
+ 
+-import org.fcrepo.client.FcrepoClient;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -31,7 +30,6 @@
+ import edu.unc.lib.dl.reporting.ActivityMetricsClient;
+ import edu.unc.lib.dl.search.solr.service.ObjectPathFactory;
+ import edu.unc.lib.dl.services.OperationsMessageSender;
+-import edu.unc.lib.dl.sparql.SparqlQueryService;
+ 
+ /**
+  * Service which moves content objects between containers.
+@@ -45,8 +43,6 @@
+     private AccessControlService aclService;
+     private RepositoryObjectLoader repositoryObjectLoader;
+     private TransactionManager transactionManager;
+-    private SparqlQueryService sparqlQueryService;
+-    private FcrepoClient fcrepoClient;
+     private OperationsMessageSender operationsMessageSender;
+     private ObjectPathFactory objectPathFactory;
+     private boolean asynchronous;
+@@ -70,15 +66,14 @@ public String moveObjects(AgentPrincipals agent, PID destinationPid, List<PID> p
+             throw new IllegalArgumentException("Must provide agent identification information");
+         }
+ 
+-        MoveObjectsJob job = new MoveObjectsJob(agent, destinationPid, pids, proxyService);
++        MoveObjectsJob job = new MoveObjectsJob(agent, destinationPid, pids);
+         job.setAclService(aclService);
+-        job.setFcrepoClient(fcrepoClient);
+         job.setRepositoryObjectLoader(repositoryObjectLoader);
+-        job.setSparqlQueryService(sparqlQueryService);
+         job.setTransactionManager(transactionManager);
+         job.setOperationsMessageSender(operationsMessageSender);
+         job.setObjectPathFactory(objectPathFactory);
+         job.setOperationMetrics(operationMetrics);
++        job.setProxyService(proxyService);
+ 
+         if (asynchronous) {
+             log.info("User {} is queueing move operation {} of {} objects to destination {}",
+@@ -112,20 +107,6 @@ public void setTransactionManager(TransactionManager transactionManager) {
+         this.transactionManager = transactionManager;
+     }
+ 
+-    /**
+-     * @param sparqlQueryService the sparqlQueryService to set
+-     */
+-    public void setSparqlQueryService(SparqlQueryService sparqlQueryService) {
+-        this.sparqlQueryService = sparqlQueryService;
+-    }
+-
+-    /**
+-     * @param fcrepoClient the fcrepoClient to set
+-     */
+-    public void setFcrepoClient(FcrepoClient fcrepoClient) {
+-        this.fcrepoClient = fcrepoClient;
+-    }
+-
+     /**
+      * @param asynchronous the asynchronous to set
+      */
+diff --git a/persistence/src/test/java/edu/unc/lib/dl/persist/services/move/MoveObjectsServiceTest.java b/persistence/src/test/java/edu/unc/lib/dl/persist/services/move/MoveObjectsServiceTest.java
+index 8e1935f7b..7a35bf555 100644
+--- a/persistence/src/test/java/edu/unc/lib/dl/persist/services/move/MoveObjectsServiceTest.java
++++ b/persistence/src/test/java/edu/unc/lib/dl/persist/services/move/MoveObjectsServiceTest.java
+@@ -141,7 +141,6 @@
+     @Mock
+     private ObjectPath sourceObjPath;
+ 
+-
+     private MoveObjectsService service;
+ 
+     private ListAppender<ILoggingEvent> actionAppender;
+@@ -152,9 +151,8 @@ public void init() throws Exception {
+ 
+         service = new MoveObjectsService();
+         service.setAclService(aclService);
+-        service.setFcrepoClient(fcrepoClient);
++
+         service.setRepositoryObjectLoader(repositoryObjectLoader);
+-        service.setSparqlQueryService(sparqlQueryService);
+         service.setTransactionManager(transactionManager);
+         service.setOperationsMessageSender(operationsMessageSender);
+         service.setObjectPathFactory(objectPathFactory);
+@@ -239,16 +237,17 @@ public void testMoveObject() throws Exception {
+         when(mockResultSet.hasNext()).thenReturn(true, false);
+         when(mockProxyResource.getURI()).thenReturn(proxyUri);
+         when(mockParentResource.getURI()).thenReturn(sourcePid.getRepositoryPath());
++        when(proxyService.destroyProxy(any(PID.class))).thenReturn(sourcePid.getRepositoryPath());
+ 
+         List<PID> movePids = asList(makeMoveObject());
+         service.moveObjects(mockAgent, destPid, movePids);
+ 
+-        //verify(fcrepoClient).delete(eq(URI.create(proxyUri)));
++        verify(proxyService).destroyProxy(movePids.get(0));
+         verify(mockDestObj).addMember(any(ContentObject.class));
+         verify(operationsMessageSender).sendMoveOperation(anyString(), anyListOf(PID.class),
+                 eq(destPid), anyListOf(PID.class), eq(null));
+ 
+-        //verifyLogMessage(sourcePid, movePids);
++        verifyLogMessage(sourcePid, movePids);
+     }
+ 
+     @Test
+@@ -259,11 +258,12 @@ public void testMoveMultipleObjects() throws Exception {
+         when(mockResultSet.hasNext()).thenReturn(true, true, false);
+         when(mockProxyResource.getURI()).thenReturn(proxyUri1, proxyUri2);
+         when(mockParentResource.getURI()).thenReturn(sourcePid.getRepositoryPath());
++        when(proxyService.destroyProxy(any(PID.class))).thenReturn(sourcePid.getRepositoryPath());
+ 
+         List<PID> movePids = asList(makeMoveObject(), makeMoveObject());
+         service.moveObjects(mockAgent, destPid, movePids);
+ 
+-        //verify(fcrepoClient, times(4)).delete(any(URI.class));
++        verify(proxyService, times(2)).destroyProxy(any(PID.class));
+         verify(mockDestObj, times(2)).addMember(any(ContentObject.class));
+         verify(operationsMessageSender).sendMoveOperation(anyString(), anyListOf(PID.class),
+                 eq(destPid), anyListOf(PID.class), eq(null));
+diff --git a/services/src/main/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestController.java b/services/src/main/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestController.java
+index e41b89762..095b9707a 100644
+--- a/services/src/main/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestController.java
++++ b/services/src/main/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestController.java
+@@ -15,57 +15,90 @@
+  */
+ package edu.unc.lib.dl.cdr.services.rest;
+ 
++import static edu.unc.lib.dl.acl.util.GroupsThreadStore.getAgentPrincipals;
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.ORIGINAL_FILE;
++
++import java.io.IOException;
++
+ import javax.servlet.http.HttpServletRequest;
+ import javax.servlet.http.HttpServletResponse;
+ 
++import org.apache.commons.lang3.StringUtils;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.stereotype.Controller;
+ import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.RequestMapping;
+ import org.springframework.web.bind.annotation.RequestParam;
+ 
++import edu.unc.lib.dl.acl.util.AccessGroupSet;
++import edu.unc.lib.dl.fcrepo4.PIDs;
++import edu.unc.lib.dl.fedora.PID;
+ import edu.unc.lib.dl.ui.service.FedoraContentService;
+-import edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil.AnalyticsUserData;
+-import edu.unc.lib.dl.util.ContentModelHelper;
++import edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil;
+ 
+ /**
+- * 
++ *
++ * Controller which provides access to datastreams of objects held in the repository.
++ *
+  * @author bbpennel
+  *
+  */
+ @Controller
+ public class DatastreamRestController {
++    private static final Logger log = LoggerFactory.getLogger(DatastreamRestController.class);
++
+     @Autowired
+     private FedoraContentService fedoraContentService;
++    @Autowired
++    private AnalyticsTrackerUtil analyticsTracker;
+ 
+     @RequestMapping("/file/{pid}")
+-    public void getDatastream(@PathVariable("pid") String pid,
++    public void getDatastream(@PathVariable("pid") String pidString,
+             @RequestParam(value = "dl", defaultValue = "false") boolean download,
+-            HttpServletRequest request, HttpServletResponse response) {
+-        fedoraContentService.streamData(pid, null, download, new AnalyticsUserData(request), response);
++            HttpServletRequest request,
++            HttpServletResponse response) {
++        getDatastream(pidString, null, download, request, response);
+     }
+ 
+     @RequestMapping("/file/{pid}/{datastream}")
+-    public void getDatastream(@PathVariable("pid") String pid, @PathVariable("datastream") String datastream,
++    public void getDatastream(@PathVariable("pid") String pidString,
++            @PathVariable("datastream") String datastream,
+             @RequestParam(value = "dl", defaultValue = "false") boolean download,
+-            HttpServletRequest request, HttpServletResponse response) {
+-        fedoraContentService.streamData(pid, datastream, download, new AnalyticsUserData(request), response);
++            HttpServletRequest request,
++            HttpServletResponse response) {
++
++        PID pid = PIDs.get(pidString);
++        AccessGroupSet principals = getAgentPrincipals().getPrincipals();
++
++        try {
++            fedoraContentService.streamData(pid, datastream, principals, download, response);
++            recordDownloadEvent(pid, datastream, principals, request);
++        } catch (IOException e) {
++            log.error("Problem retrieving {} for {}", pid.toString(), datastream, e);
++        }
++    }
++
++    private void recordDownloadEvent(PID pid, String datastream, AccessGroupSet principals,
++            HttpServletRequest request) {
++        if (!(StringUtils.isBlank(datastream) || ORIGINAL_FILE.equals(datastream))) {
++            return;
++        }
++        analyticsTracker.trackEvent(request, "download", pid, principals);
+     }
+ 
+     @RequestMapping("/thumb/{pid}")
+     public void getThumbnailSmall(@PathVariable("pid") String pid,
+             @RequestParam(value = "size", defaultValue = "small") String size, HttpServletRequest request,
+             HttpServletResponse response) {
+-        fedoraContentService.streamData(pid, ContentModelHelper.Datastream.THUMB_SMALL.getName(),
+-                false, null, response);
++        // TODO implement retrieval of derivatives
+     }
+ 
+     @RequestMapping("/thumb/{pid}/{size}")
+     public void getThumbnail(@PathVariable("pid") String pid,
+             @PathVariable("size") String size, HttpServletRequest request,
+             HttpServletResponse response) {
+-        String datastream = ("large".equals(size)) ? ContentModelHelper.Datastream.THUMB_LARGE.getName()
+-                : ContentModelHelper.Datastream.THUMB_SMALL.getName();
+-        fedoraContentService.streamData(pid, datastream, false, null, response);
++        // TODO implement retrieval of derivatives
+     }
+ }
+\ No newline at end of file
+diff --git a/services/src/main/webapp/WEB-INF/service-context.xml b/services/src/main/webapp/WEB-INF/service-context.xml
+index f3c21bfab..13ce95ec3 100644
+--- a/services/src/main/webapp/WEB-INF/service-context.xml
++++ b/services/src/main/webapp/WEB-INF/service-context.xml
+@@ -81,18 +81,22 @@
+         <constructor-arg ref="jedisPool" />
+     </bean>
+     
++    <bean id="destroyProxyService" class="edu.unc.lib.dl.persist.services.destroy.DestroyProxyService">
++        <property name="sparqlQueryService" ref="sparqlQueryService" />
++        <property name="fcrepoClient" ref="fcrepoClient" />
++    </bean>
++    
+     <bean id="moveObjectsService"
+         class="edu.unc.lib.dl.persist.services.move.MoveObjectsService">
+         <property name="aclService" ref="aclService" />
+         <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
+         <property name="transactionManager" ref="transactionManager" />
+-        <property name="sparqlQueryService" ref="sparqlQueryService" />
+-        <property name="fcrepoClient" ref="fcrepoClient" />
+         <property name="operationsMessageSender" ref="operationsMessageSender" />
+         <property name="objectPathFactory" ref="objectPathFactory" />
+         <property name="asynchronous" value="true" />
+         <property name="moveExecutor" ref="moveExecutor" />
+         <property name="operationMetrics" ref="activityMetricsClient" />
++        <property name="proxyService" ref="destroyProxyService" />
+     </bean>
+ 
+     <!-- <bean id="rollbackMoveJob" class="edu.unc.lib.dl.cdr.services.processing.MoveRollbackJob"></bean>
+@@ -222,11 +226,6 @@
+         <property name="apiRecordPath" value="${repository.protocol}://${repository.host}/record/" />
+     </bean>
+     
+-    <bean id="fedoraUtil" class="edu.unc.lib.dl.ui.util.FedoraUtil">
+-        <property name="fedoraUrl"
+-            value="${fcrepo.baseUrl}" />
+-    </bean>
+-    
+     <bean id="gaTrackingID" class="java.lang.String">
+         <constructor-arg
+             value="${google.trackingId}" />
+@@ -234,9 +233,12 @@
+     
+     <bean id="analyticsTracker" class="edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil">
+         <property name="gaTrackingID" ref="gaTrackingID" />
++        <property name="solrSearchService" ref="unrestrictedSolrSearchService" />
+     </bean>
+     
+     <bean id="fedoraContentService" class="edu.unc.lib.dl.ui.service.FedoraContentService">
++        <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
++        <property name="accessControlService" ref="aclService" />
+     </bean>
+     
+     <bean id="addContainerService" class="edu.unc.lib.dl.cdr.services.processing.AddContainerService">
+diff --git a/services/src/main/webapp/WEB-INF/solr-search-context.xml b/services/src/main/webapp/WEB-INF/solr-search-context.xml
+index df3419c32..a56237d32 100644
+--- a/services/src/main/webapp/WEB-INF/solr-search-context.xml
++++ b/services/src/main/webapp/WEB-INF/solr-search-context.xml
+@@ -73,6 +73,19 @@
+         <property name="globalPermissionEvaluator" ref="globalPermissionEvaluator" />
+     </bean>
+     
++    <bean id="unrestrictedSolrAccessRestrictionUtil" class="edu.unc.lib.dl.search.solr.util.AccessRestrictionUtil">
++        <property name="searchSettings" ref="searchSettings" />
++        <property name="disablePermissionFiltering" value="true" />
++    </bean>
++    
++    <bean id="unrestrictedSolrSearchService" class="edu.unc.lib.dl.search.solr.service.SolrSearchService"
++        init-method="initializeSolrServer">
++        <property name="solrSettings" ref="solrSettings" />
++        <property name="searchSettings" ref="searchSettings" />
++        <property name="facetFieldUtil" ref="facetFieldUtil" />
++        <property name="accessRestrictionUtil" ref="unrestrictedSolrAccessRestrictionUtil" />
++    </bean>
++    
+     <bean id="childrenCountService" class="edu.unc.lib.dl.search.solr.service.ChildrenCountService"
+         init-method="initializeSolrServer">
+         <property name="searchSettings" ref="searchSettings" />
+diff --git a/services/src/test/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestControllerIT.java b/services/src/test/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestControllerIT.java
+new file mode 100644
+index 000000000..73527e4fb
+--- /dev/null
++++ b/services/src/test/java/edu/unc/lib/dl/cdr/services/rest/DatastreamRestControllerIT.java
+@@ -0,0 +1,109 @@
++/**
++ * Copyright 2008 The University of North Carolina at Chapel Hill
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *         http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package edu.unc.lib.dl.cdr.services.rest;
++
++import static edu.unc.lib.dl.fcrepo4.RepositoryPathConstants.TECHNICAL_METADATA;
++import static edu.unc.lib.dl.ui.service.FedoraContentService.CONTENT_DISPOSITION;
++import static org.junit.Assert.assertEquals;
++import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++
++import org.fusesource.hawtbuf.ByteArrayInputStream;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.mock.web.MockHttpServletResponse;
++import org.springframework.test.context.ContextConfiguration;
++import org.springframework.test.context.ContextHierarchy;
++import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
++import org.springframework.test.context.web.WebAppConfiguration;
++import org.springframework.test.web.servlet.MvcResult;
++
++import edu.unc.lib.dl.cdr.services.rest.modify.AbstractAPIIT;
++import edu.unc.lib.dl.fcrepo4.FileObject;
++import edu.unc.lib.dl.fcrepo4.RepositoryObjectFactory;
++import edu.unc.lib.dl.fedora.PID;
++
++/**
++ *
++ * @author bbpennel
++ *
++ */
++@RunWith(SpringJUnit4ClassRunner.class)
++@WebAppConfiguration
++@ContextHierarchy({
++    @ContextConfiguration("/spring-test/test-fedora-container.xml"),
++    @ContextConfiguration("/spring-test/cdr-client-container.xml"),
++    @ContextConfiguration("/datastream-content-it-servlet.xml")
++})
++public class DatastreamRestControllerIT extends AbstractAPIIT {
++
++    private static final String BINARY_CONTENT = "binary content";
++
++    @Autowired
++    private RepositoryObjectFactory repositoryObjectFactory;
++
++    @Test
++    public void testGetFile() throws Exception {
++        PID filePid = makePid();
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), "file.txt", "text/plain", null, null);
++
++        MvcResult result = mvc.perform(get("/file/" + filePid.getId()))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        // Verify content was retrieved
++        MockHttpServletResponse response = result.getResponse();
++        assertEquals(BINARY_CONTENT, response.getContentAsString());
++
++        assertEquals(BINARY_CONTENT.length(), response.getContentLength());
++        assertEquals("text/plain", response.getContentType());
++        assertEquals("inline; filename=\"file.txt\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++
++    @Test
++    public void testGetMultipleDatastreams() throws Exception {
++        PID filePid = makePid();
++
++        String content = "<fits>content</fits>";
++
++        FileObject fileObj = repositoryObjectFactory.createFileObject(filePid, null);
++        fileObj.addOriginalFile(new ByteArrayInputStream(BINARY_CONTENT.getBytes()), null, "text/plain", null, null);
++        fileObj.addBinary(TECHNICAL_METADATA, new ByteArrayInputStream(content.getBytes()),
++                "fits.xml", "application/xml", null, null, null);
++
++        // Verify original file content retrievable
++        MvcResult result1 = mvc.perform(get("/file/" + filePid.getId()))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        assertEquals(BINARY_CONTENT, result1.getResponse().getContentAsString());
++
++        // Verify administrative datastream retrievable
++        MvcResult result2 = mvc.perform(get("/file/" + filePid.getId() + "/" + TECHNICAL_METADATA))
++                .andExpect(status().is2xxSuccessful())
++                .andReturn();
++
++        MockHttpServletResponse response = result2.getResponse();
++        assertEquals(content, response.getContentAsString());
++
++        assertEquals(content.length(), response.getContentLength());
++        assertEquals("application/xml", response.getContentType());
++        assertEquals("inline; filename=\"fits.xml\"", response.getHeader(CONTENT_DISPOSITION));
++    }
++}
+diff --git a/services/src/test/resources/datastream-content-it-servlet.xml b/services/src/test/resources/datastream-content-it-servlet.xml
+new file mode 100644
+index 000000000..aad5c56df
+--- /dev/null
++++ b/services/src/test/resources/datastream-content-it-servlet.xml
+@@ -0,0 +1,47 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++
++    Copyright 2008 The University of North Carolina at Chapel Hill
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++            http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++
++-->
++<beans xmlns="http://www.springframework.org/schema/beans"
++    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++    xmlns:mvc="http://www.springframework.org/schema/mvc"
++    xmlns:context="http://www.springframework.org/schema/context"
++    xsi:schemaLocation="
++        http://www.springframework.org/schema/beans
++        http://www.springframework.org/schema/beans/spring-beans.xsd
++        http://www.springframework.org/schema/context 
++        http://www.springframework.org/schema/context/spring-context-3.0.xsd
++        http://www.springframework.org/schema/mvc
++        http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd">
++        
++    <mvc:annotation-driven/>
++
++    <context:component-scan resource-pattern="**/DatastreamRestController*" base-package="edu.unc.lib.dl.cdr.services.rest"/>
++    
++    <bean id="fedoraContentService" class="edu.unc.lib.dl.ui.service.FedoraContentService">
++        <property name="accessControlService" ref="aclService" />
++        <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
++    </bean>
++    
++    <bean id="aclService" class="org.mockito.Mockito" factory-method="mock">
++        <constructor-arg value="edu.unc.lib.dl.acl.fcrepo4.AccessControlServiceImpl" />
++    </bean>
++    
++    <bean id="analyticsTracker" class="org.mockito.Mockito" factory-method="mock">
++        <constructor-arg value="edu.unc.lib.dl.ui.util.AnalyticsTrackerUtil" />
++    </bean>
++</beans>
+diff --git a/services/src/test/resources/move-objects-it-servlet.xml b/services/src/test/resources/move-objects-it-servlet.xml
+index 1deb4e2a1..40c201091 100644
+--- a/services/src/test/resources/move-objects-it-servlet.xml
++++ b/services/src/test/resources/move-objects-it-servlet.xml
+@@ -32,15 +32,19 @@
+ 
+     <context:component-scan resource-pattern="**/MoveObjectsController*" base-package="edu.unc.lib.dl.cdr.services.rest.modify"/>
+     
++    <bean id="destroyProxyService" class="edu.unc.lib.dl.persist.services.destroy.DestroyProxyService">
++        <property name="sparqlQueryService" ref="sparqlQueryService" />
++        <property name="fcrepoClient" ref="fcrepoClient" />
++    </bean>
++    
+     <bean id="moveObjectsService" class="edu.unc.lib.dl.persist.services.move.MoveObjectsService">
+         <property name="aclService" ref="aclService" />
+         <property name="repositoryObjectLoader" ref="repositoryObjectLoader" />
+-        <property name="sparqlQueryService" ref="sparqlQueryService" />
+         <property name="operationsMessageSender" ref="operationsMessageSender" />
+         <property name="operationMetrics" ref="operationMetrics" />
+         <property name="objectPathFactory" ref="objectPathFactory" />
+-        <property name="fcrepoClient" ref="fcrepoClient" />
+         <property name="transactionManager" ref="transactionManager" />
++        <property name="proxyService" ref="destroyProxyService" />
+     </bean>
+     
+     <bean id="aclService" class="org.mockito.Mockito" factory-method="mock">
+diff --git a/solr-search/src/main/java/edu/unc/lib/dl/search/solr/model/Datastream.java b/solr-search/src/main/java/edu/unc/lib/dl/search/solr/model/Datastream.java
+index fb615c618..93c2baea5 100644
+--- a/solr-search/src/main/java/edu/unc/lib/dl/search/solr/model/Datastream.java
++++ b/solr-search/src/main/java/edu/unc/lib/dl/search/solr/model/Datastream.java
+@@ -57,14 +57,16 @@ public Datastream(String datastream) {
+ 
+         this.name = dsParts[0];
+         this.mimetype = dsParts[1];
+-        this.extension = dsParts[2];
++        this.filename = dsParts[2];
++        this.extension = dsParts[3];
++
+         try {
+-            this.filesize = new Long(dsParts[3]);
++            this.filesize = new Long(dsParts[4]);
+         } catch (NumberFormatException e) {
+             this.filesize = null;
+         }
+-        this.checksum = dsParts[4];
+-        this.owner = dsParts[5];
++        this.checksum = dsParts[5];
++        this.owner = dsParts[6];
+     }
+ 
+     @Override
+diff --git a/solr-search/src/test/java/edu/unc/lib/dl/search/solr/model/DatastreamTest.java b/solr-search/src/test/java/edu/unc/lib/dl/search/solr/model/DatastreamTest.java
+index 800833f5b..1c3badcfd 100644
+--- a/solr-search/src/test/java/edu/unc/lib/dl/search/solr/model/DatastreamTest.java
++++ b/solr-search/src/test/java/edu/unc/lib/dl/search/solr/model/DatastreamTest.java
+@@ -27,37 +27,57 @@
+  *
+  */
+ public class DatastreamTest {
++    private static final String CHECKSUM = "urn:sha1:2c9e902133d6809b445942dca5a93a9b3e766c15";
+ 
+     @Test
+-    public void datastreamParsing() {
+-        Datastream ds = new Datastream("DATA_FILE|image/jpeg|jpg|30459|dc93eff50ca7dbd688971716e55e0084|");
++    public void testToString() {
++        Datastream ds = new Datastream(null, "original", 555l, "text/plain", "file.txt", "txt", CHECKSUM);
++
++        assertEquals("original", ds.getName());
++        assertEquals("text/plain", ds.getMimetype());
++        assertEquals("file.txt", ds.getFilename());
++        assertEquals("txt", ds.getExtension());
++        assertEquals(555, ds.getFilesize().longValue());
++        assertEquals(CHECKSUM, ds.getChecksum());
++        assertEmpty(ds.getOwner());
+ 
+-        assertEquals("DATA_FILE", ds.getName());
++        assertEquals("original|text/plain|file.txt|txt|555|" + CHECKSUM + "|", ds.toString());
++    }
++
++    @Test
++    public void testDatastreamParsing() {
++        Datastream ds = new Datastream("original_file|image/jpeg|file.jpg|jpg"
++                + "|30459|" + CHECKSUM + "|");
++
++        assertEquals("original_file", ds.getName());
+         assertEquals("image/jpeg", ds.getMimetype());
++        assertEquals("file.jpg", ds.getFilename());
+         assertEquals("jpg", ds.getExtension());
+         assertEquals(30459, ds.getFilesize().longValue());
+-        assertEquals("dc93eff50ca7dbd688971716e55e0084", ds.getChecksum());
++        assertEquals(CHECKSUM, ds.getChecksum());
+         assertEmpty(ds.getOwner());
+     }
+ 
+     @Test
+-    public void datastreamSurrogateParsing() {
+-        Datastream ds = new Datastream("DATA_FILE|image/jpeg|jpg|30459|dc93eff50ca7dbd688971716e55e0084|uuid:73247248-e351-49dc-9b27-fe44df3884e7");
++    public void testDatastreamSurrogateParsing() {
++        Datastream ds = new Datastream("DATA_FILE|image/jpeg|file.jpg|jpg|30459|" + CHECKSUM + "|uuid:73247248-e351-49dc-9b27-fe44df3884e7");
+ 
+         assertEquals("DATA_FILE", ds.getName());
+         assertEquals("image/jpeg", ds.getMimetype());
++        assertEquals("file.jpg", ds.getFilename());
+         assertEquals("jpg", ds.getExtension());
+         assertEquals(30459, ds.getFilesize().longValue());
+-        assertEquals("dc93eff50ca7dbd688971716e55e0084", ds.getChecksum());
++        assertEquals(CHECKSUM, ds.getChecksum());
+         assertEquals("uuid:73247248-e351-49dc-9b27-fe44df3884e7", ds.getOwner());
+     }
+ 
+     @Test
+-    public void datastreamNoChecksum() {
+-        Datastream ds = new Datastream("AUDIT|text/xml|xml|30459||");
++    public void testDatastreamNoChecksum() {
++        Datastream ds = new Datastream("AUDIT|text/xml|audit|xml|30459||");
+ 
+         assertEquals("AUDIT", ds.getName());
+         assertEquals("text/xml", ds.getMimetype());
++        assertEquals("audit", ds.getFilename());
+         assertEquals("xml", ds.getExtension());
+         assertEquals(30459, ds.getFilesize().longValue());
+         assertEmpty(ds.getChecksum());
+@@ -65,11 +85,12 @@ public void datastreamNoChecksum() {
+     }
+ 
+     @Test
+-    public void datastreamNoChecksumFromSurrogate() {
+-        Datastream ds = new Datastream("AUDIT|text/xml|xml|30459||uuid:73247248-e351-49dc-9b27-fe44df3884e7");
++    public void testDatastreamNoChecksumFromSurrogate() {
++        Datastream ds = new Datastream("AUDIT|text/xml|audit|xml|30459||uuid:73247248-e351-49dc-9b27-fe44df3884e7");
+ 
+         assertEquals("AUDIT", ds.getName());
+         assertEquals("text/xml", ds.getMimetype());
++        assertEquals("audit", ds.getFilename());
+         assertEquals("xml", ds.getExtension());
+         assertEquals(30459, ds.getFilesize().longValue());
+         assertEmpty(ds.getChecksum());
+@@ -79,7 +100,7 @@ public void datastreamNoChecksumFromSurrogate() {
+     @Test
+     public void testDatastreamEqualsString() {
+         String dsName = "data_stream";
+-        Datastream ds = new Datastream("data_stream|image/jpeg|jpg|0||");
++        Datastream ds = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||");
+ 
+         assertTrue(ds.equals(dsName));
+     }
+@@ -87,39 +108,39 @@ public void testDatastreamEqualsString() {
+     @Test
+     public void testDatastreamNotEqualsString() {
+         String dsName = "other_ds";
+-        Datastream ds = new Datastream("data_stream|image/jpeg|jpg|0||");
++        Datastream ds = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||");
+ 
+         assertFalse(ds.equals(dsName));
+     }
+ 
+     @Test
+     public void testDatastreamEqualsFullDSString() {
+-        String dsName = "data_stream|image/jpeg|jpg|0||";
+-        Datastream ds = new Datastream("data_stream|image/jpeg|jpg|0||");
++        String dsName = "data_stream|image/jpeg|ds.jpg|jpg|0||";
++        Datastream ds = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||");
+ 
+         assertTrue(ds.equals(dsName));
+     }
+ 
+     @Test
+     public void testDatastreamEqualsDatastream() {
+-        Datastream ds1 = new Datastream("data_stream|image/jpeg|jpg|0||");
+-        Datastream ds2 = new Datastream("data_stream|image/jpeg|jpg|0||");
++        Datastream ds1 = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||");
++        Datastream ds2 = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||");
+ 
+         assertTrue(ds1.equals(ds2));
+     }
+ 
+     @Test
+     public void testDatastreamEqualsDatastreamByNameAndOwner() {
+-        Datastream ds1 = new Datastream("data_stream|image/jpeg|jpg|0||owner_id");
+-        Datastream ds2 = new Datastream("data_stream|||||owner_id");
++        Datastream ds1 = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||owner_id");
++        Datastream ds2 = new Datastream("data_stream||||||owner_id");
+ 
+         assertTrue(ds1.equals(ds2));
+     }
+ 
+     @Test
+     public void testDatastreamNotEqualsDatastreamByOwner() {
+-        Datastream ds1 = new Datastream("data_stream|image/jpeg|jpg|0||owner_2");
+-        Datastream ds2 = new Datastream("data_stream|image/jpeg|jpg|0||owner_1");
++        Datastream ds1 = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||owner_2");
++        Datastream ds2 = new Datastream("data_stream|image/jpeg|ds.jpg|jpg|0||owner_1");
+ 
+         assertFalse(ds1.equals(ds2));
+     }

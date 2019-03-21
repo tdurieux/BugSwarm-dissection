@@ -1,0 +1,44 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/AsmVisitorWrapper.java b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/AsmVisitorWrapper.java
+index bc5f84e31f..c6d4c62885 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/AsmVisitorWrapper.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/AsmVisitorWrapper.java
+@@ -611,6 +611,7 @@ public String toString() {
+                         "outer=" + getOuter() +
+                         ", instrumentedType=" + instrumentedType +
+                         ", methodsByName=" + methodsByName +
++                        ", classFileVersion=" + classFileVersion +
+                         ", writerFlags=" + writerFlags +
+                         ", readerFlags=" + readerFlags +
+                         '}';
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AsmVisitorWrapperForDeclaredMethodsTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AsmVisitorWrapperForDeclaredMethodsTest.java
+index 232838de3b..b51dc34ef7 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AsmVisitorWrapperForDeclaredMethodsTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AsmVisitorWrapperForDeclaredMethodsTest.java
+@@ -40,9 +40,6 @@
+     @Mock
+     private TypeDescription instrumentedType;
+ 
+-    @Mock
+-    private ClassFileVersion classFileVersion;
+-
+     @Mock
+     private MethodDescription.InDefinedShape foo, bar;
+ 
+@@ -60,7 +57,7 @@ public void setUp() throws Exception {
+         when(bar.getInternalName()).thenReturn(BAR);
+         when(bar.getDescriptor()).thenReturn(BAZ);
+         when(classVisitor.visitMethod(eq(MODIFIERS), any(String.class), any(String.class), eq(BAZ), eq(new String[]{QUX + BAZ}))).thenReturn(methodVisitor);
+-        when(methodVisitorWrapper.wrap(instrumentedType, foo, methodVisitor, classFileVersion, FLAGS, FLAGS * 2)).thenReturn(wrappedVisitor);
++        when(methodVisitorWrapper.wrap(instrumentedType, foo, methodVisitor, null, FLAGS, FLAGS * 2)).thenReturn(wrappedVisitor);
+         when(matcher.matches(foo)).thenReturn(true);
+     }
+ 
+@@ -72,7 +69,7 @@ public void testMatched() throws Exception {
+                 .visitMethod(MODIFIERS, FOO, QUX, BAZ, new String[]{QUX + BAZ}), is(wrappedVisitor));
+         verify(matcher).matches(foo);
+         verifyNoMoreInteractions(matcher);
+-        verify(methodVisitorWrapper).wrap(instrumentedType, foo, methodVisitor, classFileVersion, FLAGS, FLAGS * 2);
++        verify(methodVisitorWrapper).wrap(instrumentedType, foo, methodVisitor, null, FLAGS, FLAGS * 2);
+         verifyNoMoreInteractions(methodVisitorWrapper);
+     }
+ 

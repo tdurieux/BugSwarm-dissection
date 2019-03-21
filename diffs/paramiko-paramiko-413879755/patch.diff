@@ -1,0 +1,311 @@
+diff --git a/paramiko/sftp_client.py b/paramiko/sftp_client.py
+index f27be5f94..af2b00faa 100644
+--- a/paramiko/sftp_client.py
++++ b/paramiko/sftp_client.py
+@@ -444,6 +444,159 @@ def posix_rename(self, oldpath, newpath):
+             CMD_EXTENDED, "posix-rename@openssh.com", oldpath, newpath
+         )
+ 
++    def exists(self, path):
++        """
++        Check a path to determine whether it exists, based on `stat`.
++        This follows symlinks, so a broken symlink will return ``False``.
++
++        :param str path: path to check
++
++        :rtype: bool
++        :return: ``True`` if the path exists and is not a broken symlink;
++            ``False`` otherwise
++
++        .. versionadded:: 2.5
++        """
++        path = self._adjust_cwd(path)
++        self._log(DEBUG, "exists({!r})".format(path))
++
++        try:
++            self.stat(path)
++        except (OSError, IOError) as e:
++            self._log(
++                DEBUG,
++                "{}: {} ({!r})".format(
++                    type(e).__name__,
++                    e.strerror,
++                    e.filename if e.filename is not None else path,
++                ),
++            )
++            return False
++
++        return True
++
++    def lexists(self, path):
++        """
++        Check a path to determine whether it exists, based on `lstat`.
++        This does not follow symlinks, so a broken symlink will return
++        ``True``.
++
++        :param str path: path to check
++
++        :rtype: bool
++        :return: ``True`` if the path exists;
++            ``False`` otherwise
++
++        .. versionadded:: 2.5
++        """
++        path = self._adjust_cwd(path)
++        self._log(DEBUG, "exists({!r})".format(path))
++
++        try:
++            self.lstat(path)
++        except (OSError, IOError) as e:
++            self._log(
++                DEBUG,
++                "{}: {} ({!r})".format(
++                    type(e).__name__,
++                    e.strerror,
++                    e.filename if e.filename is not None else path,
++                ),
++            )
++            return False
++
++        return True
++
++    def isfile(self, path):
++        """
++        Check a path to determine whether it exists and is a file.
++
++        :param str path: path to check
++
++        :rtype: bool
++        :return: ``True`` if the path exists and is a file;
++            ``False`` otherwise
++
++        .. versionadded:: 2.5
++        """
++        path = self._adjust_cwd(path)
++        self._log(DEBUG, "isfile({!r})".format(path))
++
++        try:
++            path_stat = self.stat(path)
++        except (OSError, IOError) as e:
++            self._log(
++                DEBUG,
++                "{}: {} ({!r})".format(
++                    type(e).__name__,
++                    e.strerror,
++                    e.filename if e.filename is not None else path,
++                ),
++            )
++            return False
++
++        return stat.S_ISREG(path_stat.st_mode)
++
++    def islink(self, path):
++        """
++        Check a path to determine whether it exists and is a symlink.
++
++        :param str path: path to check
++
++        :rtype: bool
++        :return: ``True`` if the path exists and is a symlink;
++            ``False`` otherwise
++
++        .. versionadded:: 2.5
++        """
++        path = self._adjust_cwd(path)
++        self._log(DEBUG, "isfile({!r})".format(path))
++
++        try:
++            path_lstat = self.lstat(path)
++        except (OSError, IOError) as e:
++            self._log(
++                DEBUG,
++                "{}: {} ({!r})".format(
++                    type(e).__name__,
++                    e.strerror,
++                    e.filename if e.filename is not None else path,
++                ),
++            )
++            return False
++
++        return stat.S_ISLNK(path_lstat.st_mode)
++
++    def isdir(self, path):
++        """
++        Check a path to determine whether it exists and is a directory.
++
++        :param str path: path to check
++
++        :rtype: bool
++        :return: ``True`` if the path exists and is a directory;
++            ``False`` otherwise
++
++        .. versionadded:: 2.5
++        """
++        path = self._adjust_cwd(path)
++        self._log(DEBUG, "isfile({!r})".format(path))
++
++        try:
++            path_stat = self.stat(path)
++        except (OSError, IOError) as e:
++            self._log(
++                DEBUG,
++                "{}: {} ({!r})".format(
++                    type(e).__name__,
++                    e.strerror,
++                    e.filename if e.filename is not None else path,
++                ),
++            )
++            return False
++
++        return stat.S_ISDIR(path_stat.st_mode)
++
+     def mkdir(self, path, mode=o777):
+         """
+         Create a folder (directory) named ``path`` with numeric mode ``mode``.
+diff --git a/tests/test_sftp.py b/tests/test_sftp.py
+index 576b69b77..6dac91dd0 100644
+--- a/tests/test_sftp.py
++++ b/tests/test_sftp.py
+@@ -764,6 +764,142 @@ def test_sftp_attributes_empty_str(self, sftp):
+             == "?---------   1 0        0               0 (unknown date) ?"
+         )
+ 
++    def test_exists(self, sftp):
++        filename = "exists.txt"
++        symlink_name = "also_exists.txt"
++
++        file_path = "{}/{}".format(sftp.FOLDER, filename)
++        symlink_path = "{}/{}".format(sftp.FOLDER, symlink_name)
++
++        try:
++            sftp.open(file_path, "w")
++
++            assert sftp.exists(file_path)
++
++            try:
++                sftp.symlink(filename, symlink_path)
++
++                assert sftp.exists(file_path)
++                assert sftp.exists(symlink_path)
++            finally:
++                sftp.remove(symlink_path)
++        finally:
++            sftp.remove(file_path)
++
++        assert not sftp.exists(symlink_path)
++        assert not sftp.exists(file_path)
++
++    def test_lexists(self, sftp):
++        filename = "exists.txt"
++        symlink_name = "also_exists.txt"
++
++        file_path = "{}/{}".format(sftp.FOLDER, filename)
++        symlink_path = "{}/{}".format(sftp.FOLDER, symlink_name)
++
++        try:
++            sftp.open(file_path, "w")
++
++            assert sftp.lexists(file_path)
++
++            try:
++                sftp.symlink(filename, symlink_path)
++
++                assert sftp.lexists(file_path)
++                assert sftp.lexists(symlink_path)
++            finally:
++                sftp.remove(symlink_path)
++        finally:
++            sftp.remove(file_path)
++
++        assert not sftp.lexists(symlink_path)
++        assert not sftp.lexists(file_path)
++
++        try:
++            sftp.symlink(filename, symlink_path)
++
++            assert not sftp.lexists(file_path)
++            assert sftp.lexists(symlink_path)
++        finally:
++            sftp.remove(symlink_path)
++
++        assert not sftp.lexists(symlink_path)
++        assert not sftp.lexists(file_path)
++
++    def test_isfile(self, sftp):
++        filename = "exists.txt"
++        symlink_name = "also_exists.txt"
++
++        file_path = "{}/{}".format(sftp.FOLDER, filename)
++        symlink_path = "{}/{}".format(sftp.FOLDER, symlink_name)
++
++        try:
++            sftp.open(file_path, "w")
++
++            assert sftp.isfile(file_path)
++
++            try:
++                sftp.symlink(filename, symlink_path)
++
++                assert sftp.isfile(file_path)
++                assert sftp.isfile(symlink_path)
++            finally:
++                sftp.remove(symlink_path)
++        finally:
++            sftp.remove(file_path)
++
++        assert not sftp.isfile(symlink_path)
++        assert not sftp.isfile(file_path)
++
++    def test_islink(self, sftp):
++        filename = "exists.txt"
++        symlink_name = "also_exists.txt"
++
++        file_path = "{}/{}".format(sftp.FOLDER, filename)
++        symlink_path = "{}/{}".format(sftp.FOLDER, symlink_name)
++
++        try:
++            sftp.open(file_path, "w")
++
++            assert not sftp.islink(file_path)
++
++            try:
++                sftp.symlink(filename, symlink_path)
++
++                assert not sftp.islink(file_path)
++                assert sftp.islink(symlink_path)
++            finally:
++                sftp.remove(symlink_path)
++        finally:
++            sftp.remove(file_path)
++
++        assert not sftp.islink(symlink_path)
++        assert not sftp.islink(file_path)
++
++    def test_isdir(self, sftp):
++        dirname = "exists"
++        symlink_dirname = "also_exists"
++
++        dir_path = "{}/{}".format(sftp.FOLDER, dirname)
++        symlink_dir_path = "{}/{}".format(sftp.FOLDER, symlink_dirname)
++
++        try:
++            sftp.mkdir(dir_path)
++
++            assert sftp.isdir(dir_path)
++
++            try:
++                sftp.symlink(dirname, symlink_dir_path)
++
++                assert sftp.isdir(dir_path)
++                assert sftp.isdir(symlink_dir_path)
++            finally:
++                sftp.remove(symlink_dir_path)
++        finally:
++            sftp.rmdir(dir_path)
++
++        assert not sftp.isdir(symlink_dir_path)
++        assert not sftp.isdir(dir_path)
++
+     @needs_builtin("buffer")
+     def test_write_buffer(self, sftp):
+         """Test write() using a buffer instance."""

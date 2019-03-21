@@ -1,0 +1,2695 @@
+diff --git a/src/main/java/de/thm/arsnova/config/SecurityConfig.java b/src/main/java/de/thm/arsnova/config/SecurityConfig.java
+index cbb810fdd..63a018f2e 100644
+--- a/src/main/java/de/thm/arsnova/config/SecurityConfig.java
++++ b/src/main/java/de/thm/arsnova/config/SecurityConfig.java
+@@ -23,6 +23,8 @@
+ import de.thm.arsnova.security.LoginAuthenticationSucessHandler;
+ import de.thm.arsnova.security.CustomLdapUserDetailsMapper;
+ import de.thm.arsnova.security.RegisteredUserDetailsService;
++import de.thm.arsnova.security.jwt.JwtAuthenticationProvider;
++import de.thm.arsnova.security.jwt.JwtTokenFilter;
+ import de.thm.arsnova.security.pac4j.OauthCallbackFilter;
+ import de.thm.arsnova.security.pac4j.OauthAuthenticationProvider;
+ import org.jasig.cas.client.validation.Cas20ProxyTicketValidator;
+@@ -53,6 +55,7 @@
+ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+ import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+ import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
++import org.springframework.security.config.http.SessionCreationPolicy;
+ import org.springframework.security.core.session.SessionRegistry;
+ import org.springframework.security.core.session.SessionRegistryImpl;
+ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+@@ -67,6 +70,7 @@
+ import org.springframework.security.ldap.userdetails.LdapUserDetailsMapper;
+ import org.springframework.security.web.AuthenticationEntryPoint;
+ import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
++import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+ import org.springframework.security.web.authentication.logout.LogoutFilter;
+ import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+ import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
+@@ -132,11 +136,13 @@ private void init() {
+ 
+ 	@Override
+ 	protected void configure(HttpSecurity http) throws Exception {
++		http.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+ 		http.exceptionHandling().authenticationEntryPoint(restAuthenticationEntryPoint());
+ 		http.csrf().disable();
+ 		http.headers()
+ 			.addHeaderWriter(new HstsHeaderWriter(false));
+ 
++		http.addFilterBefore(jwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+ 		if (casEnabled) {
+ 			http.addFilter(casAuthenticationFilter());
+ 			http.addFilter(casLogoutFilter());
+@@ -150,6 +156,7 @@ protected void configure(HttpSecurity http) throws Exception {
+ 	@Override
+ 	protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+ 		List<String> providers = new ArrayList<>();
++		auth.authenticationProvider(jwtAuthenticationProvider());
+ 		if (ldapEnabled) {
+ 			providers.add("ldap");
+ 			auth.authenticationProvider(ldapAuthenticationProvider());
+@@ -200,6 +207,17 @@ public static AuthenticationEntryPoint restAuthenticationEntryPoint() {
+ 		return new Http403ForbiddenEntryPoint();
+ 	}
+ 
++	@Bean
++	public JwtAuthenticationProvider jwtAuthenticationProvider() {
++		return new JwtAuthenticationProvider();
++	}
++
++	@Bean
++	public JwtTokenFilter jwtTokenFilter() throws Exception {
++		JwtTokenFilter jwtTokenFilter = new JwtTokenFilter();
++		return jwtTokenFilter;
++	}
++
+ 	@Bean
+ 	LoginAuthenticationSucessHandler successHandler() {
+ 		final LoginAuthenticationSucessHandler successHandler = new LoginAuthenticationSucessHandler();
+diff --git a/src/main/java/de/thm/arsnova/controller/AuthenticationController.java b/src/main/java/de/thm/arsnova/controller/AuthenticationController.java
+new file mode 100644
+index 000000000..2b11b7380
+--- /dev/null
++++ b/src/main/java/de/thm/arsnova/controller/AuthenticationController.java
+@@ -0,0 +1,34 @@
++package de.thm.arsnova.controller;
++
++import de.thm.arsnova.entities.ClientAuthentication;
++import de.thm.arsnova.entities.LoginCredentials;
++import de.thm.arsnova.entities.UserProfile;
++import de.thm.arsnova.services.UserService;
++import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++
++@RestController
++@RequestMapping("/auth")
++public class AuthenticationController {
++	private UserService userService;
++
++	public AuthenticationController(final UserService userService) {
++		this.userService = userService;
++	}
++
++	@PostMapping("/login")
++	public ClientAuthentication login() {
++		return userService.getCurrentClientAuthentication();
++	}
++
++	@PostMapping("/login/registered")
++	public ClientAuthentication loginRegistered(@RequestBody LoginCredentials loginCredentials) {
++		final String loginId = loginCredentials.getLoginId().toLowerCase();
++		userService.authenticate(new UsernamePasswordAuthenticationToken(loginId, loginCredentials.getPassword()),
++				UserProfile.AuthProvider.ARSNOVA);
++		return userService.getCurrentClientAuthentication();
++	}
++}
+diff --git a/src/main/java/de/thm/arsnova/controller/ControllerExceptionHandler.java b/src/main/java/de/thm/arsnova/controller/ControllerExceptionHandler.java
+index 31d43c4cb..d6223f7a7 100644
+--- a/src/main/java/de/thm/arsnova/controller/ControllerExceptionHandler.java
++++ b/src/main/java/de/thm/arsnova/controller/ControllerExceptionHandler.java
+@@ -25,6 +25,7 @@
+ import de.thm.arsnova.exceptions.PayloadTooLargeException;
+ import de.thm.arsnova.exceptions.PreconditionFailedException;
+ import de.thm.arsnova.exceptions.UnauthorizedException;
++import org.ektorp.DocumentNotFoundException;
+ import org.slf4j.event.Level;
+ import org.springframework.http.HttpStatus;
+ import org.springframework.http.converter.HttpMessageNotReadableException;
+@@ -33,12 +34,14 @@
+ import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+ import org.springframework.security.core.Authentication;
+ import org.springframework.security.core.context.SecurityContextHolder;
++import org.springframework.web.HttpRequestMethodNotSupportedException;
+ import org.springframework.web.bind.annotation.ControllerAdvice;
+ import org.springframework.web.bind.annotation.ExceptionHandler;
+ import org.springframework.web.bind.annotation.ResponseBody;
+ import org.springframework.web.bind.annotation.ResponseStatus;
+ import org.springframework.web.servlet.NoHandlerFoundException;
+ 
++import javax.naming.OperationNotSupportedException;
+ import javax.servlet.http.HttpServletRequest;
+ import javax.servlet.http.HttpServletResponse;
+ import java.util.Map;
+@@ -109,7 +112,7 @@
+ 		return handleException(e, Level.DEBUG);
+ 	}
+ 
+-	@ExceptionHandler(BadRequestException.class)
++	@ExceptionHandler({BadRequestException.class, HttpRequestMethodNotSupportedException.class})
+ 	@ResponseBody
+ 	@ResponseStatus(HttpStatus.BAD_REQUEST)
+ 	public Map<String, Object> handleBadRequestException(final Exception e, final HttpServletRequest request) {
+@@ -123,7 +126,7 @@
+ 		return handleException(e, Level.DEBUG);
+ 	}
+ 
+-	@ExceptionHandler(NotImplementedException.class)
++	@ExceptionHandler({NotImplementedException.class, OperationNotSupportedException.class})
+ 	@ResponseBody
+ 	@ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
+ 	public Map<String, Object> handleNotImplementedException(final Exception e, final HttpServletRequest request) {
+@@ -143,4 +146,12 @@
+ 	public Map<String, Object> handleHttpMessageNotReadableException(final Exception e, final HttpServletRequest request) {
+ 		return handleException(e, Level.DEBUG);
+ 	}
++
++	/* FIXME: Wrap persistance Exceptions - do not handle persistance Exceptions at the controller layer */
++	@ExceptionHandler(DocumentNotFoundException.class)
++	@ResponseBody
++	@ResponseStatus(HttpStatus.NOT_FOUND)
++	public Map<String, Object> handleDocumentNotFoundException(final Exception e, final HttpServletRequest request) {
++		return handleException(e, Level.TRACE);
++	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/controller/UserController.java b/src/main/java/de/thm/arsnova/controller/UserController.java
+new file mode 100644
+index 000000000..befbc3f78
+--- /dev/null
++++ b/src/main/java/de/thm/arsnova/controller/UserController.java
+@@ -0,0 +1,23 @@
++package de.thm.arsnova.controller;
++
++import de.thm.arsnova.entities.LoginCredentials;
++import de.thm.arsnova.services.UserService;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++
++@RestController
++@RequestMapping("/user")
++public class UserController {
++	private UserService userService;
++
++	public UserController(final UserService userService) {
++		this.userService = userService;
++	}
++
++	@PostMapping("/register")
++	public void register(@RequestBody LoginCredentials loginCredentials) {
++		userService.create(loginCredentials.getLoginId(), loginCredentials.getPassword());
++	}
++}
+diff --git a/src/main/java/de/thm/arsnova/controller/v2/AuthenticationController.java b/src/main/java/de/thm/arsnova/controller/v2/AuthenticationController.java
+index a66fe3eaf..18582c26a 100644
+--- a/src/main/java/de/thm/arsnova/controller/v2/AuthenticationController.java
++++ b/src/main/java/de/thm/arsnova/controller/v2/AuthenticationController.java
+@@ -20,7 +20,7 @@
+ import de.thm.arsnova.config.SecurityConfig;
+ import de.thm.arsnova.controller.AbstractController;
+ import de.thm.arsnova.entities.ServiceDescription;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.exceptions.UnauthorizedException;
+ import de.thm.arsnova.security.User;
+@@ -44,7 +44,6 @@
+ import org.springframework.security.core.annotation.AuthenticationPrincipal;
+ import org.springframework.security.core.authority.SimpleGrantedAuthority;
+ import org.springframework.security.core.context.SecurityContextHolder;
+-import org.springframework.security.ldap.authentication.LdapAuthenticationProvider;
+ import org.springframework.security.web.util.UrlUtils;
+ import org.springframework.stereotype.Controller;
+ import org.springframework.web.bind.annotation.RequestMapping;
+@@ -256,11 +255,11 @@ public View dialog(
+ 
+ 	@RequestMapping(value = { "/", "/whoami" }, method = RequestMethod.GET)
+ 	@ResponseBody
+-	public UserAuthentication whoami(@AuthenticationPrincipal User user) {
++	public ClientAuthentication whoami(@AuthenticationPrincipal User user) {
+ 		if (user == null) {
+ 			throw new UnauthorizedException();
+ 		}
+-		return new UserAuthentication(user);
++		return new ClientAuthentication(user);
+ 	}
+ 
+ 	@RequestMapping(value = { "/logout" }, method = { RequestMethod.POST, RequestMethod.GET })
+diff --git a/src/main/java/de/thm/arsnova/controller/v2/CourseController.java b/src/main/java/de/thm/arsnova/controller/v2/CourseController.java
+index 4a9b06688..651a8a418 100644
+--- a/src/main/java/de/thm/arsnova/controller/v2/CourseController.java
++++ b/src/main/java/de/thm/arsnova/controller/v2/CourseController.java
+@@ -21,7 +21,7 @@
+ import de.thm.arsnova.connector.model.Course;
+ import de.thm.arsnova.connector.model.UserRole;
+ import de.thm.arsnova.controller.AbstractController;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.exceptions.NotImplementedException;
+ import de.thm.arsnova.exceptions.UnauthorizedException;
+ import de.thm.arsnova.services.UserService;
+@@ -55,7 +55,7 @@
+ 			@RequestParam(value = "sortby", defaultValue = "name") final String sortby
+ 			) {
+ 
+-		final UserAuthentication currentUser = userService.getCurrentUser();
++		final ClientAuthentication currentUser = userService.getCurrentUser();
+ 
+ 		if (currentUser == null || currentUser.getUsername() == null) {
+ 			throw new UnauthorizedException();
+diff --git a/src/main/java/de/thm/arsnova/controller/v2/FeedbackController.java b/src/main/java/de/thm/arsnova/controller/v2/FeedbackController.java
+index 9298d412a..4abe82834 100644
+--- a/src/main/java/de/thm/arsnova/controller/v2/FeedbackController.java
++++ b/src/main/java/de/thm/arsnova/controller/v2/FeedbackController.java
+@@ -19,7 +19,7 @@
+ 
+ import de.thm.arsnova.controller.AbstractController;
+ import de.thm.arsnova.entities.Feedback;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.exceptions.NotFoundException;
+ import de.thm.arsnova.services.FeedbackService;
+ import de.thm.arsnova.services.RoomService;
+@@ -103,7 +103,7 @@ public Feedback postFeedback(
+ 			@RequestBody final int value
+ 			) {
+ 		String roomId = roomService.getIdByShortId(shortId);
+-		UserAuthentication user = userService.getCurrentUser();
++		ClientAuthentication user = userService.getCurrentUser();
+ 		feedbackService.save(roomId, value, user);
+ 		Feedback feedback = feedbackService.getByRoomId(roomId);
+ 
+diff --git a/src/main/java/de/thm/arsnova/controller/v2/SocketController.java b/src/main/java/de/thm/arsnova/controller/v2/SocketController.java
+index 5553f513e..9dac328ec 100644
+--- a/src/main/java/de/thm/arsnova/controller/v2/SocketController.java
++++ b/src/main/java/de/thm/arsnova/controller/v2/SocketController.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.controller.v2;
+ 
+ import de.thm.arsnova.controller.AbstractController;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.services.UserService;
+ import de.thm.arsnova.websocket.ArsnovaSocketioServer;
+ import io.swagger.annotations.Api;
+@@ -72,7 +72,7 @@ public void authorize(@ApiParam(value = "sessionMap", required = true) @RequestB
+ 			response.setStatus(HttpStatus.BAD_REQUEST.value());
+ 			return;
+ 		}
+-		UserAuthentication u = userService.getCurrentUser();
++		ClientAuthentication u = userService.getCurrentUser();
+ 		if (null == u) {
+ 			logger.debug("Client {} requested to assign Websocket session but has not authenticated.", socketid);
+ 			response.setStatus(HttpStatus.FORBIDDEN.value());
+diff --git a/src/main/java/de/thm/arsnova/entities/ClientAuthentication.java b/src/main/java/de/thm/arsnova/entities/ClientAuthentication.java
+new file mode 100644
+index 000000000..0f2748732
+--- /dev/null
++++ b/src/main/java/de/thm/arsnova/entities/ClientAuthentication.java
+@@ -0,0 +1,39 @@
++package de.thm.arsnova.entities;
++
++import com.fasterxml.jackson.annotation.JsonView;
++import de.thm.arsnova.entities.serialization.View;
++
++public class ClientAuthentication {
++	private String userId;
++	private String loginId;
++	private UserProfile.AuthProvider authProvider;
++	private String token;
++
++	public ClientAuthentication(final String userId, final String loginId, final UserProfile.AuthProvider authProvider,
++			final String token) {
++		this.userId = userId;
++		this.loginId = loginId;
++		this.authProvider = authProvider;
++		this.token = token;
++	}
++
++	@JsonView(View.Public.class)
++	public String getUserId() {
++		return userId;
++	}
++
++	@JsonView(View.Public.class)
++	public String getLoginId() {
++		return loginId;
++	}
++
++	@JsonView(View.Public.class)
++	public UserProfile.AuthProvider getAuthProvider() {
++		return authProvider;
++	}
++
++	@JsonView(View.Public.class)
++	public String getToken() {
++		return token;
++	}
++}
+diff --git a/src/main/java/de/thm/arsnova/entities/LoginCredentials.java b/src/main/java/de/thm/arsnova/entities/LoginCredentials.java
+new file mode 100644
+index 000000000..9d86bc947
+--- /dev/null
++++ b/src/main/java/de/thm/arsnova/entities/LoginCredentials.java
+@@ -0,0 +1,27 @@
++package de.thm.arsnova.entities;
++
++import com.fasterxml.jackson.annotation.JsonView;
++import de.thm.arsnova.entities.serialization.View;
++
++public class LoginCredentials {
++	private String loginId;
++	private String password;
++
++	public String getLoginId() {
++		return loginId;
++	}
++
++	@JsonView(View.Public.class)
++	public void setLoginId(final String loginId) {
++		this.loginId = loginId;
++	}
++
++	public String getPassword() {
++		return password;
++	}
++
++	@JsonView(View.Public.class)
++	public void setPassword(final String password) {
++		this.password = password;
++	}
++}
+diff --git a/src/main/java/de/thm/arsnova/entities/UserAuthentication.java b/src/main/java/de/thm/arsnova/entities/migration/v2/ClientAuthentication.java
+similarity index 89%
+rename from src/main/java/de/thm/arsnova/entities/UserAuthentication.java
+rename to src/main/java/de/thm/arsnova/entities/migration/v2/ClientAuthentication.java
+index fb8dea946..fe187412e 100644
+--- a/src/main/java/de/thm/arsnova/entities/UserAuthentication.java
++++ b/src/main/java/de/thm/arsnova/entities/migration/v2/ClientAuthentication.java
+@@ -15,9 +15,10 @@
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  */
+-package de.thm.arsnova.entities;
++package de.thm.arsnova.entities.migration.v2;
+ 
+ import com.fasterxml.jackson.annotation.JsonView;
++import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.entities.serialization.View;
+ import de.thm.arsnova.security.User;
+ import org.springframework.security.authentication.AnonymousAuthenticationToken;
+@@ -29,7 +30,7 @@
+ /**
+  * Represents a user.
+  */
+-public class UserAuthentication implements Serializable {
++public class ClientAuthentication implements Serializable {
+ 	public static final String ANONYMOUS = "anonymous";
+ 
+ 	private static final long serialVersionUID = 1L;
+@@ -38,21 +39,21 @@
+ 	private UserProfile.AuthProvider authProvider;
+ 	private boolean isAdmin;
+ 
+-	public UserAuthentication() {
++	public ClientAuthentication() {
+ 		username = ANONYMOUS;
+ 		authProvider = UserProfile.AuthProvider.NONE;
+ 	}
+ 
+-	public UserAuthentication(User user) {
++	public ClientAuthentication(User user) {
+ 		id = user.getId();
+ 		username = user.getUsername();
+ 		authProvider = user.getAuthProvider();
+ 		isAdmin = user.isAdmin();
+ 	}
+ 
+-	public UserAuthentication(Authentication authentication) {
++	public ClientAuthentication(Authentication authentication) {
+ 		if (authentication instanceof AnonymousAuthenticationToken) {
+-			setUsername(UserAuthentication.ANONYMOUS);
++			setUsername(ClientAuthentication.ANONYMOUS);
+ 		} else {
+ 			if (!(authentication.getPrincipal() instanceof User)) {
+ 				throw new IllegalArgumentException("Unsupported authentication token");
+@@ -121,7 +122,7 @@ public boolean equals(final Object obj) {
+ 		if (obj == null || !obj.getClass().equals(this.getClass())) {
+ 			return false;
+ 		}
+-		UserAuthentication other = (UserAuthentication) obj;
++		ClientAuthentication other = (ClientAuthentication) obj;
+ 
+ 		return this.authProvider == other.authProvider && Objects.equals(this.id, other.id) && this.username.equals(other.username);
+ 	}
+diff --git a/src/main/java/de/thm/arsnova/entities/migration/v2/Comment.java b/src/main/java/de/thm/arsnova/entities/migration/v2/Comment.java
+index 1856bedb7..0da816cbf 100644
+--- a/src/main/java/de/thm/arsnova/entities/migration/v2/Comment.java
++++ b/src/main/java/de/thm/arsnova/entities/migration/v2/Comment.java
+@@ -19,7 +19,6 @@
+ 
+ import com.fasterxml.jackson.annotation.JsonProperty;
+ import com.fasterxml.jackson.annotation.JsonView;
+-import de.thm.arsnova.entities.UserAuthentication;
+ import de.thm.arsnova.entities.serialization.View;
+ import io.swagger.annotations.ApiModel;
+ import io.swagger.annotations.ApiModelProperty;
+@@ -136,7 +135,7 @@ public void setCreator(String creator) {
+ 		this.creator = creator;
+ 	}
+ 
+-	public boolean isCreator(UserAuthentication user) {
++	public boolean isCreator(ClientAuthentication user) {
+ 		return user.getUsername().equals(creator);
+ 	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/entities/migration/v2/Room.java b/src/main/java/de/thm/arsnova/entities/migration/v2/Room.java
+index 4c1ed2387..0d9863320 100644
+--- a/src/main/java/de/thm/arsnova/entities/migration/v2/Room.java
++++ b/src/main/java/de/thm/arsnova/entities/migration/v2/Room.java
+@@ -20,7 +20,6 @@
+ import com.fasterxml.jackson.annotation.JsonIgnore;
+ import com.fasterxml.jackson.annotation.JsonView;
+ import de.thm.arsnova.entities.ScoreOptions;
+-import de.thm.arsnova.entities.UserAuthentication;
+ import de.thm.arsnova.entities.serialization.View;
+ import io.swagger.annotations.ApiModel;
+ import io.swagger.annotations.ApiModelProperty;
+@@ -143,7 +142,7 @@ public void setLastOwnerActivity(final long lastOwnerActivity) {
+ 		this.lastOwnerActivity = lastOwnerActivity;
+ 	}
+ 
+-	public boolean isCreator(final UserAuthentication user) {
++	public boolean isCreator(final ClientAuthentication user) {
+ 		return user.getUsername().equals(creator);
+ 	}
+ 
+diff --git a/src/main/java/de/thm/arsnova/entities/transport/AnswerQueueElement.java b/src/main/java/de/thm/arsnova/entities/transport/AnswerQueueElement.java
+index 672d8c78a..6270b09f9 100644
+--- a/src/main/java/de/thm/arsnova/entities/transport/AnswerQueueElement.java
++++ b/src/main/java/de/thm/arsnova/entities/transport/AnswerQueueElement.java
+@@ -20,7 +20,7 @@
+ import de.thm.arsnova.entities.Answer;
+ import de.thm.arsnova.entities.Content;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ /**
+  * An answer that is about to get saved in the database. Answers are not saved immediately, they are instead stored
+@@ -34,9 +34,9 @@
+ 
+ 	private final Answer answer;
+ 
+-	private final UserAuthentication user;
++	private final ClientAuthentication user;
+ 
+-	public AnswerQueueElement(Room room, Content content, Answer answer, UserAuthentication user) {
++	public AnswerQueueElement(Room room, Content content, Answer answer, ClientAuthentication user) {
+ 		this.room = room;
+ 		this.content = content;
+ 		this.answer = answer;
+@@ -55,7 +55,7 @@ public Answer getAnswer() {
+ 		return answer;
+ 	}
+ 
+-	public UserAuthentication getUser() {
++	public ClientAuthentication getUser() {
+ 		return user;
+ 	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/entities/transport/ImportExportContainer.java b/src/main/java/de/thm/arsnova/entities/transport/ImportExportContainer.java
+index 6b7cccd05..6ff8bfd5d 100644
+--- a/src/main/java/de/thm/arsnova/entities/transport/ImportExportContainer.java
++++ b/src/main/java/de/thm/arsnova/entities/transport/ImportExportContainer.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.entities.transport;
+ 
+ import com.fasterxml.jackson.annotation.JsonView;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.migration.v2.Answer;
+ import de.thm.arsnova.entities.migration.v2.Comment;
+ import de.thm.arsnova.entities.migration.v2.Content;
+@@ -134,7 +134,7 @@ public void addQuestionWithAnswers(Content q, List<Answer> aL) {
+ 		questions.add(ieq);
+ 	}
+ 
+-	public Room generateSessionEntity(UserAuthentication user) {
++	public Room generateSessionEntity(ClientAuthentication user) {
+ 		final Room s = new Room();
+ 		// import fields
+ 		s.setActive(session.isActive());
+diff --git a/src/main/java/de/thm/arsnova/events/DeleteFeedbackForRoomsEvent.java b/src/main/java/de/thm/arsnova/events/DeleteFeedbackForRoomsEvent.java
+index 4ddede278..18cf1cca7 100644
+--- a/src/main/java/de/thm/arsnova/events/DeleteFeedbackForRoomsEvent.java
++++ b/src/main/java/de/thm/arsnova/events/DeleteFeedbackForRoomsEvent.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.events;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.Room;
+ 
+ import java.util.Set;
+@@ -31,9 +31,9 @@
+ 
+ 	private final Set<Room> sessions;
+ 
+-	private final UserAuthentication user;
++	private final ClientAuthentication user;
+ 
+-	public DeleteFeedbackForRoomsEvent(Object source, Set<Room> rooms, UserAuthentication user) {
++	public DeleteFeedbackForRoomsEvent(Object source, Set<Room> rooms, ClientAuthentication user) {
+ 		super(source);
+ 		this.sessions = rooms;
+ 		this.user = user;
+@@ -43,7 +43,7 @@ public DeleteFeedbackForRoomsEvent(Object source, Set<Room> rooms, UserAuthentic
+ 		return sessions;
+ 	}
+ 
+-	public UserAuthentication getUser() {
++	public ClientAuthentication getUser() {
+ 		return user;
+ 	}
+ 
+diff --git a/src/main/java/de/thm/arsnova/events/NewAnswerEvent.java b/src/main/java/de/thm/arsnova/events/NewAnswerEvent.java
+index 8122320b4..54ac0cd75 100644
+--- a/src/main/java/de/thm/arsnova/events/NewAnswerEvent.java
++++ b/src/main/java/de/thm/arsnova/events/NewAnswerEvent.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.events;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.Answer;
+ import de.thm.arsnova.entities.Content;
+ import de.thm.arsnova.entities.Room;
+@@ -31,11 +31,11 @@
+ 
+ 	private final Answer answer;
+ 
+-	private final UserAuthentication user;
++	private final ClientAuthentication user;
+ 
+ 	private final Content content;
+ 
+-	public NewAnswerEvent(Object source, Room room, Answer answer, UserAuthentication user, Content content) {
++	public NewAnswerEvent(Object source, Room room, Answer answer, ClientAuthentication user, Content content) {
+ 		super(source, room);
+ 		this.answer = answer;
+ 		this.user = user;
+@@ -51,7 +51,7 @@ public Answer getAnswer() {
+ 		return answer;
+ 	}
+ 
+-	public UserAuthentication getUser() {
++	public ClientAuthentication getUser() {
+ 		return user;
+ 	}
+ 
+diff --git a/src/main/java/de/thm/arsnova/persistance/AnswerRepository.java b/src/main/java/de/thm/arsnova/persistance/AnswerRepository.java
+index 82cc505ee..b0e02091d 100644
+--- a/src/main/java/de/thm/arsnova/persistance/AnswerRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/AnswerRepository.java
+@@ -19,18 +19,18 @@
+ 
+ import de.thm.arsnova.entities.Answer;
+ import de.thm.arsnova.entities.AnswerStatistics;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import org.springframework.data.repository.CrudRepository;
+ 
+ import java.util.List;
+ 
+ public interface AnswerRepository extends CrudRepository<Answer, String> {
+-	<T extends Answer> T findByContentIdUserPiRound(String contentId, Class<T> type, UserAuthentication user, int piRound);
++	<T extends Answer> T findByContentIdUserPiRound(String contentId, Class<T> type, ClientAuthentication user, int piRound);
+ 	AnswerStatistics findByContentIdRound(String contentId, int round, final int optionCount);
+ 	int countByContentIdRound(String contentId, int round);
+ 	int countByContentId(String contentId);
+ 	<T extends Answer> List<T> findByContentId(String contentId, Class<T> type, int start, int limit);
+-	List<Answer> findByUserRoomId(UserAuthentication user, String roomId);
++	List<Answer> findByUserRoomId(ClientAuthentication user, String roomId);
+ 	int countByRoomId(String roomId);
+ 	int deleteByContentId(String contentId);
+ 	int countByRoomIdOnlyLectureVariant(String roomId);
+diff --git a/src/main/java/de/thm/arsnova/persistance/CommentRepository.java b/src/main/java/de/thm/arsnova/persistance/CommentRepository.java
+index c5a396006..fa0b3a982 100644
+--- a/src/main/java/de/thm/arsnova/persistance/CommentRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/CommentRepository.java
+@@ -1,7 +1,7 @@
+ package de.thm.arsnova.persistance;
+ 
+ import de.thm.arsnova.entities.Comment;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.migration.v2.CommentReadingCount;
+ import org.springframework.data.repository.CrudRepository;
+ 
+@@ -10,10 +10,10 @@
+ public interface CommentRepository extends CrudRepository<Comment, String> {
+ 	int countByRoomId(String roomId);
+ 	CommentReadingCount countReadingByRoomId(String roomId);
+-	CommentReadingCount countReadingByRoomIdAndUser(String roomId, UserAuthentication user);
++	CommentReadingCount countReadingByRoomIdAndUser(String roomId, ClientAuthentication user);
+ 	List<Comment> findByRoomId(String roomId, int start, int limit);
+-	List<Comment> findByRoomIdAndUser(String roomId, UserAuthentication user, int start, int limit);
++	List<Comment> findByRoomIdAndUser(String roomId, ClientAuthentication user, int start, int limit);
+ 	Comment findOne(String commentId);
+ 	int deleteByRoomId(String roomId);
+-	int deleteByRoomIdAndUser(String roomId, UserAuthentication user);
++	int deleteByRoomIdAndUser(String roomId, ClientAuthentication user);
+ }
+diff --git a/src/main/java/de/thm/arsnova/persistance/ContentRepository.java b/src/main/java/de/thm/arsnova/persistance/ContentRepository.java
+index a96f5c6b7..9eb56f389 100644
+--- a/src/main/java/de/thm/arsnova/persistance/ContentRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/ContentRepository.java
+@@ -1,7 +1,7 @@
+ package de.thm.arsnova.persistance;
+ 
+ import de.thm.arsnova.entities.Content;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import org.springframework.data.repository.CrudRepository;
+ 
+ import java.util.List;
+@@ -14,7 +14,7 @@
+ 	List<String> findIdsByRoomId(String roomId);
+ 	List<String> findIdsByRoomIdAndVariant(String roomId, String variant);
+ 	int deleteByRoomId(String roomId);
+-	List<String> findUnansweredIdsByRoomIdAndUser(String roomId, UserAuthentication user);
++	List<String> findUnansweredIdsByRoomIdAndUser(String roomId, ClientAuthentication user);
+ 	List<Content> findByRoomIdOnlyLectureVariantAndActive(String roomId);
+ 	List<Content> findByRoomIdOnlyLectureVariant(String roomId);
+ 	List<Content> findByRoomIdOnlyFlashcardVariantAndActive(String roomId);
+@@ -27,6 +27,6 @@
+ 	int countPreparationVariantByRoomId(String roomId);
+ 	List<String> findIdsByRoomIdAndVariantAndSubject(String roomId, String questionVariant, String subject);
+ 	List<String> findSubjectsByRoomIdAndVariant(String roomId, String questionVariant);
+-	List<String> findUnansweredIdsByRoomIdAndUserOnlyLectureVariant(String roomId, UserAuthentication user);
+-	List<String> findUnansweredIdsByRoomIdAndUserOnlyPreparationVariant(String roomId, UserAuthentication user);
++	List<String> findUnansweredIdsByRoomIdAndUserOnlyLectureVariant(String roomId, ClientAuthentication user);
++	List<String> findUnansweredIdsByRoomIdAndUserOnlyPreparationVariant(String roomId, ClientAuthentication user);
+ }
+diff --git a/src/main/java/de/thm/arsnova/persistance/RoomRepository.java b/src/main/java/de/thm/arsnova/persistance/RoomRepository.java
+index 5ecb32c8e..2535a4cd6 100644
+--- a/src/main/java/de/thm/arsnova/persistance/RoomRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/RoomRepository.java
+@@ -19,7 +19,7 @@
+ 
+ import de.thm.arsnova.connector.model.Course;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ImportExportContainer;
+ import org.springframework.data.repository.CrudRepository;
+ 
+@@ -28,15 +28,15 @@
+ public interface RoomRepository extends CrudRepository<Room, String> {
+ 	Room findByShortId(String shortId);
+ 	List<Room> findInactiveGuestRoomsMetadata(long lastActivityBefore);
+-	List<Room> findByOwner(UserAuthentication owner, int start, int limit);
++	List<Room> findByOwner(ClientAuthentication owner, int start, int limit);
+ 	List<Room> findByOwnerId(String ownerId, int start, int limit);
+ 	List<Room> findAllForPublicPool();
+-	List<Room> findForPublicPoolByOwner(UserAuthentication owner);
+-	List<Room> getRoomsWithStatsForOwner(UserAuthentication owner, int start, int limit);
+-	List<Room> getRoomHistoryWithStatsForUser(List<Room> rooms, UserAuthentication owner);
++	List<Room> findForPublicPoolByOwner(ClientAuthentication owner);
++	List<Room> getRoomsWithStatsForOwner(ClientAuthentication owner, int start, int limit);
++	List<Room> getRoomHistoryWithStatsForUser(List<Room> rooms, ClientAuthentication owner);
+ 	List<Room> findInfosForPublicPool();
+-	List<Room> findInfosForPublicPoolByOwner(UserAuthentication owner);
++	List<Room> findInfosForPublicPoolByOwner(ClientAuthentication owner);
+ 	List<Room> findRoomsByCourses(List<Course> courses);
+-	Room importRoom(UserAuthentication user, ImportExportContainer importRoom);
++	Room importRoom(ClientAuthentication user, ImportExportContainer importRoom);
+ 	ImportExportContainer exportRoom(String id, Boolean withAnswer, Boolean withFeedbackQuestions);
+ }
+diff --git a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbAnswerRepository.java b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbAnswerRepository.java
+index a94d62168..814ea1ee4 100644
+--- a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbAnswerRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbAnswerRepository.java
+@@ -4,7 +4,7 @@
+ import com.google.common.collect.Lists;
+ import de.thm.arsnova.entities.Answer;
+ import de.thm.arsnova.entities.AnswerStatistics;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.persistance.AnswerRepository;
+ import de.thm.arsnova.persistance.LogEntryRepository;
+ import org.ektorp.BulkDeleteDocument;
+@@ -75,7 +75,7 @@ public int deleteByContentId(final String contentId) {
+ 	}
+ 
+ 	@Override
+-	public <T extends Answer> T findByContentIdUserPiRound(final String contentId, final Class<T> type, final UserAuthentication user, final int piRound) {
++	public <T extends Answer> T findByContentIdUserPiRound(final String contentId, final Class<T> type, final ClientAuthentication user, final int piRound) {
+ 		final List<T> answerList = db.queryView(createQuery("by_contentid_creatorid_round")
+ 				.key(ComplexKey.of(contentId, user.getUsername(), piRound)), type);
+ 		return answerList.isEmpty() ? null : answerList.get(0);
+@@ -164,7 +164,7 @@ public int countByContentIdRound(final String contentId, final int round) {
+ 	}
+ 
+ 	@Override
+-	public List<Answer> findByUserRoomId(final UserAuthentication user, final String roomId) {
++	public List<Answer> findByUserRoomId(final ClientAuthentication user, final String roomId) {
+ 		return queryView("by_creatorid_roomid", ComplexKey.of(user.getId(), roomId));
+ 	}
+ 
+diff --git a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbCommentRepository.java b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbCommentRepository.java
+index 9d37ecd9e..076e8b881 100644
+--- a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbCommentRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbCommentRepository.java
+@@ -2,7 +2,7 @@
+ 
+ import com.fasterxml.jackson.databind.JsonNode;
+ import de.thm.arsnova.entities.Comment;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.migration.v2.CommentReadingCount;
+ import de.thm.arsnova.persistance.CommentRepository;
+ import de.thm.arsnova.persistance.LogEntryRepository;
+@@ -50,7 +50,7 @@ public CommentReadingCount countReadingByRoomId(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public CommentReadingCount countReadingByRoomIdAndUser(final String roomId, final UserAuthentication user) {
++	public CommentReadingCount countReadingByRoomIdAndUser(final String roomId, final ClientAuthentication user) {
+ 		final ViewResult result = db.queryView(createQuery("by_roomid_creatorid_read")
+ 				.startKey(ComplexKey.of(roomId, user.getId()))
+ 				.endKey(ComplexKey.of(roomId, user.getId(), ComplexKey.emptyObject()))
+@@ -123,7 +123,7 @@ private CommentReadingCount calculateReadingCount(final ViewResult viewResult) {
+ 	}
+ 
+ 	@Override
+-	public List<Comment> findByRoomIdAndUser(final String roomId, final UserAuthentication user, final int start, final int limit) {
++	public List<Comment> findByRoomIdAndUser(final String roomId, final ClientAuthentication user, final int start, final int limit) {
+ 		final int qSkip = start > 0 ? start : -1;
+ 		final int qLimit = limit > 0 ? limit : -1;
+ 
+@@ -150,7 +150,7 @@ public int deleteByRoomId(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public int deleteByRoomIdAndUser(final String roomId, final UserAuthentication user) {
++	public int deleteByRoomIdAndUser(final String roomId, final ClientAuthentication user) {
+ 		final ViewResult result = db.queryView(createQuery("by_roomid_creatorid_read")
+ 				.startKey(ComplexKey.of(roomId, user.getUsername()))
+ 				.endKey(ComplexKey.of(roomId, user.getUsername(), ComplexKey.emptyObject())));
+diff --git a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbContentRepository.java b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbContentRepository.java
+index 0659b789d..2af0c2d29 100644
+--- a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbContentRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbContentRepository.java
+@@ -1,7 +1,7 @@
+ package de.thm.arsnova.persistance.couchdb;
+ 
+ import de.thm.arsnova.entities.Content;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.persistance.ContentRepository;
+ import de.thm.arsnova.persistance.LogEntryRepository;
+ import org.ektorp.BulkDeleteDocument;
+@@ -91,7 +91,7 @@ public int deleteByRoomId(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public List<String> findUnansweredIdsByRoomIdAndUser(final String roomId, final UserAuthentication user) {
++	public List<String> findUnansweredIdsByRoomIdAndUser(final String roomId, final ClientAuthentication user) {
+ 		final ViewResult result = db.queryView(createQuery("contentid_by_creatorid_roomid_variant")
+ 				.designDocId("_design/Answer")
+ 				.startKey(ComplexKey.of(user.getId(), roomId))
+@@ -104,7 +104,7 @@ public int deleteByRoomId(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public List<String> findUnansweredIdsByRoomIdAndUserOnlyLectureVariant(final String roomId, final UserAuthentication user) {
++	public List<String> findUnansweredIdsByRoomIdAndUserOnlyLectureVariant(final String roomId, final ClientAuthentication user) {
+ 		final ViewResult result = db.queryView(createQuery("contentid_round_by_creatorid_roomid_variant")
+ 				.designDocId("_design/Answer")
+ 				.key(ComplexKey.of(user.getId(), roomId, "lecture")));
+@@ -117,7 +117,7 @@ public int deleteByRoomId(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public List<String> findUnansweredIdsByRoomIdAndUserOnlyPreparationVariant(final String roomId, final UserAuthentication user) {
++	public List<String> findUnansweredIdsByRoomIdAndUserOnlyPreparationVariant(final String roomId, final ClientAuthentication user) {
+ 		final ViewResult result = db.queryView(createQuery("contentid_round_by_creatorid_roomid_variant")
+ 				.designDocId("_design/Answer")
+ 				.key(ComplexKey.of(user.getId(), roomId, "preparation")));
+diff --git a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbRoomRepository.java b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbRoomRepository.java
+index 10f2c44fe..50e457d79 100644
+--- a/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbRoomRepository.java
++++ b/src/main/java/de/thm/arsnova/persistance/couchdb/CouchDbRoomRepository.java
+@@ -20,7 +20,7 @@
+ import de.thm.arsnova.connector.model.Course;
+ import de.thm.arsnova.entities.Room;
+ import de.thm.arsnova.entities.RoomStatistics;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ImportExportContainer;
+ import de.thm.arsnova.persistance.LogEntryRepository;
+ import de.thm.arsnova.persistance.MotdRepository;
+@@ -103,7 +103,7 @@ private String getShortId(final String id) throws IOException {
+ 
+ 	/* TODO: Move to service layer. */
+ 	@Override
+-	public Room importRoom(final UserAuthentication user, final ImportExportContainer importRoom) {
++	public Room importRoom(final ClientAuthentication user, final ImportExportContainer importRoom) {
+ 		/* FIXME: not yet migrated - move to service layer */
+ 		throw new UnsupportedOperationException();
+ //		final Room session = this.saveSession(user, importRoom.generateSessionEntity(user));
+@@ -267,7 +267,7 @@ private Room calculateSessionInfo(final ImportExportContainer importExportSessio
+ 	}
+ 
+ 	@Override
+-	public List<Room> findByOwner(final UserAuthentication owner, final int start, final int limit) {
++	public List<Room> findByOwner(final ClientAuthentication owner, final int start, final int limit) {
+ 		return findByOwnerId(owner.getId(), start, limit);
+ 	}
+ 
+@@ -300,7 +300,7 @@ private Room calculateSessionInfo(final ImportExportContainer importExportSessio
+ 	}
+ 
+ 	@Override
+-	public List<Room> findForPublicPoolByOwner(final UserAuthentication owner) {
++	public List<Room> findForPublicPoolByOwner(final ClientAuthentication owner) {
+ 		/* TODO: Only load IDs and check against cache for data. */
+ 		return db.queryView(
+ 				createQuery("partial_by_pool_ownerid_name")
+@@ -312,7 +312,7 @@ private Room calculateSessionInfo(final ImportExportContainer importExportSessio
+ 
+ 	/* TODO: Move to service layer. */
+ 	@Override
+-	public List<Room> findInfosForPublicPoolByOwner(final UserAuthentication owner) {
++	public List<Room> findInfosForPublicPoolByOwner(final ClientAuthentication owner) {
+ 		final List<Room> rooms = this.findForPublicPoolByOwner(owner);
+ 		if (rooms.isEmpty()) {
+ 			return new ArrayList<>();
+@@ -322,7 +322,7 @@ private Room calculateSessionInfo(final ImportExportContainer importExportSessio
+ 
+ 	/* TODO: Move to service layer. */
+ 	@Override
+-	public List<Room> getRoomsWithStatsForOwner(final UserAuthentication owner, final int start, final int limit) {
++	public List<Room> getRoomsWithStatsForOwner(final ClientAuthentication owner, final int start, final int limit) {
+ 		final List<Room> rooms = this.findByOwner(owner, start, limit);
+ 		if (rooms.isEmpty()) {
+ 			return new ArrayList<>();
+@@ -346,7 +346,7 @@ private Room calculateSessionInfo(final ImportExportContainer importExportSessio
+ 	}
+ 
+ 	/* TODO: Move to service layer. */
+-	public List<Room> getRoomHistoryWithStatsForUser(final List<Room> rooms, final UserAuthentication user) {
++	public List<Room> getRoomHistoryWithStatsForUser(final List<Room> rooms, final ClientAuthentication user) {
+ 		final ViewQuery answeredQuestionsView = createQuery("by_creatorid_roomid").designDocId("_design/Answer")
+ 				.reduce(false).keys(rooms.stream().map(room -> ComplexKey.of(user.getId(), room.getId())).collect(Collectors.toList()));
+ 		final ViewQuery contentIdsView = createQuery("by_roomid").designDocId("_design/Content")
+diff --git a/src/main/java/de/thm/arsnova/security/User.java b/src/main/java/de/thm/arsnova/security/User.java
+index a6dad6e6b..0dae8e0bc 100644
+--- a/src/main/java/de/thm/arsnova/security/User.java
++++ b/src/main/java/de/thm/arsnova/security/User.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.security;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import org.springframework.security.core.GrantedAuthority;
+ 
+@@ -38,6 +38,7 @@
+ 	private org.springframework.security.core.userdetails.UserDetails providerUserDetails;
+ 	private Collection<? extends GrantedAuthority> authorities;
+ 	private boolean enabled;
++	private String token;
+ 
+ 	public User(final UserProfile profile, final Collection<? extends GrantedAuthority> authorities) {
+ 		if (profile == null || profile.getId() == null) {
+@@ -57,10 +58,10 @@ public User(final UserProfile profile, final Collection<? extends GrantedAuthori
+ 		providerUserDetails = details;
+ 	}
+ 
+-	public User(final UserAuthentication userAuthentication, final Collection<? extends GrantedAuthority> authorities) {
+-		id = userAuthentication.getId();
+-		loginId = userAuthentication.getUsername();
+-		authProvider = userAuthentication.getAuthProvider();
++	public User(final ClientAuthentication clientAuthentication, final Collection<? extends GrantedAuthority> authorities) {
++		id = clientAuthentication.getId();
++		loginId = clientAuthentication.getUsername();
++		authProvider = clientAuthentication.getAuthProvider();
+ 		this.authorities = authorities;
+ 		enabled = true;
+ 	}
+@@ -116,6 +117,14 @@ public boolean isAdmin() {
+ 		return hasRole("ADMIN");
+ 	}
+ 
++	public String getToken() {
++		return token;
++	}
++
++	public void setToken(final String token) {
++		this.token = token;
++	}
++
+ 	@Override
+ 	public String toString() {
+ 		return String.format("Id: %s, LoginId: %s, AuthProvider: %s, Admin: %b",
+diff --git a/src/main/java/de/thm/arsnova/security/jwt/JwtAuthenticationProvider.java b/src/main/java/de/thm/arsnova/security/jwt/JwtAuthenticationProvider.java
+index ac7d51b46..569a4df5f 100644
+--- a/src/main/java/de/thm/arsnova/security/jwt/JwtAuthenticationProvider.java
++++ b/src/main/java/de/thm/arsnova/security/jwt/JwtAuthenticationProvider.java
+@@ -1,6 +1,7 @@
+ package de.thm.arsnova.security.jwt;
+ 
+ import de.thm.arsnova.security.User;
++import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.security.authentication.AuthenticationProvider;
+ import org.springframework.security.core.Authentication;
+ import org.springframework.security.core.AuthenticationException;
+@@ -8,10 +9,6 @@
+ public class JwtAuthenticationProvider implements AuthenticationProvider {
+ 	private JwtService jwtService;
+ 
+-	public JwtAuthenticationProvider(final JwtService jwtService) {
+-		this.jwtService = jwtService;
+-	}
+-
+ 	@Override
+ 	public Authentication authenticate(final Authentication authentication) throws AuthenticationException {
+ 		final String token = (String) authentication.getCredentials();
+@@ -24,4 +21,9 @@ public Authentication authenticate(final Authentication authentication) throws A
+ 	public boolean supports(final Class<?> aClass) {
+ 		return JwtToken.class.isAssignableFrom(aClass);
+ 	}
++
++	@Autowired
++	public void setJwtService(final JwtService jwtService) {
++		this.jwtService = jwtService;
++	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/security/jwt/JwtService.java b/src/main/java/de/thm/arsnova/security/jwt/JwtService.java
+index f1620aaee..ee5bb47ff 100644
+--- a/src/main/java/de/thm/arsnova/security/jwt/JwtService.java
++++ b/src/main/java/de/thm/arsnova/security/jwt/JwtService.java
+@@ -71,6 +71,6 @@ public User verifyToken(final String token) {
+ 		final Collection<GrantedAuthority> authorities = decodedJwt.getClaim(ROLES_CLAIM_NAME).asList(String.class).stream()
+ 				.map(role -> new SimpleGrantedAuthority(ROLE_PREFIX + role)).collect(Collectors.toList());
+ 
+-		return new User(userService.get(userId), authorities);
++		return userService.loadUser(userId, authorities);
+ 	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/security/jwt/JwtToken.java b/src/main/java/de/thm/arsnova/security/jwt/JwtToken.java
+index f7ce5cea3..ecce14b5b 100644
+--- a/src/main/java/de/thm/arsnova/security/jwt/JwtToken.java
++++ b/src/main/java/de/thm/arsnova/security/jwt/JwtToken.java
+@@ -16,6 +16,7 @@ public JwtToken(final String token, final User principal,
+ 		super(grantedAuthorities);
+ 		this.token = token;
+ 		this.principal = principal;
++		setAuthenticated(!grantedAuthorities.isEmpty());
+ 	}
+ 
+ 	public JwtToken(final String token) {
+diff --git a/src/main/java/de/thm/arsnova/security/jwt/JwtTokenFilter.java b/src/main/java/de/thm/arsnova/security/jwt/JwtTokenFilter.java
+index 282a3c16b..f8c5e2e06 100644
+--- a/src/main/java/de/thm/arsnova/security/jwt/JwtTokenFilter.java
++++ b/src/main/java/de/thm/arsnova/security/jwt/JwtTokenFilter.java
+@@ -1,29 +1,50 @@
+ package de.thm.arsnova.security.jwt;
+ 
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.security.core.Authentication;
+-import org.springframework.security.core.AuthenticationException;
+-import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
+-import org.springframework.security.web.authentication.preauth.PreAuthenticatedCredentialsNotFoundException;
+-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
++import org.springframework.security.core.context.SecurityContextHolder;
++import org.springframework.stereotype.Component;
++import org.springframework.web.filter.GenericFilterBean;
+ 
++import javax.servlet.FilterChain;
++import javax.servlet.ServletException;
++import javax.servlet.ServletRequest;
++import javax.servlet.ServletResponse;
+ import javax.servlet.http.HttpServletRequest;
+-import javax.servlet.http.HttpServletResponse;
++import java.io.IOException;
+ 
+-public class JwtTokenFilter extends AbstractAuthenticationProcessingFilter {
++@Component
++public class JwtTokenFilter extends GenericFilterBean {
+ 	private static final String JWT_HEADER_NAME = "Arsnova-Auth-Token";
+-
+-	protected JwtTokenFilter() {
+-		super(new AntPathRequestMatcher("/**"));
+-	}
++	private static final Logger logger = LoggerFactory.getLogger(JwtTokenFilter.class);
++	private JwtAuthenticationProvider jwtAuthenticationProvider;
+ 
+ 	@Override
+-	public Authentication attemptAuthentication(final HttpServletRequest httpServletRequest, final HttpServletResponse httpServletResponse) throws AuthenticationException {
+-		String jwtHeader = httpServletRequest.getHeader(JWT_HEADER_NAME);
+-		if (jwtHeader == null) {
+-			throw new PreAuthenticatedCredentialsNotFoundException("No authentication header present.");
++	public void doFilter(final ServletRequest servletRequest, final ServletResponse servletResponse, final FilterChain filterChain) throws IOException, ServletException {
++		String jwtHeader = ((HttpServletRequest) servletRequest).getHeader(JWT_HEADER_NAME);
++		if (jwtHeader != null) {
++			JwtToken token = new JwtToken(jwtHeader);
++			try {
++				Authentication authenticatedToken = jwtAuthenticationProvider.authenticate(token);
++				if (authenticatedToken != null) {
++					logger.debug("Storing JWT to SecurityContext: {}", authenticatedToken);
++					SecurityContextHolder.getContext().setAuthentication(authenticatedToken);
++				} else {
++					logger.debug("Could not authenticate JWT.");
++				}
++			} catch (final Exception e) {
++				logger.debug("JWT authentication failed", e);
++			}
++		} else {
++			logger.debug("No authentication header present.");
+ 		}
+-		JwtToken token = new JwtToken(jwtHeader);
++		filterChain.doFilter(servletRequest, servletResponse);
++	}
+ 
+-		return getAuthenticationManager().authenticate(token);
++	@Autowired
++	public void setJwtAuthenticationProvider(final JwtAuthenticationProvider jwtAuthenticationProvider) {
++		this.jwtAuthenticationProvider = jwtAuthenticationProvider;
+ 	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/services/CommentServiceImpl.java b/src/main/java/de/thm/arsnova/services/CommentServiceImpl.java
+index 3fc6522ae..3ca7b5aec 100644
+--- a/src/main/java/de/thm/arsnova/services/CommentServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/CommentServiceImpl.java
+@@ -2,7 +2,7 @@
+ 
+ import de.thm.arsnova.entities.Comment;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.migration.v2.CommentReadingCount;
+ import de.thm.arsnova.events.DeleteCommentEvent;
+ import de.thm.arsnova.events.NewCommentEvent;
+@@ -57,7 +57,7 @@ public void setApplicationEventPublisher(ApplicationEventPublisher applicationEv
+ 	@PreAuthorize("isAuthenticated()")
+ 	public boolean save(final Comment comment) {
+ 		final Room room = roomRepository.findOne(comment.getRoomId());
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		comment.setCreatorId(user.getId());
+ 		comment.setRead(false);
+ 		if (comment.getTimestamp() == null) {
+@@ -94,7 +94,7 @@ public void deleteByRoomId(final String roomId) {
+ 		if (room == null) {
+ 			throw new UnauthorizedException();
+ 		}
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			commentRepository.deleteByRoomId(room.getId());
+ 		} else {
+@@ -114,7 +114,7 @@ public CommentReadingCount countRead(final String roomId, String username) {
+ 		if (username == null) {
+ 			return commentRepository.countReadingByRoomId(roomId);
+ 		} else {
+-			UserAuthentication currentUser = userService.getCurrentUser();
++			ClientAuthentication currentUser = userService.getCurrentUser();
+ 			if (!currentUser.getUsername().equals(username)) {
+ 				throw new ForbiddenException();
+ 			}
+@@ -127,7 +127,7 @@ public CommentReadingCount countRead(final String roomId, String username) {
+ 	@PreAuthorize("isAuthenticated()")
+ 	public List<Comment> getByRoomId(final String roomId, final int offset, final int limit) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			return commentRepository.findByRoomId(room.getId(), offset, limit);
+ 		} else {
+@@ -149,8 +149,8 @@ public Comment getAndMarkRead(final String commentId) throws IOException {
+ 		return comment;
+ 	}
+ 
+-	private UserAuthentication getCurrentUser() {
+-		final UserAuthentication user = userService.getCurrentUser();
++	private ClientAuthentication getCurrentUser() {
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (user == null) {
+ 			throw new UnauthorizedException();
+ 		}
+diff --git a/src/main/java/de/thm/arsnova/services/ContentService.java b/src/main/java/de/thm/arsnova/services/ContentService.java
+index 5ef3c54a8..0d7ea8679 100644
+--- a/src/main/java/de/thm/arsnova/services/ContentService.java
++++ b/src/main/java/de/thm/arsnova/services/ContentService.java
+@@ -21,9 +21,8 @@
+ import de.thm.arsnova.entities.AnswerStatistics;
+ import de.thm.arsnova.entities.Content;
+ import de.thm.arsnova.entities.TextAnswer;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+-import java.io.IOException;
+ import java.util.List;
+ import java.util.Map;
+ 
+@@ -45,7 +44,7 @@
+ 
+ 	Answer getMyAnswer(String contentId);
+ 
+-	void getFreetextAnswerAndMarkRead(String answerId, UserAuthentication user);
++	void getFreetextAnswerAndMarkRead(String answerId, ClientAuthentication user);
+ 
+ 	AnswerStatistics getStatistics(String contentId, int piRound);
+ 
+@@ -117,11 +116,11 @@
+ 
+ 	List<String> getUnAnsweredLectureContentIds(String roomId);
+ 
+-	List<String> getUnAnsweredLectureContentIds(String roomId, UserAuthentication user);
++	List<String> getUnAnsweredLectureContentIds(String roomId, ClientAuthentication user);
+ 
+ 	List<String> getUnAnsweredPreparationContentIds(String roomId);
+ 
+-	List<String> getUnAnsweredPreparationContentIds(String roomId, UserAuthentication user);
++	List<String> getUnAnsweredPreparationContentIds(String roomId, ClientAuthentication user);
+ 
+ 	void publishAll(String roomId, boolean publish);
+ 
+diff --git a/src/main/java/de/thm/arsnova/services/ContentServiceImpl.java b/src/main/java/de/thm/arsnova/services/ContentServiceImpl.java
+index 966107a46..81d19f8e7 100644
+--- a/src/main/java/de/thm/arsnova/services/ContentServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/ContentServiceImpl.java
+@@ -23,7 +23,7 @@
+ import de.thm.arsnova.entities.Content;
+ import de.thm.arsnova.entities.Room;
+ import de.thm.arsnova.entities.TextAnswer;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.AnswerQueueElement;
+ import de.thm.arsnova.events.*;
+ import de.thm.arsnova.exceptions.NotFoundException;
+@@ -168,7 +168,7 @@ public Content save(final String roomId, final Content content) {
+ 			@CacheEvict(value = "flashcardcontentlists", allEntries = true, condition = "'flashcard'.equals(#content.getGroup())") },
+ 			put = {@CachePut(value = "contents", key = "#content.id")})
+ 	public Content update(final Content content) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Content oldContent = contentRepository.findOne(content.getId());
+ 		if (null == oldContent) {
+ 			throw new NotFoundException();
+@@ -205,7 +205,7 @@ public Content update(final Content content) {
+ 	//@Cacheable("contentlists")
+ 	public List<Content> getByRoomId(final String roomId) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			return contentRepository.findByRoomIdForSpeaker(roomId);
+ 		} else {
+@@ -366,7 +366,7 @@ public void setVotingAdmission(final String contentId, final boolean disableVoti
+ 			@CacheEvict(value = "preparationcontentlists", key = "#roomId"),
+ 			@CacheEvict(value = "flashcardcontentlists", key = "#roomId") })
+ 	public void setVotingAdmissions(final String roomId, final boolean disableVoting, List<Content> contents) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (!room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+@@ -390,7 +390,7 @@ public void setVotingAdmissions(final String roomId, final boolean disableVoting
+ 	}
+ 
+ 	private Room getRoomWithAuthCheck(final String roomId) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (user == null || room == null || !room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+@@ -411,12 +411,12 @@ public void deleteAnswers(final String contentId) {
+ 	@Override
+ 	@PreAuthorize("isAuthenticated()")
+ 	public List<String> getUnAnsweredContentIds(final String roomId) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		return contentRepository.findUnansweredIdsByRoomIdAndUser(roomId, user);
+ 	}
+ 
+-	private UserAuthentication getCurrentUser() {
+-		final UserAuthentication user = userService.getCurrentUser();
++	private ClientAuthentication getCurrentUser() {
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (user == null) {
+ 			throw new UnauthorizedException();
+ 		}
+@@ -434,7 +434,7 @@ public Answer getMyAnswer(final String contentId) {
+ 	}
+ 
+ 	@Override
+-	public void getFreetextAnswerAndMarkRead(final String answerId, final UserAuthentication user) {
++	public void getFreetextAnswerAndMarkRead(final String answerId, final ClientAuthentication user) {
+ 		final Answer answer = answerRepository.findOne(answerId);
+ 		if (!(answer instanceof TextAnswer)) {
+ 			throw new NotFoundException();
+@@ -621,7 +621,7 @@ public int countTotalAnswersByRoomId(final String roomId) {
+ 	@PreAuthorize("isAuthenticated()")
+ 	@CacheEvict(value = "answerlists", key = "#contentId")
+ 	public Answer saveAnswer(final String contentId, final Answer answer) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		final Content content = get(contentId);
+ 		if (content == null) {
+ 			throw new NotFoundException();
+@@ -663,7 +663,7 @@ public Answer saveAnswer(final String contentId, final Answer answer) {
+ 	@PreAuthorize("isAuthenticated()")
+ 	@CacheEvict(value = "answerlists", allEntries = true)
+ 	public Answer updateAnswer(final Answer answer) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Answer realAnswer = this.getMyAnswer(answer.getContentId());
+ 		if (user == null || realAnswer == null || !user.getId().equals(realAnswer.getCreatorId())) {
+ 			throw new UnauthorizedException();
+@@ -694,7 +694,7 @@ public void deleteAnswer(final String contentId, final String answerId) {
+ 		if (content == null) {
+ 			throw new NotFoundException();
+ 		}
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Room room = roomRepository.findOne(content.getRoomId());
+ 		if (user == null || room == null || !room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+@@ -710,7 +710,7 @@ public void deleteAnswer(final String contentId, final String answerId) {
+ 	//@Cacheable("lecturecontentlists")
+ 	public List<Content> getLectureContents(final String roomId) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			return contentRepository.findByRoomIdOnlyLectureVariant(room.getId());
+ 		} else {
+@@ -724,7 +724,7 @@ public void deleteAnswer(final String contentId, final String answerId) {
+ 	//@Cacheable("flashcardcontentlists")
+ 	public List<Content> getFlashcards(final String roomId) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			return contentRepository.findByRoomIdOnlyFlashcardVariant(room.getId());
+ 		} else {
+@@ -738,7 +738,7 @@ public void deleteAnswer(final String contentId, final String answerId) {
+ 	//@Cacheable("preparationcontentlists")
+ 	public List<Content> getPreparationContents(final String roomId) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			return contentRepository.findByRoomIdOnlyPreparationVariant(room.getId());
+ 		} else {
+@@ -822,24 +822,24 @@ public int countFlashcardsForUserInternal(final String roomId) {
+ 	@Override
+ 	@PreAuthorize("isAuthenticated()")
+ 	public List<String> getUnAnsweredLectureContentIds(final String roomId) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		return this.getUnAnsweredLectureContentIds(roomId, user);
+ 	}
+ 
+ 	@Override
+-	public List<String> getUnAnsweredLectureContentIds(final String roomId, final UserAuthentication user) {
++	public List<String> getUnAnsweredLectureContentIds(final String roomId, final ClientAuthentication user) {
+ 		return contentRepository.findUnansweredIdsByRoomIdAndUserOnlyLectureVariant(roomId, user);
+ 	}
+ 
+ 	@Override
+ 	@PreAuthorize("isAuthenticated()")
+ 	public List<String> getUnAnsweredPreparationContentIds(final String roomId) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		return this.getUnAnsweredPreparationContentIds(roomId, user);
+ 	}
+ 
+ 	@Override
+-	public List<String> getUnAnsweredPreparationContentIds(final String roomId, final UserAuthentication user) {
++	public List<String> getUnAnsweredPreparationContentIds(final String roomId, final ClientAuthentication user) {
+ 		return contentRepository.findUnansweredIdsByRoomIdAndUserOnlyPreparationVariant(roomId, user);
+ 	}
+ 
+@@ -847,7 +847,7 @@ public int countFlashcardsForUserInternal(final String roomId) {
+ 	@PreAuthorize("isAuthenticated()")
+ 	public void publishAll(final String roomId, final boolean publish) {
+ 		/* TODO: resolve redundancies */
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (!room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+@@ -864,7 +864,7 @@ public void publishAll(final String roomId, final boolean publish) {
+ 			@CacheEvict(value = "preparationcontentlists", key = "#roomId"),
+ 			@CacheEvict(value = "flashcardcontentlists", key = "#roomId") })
+ 	public void publishContents(final String roomId, final boolean publish, List<Content> contents) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (!room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+@@ -886,7 +886,7 @@ public void publishContents(final String roomId, final boolean publish, List<Con
+ 	@PreAuthorize("isAuthenticated()")
+ 	@CacheEvict(value = "answerlists", allEntries = true)
+ 	public void deleteAllContentsAnswers(final String roomId) {
+-		final UserAuthentication user = getCurrentUser();
++		final ClientAuthentication user = getCurrentUser();
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (!room.getOwnerId().equals(user.getId())) {
+ 			throw new UnauthorizedException();
+diff --git a/src/main/java/de/thm/arsnova/services/FeedbackService.java b/src/main/java/de/thm/arsnova/services/FeedbackService.java
+index 5c4b9518c..dbc673578 100644
+--- a/src/main/java/de/thm/arsnova/services/FeedbackService.java
++++ b/src/main/java/de/thm/arsnova/services/FeedbackService.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.services;
+ 
+ import de.thm.arsnova.entities.Feedback;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ /**
+  * The functionality the feedback service should provide.
+@@ -36,7 +36,7 @@
+ 
+ 	long calculateRoundedAverageFeedback(String roomId);
+ 
+-	boolean save(String roomId, int value, UserAuthentication user);
++	boolean save(String roomId, int value, ClientAuthentication user);
+ 
+-	Integer getByRoomIdAndUser(String roomId, UserAuthentication user);
++	Integer getByRoomIdAndUser(String roomId, ClientAuthentication user);
+ }
+diff --git a/src/main/java/de/thm/arsnova/services/FeedbackServiceImpl.java b/src/main/java/de/thm/arsnova/services/FeedbackServiceImpl.java
+index e7eae27f7..e5a00e6b6 100644
+--- a/src/main/java/de/thm/arsnova/services/FeedbackServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/FeedbackServiceImpl.java
+@@ -19,7 +19,7 @@
+ 
+ import de.thm.arsnova.entities.Feedback;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.events.DeleteFeedbackForRoomsEvent;
+ import de.thm.arsnova.events.NewFeedbackEvent;
+ import de.thm.arsnova.exceptions.NoContentException;
+@@ -66,18 +66,18 @@ public FeedbackServiceImpl(FeedbackStorageService feedbackStorage, RoomRepositor
+ 	@Override
+ 	@Scheduled(fixedDelay = DEFAULT_SCHEDULER_DELAY)
+ 	public void cleanFeedbackVotes() {
+-		Map<Room, List<UserAuthentication>> deletedFeedbackOfUsersInSession = feedbackStorage.cleanVotes(cleanupFeedbackDelay);
++		Map<Room, List<ClientAuthentication>> deletedFeedbackOfUsersInSession = feedbackStorage.cleanVotes(cleanupFeedbackDelay);
+ 		/*
+ 		 * mapping (Room -> Users) is not suitable for web sockets, because we want to sent all affected
+ 		 * sessions to a single user in one go instead of sending multiple messages for each session. Hence,
+ 		 * we need the mapping (User -> Sessions)
+ 		 */
+-		final Map<UserAuthentication, Set<Room>> affectedSessionsOfUsers = new HashMap<>();
++		final Map<ClientAuthentication, Set<Room>> affectedSessionsOfUsers = new HashMap<>();
+ 
+-		for (Map.Entry<Room, List<UserAuthentication>> entry : deletedFeedbackOfUsersInSession.entrySet()) {
++		for (Map.Entry<Room, List<ClientAuthentication>> entry : deletedFeedbackOfUsersInSession.entrySet()) {
+ 			final Room room = entry.getKey();
+-			final List<UserAuthentication> users = entry.getValue();
+-			for (UserAuthentication user : users) {
++			final List<ClientAuthentication> users = entry.getValue();
++			for (ClientAuthentication user : users) {
+ 				Set<Room> affectedSessions;
+ 				if (affectedSessionsOfUsers.containsKey(user)) {
+ 					affectedSessions = affectedSessionsOfUsers.get(user);
+@@ -89,8 +89,8 @@ public void cleanFeedbackVotes() {
+ 			}
+ 		}
+ 		// Send feedback reset event to all affected users
+-		for (Map.Entry<UserAuthentication, Set<Room>> entry : affectedSessionsOfUsers.entrySet()) {
+-			final UserAuthentication user = entry.getKey();
++		for (Map.Entry<ClientAuthentication, Set<Room>> entry : affectedSessionsOfUsers.entrySet()) {
++			final ClientAuthentication user = entry.getKey();
+ 			final Set<Room> arsSessions = entry.getValue();
+ 			this.publisher.publishEvent(new DeleteFeedbackForRoomsEvent(this, arsSessions, user));
+ 		}
+@@ -103,12 +103,12 @@ public void cleanFeedbackVotes() {
+ 	@Override
+ 	public void cleanFeedbackVotesByRoomId(final String roomId, final int cleanupFeedbackDelayInMins) {
+ 		final Room room = roomRepository.findOne(roomId);
+-		List<UserAuthentication> affectedUsers = feedbackStorage.cleanVotesByRoom(room, cleanupFeedbackDelayInMins);
++		List<ClientAuthentication> affectedUsers = feedbackStorage.cleanVotesByRoom(room, cleanupFeedbackDelayInMins);
+ 		Set<Room> sessionSet = new HashSet<>();
+ 		sessionSet.add(room);
+ 
+ 		// Send feedback reset event to all affected users
+-		for (UserAuthentication user : affectedUsers) {
++		for (ClientAuthentication user : affectedUsers) {
+ 			this.publisher.publishEvent(new DeleteFeedbackForRoomsEvent(this, sessionSet, user));
+ 		}
+ 		// send the new feedback to all clients in affected session
+@@ -157,7 +157,7 @@ public long calculateRoundedAverageFeedback(final String roomId) {
+ 	}
+ 
+ 	@Override
+-	public boolean save(final String roomId, final int value, final UserAuthentication user) {
++	public boolean save(final String roomId, final int value, final ClientAuthentication user) {
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (room == null) {
+ 			throw new NotFoundException();
+@@ -169,7 +169,7 @@ public boolean save(final String roomId, final int value, final UserAuthenticati
+ 	}
+ 
+ 	@Override
+-	public Integer getByRoomIdAndUser(final String roomId, final UserAuthentication user) {
++	public Integer getByRoomIdAndUser(final String roomId, final ClientAuthentication user) {
+ 		final Room room = roomRepository.findOne(roomId);
+ 		if (room == null) {
+ 			throw new NotFoundException();
+diff --git a/src/main/java/de/thm/arsnova/services/FeedbackStorageService.java b/src/main/java/de/thm/arsnova/services/FeedbackStorageService.java
+index 8dacaafe5..26d3715c4 100644
+--- a/src/main/java/de/thm/arsnova/services/FeedbackStorageService.java
++++ b/src/main/java/de/thm/arsnova/services/FeedbackStorageService.java
+@@ -2,15 +2,15 @@
+ 
+ import de.thm.arsnova.entities.Feedback;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ import java.util.List;
+ import java.util.Map;
+ 
+ public interface FeedbackStorageService {
+ 	Feedback getByRoom(Room room);
+-	Integer getByRoomAndUser(Room room, UserAuthentication u);
+-	void save(Room room, int value, UserAuthentication user);
+-	Map<Room, List<UserAuthentication>> cleanVotes(int cleanupFeedbackDelay);
+-	List<UserAuthentication> cleanVotesByRoom(Room room, int cleanupFeedbackDelayInMins);
++	Integer getByRoomAndUser(Room room, ClientAuthentication u);
++	void save(Room room, int value, ClientAuthentication user);
++	Map<Room, List<ClientAuthentication>> cleanVotes(int cleanupFeedbackDelay);
++	List<ClientAuthentication> cleanVotesByRoom(Room room, int cleanupFeedbackDelayInMins);
+ }
+diff --git a/src/main/java/de/thm/arsnova/services/FeedbackStorageServiceImpl.java b/src/main/java/de/thm/arsnova/services/FeedbackStorageServiceImpl.java
+index 6d3b9d656..983c13e23 100644
+--- a/src/main/java/de/thm/arsnova/services/FeedbackStorageServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/FeedbackStorageServiceImpl.java
+@@ -19,7 +19,7 @@
+ 
+ import de.thm.arsnova.entities.Feedback;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.springframework.stereotype.Service;
+@@ -42,9 +42,9 @@
+ 	private static class FeedbackStorageObject {
+ 		private final int value;
+ 		private final Date timestamp;
+-		private final UserAuthentication user;
++		private final ClientAuthentication user;
+ 
+-		public FeedbackStorageObject(final int initValue, final UserAuthentication u) {
++		public FeedbackStorageObject(final int initValue, final ClientAuthentication u) {
+ 			value = initValue;
+ 			timestamp = new Date();
+ 			user = u;
+@@ -56,14 +56,14 @@ public int getValue() {
+ 		public Date getTimestamp() {
+ 			return timestamp;
+ 		}
+-		public boolean fromUser(final UserAuthentication u) {
++		public boolean fromUser(final ClientAuthentication u) {
+ 			return user.equals(u);
+ 		}
+ 	}
+ 
+ 	private static final Logger logger = LoggerFactory.getLogger(FeedbackStorageServiceImpl.class);
+ 
+-	private final Map<Room, Map<UserAuthentication, FeedbackStorageObject>> data =
++	private final Map<Room, Map<ClientAuthentication, FeedbackStorageObject>> data =
+ 			new ConcurrentHashMap<>();
+ 
+ 	@Override
+@@ -99,7 +99,7 @@ public Feedback getByRoom(final Room room) {
+ 	}
+ 
+ 	@Override
+-	public Integer getByRoomAndUser(final Room room, final UserAuthentication u) {
++	public Integer getByRoomAndUser(final Room room, final ClientAuthentication u) {
+ 		if (data.get(room) == null) {
+ 			return null;
+ 		}
+@@ -115,13 +115,13 @@ public Integer getByRoomAndUser(final Room room, final UserAuthentication u) {
+ 
+ 	@Override
+ 	@Transactional(isolation = Isolation.READ_COMMITTED)
+-	public void save(final Room room, final int value, final UserAuthentication user) {
++	public void save(final Room room, final int value, final ClientAuthentication user) {
+ 		logger.debug("Feedback data for {} Rooms is stored", data.size());
+ 		logger.debug("Saving feedback: Room: {}, Value: {}, User: {}", room, value, user);
+-		Map<UserAuthentication, FeedbackStorageObject> roomData = data.get(room);
++		Map<ClientAuthentication, FeedbackStorageObject> roomData = data.get(room);
+ 		if (roomData == null) {
+ 			logger.debug("Creating new feedback container for Room: {}", room);
+-			roomData = new ConcurrentHashMap<UserAuthentication, FeedbackStorageObject>();
++			roomData = new ConcurrentHashMap<ClientAuthentication, FeedbackStorageObject>();
+ 			data.put(room, roomData);
+ 		}
+ 		logger.debug("Feedback values for Room {}: {}", room.getId(), roomData.size());
+@@ -130,11 +130,11 @@ public void save(final Room room, final int value, final UserAuthentication user
+ 
+ 	@Override
+ 	@Transactional(isolation = Isolation.READ_COMMITTED)
+-	public Map<Room, List<UserAuthentication>> cleanVotes(final int cleanupFeedbackDelay) {
+-		final Map<Room, List<UserAuthentication>> removedFeedbackOfUsersInSession = new HashMap<>();
++	public Map<Room, List<ClientAuthentication>> cleanVotes(final int cleanupFeedbackDelay) {
++		final Map<Room, List<ClientAuthentication>> removedFeedbackOfUsersInSession = new HashMap<>();
+ 		for (final Room room : data.keySet()) {
+ 			if (!room.getSettings().isQuickSurveyEnabled()) {
+-				List<UserAuthentication> affectedUsers = cleanVotesByRoom(room, cleanupFeedbackDelay);
++				List<ClientAuthentication> affectedUsers = cleanVotesByRoom(room, cleanupFeedbackDelay);
+ 				if (!affectedUsers.isEmpty()) {
+ 					removedFeedbackOfUsersInSession.put(room, affectedUsers);
+ 				}
+@@ -145,17 +145,17 @@ public void save(final Room room, final int value, final UserAuthentication user
+ 
+ 	@Override
+ 	@Transactional(isolation = Isolation.READ_COMMITTED)
+-	public List<UserAuthentication> cleanVotesByRoom(final Room room, final int cleanupFeedbackDelayInMins) {
++	public List<ClientAuthentication> cleanVotesByRoom(final Room room, final int cleanupFeedbackDelayInMins) {
+ 		final long timelimitInMillis = TimeUnit.MILLISECONDS.convert(cleanupFeedbackDelayInMins, TimeUnit.MINUTES);
+ 		final Date maxAllowedTime = new Date(System.currentTimeMillis() - timelimitInMillis);
+ 		final boolean forceClean = cleanupFeedbackDelayInMins == 0;
+ 
+-		final Map<UserAuthentication, FeedbackStorageObject> roomFeedbacks = data.get(room);
+-		final List<UserAuthentication> affectedUsers = new ArrayList<>();
++		final Map<ClientAuthentication, FeedbackStorageObject> roomFeedbacks = data.get(room);
++		final List<ClientAuthentication> affectedUsers = new ArrayList<>();
+ 
+ 		if (roomFeedbacks != null) {
+-			for (final Map.Entry<UserAuthentication, FeedbackStorageObject> entry : roomFeedbacks.entrySet()) {
+-				final UserAuthentication user = entry.getKey();
++			for (final Map.Entry<ClientAuthentication, FeedbackStorageObject> entry : roomFeedbacks.entrySet()) {
++				final ClientAuthentication user = entry.getKey();
+ 				final FeedbackStorageObject feedback = entry.getValue();
+ 				final boolean timeIsUp = feedback.getTimestamp().before(maxAllowedTime);
+ 				final boolean isAwayFeedback = getByRoomAndUser(room, user).equals(Feedback.FEEDBACK_AWAY);
+diff --git a/src/main/java/de/thm/arsnova/services/RoomService.java b/src/main/java/de/thm/arsnova/services/RoomService.java
+index 2b537cb44..77358a076 100644
+--- a/src/main/java/de/thm/arsnova/services/RoomService.java
++++ b/src/main/java/de/thm/arsnova/services/RoomService.java
+@@ -19,7 +19,7 @@
+ 
+ import de.thm.arsnova.connector.model.Course;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ImportExportContainer;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ 
+@@ -36,7 +36,7 @@
+ 
+ 	Room getForAdmin(final String id);
+ 
+-	Room getInternal(String id, UserAuthentication user);
++	Room getInternal(String id, ClientAuthentication user);
+ 
+ 	Room save(Room session);
+ 
+@@ -64,7 +64,7 @@
+ 
+ 	Room updateCreator(String id, String newCreator);
+ 
+-	Room updateInternal(Room room, UserAuthentication user);
++	Room updateInternal(Room room, ClientAuthentication user);
+ 
+ 	int[] deleteCascading(Room room);
+ 
+diff --git a/src/main/java/de/thm/arsnova/services/RoomServiceImpl.java b/src/main/java/de/thm/arsnova/services/RoomServiceImpl.java
+index 0a3c73226..3efda3b0b 100644
+--- a/src/main/java/de/thm/arsnova/services/RoomServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/RoomServiceImpl.java
+@@ -20,7 +20,7 @@
+ import de.thm.arsnova.connector.client.ConnectorClient;
+ import de.thm.arsnova.connector.model.Course;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.entities.transport.ImportExportContainer;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+@@ -194,7 +194,7 @@ public Room join(final String id, final UUID socketId) {
+ 	@Override
+ 	@PreAuthorize("isAuthenticated()")
+ 	public Room getByShortId(final String shortId) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		return this.getInternal(getIdByShortId(shortId), user);
+ 	}
+ 
+@@ -222,7 +222,7 @@ public Room getForAdmin(final String id) {
+ 	 * TODO: Find a better way of doing this...
+ 	 */
+ 	@Override
+-	public Room getInternal(final String id, final UserAuthentication user) {
++	public Room getInternal(final String id, final ClientAuthentication user) {
+ 		final Room room = roomRepository.findOne(id);
+ 		if (room == null) {
+ 			throw new NotFoundException();
+@@ -271,7 +271,7 @@ public Room getInternal(final String id, final UserAuthentication user) {
+ 	@Override
+ 	@PreAuthorize("isAuthenticated()")
+ 	public List<Room> getMyRoomsInfo(final int offset, final int limit) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		return roomRepository.getRoomsWithStatsForOwner(user, offset, limit);
+ 	}
+ 
+@@ -404,7 +404,7 @@ public Room updateCreator(String id, String newCreator) {
+ 	 * TODO: Find a better way of doing this...
+ 	 */
+ 	@Override
+-	public Room updateInternal(final Room room, final UserAuthentication user) {
++	public Room updateInternal(final Room room, final ClientAuthentication user) {
+ 		if (room.getOwnerId().equals(user.getId())) {
+ 			roomRepository.save(room);
+ 			return room;
+@@ -445,7 +445,7 @@ public ScoreStatistics getLearningProgress(final String id, final String type, f
+ 	@PreAuthorize("hasPermission(#id, 'room', 'read')")
+ 	public ScoreStatistics getMyLearningProgress(final String id, final String type, final String questionVariant) {
+ 		final Room room = roomRepository.findOne(id);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		ScoreCalculator scoreCalculator = scoreCalculatorFactory.create(type, questionVariant);
+ 		return scoreCalculator.getMyProgress(room, user);
+ 	}
+@@ -453,7 +453,7 @@ public ScoreStatistics getMyLearningProgress(final String id, final String type,
+ 	@Override
+ 	@PreAuthorize("hasPermission('', 'room', 'create')")
+ 	public Room importRooms(ImportExportContainer importRoom) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Room info = roomRepository.importRoom(user, importRoom);
+ 		if (info == null) {
+ 			throw new NullPointerException("Could not import room.");
+@@ -473,7 +473,7 @@ public Room copyRoomToPublicPool(String id, ImportExportContainer.PublicPool pp)
+ 		ImportExportContainer temp = roomRepository.exportRoom(id, false, false);
+ 		temp.getSession().setPublicPool(pp);
+ 		temp.getSession().setSessionType("public_pool");
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		return roomRepository.importRoom(user, temp);
+ 	}
+ 
+@@ -492,7 +492,7 @@ public void setApplicationEventPublisher(ApplicationEventPublisher publisher) {
+ 	@PreAuthorize("hasPermission(#id, 'room', 'owner')")
+ 	public Room.Settings updateFeatures(String id, Room.Settings settings) {
+ 		final Room room = roomRepository.findOne(id);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		room.setSettings(settings);
+ 		this.publisher.publishEvent(new FeatureChangeEvent(this, room));
+ 		roomRepository.save(room);
+@@ -504,7 +504,7 @@ public void setApplicationEventPublisher(ApplicationEventPublisher publisher) {
+ 	@PreAuthorize("hasPermission(#id, 'room', 'owner')")
+ 	public boolean lockFeedbackInput(String id, Boolean lock) {
+ 		final Room room = roomRepository.findOne(id);
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		if (!lock) {
+ 			feedbackService.cleanFeedbackVotesByRoomId(id, 0);
+ 		}
+diff --git a/src/main/java/de/thm/arsnova/services/TimerService.java b/src/main/java/de/thm/arsnova/services/TimerService.java
+index 0e3908142..cbb321b32 100644
+--- a/src/main/java/de/thm/arsnova/services/TimerService.java
++++ b/src/main/java/de/thm/arsnova/services/TimerService.java
+@@ -1,9 +1,9 @@
+ package de.thm.arsnova.services;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ public interface TimerService {
+-	void startNewRound(final String contentId, UserAuthentication user);
++	void startNewRound(final String contentId, ClientAuthentication user);
+ 	void startNewRoundDelayed(final String contentId, final int time);
+ 	void cancelRoundChange(final String contentId);
+ 	void cancelDelayedRoundChange(final String contentId);
+diff --git a/src/main/java/de/thm/arsnova/services/TimerServiceImpl.java b/src/main/java/de/thm/arsnova/services/TimerServiceImpl.java
+index 0cbcd856e..3a7c7e76b 100644
+--- a/src/main/java/de/thm/arsnova/services/TimerServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/TimerServiceImpl.java
+@@ -2,7 +2,7 @@
+ 
+ import de.thm.arsnova.entities.Content;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.events.PiRoundCancelEvent;
+ import de.thm.arsnova.events.PiRoundDelayedStartEvent;
+ import de.thm.arsnova.events.PiRoundEndEvent;
+@@ -40,7 +40,7 @@ public TimerServiceImpl(final UserService userService, final RoomRepository room
+ 
+ 	@Override
+ 	@PreAuthorize("isAuthenticated() and hasPermission(#contentId, 'content', 'owner')")
+-	public void startNewRound(final String contentId, UserAuthentication user) {
++	public void startNewRound(final String contentId, ClientAuthentication user) {
+ 		final Content content = contentRepository.findOne(contentId);
+ 		final Room room = roomRepository.findOne(content.getRoomId());
+ 
+@@ -61,7 +61,7 @@ public void startNewRound(final String contentId, UserAuthentication user) {
+ 	@Override
+ 	@PreAuthorize("hasPermission(#contentId, 'content', 'owner')")
+ 	public void startNewRoundDelayed(final String contentId, final int time) {
+-		final UserAuthentication user = userService.getCurrentUser();
++		final ClientAuthentication user = userService.getCurrentUser();
+ 		final Content content = contentRepository.findOne(contentId);
+ 		final Room room = roomRepository.findOne(content.getRoomId());
+ 
+diff --git a/src/main/java/de/thm/arsnova/services/UserService.java b/src/main/java/de/thm/arsnova/services/UserService.java
+index d75f272aa..7e088ef6c 100644
+--- a/src/main/java/de/thm/arsnova/services/UserService.java
++++ b/src/main/java/de/thm/arsnova/services/UserService.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.services;
+ 
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.security.User;
+ import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+@@ -36,23 +36,25 @@
+ public interface UserService extends EntityService<UserProfile> {
+ 	UserProfile getCurrentUserProfile();
+ 
+-	UserAuthentication getCurrentUser();
++	ClientAuthentication getCurrentUser();
++
++	de.thm.arsnova.entities.ClientAuthentication getCurrentClientAuthentication();
+ 
+ 	boolean isBannedFromLogin(String addr);
+ 
+ 	void increaseFailedLoginCount(String addr);
+ 
+-	UserAuthentication getUserToSocketId(UUID socketId);
++	ClientAuthentication getUserToSocketId(UUID socketId);
+ 
+-	void putUserToSocketId(UUID socketId, UserAuthentication user);
++	void putUserToSocketId(UUID socketId, ClientAuthentication user);
+ 
+ 	void removeUserToSocketId(UUID socketId);
+ 
+-	Set<Map.Entry<UUID, UserAuthentication>> getSocketIdToUser();
++	Set<Map.Entry<UUID, ClientAuthentication>> getSocketIdToUser();
+ 
+-	boolean isUserInRoom(UserAuthentication user, String roomId);
++	boolean isUserInRoom(ClientAuthentication user, String roomId);
+ 
+-	Set<UserAuthentication> getUsersByRoomId(String roomId);
++	Set<ClientAuthentication> getUsersByRoomId(String roomId);
+ 
+ 	String getRoomIdByUserId(String userId);
+ 
+@@ -60,7 +62,7 @@
+ 
+ 	void removeUserFromRoomBySocketId(UUID socketId);
+ 
+-	void removeUserFromMaps(UserAuthentication user);
++	void removeUserFromMaps(ClientAuthentication user);
+ 
+ 	int loggedInUsers();
+ 
+@@ -69,6 +71,8 @@
+ 	User loadUser(UserProfile.AuthProvider authProvider, String loginId,
+ 			Collection<GrantedAuthority> grantedAuthorities, boolean autoCreate) throws UsernameNotFoundException;
+ 
++	User loadUser(String userId, Collection<GrantedAuthority> grantedAuthorities);
++
+ 	UserProfile getByAuthProviderAndLoginId(UserProfile.AuthProvider authProvider, String loginId);
+ 
+ 	UserProfile getByUsername(String username);
+diff --git a/src/main/java/de/thm/arsnova/services/UserServiceImpl.java b/src/main/java/de/thm/arsnova/services/UserServiceImpl.java
+index 3171b9d76..38d28a62c 100644
+--- a/src/main/java/de/thm/arsnova/services/UserServiceImpl.java
++++ b/src/main/java/de/thm/arsnova/services/UserServiceImpl.java
+@@ -19,7 +19,7 @@
+ 
+ import com.codahale.metrics.annotation.Gauge;
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.exceptions.BadRequestException;
+ import de.thm.arsnova.exceptions.NotFoundException;
+@@ -27,6 +27,8 @@
+ import de.thm.arsnova.persistance.UserRepository;
+ import de.thm.arsnova.security.GuestUserDetailsService;
+ import de.thm.arsnova.security.User;
++import de.thm.arsnova.security.jwt.JwtService;
++import de.thm.arsnova.security.jwt.JwtToken;
+ import org.apache.commons.lang.RandomStringUtils;
+ import org.apache.commons.lang.StringUtils;
+ import org.slf4j.Logger;
+@@ -90,13 +92,13 @@
+ 
+ 	private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
+ 
+-	private static final ConcurrentHashMap<UUID, UserAuthentication> socketIdToUser = new ConcurrentHashMap<>();
++	private static final ConcurrentHashMap<UUID, ClientAuthentication> socketIdToUser = new ConcurrentHashMap<>();
+ 
+ 	/* used for Socket.IO online check solution (new) */
+-	private static final ConcurrentHashMap<UserAuthentication, String> userToRoomId = new ConcurrentHashMap<>();
++	private static final ConcurrentHashMap<ClientAuthentication, String> userToRoomId = new ConcurrentHashMap<>();
+ 
+ 	private UserRepository userRepository;
+-
++	private JwtService jwtService;
+ 	private JavaMailSender mailSender;
+ 
+ 	@Autowired(required = false)
+@@ -193,18 +195,18 @@ public void deleteInactiveUsers() {
+ 
+ 	@Override
+ 	public UserProfile getCurrentUserProfile() {
+-		final UserAuthentication authentication = getCurrentUser();
++		final ClientAuthentication authentication = getCurrentUser();
+ 		return getByAuthProviderAndLoginId(authentication.getAuthProvider(), authentication.getUsername());
+ 	}
+ 
+ 	@Override
+-	public UserAuthentication getCurrentUser() {
++	public ClientAuthentication getCurrentUser() {
+ 		final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+ 		if (authentication == null || authentication.getPrincipal() == null) {
+ 			return null;
+ 		}
+ 
+-		UserAuthentication user = new UserAuthentication(authentication);
++		ClientAuthentication user = new ClientAuthentication(authentication);
+ 		if (user == null || "anonymous".equals(user.getUsername())) {
+ 			throw new UnauthorizedException();
+ 		}
+@@ -213,6 +215,23 @@ public UserAuthentication getCurrentUser() {
+ 		return user;
+ 	}
+ 
++	@Override
++	public de.thm.arsnova.entities.ClientAuthentication getCurrentClientAuthentication() {
++		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
++		if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
++			return null;
++		}
++		User user = (User) authentication.getPrincipal();
++		String jwt = authentication instanceof JwtToken ?
++				(String) authentication.getCredentials() : jwtService.createSignedToken(user);
++
++		de.thm.arsnova.entities.ClientAuthentication clientAuthentication =
++				new de.thm.arsnova.entities.ClientAuthentication(user.getId(), user.getUsername(),
++						user.getAuthProvider(), jwt);
++
++		return clientAuthentication;
++	}
++
+ 	@Override
+ 	public boolean isBannedFromLogin(String addr) {
+ 		return loginBans.contains(addr);
+@@ -234,17 +253,17 @@ public void increaseFailedLoginCount(String addr) {
+ 	}
+ 
+ 	@Override
+-	public UserAuthentication getUserToSocketId(final UUID socketId) {
++	public ClientAuthentication getUserToSocketId(final UUID socketId) {
+ 		return socketIdToUser.get(socketId);
+ 	}
+ 
+ 	@Override
+-	public void putUserToSocketId(final UUID socketId, final UserAuthentication user) {
++	public void putUserToSocketId(final UUID socketId, final ClientAuthentication user) {
+ 		socketIdToUser.put(socketId, user);
+ 	}
+ 
+ 	@Override
+-	public Set<Map.Entry<UUID, UserAuthentication>> getSocketIdToUser() {
++	public Set<Map.Entry<UUID, ClientAuthentication>> getSocketIdToUser() {
+ 		return socketIdToUser.entrySet();
+ 	}
+ 
+@@ -254,16 +273,16 @@ public void removeUserToSocketId(final UUID socketId) {
+ 	}
+ 
+ 	@Override
+-	public boolean isUserInRoom(final UserAuthentication user, final String expectedRoomId) {
++	public boolean isUserInRoom(final ClientAuthentication user, final String expectedRoomId) {
+ 		String actualRoomId = userToRoomId.get(user);
+ 
+ 		return actualRoomId != null && actualRoomId.equals(expectedRoomId);
+ 	}
+ 
+ 	@Override
+-	public Set<UserAuthentication> getUsersByRoomId(final String roomId) {
+-		final Set<UserAuthentication> result = new HashSet<>();
+-		for (final Entry<UserAuthentication, String> e : userToRoomId.entrySet()) {
++	public Set<ClientAuthentication> getUsersByRoomId(final String roomId) {
++		final Set<ClientAuthentication> result = new HashSet<>();
++		for (final Entry<ClientAuthentication, String> e : userToRoomId.entrySet()) {
+ 			if (e.getValue().equals(roomId)) {
+ 				result.add(e.getKey());
+ 			}
+@@ -275,14 +294,14 @@ public boolean isUserInRoom(final UserAuthentication user, final String expected
+ 	@Override
+ 	@Transactional(isolation = Isolation.READ_COMMITTED)
+ 	public void addUserToRoomBySocketId(final UUID socketId, final String roomId) {
+-		final UserAuthentication user = socketIdToUser.get(socketId);
++		final ClientAuthentication user = socketIdToUser.get(socketId);
+ 		userToRoomId.put(user, roomId);
+ 	}
+ 
+ 	@Override
+ 	@Transactional(isolation = Isolation.READ_COMMITTED)
+ 	public void removeUserFromRoomBySocketId(final UUID socketId) {
+-		final UserAuthentication user = socketIdToUser.get(socketId);
++		final ClientAuthentication user = socketIdToUser.get(socketId);
+ 		if (null == user) {
+ 			logger.warn("No user exists for socket {}.", socketId);
+ 
+@@ -293,7 +312,7 @@ public void removeUserFromRoomBySocketId(final UUID socketId) {
+ 
+ 	@Override
+ 	public String getRoomIdByUserId(final String userId) {
+-		for (final Entry<UserAuthentication, String> entry  : userToRoomId.entrySet()) {
++		for (final Entry<ClientAuthentication, String> entry  : userToRoomId.entrySet()) {
+ 			if (entry.getKey().getId().equals(userId)) {
+ 				return entry.getValue();
+ 			}
+@@ -308,7 +327,7 @@ public void destroy() {
+ 	}
+ 
+ 	@Override
+-	public void removeUserFromMaps(final UserAuthentication user) {
++	public void removeUserFromMaps(final ClientAuthentication user) {
+ 		if (user != null) {
+ 			userToRoomId.remove(user);
+ 		}
+@@ -374,6 +393,18 @@ public User loadUser(final UserProfile.AuthProvider authProvider, final String l
+ 		return new User(userProfile, grantedAuthorities);
+ 	}
+ 
++	@Override
++	public User loadUser(final String userId, final Collection<GrantedAuthority> grantedAuthorities)
++			throws UsernameNotFoundException {
++		logger.debug("Load user: UserId: {}", userId);
++		UserProfile userProfile = userRepository.findOne(userId);
++		if (userProfile == null) {
++			throw new UsernameNotFoundException("User does not exist.");
++		}
++
++		return new User(userProfile, grantedAuthorities);
++	}
++
+ 	@Override
+ 	public UserProfile getByAuthProviderAndLoginId(final UserProfile.AuthProvider authProvider, final String loginId) {
+ 		return userRepository.findByAuthProviderAndLoginId(authProvider, loginId);
+@@ -490,7 +521,7 @@ public UserProfile update(UserProfile userProfile) {
+ 
+ 	@Override
+ 	public UserProfile deleteByUsername(String username) {
+-		UserAuthentication user = getCurrentUser();
++		ClientAuthentication user = getCurrentUser();
+ 		if (!user.getUsername().equals(username.toLowerCase())
+ 				&& !SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+ 						.contains(new SimpleGrantedAuthority("ROLE_ADMIN"))) {
+@@ -618,4 +649,9 @@ private String generateGuestId() {
+ 
+ 		return new String(Hex.encode(keygen.generateKey()));
+ 	}
++
++	@Autowired
++	public void setJwtService(final JwtService jwtService) {
++		this.jwtService = jwtService;
++	}
+ }
+diff --git a/src/main/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculator.java b/src/main/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculator.java
+index e7356a70b..59dfb1e7e 100644
+--- a/src/main/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculator.java
++++ b/src/main/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculator.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ import de.thm.arsnova.persistance.SessionStatisticsRepository;
+ 
+@@ -71,7 +71,7 @@ private int countCorrectAnswers(QuestionScore questionScore) {
+ 	}
+ 
+ 	@Override
+-	protected ScoreStatistics createMyProgress(UserAuthentication user) {
++	protected ScoreStatistics createMyProgress(ClientAuthentication user) {
+ 		final int numerator = numQuestionsCorrectForUser(user);
+ 		final int denominator = courseScore.getQuestionCount();
+ 		ScoreStatistics lpv = new ScoreStatistics();
+@@ -84,7 +84,7 @@ protected ScoreStatistics createMyProgress(UserAuthentication user) {
+ 		return lpv;
+ 	}
+ 
+-	private int numQuestionsCorrectForUser(UserAuthentication user) {
++	private int numQuestionsCorrectForUser(ClientAuthentication user) {
+ 		int numQuestionsCorrect = 0;
+ 		for (QuestionScore questionScore : courseScore) {
+ 			numQuestionsCorrect += countCorrectAnswersForUser(user, questionScore);
+@@ -92,7 +92,7 @@ private int numQuestionsCorrectForUser(UserAuthentication user) {
+ 		return numQuestionsCorrect;
+ 	}
+ 
+-	private int countCorrectAnswersForUser(UserAuthentication user, QuestionScore questionScore) {
++	private int countCorrectAnswersForUser(ClientAuthentication user, QuestionScore questionScore) {
+ 		int numQuestionsCorrect = 0;
+ 		int requiredScore = questionScore.getMaximum();
+ 		for (UserScore userScore : questionScore) {
+diff --git a/src/main/java/de/thm/arsnova/services/score/QuestionScore.java b/src/main/java/de/thm/arsnova/services/score/QuestionScore.java
+index d87b75517..fcf7adb16 100644
+--- a/src/main/java/de/thm/arsnova/services/score/QuestionScore.java
++++ b/src/main/java/de/thm/arsnova/services/score/QuestionScore.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ import java.util.ArrayList;
+ import java.util.Iterator;
+@@ -74,7 +74,7 @@ public int getTotalUserScore() {
+ 		return totalScore;
+ 	}
+ 
+-	public int getTotalUserScore(UserAuthentication user) {
++	public int getTotalUserScore(ClientAuthentication user) {
+ 		int totalScore = 0;
+ 		for (UserScore score : userScores) {
+ 			if (score.isUser(user)) {
+diff --git a/src/main/java/de/thm/arsnova/services/score/Score.java b/src/main/java/de/thm/arsnova/services/score/Score.java
+index d693e1705..c0f1d3fa4 100644
+--- a/src/main/java/de/thm/arsnova/services/score/Score.java
++++ b/src/main/java/de/thm/arsnova/services/score/Score.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ import java.util.HashMap;
+ import java.util.HashSet;
+@@ -90,7 +90,7 @@ public int getTotalUserScore() {
+ 		return score;
+ 	}
+ 
+-	public double getTotalUserScore(UserAuthentication user) {
++	public double getTotalUserScore(ClientAuthentication user) {
+ 		int score = 0;
+ 		for (QuestionScore questionScore : this) {
+ 			score += questionScore.getTotalUserScore(user);
+diff --git a/src/main/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculator.java b/src/main/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculator.java
+index 9a2488340..4a4d49a81 100644
+--- a/src/main/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculator.java
++++ b/src/main/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculator.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ import de.thm.arsnova.persistance.SessionStatisticsRepository;
+ 
+@@ -54,7 +54,7 @@ private int coursePercentage() {
+ 	}
+ 
+ 	@Override
+-	protected ScoreStatistics createMyProgress(UserAuthentication user) {
++	protected ScoreStatistics createMyProgress(ClientAuthentication user) {
+ 		ScoreStatistics lpv = new ScoreStatistics();
+ 		lpv.setCourseProgress(coursePercentage());
+ 		lpv.setNumQuestions(courseScore.getQuestionCount());
+@@ -65,7 +65,7 @@ protected ScoreStatistics createMyProgress(UserAuthentication user) {
+ 		return lpv;
+ 	}
+ 
+-	private int myPercentage(UserAuthentication user) {
++	private int myPercentage(ClientAuthentication user) {
+ 		final int courseMaximumValue = courseScore.getMaximumScore();
+ 		final double userTotalValue = courseScore.getTotalUserScore(user);
+ 		if (courseMaximumValue == 0) {
+diff --git a/src/main/java/de/thm/arsnova/services/score/ScoreCalculator.java b/src/main/java/de/thm/arsnova/services/score/ScoreCalculator.java
+index 73cf7b31e..d43f0549c 100644
+--- a/src/main/java/de/thm/arsnova/services/score/ScoreCalculator.java
++++ b/src/main/java/de/thm/arsnova/services/score/ScoreCalculator.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.services.score;
+ 
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ 
+ /**
+@@ -28,5 +28,5 @@
+ 
+ 	ScoreStatistics getCourseProgress(Room room);
+ 
+-	ScoreStatistics getMyProgress(Room room, UserAuthentication user);
++	ScoreStatistics getMyProgress(Room room, ClientAuthentication user);
+ }
+diff --git a/src/main/java/de/thm/arsnova/services/score/UserScore.java b/src/main/java/de/thm/arsnova/services/score/UserScore.java
+index c689b2098..37eb20b87 100644
+--- a/src/main/java/de/thm/arsnova/services/score/UserScore.java
++++ b/src/main/java/de/thm/arsnova/services/score/UserScore.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ 
+ /**
+  * The learning progress answer score of a particular user.
+@@ -41,7 +41,7 @@ public int getScore() {
+ 		return score;
+ 	}
+ 
+-	public boolean isUser(UserAuthentication user) {
++	public boolean isUser(ClientAuthentication user) {
+ 		return user.getUsername().equals(username);
+ 	}
+ 
+diff --git a/src/main/java/de/thm/arsnova/services/score/VariantScoreCalculator.java b/src/main/java/de/thm/arsnova/services/score/VariantScoreCalculator.java
+index 770238ae8..315a0371a 100644
+--- a/src/main/java/de/thm/arsnova/services/score/VariantScoreCalculator.java
++++ b/src/main/java/de/thm/arsnova/services/score/VariantScoreCalculator.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.services.score;
+ 
+ import de.thm.arsnova.entities.Room;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ import de.thm.arsnova.persistance.SessionStatisticsRepository;
+ import org.springframework.cache.annotation.Cacheable;
+@@ -61,7 +61,7 @@ public ScoreStatistics getCourseProgress(Room room) {
+ 	protected abstract ScoreStatistics createCourseProgress();
+ 
+ 	@Override
+-	public ScoreStatistics getMyProgress(Room room, UserAuthentication user) {
++	public ScoreStatistics getMyProgress(Room room, ClientAuthentication user) {
+ 		this.refreshProgress(room);
+ 		this.filterVariant();
+ 		return this.createMyProgress(user);
+@@ -73,6 +73,6 @@ private void filterVariant() {
+ 		}
+ 	}
+ 
+-	protected abstract ScoreStatistics createMyProgress(UserAuthentication user);
++	protected abstract ScoreStatistics createMyProgress(ClientAuthentication user);
+ 
+ }
+diff --git a/src/main/java/de/thm/arsnova/websocket/ArsnovaSocketioServerImpl.java b/src/main/java/de/thm/arsnova/websocket/ArsnovaSocketioServerImpl.java
+index cffb66223..5cebdb1cc 100644
+--- a/src/main/java/de/thm/arsnova/websocket/ArsnovaSocketioServerImpl.java
++++ b/src/main/java/de/thm/arsnova/websocket/ArsnovaSocketioServerImpl.java
+@@ -28,7 +28,7 @@
+ import com.corundumstudio.socketio.listener.DisconnectListener;
+ import com.corundumstudio.socketio.protocol.Packet;
+ import com.corundumstudio.socketio.protocol.PacketType;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.Comment;
+ import de.thm.arsnova.entities.ScoreOptions;
+ import de.thm.arsnova.entities.migration.ToV2Migrator;
+@@ -141,7 +141,7 @@ public void startServer() {
+ 			@Override
+ 			@Timed(name = "setFeedbackEvent.onData")
+ 			public void onData(final SocketIOClient client, final Feedback data, final AckRequest ackSender) {
+-				final UserAuthentication u = userService.getUserToSocketId(client.getSessionId());
++				final ClientAuthentication u = userService.getUserToSocketId(client.getSessionId());
+ 				if (u == null) {
+ 					logger.info("Client {} tried to send feedback but is not mapped to a user", client.getSessionId());
+ 
+@@ -165,7 +165,7 @@ public void onData(final SocketIOClient client, final Feedback data, final AckRe
+ 			@Override
+ 			@Timed(name = "setSessionEvent.onData")
+ 			public void onData(final SocketIOClient client, final Room room, final AckRequest ackSender) {
+-				final UserAuthentication u = userService.getUserToSocketId(client.getSessionId());
++				final ClientAuthentication u = userService.getUserToSocketId(client.getSessionId());
+ 				if (null == u) {
+ 					logger.info("Client {} requested to join room but is not mapped to a user", client.getSessionId());
+ 
+@@ -202,7 +202,7 @@ public void onData(
+ 					SocketIOClient client,
+ 					Comment comment,
+ 					AckRequest ackRequest) {
+-				final UserAuthentication user = userService.getUserToSocketId(client.getSessionId());
++				final ClientAuthentication user = userService.getUserToSocketId(client.getSessionId());
+ 				try {
+ 					commentService.getAndMarkRead(comment.getId());
+ 				} catch (IOException | NotFoundException | UnauthorizedException e) {
+@@ -214,7 +214,7 @@ public void onData(
+ 		server.addEventListener("readFreetextAnswer", String.class, new DataListener<String>() {
+ 			@Override
+ 			public void onData(SocketIOClient client, String answerId, AckRequest ackRequest) {
+-				final UserAuthentication user = userService.getUserToSocketId(client.getSessionId());
++				final ClientAuthentication user = userService.getUserToSocketId(client.getSessionId());
+ 				try {
+ 					contentService.getFreetextAnswerAndMarkRead(answerId, user);
+ 				} catch (NotFoundException | UnauthorizedException e) {
+@@ -231,7 +231,7 @@ public void onData(SocketIOClient client, String answerId, AckRequest ackRequest
+ 			@Timed(name = "setLearningProgressOptionsEvent.onData")
+ 			public void onData(SocketIOClient client, ScoreOptions scoreOptions, AckRequest ack) {
+ 				throw new UnsupportedOperationException("Not implemented.");
+-//				final UserAuthentication user = userService.getUserToSocketId(client.getSessionId());
++//				final ClientAuthentication user = userService.getUserToSocketId(client.getSessionId());
+ //				final String shortRoomId = userService.getSessionByUsername(user.getUsername());
+ //				final de.thm.arsnova.entities.Room room = roomService.getInternal(shortRoomId, user);
+ //				if (room.getOwnerId().equals(user.getId())) {
+@@ -335,7 +335,7 @@ public void setUseSSL(final boolean useSSL) {
+ 		this.useSSL = useSSL;
+ 	}
+ 
+-	public void reportDeletedFeedback(final UserAuthentication user, final Set<de.thm.arsnova.entities.Room> rooms) {
++	public void reportDeletedFeedback(final ClientAuthentication user, final Set<de.thm.arsnova.entities.Room> rooms) {
+ 		final List<String> roomShortIds = new ArrayList<>();
+ 		for (final de.thm.arsnova.entities.Room room : rooms) {
+ 			roomShortIds.add(room.getShortId());
+@@ -343,11 +343,11 @@ public void reportDeletedFeedback(final UserAuthentication user, final Set<de.th
+ 		this.sendToUser(user, "feedbackReset", roomShortIds);
+ 	}
+ 
+-	private List<UUID> findConnectionIdForUser(final UserAuthentication user) {
++	private List<UUID> findConnectionIdForUser(final ClientAuthentication user) {
+ 		final List<UUID> result = new ArrayList<>();
+-		for (final Entry<UUID, UserAuthentication> e : userService.getSocketIdToUser()) {
++		for (final Entry<UUID, ClientAuthentication> e : userService.getSocketIdToUser()) {
+ 			final UUID someUsersConnectionId = e.getKey();
+-			final UserAuthentication someUser = e.getValue();
++			final ClientAuthentication someUser = e.getValue();
+ 			if (someUser.equals(user)) {
+ 				result.add(someUsersConnectionId);
+ 			}
+@@ -355,7 +355,7 @@ public void reportDeletedFeedback(final UserAuthentication user, final Set<de.th
+ 		return result;
+ 	}
+ 
+-	private void sendToUser(final UserAuthentication user, final String event, Object data) {
++	private void sendToUser(final ClientAuthentication user, final String event, Object data) {
+ 		final List<UUID> connectionIds = findConnectionIdForUser(user);
+ 		if (connectionIds.isEmpty()) {
+ 			return;
+@@ -371,7 +371,7 @@ private void sendToUser(final UserAuthentication user, final String event, Objec
+ 	 * Currently only sends the feedback data to the client. Should be used for all
+ 	 * relevant Socket.IO data, the client needs to know after joining a session.
+ 	 */
+-	public void reportRoomDataToClient(final String roomId, final UserAuthentication user, final SocketIOClient client) {
++	public void reportRoomDataToClient(final String roomId, final ClientAuthentication user, final SocketIOClient client) {
+ 		final de.thm.arsnova.entities.Room room = roomService.getInternal(roomId, user);
+ 		final de.thm.arsnova.entities.Room.Settings settings = room.getSettings();
+ 
+@@ -410,7 +410,7 @@ public void reportUpdatedFeedbackForRoom(final de.thm.arsnova.entities.Room room
+ 		}
+ 	}
+ 
+-	public void reportFeedbackForUserInRoom(final Room room, final UserAuthentication user) {
++	public void reportFeedbackForUserInRoom(final Room room, final ClientAuthentication user) {
+ 		final de.thm.arsnova.entities.Feedback fb = feedbackService.getByRoomId(room.getKeyword());
+ 		Long averageFeedback;
+ 		try {
+@@ -476,10 +476,10 @@ public void broadcastInRoom(final String roomId, final String eventName, final O
+ 		 * all connected clients and if send feedback, if user is in current
+ 		 * room
+ 		 */
+-		final Set<UserAuthentication> users = userService.getUsersByRoomId(roomId);
++		final Set<ClientAuthentication> users = userService.getUsersByRoomId(roomId);
+ 
+ 		for (final SocketIOClient c : server.getAllClients()) {
+-			final UserAuthentication u = userService.getUserToSocketId(c.getSessionId());
++			final ClientAuthentication u = userService.getUserToSocketId(c.getSessionId());
+ 			if (u != null && users.contains(u)) {
+ 				c.sendEvent(eventName, data);
+ 			}
+diff --git a/src/main/java/de/thm/arsnova/websocket/WebsocketAuthenticationAspect.java b/src/main/java/de/thm/arsnova/websocket/WebsocketAuthenticationAspect.java
+index e258be2f0..9eae5d655 100644
+--- a/src/main/java/de/thm/arsnova/websocket/WebsocketAuthenticationAspect.java
++++ b/src/main/java/de/thm/arsnova/websocket/WebsocketAuthenticationAspect.java
+@@ -18,7 +18,7 @@
+ package de.thm.arsnova.websocket;
+ 
+ import com.corundumstudio.socketio.SocketIOClient;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.security.User;
+ import de.thm.arsnova.services.UserService;
+ import org.aspectj.lang.ProceedingJoinPoint;
+@@ -68,7 +68,7 @@
+ 	}
+ 
+ 	private void populateSecurityContext(final UUID socketId) {
+-		UserAuthentication userAuth = userService.getUserToSocketId(socketId);
++		ClientAuthentication userAuth = userService.getUserToSocketId(socketId);
+ 		if (userAuth == null) {
+ 			throw new AccessDeniedException("No user authenticated for WebSocket connection");
+ 		}
+diff --git a/src/test/java/de/thm/arsnova/entities/TestUser.java b/src/test/java/de/thm/arsnova/entities/TestClient.java
+similarity index 88%
+rename from src/test/java/de/thm/arsnova/entities/TestUser.java
+rename to src/test/java/de/thm/arsnova/entities/TestClient.java
+index 489ee8288..905c152aa 100644
+--- a/src/test/java/de/thm/arsnova/entities/TestUser.java
++++ b/src/test/java/de/thm/arsnova/entities/TestClient.java
+@@ -17,17 +17,18 @@
+  */
+ package de.thm.arsnova.entities;
+ 
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import org.springframework.security.core.GrantedAuthority;
+ 
+ import java.util.HashSet;
+ import java.util.Set;
+ import java.util.UUID;
+ 
+-public class TestUser extends UserAuthentication {
++public class TestClient extends ClientAuthentication {
+ 	private static final long serialVersionUID = 1L;
+ 	private final Set<GrantedAuthority> grantedAuthorities;
+ 
+-	public TestUser(String username) {
++	public TestClient(String username) {
+ 		super();
+ 		grantedAuthorities = new HashSet<>();
+ 		setId(UUID.randomUUID().toString());
+diff --git a/src/test/java/de/thm/arsnova/services/StubUserService.java b/src/test/java/de/thm/arsnova/services/StubUserService.java
+index ae4063a14..5a53c6604 100644
+--- a/src/test/java/de/thm/arsnova/services/StubUserService.java
++++ b/src/test/java/de/thm/arsnova/services/StubUserService.java
+@@ -17,7 +17,7 @@
+  */
+ package de.thm.arsnova.services;
+ 
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.persistance.UserRepository;
+ import de.thm.arsnova.security.User;
+@@ -25,11 +25,9 @@
+ import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+ import org.springframework.mail.javamail.JavaMailSender;
+ import org.springframework.security.authentication.AnonymousAuthenticationToken;
+-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+ import org.springframework.security.core.GrantedAuthority;
+ import org.springframework.security.core.authority.SimpleGrantedAuthority;
+ 
+-import java.util.Collection;
+ import java.util.Collections;
+ import java.util.HashSet;
+ import java.util.Set;
+@@ -37,7 +35,7 @@
+ 
+ public class StubUserService extends UserServiceImpl {
+ 	private final Set<GrantedAuthority> grantedAuthorities;
+-	private UserAuthentication stubUser = null;
++	private ClientAuthentication stubUser = null;
+ 
+ 	public StubUserService(
+ 			UserRepository repository,
+@@ -57,18 +55,18 @@ public void setUserAuthenticated(boolean isAuthenticated, String username) {
+ 			UserProfile userProfile = new UserProfile(UserProfile.AuthProvider.ARSNOVA, username);
+ 			userProfile.setId(UUID.randomUUID().toString());
+ 			User user = new User(userProfile, grantedAuthorities);
+-			stubUser = new UserAuthentication(user);
++			stubUser = new ClientAuthentication(user);
+ 		} else {
+ 			stubUser = null;
+ 		}
+ 	}
+ 
+ 	public void useAnonymousUser() {
+-		stubUser = new UserAuthentication(new AnonymousAuthenticationToken(UUID.randomUUID().toString(), "anonymous", Collections.emptyList()));
++		stubUser = new ClientAuthentication(new AnonymousAuthenticationToken(UUID.randomUUID().toString(), "anonymous", Collections.emptyList()));
+ 	}
+ 
+ 	@Override
+-	public UserAuthentication getCurrentUser() {
++	public ClientAuthentication getCurrentUser() {
+ 		return stubUser;
+ 	}
+ }
+diff --git a/src/test/java/de/thm/arsnova/services/UserServiceTest.java b/src/test/java/de/thm/arsnova/services/UserServiceTest.java
+index ccfc440f7..5dd1a3779 100644
+--- a/src/test/java/de/thm/arsnova/services/UserServiceTest.java
++++ b/src/test/java/de/thm/arsnova/services/UserServiceTest.java
+@@ -21,18 +21,16 @@
+ import de.thm.arsnova.config.TestAppConfig;
+ import de.thm.arsnova.config.TestPersistanceConfig;
+ import de.thm.arsnova.config.TestSecurityConfig;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.UserProfile;
+ import de.thm.arsnova.security.User;
+ import de.thm.arsnova.security.pac4j.OAuthToken;
+-import org.jasig.cas.client.authentication.AttributePrincipalImpl;
+ import org.junit.Test;
+ import org.junit.runner.RunWith;
+ import org.pac4j.oauth.profile.google2.Google2Email;
+ import org.pac4j.oauth.profile.google2.Google2Profile;
+ import org.pac4j.oauth.profile.google2.Google2ProfileDefinition;
+ import org.springframework.security.authentication.AnonymousAuthenticationToken;
+-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+ import org.springframework.security.core.GrantedAuthority;
+ import org.springframework.security.core.authority.SimpleGrantedAuthority;
+ import org.springframework.test.context.ActiveProfiles;
+@@ -60,13 +58,13 @@
+ @ActiveProfiles("test")
+ public class UserServiceTest {
+ 
+-	private static final ConcurrentHashMap<UUID, UserAuthentication> socketid2user = new ConcurrentHashMap<>();
++	private static final ConcurrentHashMap<UUID, ClientAuthentication> socketid2user = new ConcurrentHashMap<>();
+ 	private static final ConcurrentHashMap<String, String> user2session = new ConcurrentHashMap<>();
+ 
+ 	@Test
+ 	public void testSocket2UserPersistence() throws IOException, ClassNotFoundException {
+-		//socketid2user.put(UUID.randomUUID(), new UserAuthentication(new UsernamePasswordAuthenticationToken("ptsr00", UUID.randomUUID())));
+-		//socketid2user.put(UUID.randomUUID(), new UserAuthentication(new AttributePrincipalImpl("ptstr0")));
++		//socketid2user.put(UUID.randomUUID(), new ClientAuthentication(new UsernamePasswordAuthenticationToken("ptsr00", UUID.randomUUID())));
++		//socketid2user.put(UUID.randomUUID(), new ClientAuthentication(new AttributePrincipalImpl("ptstr0")));
+ 
+ 		Google2Email email = new Google2Email();
+ 		email.setEmail("mail@host.com");
+@@ -79,18 +77,18 @@ public void testSocket2UserPersistence() throws IOException, ClassNotFoundExcept
+ 		userProfile.setId(UUID.randomUUID().toString());
+ 		User user = new User(userProfile, Collections.emptyList());
+ 		OAuthToken token = new OAuthToken(user, profile, Collections.emptyList());
+-		socketid2user.put(UUID.randomUUID(), new UserAuthentication(token));
++		socketid2user.put(UUID.randomUUID(), new ClientAuthentication(token));
+ 
+ 		List<GrantedAuthority> authorities = new ArrayList<>();
+ 		authorities.add(new SimpleGrantedAuthority("ROLE_GUEST"));
+-		socketid2user.put(UUID.randomUUID(), new UserAuthentication(new AnonymousAuthenticationToken("ptsr00", UUID.randomUUID(), authorities)));
++		socketid2user.put(UUID.randomUUID(), new ClientAuthentication(new AnonymousAuthenticationToken("ptsr00", UUID.randomUUID(), authorities)));
+ 
+ 		ByteArrayOutputStream out = new ByteArrayOutputStream();
+ 		ObjectOutputStream objOut = new ObjectOutputStream(out);
+ 		objOut.writeObject(socketid2user);
+ 		objOut.close();
+ 		ObjectInputStream objIn = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
+-		Map<UUID, UserAuthentication> actual = (Map<UUID, UserAuthentication>) objIn.readObject();
++		Map<UUID, ClientAuthentication> actual = (Map<UUID, ClientAuthentication>) objIn.readObject();
+ 		assertEquals(actual, socketid2user);
+ 	}
+ 
+diff --git a/src/test/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculatorTest.java b/src/test/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculatorTest.java
+index d12d678e3..007d2f2ee 100644
+--- a/src/test/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculatorTest.java
++++ b/src/test/java/de/thm/arsnova/services/score/QuestionBasedScoreCalculatorTest.java
+@@ -17,8 +17,8 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.TestUser;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.TestClient;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ import de.thm.arsnova.persistance.SessionStatisticsRepository;
+ import org.junit.Before;
+@@ -42,7 +42,7 @@ private String addQuestion(String questionVariant, int points) {
+ 		return questionId;
+ 	}
+ 
+-	private void addAnswer(String questionId, UserAuthentication user, int points) {
++	private void addAnswer(String questionId, ClientAuthentication user, int points) {
+ 		final int piRound = 1;
+ 		courseScore.addAnswer(questionId, piRound, user.getUsername(), points);
+ 	}
+@@ -62,7 +62,7 @@ public void setUp() {
+ 	public void shouldIgnoreQuestionsWithoutCorrectAnswers() {
+ 		final int questionMaxValue = 0;
+ 		final int userScore = 0;
+-		UserAuthentication user = new TestUser("username");
++		ClientAuthentication user = new TestClient("username");
+ 		String questionId = this.addQuestion("lecture", questionMaxValue);
+ 		this.addAnswer(questionId, user, userScore);
+ 
+@@ -77,7 +77,7 @@ public void shouldIgnoreQuestionsWithoutCorrectAnswers() {
+ 
+ 	@Test
+ 	public void shouldIgnoreQuestionsWithoutCorrectAnswersInQuestionCount() {
+-		UserAuthentication user = new TestUser("username");
++		ClientAuthentication user = new TestClient("username");
+ 		courseScore.addQuestion("question-without-correct-answers", "lecture", 1, 0);
+ 		courseScore.addQuestion("question-with-correct-answers", "lecture", 1, 50);
+ 		courseScore.addAnswer("question-without-correct-answers", 1, user.getUsername(), 0);
+@@ -99,9 +99,9 @@ public void shouldIgnoreQuestionsWithoutCorrectAnswersInQuestionCount() {
+ 	public void shouldCalculatePercentageOfOneQuestionWithSomeWrongAnswers() {
+ 		String questionId = this.addQuestion("lecture", 10);
+ 		for (int i = 0; i < 99; i++) {
+-			this.addAnswer(questionId, new TestUser("user"+i), 10);
++			this.addAnswer(questionId, new TestClient("user"+i), 10);
+ 		}
+-		this.addAnswer(questionId, new TestUser("user-with-a-wrong-answer"), 0);
++		this.addAnswer(questionId, new TestClient("user-with-a-wrong-answer"), 0);
+ 
+ 		int expected = 99;
+ 		int actual = lp.getCourseProgress(null).getCourseProgress();
+@@ -120,8 +120,8 @@ public void shouldCalculatePercentageOfMultipleQuestionsAndAnswers() {
+ 		String q1 = this.addQuestion("lecture", 10);
+ 		String q2 = this.addQuestion("lecture", 10);
+ 		// two users
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// four answers, last one is wrong
+ 		this.addAnswer(q1, u1, 10);
+ 		this.addAnswer(q1, u2, 10);
+@@ -141,10 +141,10 @@ public void shouldNotBeBiasedByPointsOrAnswerCount() {
+ 		String q2 = this.addQuestion("lecture", 1);
+ 		// first question has many answers, all of them correct
+ 		for (int i = 0; i < 100; i++) {
+-			this.addAnswer(q1, new TestUser("user"+i), 1000);
++			this.addAnswer(q1, new TestClient("user"+i), 1000);
+ 		}
+ 		// second question has one wrong answer
+-		this.addAnswer(q2,  new TestUser("another-user"), 0);
++		this.addAnswer(q2,  new TestClient("another-user"), 0);
+ 
+ 		int expected = 50;
+ 		int actual = lp.getCourseProgress(null).getCourseProgress();
+@@ -156,8 +156,8 @@ public void shouldNotBeBiasedByPointsOrAnswerCount() {
+ 	public void shouldFilterBasedOnQuestionVariant() {
+ 		String q1 = this.addQuestion("lecture", 100);
+ 		String q2 = this.addQuestion("preparation", 100);
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// first question is answered correctly, second one is not
+ 		this.addAnswer(q1, u1, 100);
+ 		this.addAnswer(q1, u2, 100);
+@@ -179,8 +179,8 @@ public void shouldFilterBasedOnQuestionVariant() {
+ 
+ 	@Test
+ 	public void shouldConsiderAnswersOfSamePiRound() {
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// question is in round 2
+ 		courseScore.addQuestion("q1", "lecture", 2, 100);
+ 		// 25 points in round 1, 75 points in round two for the first user
+@@ -206,9 +206,9 @@ public void shouldIncludeNominatorAndDenominatorOfResultExcludingStudentCount()
+ 		String q1 = this.addQuestion("lecture", 10);
+ 		String q2 = this.addQuestion("lecture", 10);
+ 		// three users
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
+-		UserAuthentication u3 = new TestUser("user3");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
++		ClientAuthentication u3 = new TestClient("user3");
+ 		// six answers
+ 		this.addAnswer(q1, u1, 10);
+ 		this.addAnswer(q2, u1, -100);
+diff --git a/src/test/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculatorTest.java b/src/test/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculatorTest.java
+index 1a6d107be..d7f2117ef 100644
+--- a/src/test/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculatorTest.java
++++ b/src/test/java/de/thm/arsnova/services/score/ScoreBasedScoreCalculatorTest.java
+@@ -17,8 +17,8 @@
+  */
+ package de.thm.arsnova.services.score;
+ 
+-import de.thm.arsnova.entities.TestUser;
+-import de.thm.arsnova.entities.UserAuthentication;
++import de.thm.arsnova.entities.TestClient;
++import de.thm.arsnova.entities.migration.v2.ClientAuthentication;
+ import de.thm.arsnova.entities.transport.ScoreStatistics;
+ import de.thm.arsnova.persistance.SessionStatisticsRepository;
+ import org.junit.Before;
+@@ -42,7 +42,7 @@ private String addQuestion(String questionVariant, int points) {
+ 		return questionId;
+ 	}
+ 
+-	private void addAnswer(String questionId, UserAuthentication user, int points) {
++	private void addAnswer(String questionId, ClientAuthentication user, int points) {
+ 		final int piRound = 1;
+ 		courseScore.addAnswer(questionId, piRound, user.getUsername(), points);
+ 	}
+@@ -59,8 +59,8 @@ public void setUp() {
+ 	public void shouldFilterBasedOnQuestionVariant() {
+ 		String q1 = this.addQuestion("lecture", 100);
+ 		String q2 = this.addQuestion("preparation", 100);
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// first question is answered correctly, second one is not
+ 		this.addAnswer(q1, u1, 100);
+ 		this.addAnswer(q1, u2, 100);
+@@ -86,8 +86,8 @@ public void shouldNotContainRoundingErrors() {
+ 		String q1 = this.addQuestion("lecture", 100);
+ 		String q2 = this.addQuestion("lecture", 100);
+ 		String q3 = this.addQuestion("lecture", 100);
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// Both users achieve 200 points
+ 		this.addAnswer(q1, u1, 100);
+ 		this.addAnswer(q1, u2, 100);
+@@ -105,8 +105,8 @@ public void shouldNotContainRoundingErrors() {
+ 
+ 	@Test
+ 	public void shouldConsiderAnswersOfSamePiRound() {
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
+ 		// question is in round 2
+ 		courseScore.addQuestion("q1", "lecture", 2, 100);
+ 		// 25 points in round 1, 75 points in round two for the first user
+@@ -132,9 +132,9 @@ public void shouldIncludeNominatorAndDenominatorOfResultExcludingStudentCount()
+ 		String q1 = this.addQuestion("lecture", 10);
+ 		String q2 = this.addQuestion("lecture", 10);
+ 		// three users
+-		UserAuthentication u1 = new TestUser("user1");
+-		UserAuthentication u2 = new TestUser("user2");
+-		UserAuthentication u3 = new TestUser("user3");
++		ClientAuthentication u1 = new TestClient("user1");
++		ClientAuthentication u2 = new TestClient("user2");
++		ClientAuthentication u3 = new TestClient("user3");
+ 		// six answers
+ 		this.addAnswer(q1, u1, 10);
+ 		this.addAnswer(q2, u1, 0);

@@ -1,0 +1,405 @@
+diff --git a/ant/java.xml b/ant/java.xml
+index 94d2cbe78ea..d49eab49d65 100644
+--- a/ant/java.xml
++++ b/ant/java.xml
+@@ -176,7 +176,9 @@ your FindBugs installation's lib directory. E.g.:
+       </manifest>
+     </jar>
+     <artifact:install file="${artifact.dir}/${component.jar}">
+-        <pom refid="maven.pom"/>
++      <artifact:localRepository id="local.repository"
++        path="${maven.repo.local}"/>
++      <pom refid="maven.pom"/>
+     </artifact:install>
+   </target>
+ 
+@@ -189,7 +191,9 @@ your FindBugs installation's lib directory. E.g.:
+       </manifest>
+     </jar>
+     <artifact:install file="${artifact.dir}/${bundle.jar}">
+-        <pom refid="maven.pom"/>
++      <pom refid="maven.pom"/>
++      <artifact:localRepository id="local.repository"
++        path="${maven.repo.local}"/>
+     </artifact:install>
+   </target>
+ 
+diff --git a/ant/toplevel.xml b/ant/toplevel.xml
+index 88af24edba1..434396cd3d0 100644
+--- a/ant/toplevel.xml
++++ b/ant/toplevel.xml
+@@ -542,7 +542,7 @@ Type "ant -p" for a list of targets.
+     <ant dir="components/bundles/bioformats_package" target="bundle"/>
+ 
+     <echo>----------=========== loci_tools ===========----------</echo>
+-    <ant dir="components/bundles/loci-tools" target="bundle"/>
++    <ant dir="components/bundles/loci_tools" target="bundle"/>
+   </target>
+ 
+   <!-- HACK - limit OS to *nix due to file permission issues -->
+diff --git a/components/autogen/src/format-pages.txt b/components/autogen/src/format-pages.txt
+index d8cf1fd566d..ecd480a4922 100644
+--- a/components/autogen/src/format-pages.txt
++++ b/components/autogen/src/format-pages.txt
+@@ -1855,7 +1855,7 @@ Commercial applications that support this format include: \n
+ * `Image-Pro Plus <http://www.mediacy.com/>`_ \n
+ \n
+ .. seealso:: \n
+-  `PerkinElmer UltraVIEW system overview <http://www.perkinelmer.com/product/ultraview-vox-3d-live-cell-imaging-system-l7267000>`_
++  `PerkinElmer UltraVIEW system overview (pdf) <http://www.perkinelmer.com/lab-solutions/resources/docs/BRO_UltraVIEW-VoX-Product-Brochure.pdf>`_
+ 
+ [Portable Any Map]
+ pagename = pgm
+diff --git a/components/bundles/loci-tools/LICENSE.txt b/components/bundles/loci_tools/LICENSE.txt
+similarity index 100%
+rename from components/bundles/loci-tools/LICENSE.txt
+rename to components/bundles/loci_tools/LICENSE.txt
+diff --git a/components/bundles/loci-tools/assembly.xml b/components/bundles/loci_tools/assembly.xml
+similarity index 100%
+rename from components/bundles/loci-tools/assembly.xml
+rename to components/bundles/loci_tools/assembly.xml
+diff --git a/components/bundles/loci-tools/build.properties b/components/bundles/loci_tools/build.properties
+similarity index 60%
+rename from components/bundles/loci-tools/build.properties
+rename to components/bundles/loci_tools/build.properties
+index 9b49eb0ad9c..7a3869f436b 100644
+--- a/components/bundles/loci-tools/build.properties
++++ b/components/bundles/loci_tools/build.properties
+@@ -6,7 +6,7 @@
+ # Download Apache Ant from http://ant.apache.org/.
+ # Type "ant -p" for a list of targets.
+ 
+-bundle.name           = loci-tools
+-bundle.jar            = loci-tools.jar
++bundle.name           = loci_tools
++bundle.jar            = loci_tools.jar
+ bundle.version        = ${release.version}
+ bundle.main-class     = loci.formats.gui.ImageViewer
+\ No newline at end of file
+diff --git a/components/bundles/loci-tools/build.xml b/components/bundles/loci_tools/build.xml
+similarity index 86%
+rename from components/bundles/loci-tools/build.xml
+rename to components/bundles/loci_tools/build.xml
+index c36c5bed152..5618742e4dc 100644
+--- a/components/bundles/loci-tools/build.xml
++++ b/components/bundles/loci_tools/build.xml
+@@ -6,7 +6,7 @@ Download Apache Ant from http://ant.apache.org/.
+ Type "ant -p" for a list of targets.
+ -->
+ 
+-<project name="loci-tools" default="bundle" basedir=".">
++<project name="loci_tools" default="bundle" basedir=".">
+   <description>Build file for LOCI Tools bundle</description>
+   <property name="root.dir" location="../../.."/>
+   <import file="${root.dir}/ant/java.xml"/>
+diff --git a/components/bundles/loci-tools/pom.xml b/components/bundles/loci_tools/pom.xml
+similarity index 100%
+rename from components/bundles/loci-tools/pom.xml
+rename to components/bundles/loci_tools/pom.xml
+diff --git a/components/formats-gpl/test/loci/formats/utests/ND2HandlerTest.java b/components/formats-gpl/test/loci/formats/utests/ND2HandlerTest.java
+index 970b392e578..4ea8afb907c 100644
+--- a/components/formats-gpl/test/loci/formats/utests/ND2HandlerTest.java
++++ b/components/formats-gpl/test/loci/formats/utests/ND2HandlerTest.java
+@@ -23,7 +23,7 @@
+  * #L%
+  */
+ 
+-package loci.formats.utests.in;
++package loci.formats.utests;
+ 
+ import java.util.List;
+ import java.util.ArrayList;
+diff --git a/components/test-suite/src/loci/tests/testng/ConfigurationTree.java b/components/test-suite/src/loci/tests/testng/ConfigurationTree.java
+index 3574170d555..45f72f86aa6 100644
+--- a/components/test-suite/src/loci/tests/testng/ConfigurationTree.java
++++ b/components/test-suite/src/loci/tests/testng/ConfigurationTree.java
+@@ -98,19 +98,9 @@ public ConfigurationTree(String rootDir, String configDir) {
+     if (rootDir == null) {
+       throw new IllegalArgumentException("rootDir cannot be null.");
+     }
+-
++    this.rootDir = new File(rootDir).getAbsolutePath();
+     if (configDir != null) {
+-      Location rootLocation = new Location(rootDir);
+-      Location configLocation = new Location(configDir);
+-      while (rootLocation.getName().equals(configLocation.getName())) {
+-        rootLocation = rootLocation.getParentFile();
+-        configLocation = configLocation.getParentFile();
+-      }
+-
+-      this.rootDir = rootLocation.getAbsolutePath();
+-      this.configDir = configLocation.getAbsolutePath();
+-    } else {
+-      this.rootDir = new File(rootDir).getAbsolutePath();
++        this.configDir = new File(configDir).getAbsolutePath();
+     }
+     root = new DefaultMutableTreeNode();
+   }
+@@ -135,7 +125,6 @@ public String getConfigDirectory() {
+    *  Relocate a path from an base directory into a target directory
+    */
+   public String relocate(String path, String oldRoot, String newRoot) {
+-
+     String subPath = path.substring((int) Math.min(
+       oldRoot.length() + 1, path.length()));
+     if (subPath.length() == 0) {
+diff --git a/components/test-suite/src/loci/tests/testng/FormatReaderTestFactory.java b/components/test-suite/src/loci/tests/testng/FormatReaderTestFactory.java
+index ba76aa4701a..303b024251d 100644
+--- a/components/test-suite/src/loci/tests/testng/FormatReaderTestFactory.java
++++ b/components/test-suite/src/loci/tests/testng/FormatReaderTestFactory.java
+@@ -32,6 +32,8 @@
+ import java.util.Set;
+ import java.util.LinkedHashSet;
+ import java.util.Arrays;
++import java.util.Map;
++import java.util.HashMap;
+ 
+ import loci.common.DataTools;
+ import loci.formats.FileStitcher;
+@@ -202,16 +204,30 @@ public String getProperty(String key) {
+     }
+ 
+     // remove duplicates
+-    Set<String> fileSet = new LinkedHashSet<String>(files);
++    Set<String> fileSet = new LinkedHashSet<String>();
++    Map<String, String> originalPath = new HashMap<String, String>();
++    for (String s: files) {
++      String canonicalPath;
++      try {
++        canonicalPath = (new File(s)).getCanonicalPath();
++      } catch (IOException e) {
++        LOGGER.warn("Could not get canonical path for {}", s);
++        canonicalPath = s;
++      }
++      fileSet.add(canonicalPath);
++      originalPath.put(canonicalPath, s);
++    }
+     Set<String> minimalFiles = new LinkedHashSet<String>();
+     FileStitcher reader = new FileStitcher();
+     while (!fileSet.isEmpty()) {
+       String file = fileSet.iterator().next();
+       try {
+         reader.setId(file);
+-        Set<String> auxFiles = new LinkedHashSet<String>(
+-            Arrays.asList(reader.getUsedFiles())
+-        );
++        String[] usedFiles = reader.getUsedFiles();
++        Set<String> auxFiles = new LinkedHashSet<String>();
++        for (String s: usedFiles) {
++          auxFiles.add((new File(s)).getCanonicalPath());
++        }
+         fileSet.removeAll(auxFiles);
+         String masterFile = reader.getCurrentFile();
+         auxFiles.remove(masterFile);
+@@ -227,7 +243,15 @@ public String getProperty(String key) {
+         catch (IOException e) { }
+       }
+     }
+-    files = new ArrayList(minimalFiles);
++    files = new ArrayList<String>();
++    for (String s: minimalFiles) {
++      if (!originalPath.containsKey(s)) {
++        String msg = "No match found for " + s;
++        LOGGER.error(msg);
++        throw new RuntimeException(msg);
++      }
++      files.add(originalPath.get(s));
++    }
+ 
+     // create test class instances
+     System.out.println("Building list of tests...");
+diff --git a/components/test-suite/src/loci/tests/testng/TestTools.java b/components/test-suite/src/loci/tests/testng/TestTools.java
+index 047de00f219..52636f27aa3 100644
+--- a/components/test-suite/src/loci/tests/testng/TestTools.java
++++ b/components/test-suite/src/loci/tests/testng/TestTools.java
+@@ -197,8 +197,10 @@ public static void getFiles(String root, List files,
+ 
+   /**
+    * Retrieve an external configuration file given a root directory and test
+-   * configuration
++   * configuration.
++   * @deprecated No replacement.
+    */
++  @Deprecated
+   public static String getExternalConfigFile(String root,
+     final ConfigurationTree config)
+   {
+@@ -213,9 +215,11 @@ public static String getExternalConfigFile(String root,
+   }
+ 
+   /**
+-   * Retrieve an external symlinkedconfiguration file given a root directory 
+-   * and a test configuration
++   * Retrieve an external symlinked configuration file given a root directory
++   * and a test configuration.
++   * @deprecated No replacement.
+    */
++  @Deprecated
+   public static String getExternalSymlinkConfigFile(String root,
+     final ConfigurationTree config)
+   {
+@@ -248,22 +252,16 @@ public static void getFiles(String root, List files,
+     boolean isToplevel =
+      toplevelConfig != null && new File(toplevelConfig).exists();
+     Arrays.sort(subs);
+-    boolean isSymlinkConfig = false;
+ 
+     List<String> subsList = new ArrayList<String>();
+ 
+     if (config.getConfigDirectory() != null) {
+-      String configFile = getExternalConfigFile(root, config);
+-      if (configFile != null) {
+-        LOGGER.debug("found config file: {}", configFile);
+-        subsList.add(configFile);
+-      } else {
+-        configFile = getExternalSymlinkConfigFile(root, config);
+-        if (configFile != null) {
+-          LOGGER.debug("found symlinked config file: {}", configFile);
+-          subsList.add(configFile);
+-          isSymlinkConfig = true;
+-        }
++      // Look for a configuration file under the configuration directory
++      String configRoot = config.relocateToConfig(root);
++      Location configFile = new Location(configRoot, baseConfigName);
++      if (configFile.exists()) {
++        LOGGER.debug("found config file: {}", configFile.getAbsolutePath());
++        subsList.add(configFile.getAbsolutePath());
+       }
+     }
+ 
+@@ -274,20 +272,12 @@ public static void getFiles(String root, List files,
+       if ((!isToplevel && isConfigFile(file, configFileSuffix)) ||
+           (isToplevel && subs[i].equals(toplevelConfig)))
+       {
+-        if (config.getConfigDirectory() == null) {
++        if (config.getConfigDirectory() != null) {
+           LOGGER.debug("adding config file: {}", file.getAbsolutePath());
+           subsList.add(0, file.getAbsolutePath());
+         }
+       } else {
+-        if (isSymlinkConfig) {
+-          try {
+-            subsList.add(file.getCanonicalPath());
+-          } catch (IOException e) {
+-            subsList.add(file.getAbsolutePath());
+-          }
+-        } else {
+-          subsList.add(file.getAbsolutePath());
+-        }
++        subsList.add(file.getAbsolutePath());
+       }
+     }
+ 
+diff --git a/docs/sphinx/developers/building-bioformats.txt b/docs/sphinx/developers/building-bioformats.txt
+index 6d630576e5e..87ddb32542f 100644
+--- a/docs/sphinx/developers/building-bioformats.txt
++++ b/docs/sphinx/developers/building-bioformats.txt
+@@ -62,26 +62,6 @@ If you are interested in working on the Bio-Formats source code itself,
+ you can load it into your favorite IDE, or develop with your favorite
+ text editor.
+ 
+-Prerequisites
+-^^^^^^^^^^^^^
+-
+-In addition to the Bio-Formats source code, the following programs and
+-packages are also required:
+-
+-- `Python 2 <http://python.org>`_, version 2.6 or later (note: not
+-  version 3)
+-- `Genshi <http://genshi.edgewall.org>`_ 0.5 or later (0.7 recommended)
+-
+-.. note::
+-
+-    Genshi may be installed (in order of decreasing preference) with
+-    some Linux distributions' package managers, :program:`pip` (``pip
+-    install genshi``), by downloading a compatible :file:`.egg` for
+-    your system from the `Genshi download page
+-    <http://genshi.edgewall.org/wiki/Download>`_, or from source.  If
+-    using a :file:`.egg`, make sure it is added to your
+-    :envvar:`PYTHONPATH` environment variable.
+-
+ NetBeans
+ ^^^^^^^^
+ 
+@@ -123,14 +103,7 @@ You can import the Bio-Formats source by choosing
+ and browsing to the top-level folder of your Bio-Formats working copy.
+ Alternatively, run the Eclipse Maven target with :command:`mvn
+ eclipse:eclipse` to create the Eclipse project files, then use
+-:menuselection:`File --> Import --> Existing Projects into Workspace`.
+-
+-To remove post-import errors, either close the ``ome-xml`` project or run::
+-
+-  ant jars && mvn generate-sources
+-
+-.. seealso::
+-   `[ome-devel] Importing source into eclipse <http://lists.openmicroscopy.org.uk/pipermail/ome-devel/2014-March/002719.html>`_
++:menuselection:`File --> Import --> Existing Maven Projects`.
+ 
+ Command line
+ ^^^^^^^^^^^^
+diff --git a/docs/sphinx/developers/components.txt b/docs/sphinx/developers/components.txt
+index 06d981154d4..1709cf81677 100644
+--- a/docs/sphinx/developers/components.txt
++++ b/docs/sphinx/developers/components.txt
+@@ -131,7 +131,7 @@ readers and writers. :ref:`ome-common <ome-common>` and
+ 
+ :source:`formats-bsd (BSD Bio-Formats readers and writers) <components/formats-bsd>`:
+ 
+-`Ant: jar-formats-bsd, jar-formats-bsd-tests`
++`Ant: jar-formats-bsd`
+ 
+ This contains readers and writers for formats which have a publicly available
+ specification, e.g. TIFF.  Everything in the component is BSD-licensed.
+diff --git a/docs/sphinx/developers/overview.txt b/docs/sphinx/developers/overview.txt
+index 7965eea3de8..b5de9ddb490 100644
+--- a/docs/sphinx/developers/overview.txt
++++ b/docs/sphinx/developers/overview.txt
+@@ -40,8 +40,8 @@ OME data model.
+ Implementation
+ --------------
+ 
+-Bio-Formats is primarily a Java project. It can be used from MATLAB, and
+-there are C++ bindings and an ongoing C++ implementation effort. The
++Bio-Formats is primarily a Java project. It can be used from MATLAB and
++there is also a separate C++ implementation (OME Files C++). The
+ source code is available for download and sometimes the user community
+ contributes code back into Bio-Formats by opening a pull request on
+ GitHub. Bio-Formats is built from source with Ant or Maven and some of
+diff --git a/docs/sphinx/formats/perkinelmer-ultraview.txt b/docs/sphinx/formats/perkinelmer-ultraview.txt
+index a6038ff7453..6edfa7d63df 100644
+--- a/docs/sphinx/formats/perkinelmer-ultraview.txt
++++ b/docs/sphinx/formats/perkinelmer-ultraview.txt
+@@ -55,4 +55,4 @@ Commercial applications that support this format include:
+ * `Image-Pro Plus <http://www.mediacy.com/>`_ 
+ 
+ .. seealso:: 
+-  `PerkinElmer UltraVIEW system overview <http://www.perkinelmer.com/product/ultraview-vox-3d-live-cell-imaging-system-l7267000>`_
++  `PerkinElmer UltraVIEW system overview (pdf) <http://www.perkinelmer.com/lab-solutions/resources/docs/BRO_UltraVIEW-VoX-Product-Brochure.pdf>`_
+diff --git a/pom.xml b/pom.xml
+index 8b4d99bf97e..21438e6b128 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -24,7 +24,7 @@
+     <module>components/formats-gpl</module>
+     <module>components/bundles/bioformats_package</module>
+     <module>components/bio-formats-plugins</module>
+-    <module>components/bundles/loci-tools</module>
++    <module>components/bundles/loci_tools</module>
+     <module>components/metakit</module>
+     <module>components/bio-formats-tools</module>
+     <module>components/test-suite</module>
+@@ -55,10 +55,10 @@
+     <kryo.version>2.24.0</kryo.version>
+     <testng.version>6.8</testng.version>
+     <guava.version>17.0</guava.version>
+-    <ome-common.version>5.3.1-SNAPSHOT</ome-common.version>
+-    <specification.version>5.3.1-SNAPSHOT</specification.version>
+-    <ome-xml.version>5.3.1-SNAPSHOT</ome-xml.version>
+-    <ome-poi.version>5.3.1-SNAPSHOT</ome-poi.version>
++    <ome-common.version>5.3.1</ome-common.version>
++    <specification.version>5.3.1</specification.version>
++    <ome-xml.version>5.3.1</ome-xml.version>
++    <ome-poi.version>5.3.1</ome-poi.version>
+     <ome-mdbtools.version>5.3.0</ome-mdbtools.version>
+     <jxrlib.version>0.2.0-SNAPSHOT</jxrlib.version>
+ 

@@ -1,0 +1,152 @@
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
+index d58554f9b6..2aeb83e7a3 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
+@@ -40,7 +40,7 @@
+     @Override
+     protected String getPath(String filename) throws IOException {
+         return super.getPath("checks" + File.separator
+-                + "blocks" + File.separator + "emptyblock" + File.separator + filename);
++                + "blocks" + File.separator + filename);
+     }
+ 
+     /* Additional test for jacoco, since valueOf()
+@@ -68,7 +68,7 @@ public void testDefault()
+             "73:41: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+             "84:12: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockDefault.java"), expected);
++        verify(checkConfig, getPath("InputSemantic.java"), expected);
+     }
+ 
+     @Test
+@@ -84,7 +84,7 @@ public void testText()
+             "71:29: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "synchronized"),
+             "84:12: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "STATIC_INIT"),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockDefault.java"), expected);
++        verify(checkConfig, getPath("InputSemantic.java"), expected);
+     }
+ 
+     @Test
+@@ -103,7 +103,7 @@ public void testStatement()
+             "73:41: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+             "84:12: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockDefault.java"), expected);
++        verify(checkConfig, getPath("InputSemantic.java"), expected);
+     }
+ 
+     @Test
+@@ -120,7 +120,7 @@ public void allowEmptyLoops() throws Exception {
+             "22:29: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+             "23:28: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockAllowEmptyLoops.java"), expected);
++        verify(checkConfig, getPath("InputSemantic2.java"), expected);
+     }
+ 
+     @Test
+@@ -137,7 +137,7 @@ public void allowEmptyLoopsText() throws Exception {
+             "22:29: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "if"),
+             "23:28: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "switch"),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockAllowEmptyLoops.java"), expected);
++        verify(checkConfig, getPath("InputSemantic2.java"), expected);
+     }
+ 
+     @Test
+@@ -148,7 +148,7 @@ public void testInvalidOption() throws Exception {
+         try {
+             final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
+ 
+-            verify(checkConfig, getPath("InputEmptyBlockDefault.java"), expected);
++            verify(checkConfig, getPath("InputSemantic.java"), expected);
+             fail("exception expected");
+         }
+         catch (CheckstyleException ex) {
+@@ -170,7 +170,7 @@ public void testAllowEmptyCaseWithText() throws Exception {
+             "31:37: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "case"),
+             "32:29: " + getCheckMessage(MSG_KEY_BLOCK_EMPTY, "case"),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockCase.java"), expected);
++        verify(checkConfig, getPath("InputEmptyCase.java"), expected);
+     }
+ 
+     @Test
+@@ -187,7 +187,7 @@ public void testForbidCaseWithoutStmt() throws Exception {
+             "32:29: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT, "case"),
+             "32:40: " + getCheckMessage(MSG_KEY_BLOCK_NO_STMT, "case"),
+         };
+-        verify(checkConfig, getPath("InputEmptyBlockCase.java"), expected);
++        verify(checkConfig, getPath("InputEmptyCase.java"), expected);
+     }
+ 
+     @Test
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
+similarity index 91%
+rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
+rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
+index bf75c7bd26..b8c1df3f66 100644
+--- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
+@@ -2,9 +2,9 @@
+ // Input test file for testing empty LITERAL_CASE.
+ // Created: 2017
+ ////////////////////////////////////////////////////////////////////////////////
+-package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
++package com.puppycrawl.tools.checkstyle.checks.blocks;
+ 
+-class InputEmptyBlockCase
++class InputEmptyCase
+ {
+     void method1(int a) {
+         switch (a) {}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
+similarity index 94%
+rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
+rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
+index d387c10d10..94cda5d53d 100644
+--- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
+@@ -2,7 +2,7 @@
+ // Test case file for checkstyle.
+ // Created: 2001
+ ////////////////////////////////////////////////////////////////////////////////
+-package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
++package com.puppycrawl.tools.checkstyle.checks.blocks;
+ 
+ import java.io.*; // star import for instantiation tests
+ import java.awt.Dimension; // explicit import for instantiation tests
+@@ -12,7 +12,7 @@
+  * Test case for detecting empty block statements.
+  * @author Lars Kühne
+  **/
+-class InputEmptyBlockDefault
++class InputSemantic
+ {
+     static {
+         Boolean x = new Boolean(true);
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
+similarity index 89%
+rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
+rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
+index b1f994af76..01b93dfdaa 100644
+--- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
+@@ -2,13 +2,13 @@
+ // Test case file for checkstyle.
+ // Created: 2001
+ ////////////////////////////////////////////////////////////////////////////////
+-package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
++package com.puppycrawl.tools.checkstyle.checks.blocks;
+ 
+ import java.io.*; // star import for instantiation tests
+ import java.awt.Dimension; // explicit import for instantiation tests
+ import java.awt.Color;
+ 
+-class InputEmptyBlockAllowEmptyLoops
++class UpdateClass
+ {
+ 	public void fooMethod()
+ 	{

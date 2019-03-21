@@ -1,0 +1,166 @@
+diff --git a/src/main/java/org/assertj/core/api/AbstractIterableAssert.java b/src/main/java/org/assertj/core/api/AbstractIterableAssert.java
+index 674049044..2d4970642 100644
+--- a/src/main/java/org/assertj/core/api/AbstractIterableAssert.java
++++ b/src/main/java/org/assertj/core/api/AbstractIterableAssert.java
+@@ -31,11 +31,11 @@
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Comparator;
+-import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.Iterator;
+ import java.util.List;
+ import java.util.Map;
++import java.util.TreeMap;
+ 
+ import org.assertj.core.api.IterableAssert.LazyIterable;
+ import org.assertj.core.api.filter.FilterOperator;
+@@ -99,7 +99,7 @@
+   private static final String ASSERT = "Assert";
+ 
+   private TypeComparators comparatorsByType = defaultTypeComparators();
+-  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new HashMap<>();
++  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new TreeMap<>();
+   private TypeComparators comparatorsForElementPropertyOrFieldTypes = defaultTypeComparators();
+ 
+   protected Iterables iterables = Iterables.instance();
+diff --git a/src/main/java/org/assertj/core/api/AbstractObjectArrayAssert.java b/src/main/java/org/assertj/core/api/AbstractObjectArrayAssert.java
+index 5626eda4e..d18a058e5 100644
+--- a/src/main/java/org/assertj/core/api/AbstractObjectArrayAssert.java
++++ b/src/main/java/org/assertj/core/api/AbstractObjectArrayAssert.java
+@@ -30,10 +30,10 @@
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Comparator;
+-import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.TreeMap;
+ 
+ import org.assertj.core.api.filter.FilterOperator;
+ import org.assertj.core.api.filter.Filters;
+@@ -84,7 +84,7 @@
+   ObjectArrays arrays = ObjectArrays.instance();
+ 
+   private TypeComparators comparatorsByType = defaultTypeComparators();
+-  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new HashMap<>();
++  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new TreeMap<>();
+   private TypeComparators comparatorsForElementPropertyOrFieldTypes = defaultTypeComparators();
+ 
+   public AbstractObjectArrayAssert(ELEMENT[] actual, Class<?> selfType) {
+diff --git a/src/main/java/org/assertj/core/api/AbstractObjectAssert.java b/src/main/java/org/assertj/core/api/AbstractObjectAssert.java
+index c913de151..bc64c986f 100644
+--- a/src/main/java/org/assertj/core/api/AbstractObjectAssert.java
++++ b/src/main/java/org/assertj/core/api/AbstractObjectAssert.java
+@@ -18,9 +18,9 @@
+ import static org.assertj.core.internal.TypeComparators.defaultTypeComparators;
+ 
+ import java.util.Comparator;
+-import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.TreeMap;
+ 
+ import org.assertj.core.description.Description;
+ import org.assertj.core.groups.Tuple;
+@@ -46,7 +46,7 @@
+ public abstract class AbstractObjectAssert<SELF extends AbstractObjectAssert<SELF, ACTUAL>, ACTUAL>
+     extends AbstractAssert<SELF, ACTUAL> {
+ 
+-  private Map<String, Comparator<?>> comparatorByPropertyOrField = new HashMap<>();
++  private Map<String, Comparator<?>> comparatorByPropertyOrField = new TreeMap<>();
+   private TypeComparators comparatorByType = defaultTypeComparators();
+ 
+   public AbstractObjectAssert(ACTUAL actual, Class<?> selfType) {
+diff --git a/src/main/java/org/assertj/core/api/AtomicReferenceArrayAssert.java b/src/main/java/org/assertj/core/api/AtomicReferenceArrayAssert.java
+index 514466a09..5d4b7d5d0 100644
+--- a/src/main/java/org/assertj/core/api/AtomicReferenceArrayAssert.java
++++ b/src/main/java/org/assertj/core/api/AtomicReferenceArrayAssert.java
+@@ -31,10 +31,10 @@
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Comparator;
+-import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.TreeMap;
+ import java.util.concurrent.atomic.AtomicReferenceArray;
+ 
+ import org.assertj.core.api.filter.FilterOperator;
+@@ -71,7 +71,7 @@
+   ObjectArrays arrays = ObjectArrays.instance();
+ 
+   private TypeComparators comparatorsByType = defaultTypeComparators();
+-  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new HashMap<>();
++  private Map<String, Comparator<?>> comparatorsForElementPropertyOrFieldNames = new TreeMap<>();
+   private TypeComparators comparatorsForElementPropertyOrFieldTypes = defaultTypeComparators();
+ 
+   public AtomicReferenceArrayAssert(AtomicReferenceArray<T> actual) {
+diff --git a/src/main/java/org/assertj/core/internal/DeepDifference.java b/src/main/java/org/assertj/core/internal/DeepDifference.java
+index cd5558ec8..65e7bc002 100644
+--- a/src/main/java/org/assertj/core/internal/DeepDifference.java
++++ b/src/main/java/org/assertj/core/internal/DeepDifference.java
+@@ -34,6 +34,7 @@
+ import java.util.Set;
+ import java.util.SortedMap;
+ import java.util.SortedSet;
++import java.util.TreeMap;
+ import java.util.concurrent.ConcurrentHashMap;
+ 
+ /**
+@@ -149,7 +150,7 @@ public String toString() {
+                                                       TypeComparators comparatorByType) {
+     // replace null comparators groups by empty one to simplify code afterwards
+     comparatorByPropertyOrField = comparatorByPropertyOrField == null
+-        ? new HashMap<String, Comparator<?>>()
++        ? new TreeMap<String, Comparator<?>>()
+         : comparatorByPropertyOrField;
+     comparatorByType = comparatorByType == null ? defaultTypeComparators() : comparatorByType;
+     return determineDifferences(a, b, null, comparatorByPropertyOrField, comparatorByType);
+diff --git a/src/main/java/org/assertj/core/internal/FieldByFieldComparator.java b/src/main/java/org/assertj/core/internal/FieldByFieldComparator.java
+index a215a6d3f..9bc8c568a 100644
+--- a/src/main/java/org/assertj/core/internal/FieldByFieldComparator.java
++++ b/src/main/java/org/assertj/core/internal/FieldByFieldComparator.java
+@@ -19,10 +19,10 @@
+ 
+ import java.util.ArrayList;
+ import java.util.Comparator;
+-import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Map.Entry;
++import java.util.TreeMap;
+ 
+ import org.assertj.core.api.Assertions;
+ import org.assertj.core.util.introspection.IntrospectionError;
+@@ -39,13 +39,13 @@
+   public FieldByFieldComparator(Map<String, Comparator<?>> comparatorByPropertyOrField,
+                                 TypeComparators typeComparators) {
+     this.comparatorByPropertyOrField = comparatorByPropertyOrField == null
+-        ? new HashMap<String, Comparator<?>>()
++        ? new TreeMap<String, Comparator<?>>()
+         : comparatorByPropertyOrField;
+     this.comparatorByType = isNullOrEmpty(typeComparators) ? defaultTypeComparators() : typeComparators;
+   }
+ 
+   protected FieldByFieldComparator() {
+-    this(new HashMap<String, Comparator<?>>(), defaultTypeComparators());
++    this(new TreeMap<String, Comparator<?>>(), defaultTypeComparators());
+   }
+ 
+   @Override
+diff --git a/src/test/java/org/assertj/core/internal/FieldByFieldComparator_toString_Test.java b/src/test/java/org/assertj/core/internal/FieldByFieldComparator_toString_Test.java
+index 7479eb560..608189b60 100644
+--- a/src/test/java/org/assertj/core/internal/FieldByFieldComparator_toString_Test.java
++++ b/src/test/java/org/assertj/core/internal/FieldByFieldComparator_toString_Test.java
+@@ -44,7 +44,7 @@ public void should_return_description_of_FieldByFieldComparator_with_field_compa
+     // THEN
+     assertThat(fieldByFieldComparator).hasToString(format("field/property by field/property comparator on all fields/properties%n"
+                                                           + "Comparators used:%n"
+-                                                          + "- for elements fields (by name): {weight -> org.assertj.core.util.BigDecimalComparator, name -> AlwaysEqualComparator}%n"
++                                                          + "- for elements fields (by name): {name -> AlwaysEqualComparator, weight -> org.assertj.core.util.BigDecimalComparator}%n"
+                                                           + "- for elements fields (by type): {Double -> DoubleComparator[precision=1.0E-15], Float -> FloatComparator[precision=1.0E-6]}"));
+   }
+ 

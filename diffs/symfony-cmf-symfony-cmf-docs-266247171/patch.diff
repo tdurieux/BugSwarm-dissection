@@ -1,0 +1,242 @@
+diff --git a/bundles/routing_auto/configuration.rst b/bundles/routing_auto/configuration.rst
+index f2db71ca..6be3d22c 100644
+--- a/bundles/routing_auto/configuration.rst
++++ b/bundles/routing_auto/configuration.rst
+@@ -10,9 +10,9 @@ Configuration
+ ``adapter``
+ ~~~~~~~~~~~
+ 
+-**type**: ``scalar`` **default**: ``doctrine_phpcr_odm`` if ``persistence`` configuration option is set ``phpcr``
++**type**: ``scalar`` **default**: ``doctrine_phpcr_odm`` if ``persistence`` configuration option is set to ``phpcr``
+ 
+-This defines the adapter used to manage routes.
++Alias of the :doc:`adapter <adapter>` used to manage routes.
+ 
+ ``auto_mapping``
+ ~~~~~~~~~~~~~~~~
+@@ -22,10 +22,120 @@ This defines the adapter used to manage routes.
+ Look for the configuration file ``cmf_routing_auto.yml`` in `Resource/config` folder of all
+ available bundles.
+ 
++``mapping``
++~~~~~~~~~~~
++
++Specify files with auto routing mapping.
++
++.. configuration-block::
++
++    .. code-block:: yaml
++
++        # app/config/config.yml
++        cmf_routing_auto:
++            mapping:
++                resources:
++                    -
++                        path: app/Resources/routing_auto.yml
++                        type: yaml
++
++    .. code-block:: xml
++
++        <!-- app/config/config.xml -->
++        <?xml version="1.0" encoding="UTF-8" ?>
++        <container xmlns="http://symfony.com/schema/dic/services">
++
++            <config xmlns="http://cmf.symfony.com/schema/dic/routing_auto">
++                <mapping>
++                    <resource path="app/Resources/routing_auto.yml" type="yaml"/>
++                </mapping>
++            </config>
++
++        </container>
++
++    .. code-block:: php
++
++        // app/config/config.php
++        $container->loadFromExtension('cmf_routing_auto', [
++            'mapping' => [
++                'resources' => [
++                    [
++                        'path' => 'app/Resources/routing_auto.yml',
++                        'type' => 'yaml',
++                    ],
++                ],
++            ],
++        ]);
++
++``path``
++........
++
++**type**: ``scalar`` **required**
++
++Path to the auto route mapping file in the project.
++
++``type``
++........
++
++**type**: ``enum`` **values**: ``yaml``|``xml`` **optional**
++
++Type of the configuration file, for the Symfony configuration loader.
++
+ ``persistence``
+ ~~~~~~~~~~~~~~~
+ 
++Select persistence mode. Only PHPCR is provided by this bundle.
++
+ ``phpcr``
+-.........
++~~~~~~~~~
++
++Use this section to configure the PHPCR adapter.
++
++.. configuration-block::
++
++    .. code-block:: yaml
++
++        # app/config/config.yml
++        cmf_routing_auto:
++            persistence:
++                phpcr:
++                    enabled: true
++                    route_basepath: /cms/routes
++
++    .. code-block:: xml
++
++        <!-- app/config/config.xml -->
++        <?xml version="1.0" encoding="UTF-8" ?>
++        <container xmlns="http://symfony.com/schema/dic/services">
++
++            <config xmlns="http://cmf.symfony.com/schema/dic/routing_auto">
++                <persistence>
++                    <phpcr enabled="true" route-basepath="/cms/routes"/>
++                </persistence>
++            </config>
++
++        </container>
++
++    .. code-block:: php
++
++        // app/config/config.php
++        $container->loadFromExtension('cmf_routing_auto', [
++            'persistence' => [
++                'phpcr' => [
++                    'enabled' => true,
++                    'route_basepath' => '/cms/routes',
++                ],
++            ],
++        ]);
++
++``enabled``
++...........
++
++**type**: ``Boolean`` **default**: ``false``
++
++``route_basepath``
++..................
++
++**type**: ``scalar`` **default**: ``/cms/routes``
+ 
+-.. todo
+\ No newline at end of file
++Path to the root route to know where to add auto routes.
+diff --git a/bundles/routing_auto/defunct_route_handlers.rst b/bundles/routing_auto/defunct_route_handlers.rst
+index 2f068f4d..a320c85b 100644
+--- a/bundles/routing_auto/defunct_route_handlers.rst
++++ b/bundles/routing_auto/defunct_route_handlers.rst
+@@ -112,11 +112,11 @@ can be configured as follows:
+ Creating a Custom Defunct Route Handler
+ ---------------------------------------
+ 
+-To create a custom default route handler, you have to implement
+-``DefunctRouteHandlerInterface``. This requires a method ``handleDefunctRoutes()``.
++To create your own custom defunct route handler, you implement
++``DefunctRouteHandlerInterface`` which specifies one method called
++``handleDefunctRoutes()``.
+ 
+-They are not all-together trivial - the following handler removes old routes and is
+-the default handler::
++To get an idea, lets look at the default handler that removes the old route::
+ 
+     namespace Symfony\Cmf\Component\RoutingAuto\DefunctRouteHandler;
+ 
+diff --git a/bundles/routing_auto/introduction.rst b/bundles/routing_auto/introduction.rst
+index 39542542..3b87e9fd 100644
+--- a/bundles/routing_auto/introduction.rst
++++ b/bundles/routing_auto/introduction.rst
+@@ -8,10 +8,6 @@ RoutingAutoBundle
+ The RoutingAutoBundle allows you to automatically persist routes when
+ documents are persisted based on URI schemas and contextual information.
+ 
+-This implies a separation of the ``Route`` and ``Content`` documents. If your
+-needs are simple this bundle may not be for you and you should have a look at
+-:doc:`the SimpleCmsBundle <../simple_cms/introduction>`.
+-
+ Installation
+ ------------
+ 
+@@ -44,20 +40,22 @@ Features
+ --------
+ 
+ Imagine you are going to create a forum application that has two routeable
+-content documents - a category and the topics. These documents are called
+-``Category`` and ``Topic``, and they are called *content documents*.
+-
+-If you create a new category with the title "My New Category", the
+-RoutingAutoBundle will automatically create the route
+-``/forum/my-new-cateogry``. For each new ``Topic`` it could create a route
+-like ``/forum/my-new-category/my-new-topic``. This URI resolves to a special
+-type of route that is called an *auto route*.
+-
+-By default, when you update a content document that has an auto route, the
+-corresponding auto route will also be updated. When deleting a content
+-document, the corresponding auto route will also be deleted.
+-
+-If required, the bundle can also be configured to do extra stuff, like, for
++content documents - the categories and the topics. They are defined in the
++document classes ``Category`` and ``Topic``. In general, we speak of them as
++*content documents*.
++
++With the proper setup, routing auto automatically creates the route
++``/forum/my-new-cateogry`` when you create a new category with the title
++"My New Category". For each new ``Topic``, it creates a route like
++``/forum/my-new-category/my-new-topic``.
++
++The routes created by this bundle are documents of a special class
++``AutoRoute`` so that they can be recognized by the application as having been
++autocreated. By default, when you update a content document that has an auto
++route, the corresponding auto route will also be updated. When deleting such a
++content document, the corresponding auto route will also be deleted.
++
++If required, the bundle can also be configured to do extra things, like, for
+ example, leaving a ``RedirectRoute`` when the location of a content document
+ changes or automatically displaying an index page when an unconfigured
+ intermediate path is accessed (for example, listing all the children when requesting
+@@ -89,7 +87,7 @@ Usage
+ -----
+ 
+ Imagine you have a fictional forum application and that you want to access the
+-forum topic with the following fictional URI:
++forum topic with the following URI:
+ 
+ - ``https://mywebsite.com/my-forum/drinks/coffee``
+ 
+@@ -168,8 +166,8 @@ follows::
+         }
+     }
+ 
+-After persisting this object, the route will be created. You will of course
+-be wanting to return property values and not static strings, but you get the
++After persisting this object, the route will be created. Your classes will of
++course be returning property values and not static strings, but you get the
+ idea.
+ 
+ .. note::
+@@ -178,7 +176,8 @@ idea.
+     object. Imagine you have 2 documents, ``ContactPage`` and ``Page``, which
+     both extend ``AbstractPage``. When you map the ``AbstractPage`` class, it
+     will be applied to both documents. You can also use the ``extend`` keyword
+-    to achieve the same thing with objects which are not related.
++    in the auto routing configuration file to achieve the same thing with
++    objects which are not related.
+ 
+ This is just a basic example. You can also configure what should happen when
+ a route already exists (conflict resolution) and what to do with old routes

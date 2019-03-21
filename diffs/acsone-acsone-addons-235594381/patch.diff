@@ -1,0 +1,748 @@
+diff --git a/cagnotte_base/__manifest__.py b/cagnotte_base/__manifest__.py
+new file mode 100644
+index 0000000..bdbb486
+--- /dev/null
++++ b/cagnotte_base/__manifest__.py
+@@ -0,0 +1,22 @@
++# -*- coding: utf-8 -*-
++# © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
++# License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
++
++{
++    "name": "Cagnotte Base",
++    "version": "10.0.1.0.0",
++    'author': "ACSONE SA/NV",
++    "category": "Accounting & Finance",
++    "website": "http://www.acsone.eu",
++    "depends": [
++        "account",
++    ],
++    "data": [
++        "views/cagnotte_views.xml",
++        "security/ir.model.access.csv",
++        "security/cagnotte_base_security.xml",
++    ],
++    "license": "AGPL-3",
++    "installable": True,
++    "application": False,
++}
+diff --git a/cagnotte_base/models/cagnotte.py b/cagnotte_base/models/cagnotte.py
+index 68a4e76..ebbe82b 100644
+--- a/cagnotte_base/models/cagnotte.py
++++ b/cagnotte_base/models/cagnotte.py
+@@ -2,31 +2,40 @@
+ # © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+-from openerp import api, fields, models
++from odoo import api, fields, models
+ 
+ 
+ class CagnotteType(models.Model):
+     _name = 'cagnotte.type'
+ 
+-    name = fields.Char(translate=True, required=True)
++    name = fields.Char(
++        translate=True,
++        required=True)
+     sequence_id = fields.Many2one(
+-        comodel_name='ir.sequence', string='Cagnotte Sequence',
++        comodel_name='ir.sequence',
++        string='Cagnotte Sequence',
+         help="This field contains the information related to the numbering "
+-             "of the cagnotte of this type.", required=True)
+-    account_id = fields.Many2one(comodel_name='account.account',
+-                                 string='Account', ondelete='restrict',
+-                                 index=True,
+-                                 required=True)
+-    journal_id = fields.Many2one(comodel_name='account.journal',
+-                                 string='Journal', ondelete='restrict',
+-                                 help='Journal use to empty the cagnotte',
+-                                 required=True)
+-    product_id = fields.Many2one(comodel_name='product.product',
+-                                 string='Product', ondelete='restrict',
+-                                 help='Product use to fill the cagnotte')
++             "of the cagnotte of this type.",
++        required=True)
++    account_id = fields.Many2one(
++        comodel_name='account.account',
++        string='Account', ondelete='restrict',
++        index=True,
++        required=True)
++    journal_id = fields.Many2one(
++        comodel_name='account.journal',
++        string='Journal', ondelete='restrict',
++        help='Journal use to empty the cagnotte',
++        required=True)
++    product_id = fields.Many2one(
++        comodel_name='product.product',
++        string='Product', ondelete='restrict',
++        help='Product use to fill the cagnotte')
+     company_id = fields.Many2one(
+-        comodel_name='res.company', string='Company',
+-        default=lambda self: self.env.user.company_id.id, required=True)
++        comodel_name='res.company',
++        string='Company',
++        default=lambda self: self.env.user.company_id.id,
++        required=True)
+ 
+     @api.multi
+     def _check_account(self):
+@@ -38,7 +47,7 @@ def _check_account(self):
+         for cagnotte in self:
+             if cagnotte.product_id:
+                 product_account_id = cagnotte.product_id.\
+-                    property_account_income.id
++                    property_account_income_id.id
+                 if not product_account_id:
+                     product_account_id = cagnotte.product_id.categ_id.\
+                         property_account_income_categ.id
+@@ -75,47 +84,66 @@ def _check_account(self):
+ class AccountCagnotte(models.Model):
+     _name = 'account.cagnotte'
+ 
+-    name = fields.Char(readonly=True, copy=False)
+-    cagnotte_type_id = fields.Many2one('cagnotte.type', 'Cagnotte Type',
+-                                       required=True,
+-				       ondelete='restrict')
+-    solde_cagnotte = fields.Float(compute='_compute_solde_cagnotte',
+-                                  store=True)
+-    active = fields.Boolean(default=True)
++    name = fields.Char(
++        readonly=True,
++        copy=False)
++    cagnotte_type_id = fields.Many2one(
++        'cagnotte.type',
++        'Cagnotte Type',
++        required=True,
++        ondelete='restrict')
++    solde_cagnotte = fields.Float(
++        compute='_compute_solde_cagnotte',
++        store=True)
++    active = fields.Boolean(
++        default=True)
+     account_move_line_ids = fields.One2many(
+-        "account.move.line", "account_cagnotte_id",
++        comodel_name="account.move.line",
++        inverse_name="account_cagnotte_id",
+         string="Journal Items")
+-    create_date = fields.Date(default=fields.Date.today)
++    create_date = fields.Date(
++        default=fields.Date.today)
++
++    @api.multi
++    def _get_name(self):
++        self.ensure_one()
++        return '%s - %s' % (self.cagnotte_type_id.name, self.name)
+ 
+-    @api.one
++    @api.multi
+     def name_get(self):
+         """Add the type of cagnotte in the name"""
+-        return (self.id, '%s - %s' % (self.cagnotte_type_id.name, self.name))
++        res = []
++        for cagnotte in self:
++            name = cagnotte._get_name()
++            res.append((cagnotte.id, name))
++        return res
+ 
+-    @api.one
++    @api.multi
+     @api.depends('account_move_line_ids.debit',
+                  'account_move_line_ids.credit')
+     def _compute_solde_cagnotte(self):
+-        solde_cagnotte = 0
+-        for move_line in self.account_move_line_ids:
+-            solde_cagnotte += move_line.credit - move_line.debit
+-        self.solde_cagnotte = solde_cagnotte
++        for cagnotte in self:
++            solde_cagnotte = 0
++            for move_line in cagnotte.account_move_line_ids:
++                solde_cagnotte += move_line.credit - move_line.debit
++            cagnotte.solde_cagnotte = solde_cagnotte
+ 
+-    @api.model
++    @api.multi
+     def create(self, vals):
+         if 'name' not in vals:
+             cagnotte_type = self.env['cagnotte.type'].browse(
+                 vals['cagnotte_type_id'])
+-            vals['name'] = self.env['ir.sequence'].next_by_id(
+-                cagnotte_type.sequence_id.id)
++            vals['name'] = cagnotte_type.sequence_id.next_by_id()
+         return super(AccountCagnotte, self).create(vals)
+ 
+ 
+ class AccountMoveLine(models.Model):
+     _inherit = "account.move.line"
+ 
+-    account_cagnotte_id = fields.Many2one('account.cagnotte', 'Cagnotte',
+-				          ondelete='restrict')
++    account_cagnotte_id = fields.Many2one(
++        comodel_name='account.cagnotte',
++        string='Cagnotte',
++        ondelete='restrict')
+ 
+     @api.model
+     def cagnotte_value(self, values):
+@@ -133,11 +161,10 @@ def cagnotte_value(self, values):
+                             {'cagnotte_type_id': cagnotte_type.id}).id
+         return values
+ 
+-    @api.cr_uid_context
+-    def create(self, cr, uid, values, context=None, check=True):
+-        vals = self.cagnotte_value(cr, uid, values, context=context)
+-        return super(AccountMoveLine, self).create(
+-            cr, uid, vals, context=context, check=check)
++    @api.multi
++    def create(self, values):
++        vals = self.cagnotte_value(values)
++        return super(AccountMoveLine, self).create(vals)
+ 
+     @api.multi
+     def _check_cagnotte_account(self):
+@@ -161,10 +188,13 @@ class AccountInvoice(models.Model):
+     _inherit = "account.invoice"
+ 
+     cagnotte_type_id = fields.Many2one(
+-        'cagnotte.type', 'Cagnotte type', readonly=True,
+-	ondelete='restrict',
++        comodel_name='cagnotte.type',
++        string='Cagnotte type',
++        readonly=True,
++        ondelete='restrict',
+         help="Use this field to give coupon to a customer",
+-        states={'draft': [('readonly', False)]})
++        states={'draft': [('readonly', False)]}
++    )
+ 
+     @api.onchange("cagnotte_type_id")
+     def onchange_cagnotte_type_id(self):
+diff --git a/cagnotte_base/security/cagnotte_base_security.xml b/cagnotte_base/security/cagnotte_base_security.xml
+index a05d181..8b41daf 100644
+--- a/cagnotte_base/security/cagnotte_base_security.xml
++++ b/cagnotte_base/security/cagnotte_base_security.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<openerp>
++<odoo>
+     <data noupdate="1">
+         <record id="cagnotte_type_comp_rule" model="ir.rule">
+             <field name="name">Cagnotte Type multi company</field>
+@@ -14,4 +14,4 @@
+             <field name="domain_force">[('cagnotte_type_id.company_id','child_of',[user.company_id.id])]</field>
+         </record>
+     </data>
+-</openerp>
+\ No newline at end of file
++</odoo>
+\ No newline at end of file
+diff --git a/cagnotte_base/tests/data/account_cagnotte_data.xml b/cagnotte_base/tests/data/account_cagnotte_data.xml
+new file mode 100644
+index 0000000..8a1f590
+--- /dev/null
++++ b/cagnotte_base/tests/data/account_cagnotte_data.xml
+@@ -0,0 +1,41 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data>
++        <record id="cagnotte" model="account.account">
++            <field name="code">X4404</field>
++            <field name="name">Cagnotte - (test)</field>
++            <field name="user_type_id" ref="account.data_account_type_revenue"/>
++        </record>
++        <record id="sequence_cagnotte_journal" model="ir.sequence">
++            <field name="name">Account Default Cagnotte Journal</field>
++            <field eval="3" name="padding"/>
++            <field name="prefix">CAG/%(year)s/</field>
++        </record>
++        <record id="cagnotte_journal" model="account.journal">
++            <field name="name">Cagnotte Journal - (test)</field>
++            <field name="code">CAG</field>
++            <field name="type">bank</field>
++            <field name="sequence_id" ref="sequence_cagnotte_journal"/>
++            <field name="default_debit_account_id" ref="cagnotte"/>
++            <field name="default_credit_account_id" ref="cagnotte"/>
++        </record>
++        <record id="product_product_cagnotte" model="product.product">
++            <field name="name">Cagnotte</field>
++            <field name="standard_price">15</field>
++            <field name="type">service</field>
++            <field name="property_account_income_id" ref="cagnotte"/>
++        </record>
++        <record id="sequence_cagnotte_type" model="ir.sequence">
++            <field name="name">Cagnotte type</field>
++            <field eval="3" name="padding"/>
++            <field name="prefix">CAG-</field>
++        </record>
++        <record id="cagnotte_type" model="cagnotte.type">
++            <field name="name">Cagnotte Type</field>
++            <field name="sequence_id" ref="sequence_cagnotte_type"/>
++            <field name="account_id" ref="cagnotte"/>
++            <field name="journal_id" ref="cagnotte_journal"/>
++            <field name="product_id" ref="product_product_cagnotte"/>
++        </record>
++    </data>
++</odoo>
+\ No newline at end of file
+diff --git a/cagnotte_base/tests/test_cagnotte.py b/cagnotte_base/tests/test_cagnotte.py
+index 13dcb81..d7595cb 100644
+--- a/cagnotte_base/tests/test_cagnotte.py
++++ b/cagnotte_base/tests/test_cagnotte.py
+@@ -2,12 +2,31 @@
+ # © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+-import openerp.tests.common as common
+-from openerp.exceptions import ValidationError
++from odoo import tools
++from odoo.modules.module import get_module_resource
++import odoo.tests.common as common
++
++
++def load_file(cr, module, *args):
++    tools.convert_file(
++        cr, 'cagnotte_base',
++        get_module_resource(module, *args),
++        {},
++        'init',
++        False,
++        'test')
+ 
+ 
+ class TestCagnotte(common.TransactionCase):
+ 
++    def setUp(self):
++        super(TestCagnotte, self).setUp()
++        load_file(
++            self.cr,
++            'cagnotte_base',
++            'tests/data/',
++            'account_cagnotte_data.xml')
++
+     def test_cagnotte(self):
+         """ Buy cagnotte product
+             Check cagnotte amount
+@@ -17,9 +36,12 @@ def test_cagnotte(self):
+             Check error
+         """
+         cagnotte_type = self.env.ref("cagnotte_base.cagnotte_type")
++        invoice_account = self.env['account.account'].search(
++            [('user_type_id', '=', self.env.ref(
++                'account.data_account_type_receivable').id)], limit=1)
+         invoice = self.env["account.invoice"].create(
+             {'partner_id': self.env.ref("base.res_partner_2").id,
+-             'account_id': self.env.ref("account.a_recv").id})
++             'account_id': invoice_account.id})
+         self.env["account.invoice.line"].create(
+             {'product_id': cagnotte_type.product_id.id,
+              'account_id': cagnotte_type.account_id.id,
+@@ -27,10 +49,9 @@ def test_cagnotte(self):
+              'price_unit': 100,
+              'invoice_id': invoice.id,
+              'name': 'set 100 in my cagnotte'})
+-        invoice.signal_workflow('invoice_open')
++        invoice.action_invoice_open()
+         has_cagnotte = False
+-        cagnotte = self.env['account.cagnotte']
+-        for line in invoice.move_id.line_id:
++        for line in invoice.move_id.line_ids:
+             if line.account_id.id == cagnotte_type.account_id.id:
+                 cagnotte = line.account_cagnotte_id
+                 self.assertTrue(cagnotte.cagnotte_type_id.id,
+@@ -40,25 +61,19 @@ def test_cagnotte(self):
+         self.assertAlmostEqual(cagnotte.solde_cagnotte, 100.00, 2)
+ 
+         move_obj = self.env["account.move"]
+-        move_line_obj = self.env["account.move.line"]
+ 
+-        pay_move = move_obj.create(
+-            {"journal_id": cagnotte.cagnotte_type_id.journal_id.id})
+-        pay_move_line = move_line_obj.create(
+-            {"move_id": pay_move.id,
+-             "account_id": cagnotte.cagnotte_type_id.account_id.id,
+-             "account_cagnotte_id": cagnotte.id,
+-             "name": "payement with my cagnotte",
+-             "debit": 100})
++        move_obj.create(
++            {"journal_id": cagnotte.cagnotte_type_id.journal_id.id,
++             "line_ids": [
++                 (0, 0, {
++                     "account_id": cagnotte.cagnotte_type_id.account_id.id,
++                     "account_cagnotte_id": cagnotte.id,
++                     "name": "payment with my cagnotte",
++                     "debit": 100
++                 }),
++                 (0, 0, {
++                     "account_id": invoice_account.id,
++                     "name": "payment with my cagnotte",
++                     "credit": 100})]})
+         self.assertEqual(len(cagnotte.account_move_line_ids), 2)
+         self.assertAlmostEqual(cagnotte.solde_cagnotte, 0.00, 2)
+-
+-        try:
+-            pay_move_line.debit = 150
+-        except ValidationError, e:
+-            self.assertEqual(
+-                e.value, "Field(s) `account_cagnotte_id, credit, debit` "
+-                         "failed against a constraint: The cagnotte "
+-                         "amount is insufficient")
+-        else:
+-            assert False, "Not enough cagnotte amount"
+diff --git a/cagnotte_base/views/cagnotte_views.xml b/cagnotte_base/views/cagnotte_views.xml
+index 76670b0..431293a 100644
+--- a/cagnotte_base/views/cagnotte_views.xml
++++ b/cagnotte_base/views/cagnotte_views.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0"?>
+-<openerp>
++<odoo>
+     <data>
+ 
+         <!-- Cagnotte type view -->
+@@ -7,7 +7,7 @@
+             <field name="name">account.cagnotte.search</field>
+             <field name="model">account.cagnotte</field>
+             <field name="arch" type="xml">
+-                <search string="Cagnotte">
++                <search string="Cagnotte" name="cagnotte">
+                     <group expand="1" string="Group By...">
+                         <filter string="Cagnotte type" name="cagnotte_type" context="{'group_by':'cagnotte_type_id'}"/>
+                     </group>
+@@ -158,7 +158,8 @@
+             <field name="inherit_id" ref="account.view_move_form" />
+             <field name="arch" type="xml">
+                 <data>
+-                    <xpath expr="//notebook/page[@string='Journal Items']/field[@name='line_id']/tree/field[@name='state']" position="after">
++                    <xpath
++                            expr="//notebook/page/field[@name='line_ids']/tree/field[@name='date_maturity']" position="after">
+                         <field name="account_cagnotte_id"/>
+                     </xpath>
+                 </data>
+@@ -181,12 +182,12 @@
+             <field name="model">account.invoice</field>
+             <field name="inherit_id" ref="account.invoice_form" />
+             <field name="arch" type="xml">
+-                <field name="account_id" position="before">
++                <xpath expr="//notebook/page[@name='other_info']/group/group/field[@name='account_id']" position="before">
+                     <field name="cagnotte_type_id" attrs="{'invisible':[('type','&lt;&gt;','out_refund')]}"/>
+-                </field>
++                </xpath>
+             </field>
+         </record>
+ 
+     </data>
+-</openerp>
++</odoo>
+ 
+diff --git a/cagnotte_coupon/__manifest__.py b/cagnotte_coupon/__manifest__.py
+new file mode 100644
+index 0000000..fcab5cd
+--- /dev/null
++++ b/cagnotte_coupon/__manifest__.py
+@@ -0,0 +1,20 @@
++# -*- coding: utf-8 -*-
++# © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
++# License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
++
++{
++    "name": "Cagnotte Coupon",
++    "version": "10.0.1.0.0",
++    'author': "ACSONE SA/NV",
++    "category": "Accounting & Finance",
++    "website": "http://www.acsone.eu",
++    "depends": [
++        "cagnotte_base",
++    ],
++    "data": [
++        "views/cagnotte_views.xml",
++    ],
++    "license": "AGPL-3",
++    "installable": True,
++    "application": False,
++}
+diff --git a/cagnotte_coupon/models/cagnotte.py b/cagnotte_coupon/models/cagnotte.py
+index 4db1fab..3ce5ece 100644
+--- a/cagnotte_coupon/models/cagnotte.py
++++ b/cagnotte_coupon/models/cagnotte.py
+@@ -3,15 +3,15 @@
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+ import uuid
+-from openerp import api, fields, models
++from odoo import api, fields, models
+ 
+ 
+ class CagnotteType(models.Model):
+     _inherit = 'cagnotte.type'
+ 
+-    with_coupon_code = fields.Boolean(help="Use this check to generate "
+-                                           "coupon number on created cagnotte "
+-                                           "for this type")
++    with_coupon_code = fields.Boolean(
++        help="Use this check to generate coupon number on created cagnotte "
++             "for this type")
+ 
+ 
+ class AccountCagnotte(models.Model):
+@@ -19,13 +19,11 @@ class AccountCagnotte(models.Model):
+ 
+     coupon_code = fields.Char(copy=False)
+ 
+-    @api.one
+-    def name_get(self):
+-        """Add coupon number to the name"""
+-        res = super(AccountCagnotte, self).name_get()[0]
+-        if self.coupon_code:
+-            res = (res[0], "%s, %s" % (res[1], self.coupon_code))
+-        return res
++    @api.multi
++    def _get_name(self):
++        self.ensure_one()
++        name = super(AccountCagnotte, self)._get_name()
++        return '%s, %s' % (name, self.coupon_code)
+ 
+     _sql_constraints = [(
+         'coupon_cagnotte_uniq',
+@@ -38,7 +36,7 @@ def generate_coupon_code(self, base):
+         uid = hash(str(uuid.uuid1())) % 1000000
+         return "%s%s" % (uid, base)
+ 
+-    @api.model
++    @api.multi
+     def create(self, vals):
+         res = super(AccountCagnotte, self).create(vals)
+         if not vals.get('coupon_code') and vals.get('cagnotte_type_id'):
+diff --git a/cagnotte_coupon/tests/test_cagnotte.py b/cagnotte_coupon/tests/test_cagnotte.py
+index effeb46..9690f8c 100644
+--- a/cagnotte_coupon/tests/test_cagnotte.py
++++ b/cagnotte_coupon/tests/test_cagnotte.py
+@@ -2,11 +2,20 @@
+ # © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+-import openerp.tests.common as common
++import odoo.tests.common as common
++from odoo.addons.cagnotte_base.tests.test_cagnotte import load_file
+ 
+ 
+ class TestCagnotte(common.TransactionCase):
+ 
++    def setUp(self):
++        super(TestCagnotte, self).setUp()
++        load_file(
++            self.cr,
++            'cagnotte_base',
++            'tests/data/',
++            'account_cagnotte_data.xml')
++
+     def test_cagnotte(self):
+         """ Create cagnotte
+             Check coupon code is empty
+diff --git a/cagnotte_coupon/views/cagnotte_views.xml b/cagnotte_coupon/views/cagnotte_views.xml
+index 191230e..7391d81 100644
+--- a/cagnotte_coupon/views/cagnotte_views.xml
++++ b/cagnotte_coupon/views/cagnotte_views.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0"?>
+-<openerp>
++<odoo>
+     <data>
+ 
+         <record id="account_cagnotte_view_search_inherit_cagnotte_coupon" model="ir.ui.view">
+@@ -7,7 +7,7 @@
+             <field name="model">account.cagnotte</field>
+             <field name="inherit_id" ref="cagnotte_base.account_cagnotte_view_search" />
+             <field name="arch" type="xml">
+-                <search string="Cagnotte">
++                <search name="cagnotte">
+                     <group position="before">
+                         <field name="coupon_code"/>
+                     </group>
+@@ -49,5 +49,5 @@
+         </record>
+ 
+     </data>
+-</openerp>
++</odoo>
+ 
+diff --git a/cagnotte_partner/__manifest__.py b/cagnotte_partner/__manifest__.py
+new file mode 100644
+index 0000000..5759d2e
+--- /dev/null
++++ b/cagnotte_partner/__manifest__.py
+@@ -0,0 +1,20 @@
++# -*- coding: utf-8 -*-
++# © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
++# License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
++
++{
++    "name": "Cagnotte Partner",
++    "version": "10.0.1.0.0",
++    'author': "ACSONE SA/NV",
++    "category": "Accounting & Finance",
++    "website": "http://www.acsone.eu",
++    "depends": [
++        "cagnotte_base",
++    ],
++    "data": [
++        "views/cagnotte_views.xml",
++    ],
++    "license": "AGPL-3",
++    "installable": True,
++    "application": False,
++}
+diff --git a/cagnotte_partner/models/cagnotte.py b/cagnotte_partner/models/cagnotte.py
+index 0c2ad89..43b199d 100644
+--- a/cagnotte_partner/models/cagnotte.py
++++ b/cagnotte_partner/models/cagnotte.py
+@@ -2,21 +2,21 @@
+ # © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+-from openerp import api, fields, models
++from odoo import api, fields, models
+ 
+ 
+ class AccountCagnotte(models.Model):
+     _inherit = 'account.cagnotte'
+ 
+-    partner_id = fields.Many2one(comodel_name="res.partner", string="Partner")
++    partner_id = fields.Many2one(
++        comodel_name="res.partner",
++        string="Partner")
+ 
+-    @api.one
+-    def name_get(self):
+-        """Add partner to the name"""
+-        res = super(AccountCagnotte, self).name_get()[0]
+-        if self.partner_id:
+-            res = (res[0], "%s, %s" % (res[1], self.partner_id.name))
+-        return res
++    @api.multi
++    def _get_name(self):
++        self.ensure_one()
++        name = super(AccountCagnotte, self)._get_name()
++        return '%s, %s' % (name, self.partner_id.name)
+ 
+     @api.multi
+     def _check_partner(self):
+diff --git a/cagnotte_partner/tests/test_cagnotte.py b/cagnotte_partner/tests/test_cagnotte.py
+index c441814..de2d9ab 100644
+--- a/cagnotte_partner/tests/test_cagnotte.py
++++ b/cagnotte_partner/tests/test_cagnotte.py
+@@ -2,11 +2,20 @@
+ # © 2015  Laetitia Gangloff, Acsone SA/NV (http://www.acsone.eu)
+ # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+ 
+-import openerp.tests.common as common
++import odoo.tests.common as common
++from odoo.addons.cagnotte_base.tests.test_cagnotte import load_file
+ 
+ 
+ class TestCagnotte(common.TransactionCase):
+ 
++    def setUp(self):
++        super(TestCagnotte, self).setUp()
++        load_file(
++            self.cr,
++            'cagnotte_base',
++            'tests/data/',
++            'account_cagnotte_data.xml')
++
+     def test_cagnotte(self):
+         """ Create cagnotte with partner
+             Use cagnotte
+@@ -17,28 +26,48 @@ def test_cagnotte(self):
+         cagnotte_obj = self.env['account.cagnotte']
+         cagnotte = cagnotte_obj.create({'cagnotte_type_id': cagnotte_type.id,
+                                         'partner_id': cagnotte_partner.id})
++        invoice_account = self.env['account.account'].search(
++            [('user_type_id', '=', self.env.ref(
++                'account.data_account_type_receivable').id)], limit=1)
+ 
+         move_obj = self.env["account.move"]
+         move_line_obj = self.env["account.move.line"]
+ 
+         cag_move = move_obj.create(
+-            {"journal_id": cagnotte_type.journal_id.id})
+-        cag_move_line = move_line_obj.create(
+-            {"move_id": cag_move.id,
+-             "account_id": cagnotte_type.account_id.id,
+-             "account_cagnotte_id": cagnotte.id,
+-             "name": "get credit on my cagnotte",
+-             "credit": 100})
+-        self.assertEqual(cag_move_line.partner_id.id, cagnotte_partner.id)
++            {"journal_id": cagnotte_type.journal_id.id,
++             "line_ids": [
++                 (0, 0, {
++                     "account_id": cagnotte_type.account_id.id,
++                     "account_cagnotte_id": cagnotte.id,
++                     "name": "get credit on my cagnotte",
++                     "credit": 100
++                 }),
++                 (0, 0, {
++                     "account_id": invoice_account.id,
++                     "name": "get credit on my cagnotte",
++                     "debit": 100})]})
++
++        line = self.env['account.move.line'].search([
++            ('move_id', '=', cag_move.id),
++            ('credit', '=', 100)
++        ])
++        self.assertEqual(line.partner_id.id,
++                         cagnotte_partner.id)
+         self.assertAlmostEqual(cagnotte.solde_cagnotte, 100.00, 2)
+ 
+-        cag_move = move_obj.create(
+-            {"journal_id": cagnotte_type.journal_id.id})
+-        cag_move_line = move_line_obj.create(
+-            {"move_id": cag_move.id,
+-             "partner_id": cagnotte_partner.id,
+-             "account_id": cagnotte_type.account_id.id,
+-             "name": "payement with my cagnotte",
+-             "debit": 20})
+-        self.assertEqual(cag_move_line.account_cagnotte_id.id, cagnotte.id)
++        move_obj.create(
++            {"journal_id": cagnotte_type.journal_id.id,
++             "line_ids": [
++                 (0, 0, {
++                     "account_id": cagnotte_type.account_id.id,
++                     "partner_id": cagnotte_partner.id,
++                     "account_cagnotte_id": cagnotte.id,
++                     "name": "payement with my cagnotte",
++                     "debit": 20
++                 }),
++                 (0, 0, {
++                     "account_id": invoice_account.id,
++                     "name": "payement with my cagnotte",
++                     "credit": 20})]})
++
+         self.assertAlmostEqual(cagnotte.solde_cagnotte, 80.00, 2)
+diff --git a/cagnotte_partner/views/cagnotte_views.xml b/cagnotte_partner/views/cagnotte_views.xml
+index ef8a043..e818f30 100644
+--- a/cagnotte_partner/views/cagnotte_views.xml
++++ b/cagnotte_partner/views/cagnotte_views.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0"?>
+-<openerp>
++<odoo>
+     <data>
+ 
+         <record id="account_cagnotte_view_search_inherit_cagnotte_partner" model="ir.ui.view">
+@@ -30,7 +30,7 @@
+             <field name="inherit_id" ref="base.view_partner_form"/>
+             <field name="priority">60</field>
+             <field name="arch" type="xml">
+-                <xpath expr="//div[@name='buttons']" position="inside">
++                <xpath expr="//div[@name='button_box']" position="inside">
+                     <button
+                         class="oe_inline oe_stat_button"
+                         type="action"
+@@ -65,5 +65,5 @@
+         </record>
+ 
+     </data>
+-</openerp>
++</odoo>
+ 

@@ -1,0 +1,186 @@
+diff --git a/sklearn/metrics/scorer.py b/sklearn/metrics/scorer.py
+index 05231826a899..28b97a229395 100644
+--- a/sklearn/metrics/scorer.py
++++ b/sklearn/metrics/scorer.py
+@@ -26,8 +26,9 @@
+ from . import (r2_score, median_absolute_error, mean_absolute_error,
+                mean_squared_error, mean_squared_log_error, accuracy_score,
+                f1_score, roc_auc_score, average_precision_score,
+-               precision_score, recall_score, log_loss, balanced_accuracy_score,
+-               explained_variance_score, brier_score_loss)
++               precision_score, recall_score, log_loss,
++               balanced_accuracy_score, explained_variance_score,
++               brier_score_loss)
+ 
+ from .cluster import adjusted_rand_score
+ from .cluster import homogeneity_score
+@@ -79,7 +80,7 @@ def __call__(self, estimator, X, y_true, sample_weight=None):
+         Parameters
+         ----------
+         estimator : object
+-            Trained estimator to use for scoring. Must have a predict_proba
++            Trained estimator to use for scoring. Must have a predict
+             method; the output of that is used to compute the score.
+ 
+         X : array-like or sparse matrix
+@@ -96,9 +97,32 @@ def __call__(self, estimator, X, y_true, sample_weight=None):
+         score : float
+             Score function applied to prediction of estimator on X.
+         """
+-        super(_PredictScorer, self).__call__(estimator, X, y_true,
+-                                             sample_weight=sample_weight)
+         y_pred = estimator.predict(X)
++        return self.score_predict(y_pred, y_true, sample_weight)
++
++    def score_predict(self, y_pred, y_true, sample_weight=None):
++        """Evaluate predicted target values y_pred relative to y_true.
++
++        Parameters
++        ----------
++        y_pred : array-like
++            Prodicted values for y.
++
++        y_true : array-like
++            Gold standard target values for y.
++
++        sample_weight : array-like, optional (default=None)
++            Sample weights.
++
++        Returns
++        -------
++        score : float
++            Score function applied to prediction of estimator on X.
++        """
++        # We call __call__ with no arguments as it only serves to show
++        # deprecation warnings.
++        super(_PredictScorer, self).__call__(None, None, None,
++                                             sample_weight=sample_weight)
+         if sample_weight is not None:
+             return self._sign * self._score_func(y_true, y_pred,
+                                                  sample_weight=sample_weight,
+@@ -133,21 +157,49 @@ def __call__(self, clf, X, y, sample_weight=None):
+         score : float
+             Score function applied to prediction of estimator on X.
+         """
+-        super(_ProbaScorer, self).__call__(clf, X, y,
+-                                           sample_weight=sample_weight)
+-        y_type = type_of_target(y)
+         y_pred = clf.predict_proba(X)
++
++        return self.score_predict(y_pred, y, sample_weight)
++
++    def _factory_args(self):
++        return ", needs_proba=True"
++
++    def score_predict(self, y_pred, y_true, sample_weight=None):
++        """Evaluate predicted y_pred relative to y_true.
++
++        Parameters
++        ----------
++        y_pred : array-like
++            Predicted values for y by a classifier. These must be class labels,
++            not probabilities.
++
++        y_true : array-like
++            Gold standard target values for y. These must be class labels,
++            not probabilities.
++
++        sample_weight : array-like, optional (default=None)
++            Sample weights.
++
++        Returns
++        -------
++        score : float
++            Score function applied to prediction of estimator on X.
++        """
++        # We call __call__ with no arguments as it only serves to show
++        # deprecation warnings.
++        super(_ProbaScorer, self).__call__(None, None, None,
++                                           sample_weight=sample_weight)
++        y_type = type_of_target(y_true)
+         if y_type == "binary":
+             y_pred = y_pred[:, 1]
+         if sample_weight is not None:
+-            return self._sign * self._score_func(y, y_pred,
++            return self._sign * self._score_func(y_true, y_pred,
+                                                  sample_weight=sample_weight,
+                                                  **self._kwargs)
+         else:
+-            return self._sign * self._score_func(y, y_pred, **self._kwargs)
+-
+-    def _factory_args(self):
+-        return ", needs_proba=True"
++            return self._sign * self._score_func(y_true,
++                                                 y_pred,
++                                                 **self._kwargs)
+ 
+ 
+ class _ThresholdScorer(_BaseScorer):
+diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
+index ceddce37781a..413416d045a5 100644
+--- a/sklearn/model_selection/_validation.py
++++ b/sklearn/model_selection/_validation.py
+@@ -27,7 +27,8 @@
+ from ..utils.metaestimators import _safe_split
+ from ..externals.joblib import Parallel, delayed, logger
+ from ..externals.six.moves import zip
+-from ..metrics.scorer import check_scoring, _check_multimetric_scoring
++from ..metrics.scorer import (check_scoring, _check_multimetric_scoring,
++                              _PredictScorer, _ProbaScorer)
+ from ..exceptions import FitFailedWarning
+ from ._split import check_cv
+ from ..preprocessing import LabelEncoder
+@@ -577,14 +578,48 @@ def _score(estimator, X_test, y_test, scorer, is_multimetric=False):
+ 
+ def _multimetric_score(estimator, X_test, y_test, scorers):
+     """Return a dict of score for multimetric scoring"""
+-    scores = {}
+-
+-    for name, scorer in scorers.items():
++    def _is_proba(x):
++        return isinstance(x, _ProbaScorer)
++
++    def _is_predict(x):
++        return isinstance(x, _PredictScorer)
++
++    # We want to keep the memmap and score types in a single
++    # loop.
++    tmp_scores = {}
++
++    # The following two are special cases where we want to compute
++    # the `predict` and `predict_proba` only once.
++    # This is ugly but gives a good performance boost, see #10802
++    # for more details.
++    predict_scorers = [
++            (name, sc) for name, sc in scorers.items()
++            if _is_predict(sc)]
++    if predict_scorers:
++        y_pred = estimator.predict(X_test)
++        for (name, scorer) in predict_scorers:
++            tmp_scores[name] = scorer.score_predict(y_pred, y_test)
++
++    proba_scorers = [
++            (name, sc) for name, sc in scorers.items()
++            if _is_proba(sc)]
++    if proba_scorers:
++        y_pred = estimator.predict_proba(X_test)
++        for (name, scorer) in proba_scorers:
++            tmp_scores[name] = scorer.score_predict(y_pred, y_test)
++
++    other_scorers = [
++            (name, sc) for name, sc in scorers.items()
++            if not (_is_proba(sc) or _is_predict(sc))]
++    for name, scorer in other_scorers:
+         if y_test is None:
+-            score = scorer(estimator, X_test)
++            tmp_scores[name] = scorer(estimator, X_test)
+         else:
+-            score = scorer(estimator, X_test, y_test)
++            tmp_scores[name] = scorer(estimator, X_test, y_test)
+ 
++    scores = {}
++    for name in scorers:
++        score = tmp_scores[name]
+         if hasattr(score, 'item'):
+             try:
+                 # e.g. unwrap memmapped scalars

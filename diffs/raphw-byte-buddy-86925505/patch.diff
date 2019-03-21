@@ -1,0 +1,32 @@
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/agent/builder/AgentBuilderDefaultApplicationTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/agent/builder/AgentBuilderDefaultApplicationTest.java
+index 7693ffd42e..7f2e5807c3 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/agent/builder/AgentBuilderDefaultApplicationTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/agent/builder/AgentBuilderDefaultApplicationTest.java
+@@ -131,6 +131,27 @@ public void testRedefinition() throws Exception {
+                 .withTypeStrategy(AgentBuilder.TypeStrategy.REDEFINE)
+                 .withRedefinitionStrategy(AgentBuilder.RedefinitionStrategy.REDEFINITION)
+                 .type(isAnnotatedWith(ShouldRebase.class), ElementMatchers.is(classLoader)).transform(new FooTransformer())
++                .withListener(new AgentBuilder.Listener() {
++                    @Override
++                    public void onTransformation(TypeDescription typeDescription, DynamicType dynamicType) {
++
++                    }
++
++                    @Override
++                    public void onIgnored(TypeDescription typeDescription) {
++
++                    }
++
++                    @Override
++                    public void onError(String typeName, Throwable throwable) {
++                        throwable.printStackTrace(System.err);
++                    }
++
++                    @Override
++                    public void onComplete(String typeName) {
++
++                    }
++                })
+                 .installOnByteBuddyAgent();
+         try {
+             Class<?> type = classLoader.loadClass(Foo.class.getName());

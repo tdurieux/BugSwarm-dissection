@@ -1,0 +1,2326 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 88d9f52ab..6edb78002 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com)
+ 
+ ### Changed
+ - #1571 - Remove separate twitter bundle and use exception trapping to only register AdapterFactory when Twitter4J is available.
++- #1573 - Tag Creator - automatic detection/support of /etc/tags or /content/cq:tags root paths
++- #1578 - Asset import needs additional configuration inputs
+ 
+ ## [3.19.0] - 2018-11-03
+ 
+diff --git a/bundle/pom.xml b/bundle/pom.xml
+index 1a9953c8a..6e1ea4ac0 100644
+--- a/bundle/pom.xml
++++ b/bundle/pom.xml
+@@ -46,7 +46,17 @@
+                 <groupId>org.apache.felix</groupId>
+                 <artifactId>maven-bundle-plugin</artifactId>
+                 <extensions>true</extensions>
++                <executions>
++                	<execution>
++	                	<id>generate-scr-metadata-for-unittests</id>
++	                	<goals>
++	                		<goal>manifest</goal>
++	                	</goals>
++	                	<phase>process-classes</phase>
++                	</execution>
++                </executions>
+                 <configuration>
++                	<exportScr>true</exportScr>
+                     <instructions>
+                         <Bundle-Activator>com.adobe.acs.commons.util.impl.Activator</Bundle-Activator>
+                         <Bundle-SymbolicName>com.adobe.acs.acs-aem-commons-bundle</Bundle-SymbolicName>                        
+@@ -78,8 +88,18 @@
+                             com.adobe.acs.commons.mcp.model,
+                             com.adobe.acs.commons.reports.models
+                         </Sling-Model-Packages>
++                        <_dsannotations>*</_dsannotations>
++                        <_metatypeannotations>*</_metatypeannotations>
++                        <_plugin>org.apache.felix.scrplugin.bnd.SCRDescriptorBndPlugin;destdir=${project.build.outputDirectory}</_plugin>
+                     </instructions>
+                 </configuration>
++                <dependencies>
++                    <dependency>
++			            <groupId>org.apache.felix</groupId>
++			            <artifactId>org.apache.felix.scr.bnd</artifactId>
++			            <version>1.9.0</version>
++			        </dependency>
++                </dependencies>
+             </plugin>
+             <plugin>
+                 <groupId>org.apache.sling</groupId>
+@@ -427,6 +447,10 @@
+             <groupId>org.slf4j</groupId>
+             <artifactId>jcl-over-slf4j</artifactId>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.sling</groupId>
++            <artifactId>org.apache.sling.testing.sling-mock.junit4</artifactId>
++        </dependency>
+         <dependency>
+             <groupId>org.apache.sling</groupId>
+             <artifactId>org.apache.sling.testing.sling-mock</artifactId>
+@@ -452,7 +476,7 @@
+         </dependency>
+         <dependency>
+             <groupId>io.wcm</groupId>
+-            <artifactId>io.wcm.testing.aem-mock</artifactId>
++            <artifactId>io.wcm.testing.aem-mock.junit4</artifactId>
+             <exclusions>
+                 <exclusion>
+                     <groupId>org.slf4j</groupId>
+@@ -527,6 +551,12 @@
+             <version>2.8.4</version>
+             <scope>provided</scope>
+         </dependency>
++        <dependency>
++			<groupId>org.apache.sling</groupId>
++			<artifactId>org.apache.sling.servlets.annotations</artifactId>
++			<version>1.0.0</version>
++			<scope>provided</scope>
++		</dependency>
+ 
+ 
+         <!--  Build Dependencies -->        
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/ChecksumGeneratorImpl.java b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/ChecksumGeneratorImpl.java
+index b34d1daa6..b809f4ae2 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/ChecksumGeneratorImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/ChecksumGeneratorImpl.java
+@@ -20,26 +20,6 @@
+ 
+ package com.adobe.acs.commons.analysis.jcrchecksum.impl;
+ 
+-import aQute.bnd.annotation.ProviderType;
+-import com.adobe.acs.commons.analysis.jcrchecksum.ChecksumGenerator;
+-import com.adobe.acs.commons.analysis.jcrchecksum.ChecksumGeneratorOptions;
+-import com.adobe.acs.commons.analysis.jcrchecksum.impl.options.DefaultChecksumGeneratorOptions;
+-import org.apache.commons.codec.digest.DigestUtils;
+-import org.apache.commons.lang.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Service;
+-import org.apache.jackrabbit.vault.util.Text;
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-
+-import javax.jcr.Node;
+-import javax.jcr.NodeIterator;
+-import javax.jcr.Property;
+-import javax.jcr.PropertyIterator;
+-import javax.jcr.PropertyType;
+-import javax.jcr.RepositoryException;
+-import javax.jcr.Session;
+-import javax.jcr.Value;
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.util.ArrayList;
+@@ -52,13 +32,32 @@
+ import java.util.SortedMap;
+ import java.util.TreeMap;
+ 
++import javax.jcr.Node;
++import javax.jcr.NodeIterator;
++import javax.jcr.Property;
++import javax.jcr.PropertyIterator;
++import javax.jcr.PropertyType;
++import javax.jcr.RepositoryException;
++import javax.jcr.Session;
++import javax.jcr.Value;
++
++import org.apache.commons.codec.digest.DigestUtils;
++import org.apache.commons.lang.StringUtils;
++import org.apache.jackrabbit.vault.util.Text;
++import org.osgi.service.component.annotations.Component;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.adobe.acs.commons.analysis.jcrchecksum.ChecksumGenerator;
++import com.adobe.acs.commons.analysis.jcrchecksum.ChecksumGeneratorOptions;
++import com.adobe.acs.commons.analysis.jcrchecksum.impl.options.DefaultChecksumGeneratorOptions;
++
+ /**
+  * Utility that generates checksums for JCR paths.  The checksum is calculated using a depth first traversal
+  * and calculates an aggregate checksum on the nodes with the specified node types
+  * (via {@link ChecksumGeneratorOptions}).
+  */
+ @Component
+-@Service
+ public class ChecksumGeneratorImpl implements ChecksumGenerator {
+     private static final Logger log = LoggerFactory.getLogger(ChecksumGeneratorImpl.class);
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/ChecksumGeneratorServlet.java b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/ChecksumGeneratorServlet.java
+index d24a7ecaa..f011caead 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/ChecksumGeneratorServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/ChecksumGeneratorServlet.java
+@@ -25,13 +25,10 @@
+ import com.adobe.acs.commons.analysis.jcrchecksum.impl.options.ChecksumGeneratorOptionsFactory;
+ import com.adobe.acs.commons.analysis.jcrchecksum.impl.options.RequestChecksumGeneratorOptions;
+ import org.apache.commons.collections.CollectionUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -44,18 +41,11 @@
+ import java.util.Set;
+ 
+ @SuppressWarnings("serial")
+-@Component
+-@Properties({
+-        @Property(
+-                name="sling.servlet.paths",
+-                value= ChecksumGeneratorServlet.SERVLET_PATH
+-        ),
+-        @Property(
+-                name="sling.auth.requirements",
+-                value= "-" + ChecksumGeneratorServlet.SERVLET_PATH
+-        )
++@Component(property= {
++        "sling.servlet.paths="+ChecksumGeneratorServlet.SERVLET_PATH,
++        "sling.auth.requirements=-"+ChecksumGeneratorServlet.SERVLET_PATH
+ })
+-@Service
++
+ public class ChecksumGeneratorServlet extends BaseChecksumServlet {
+     public static final Logger log = LoggerFactory.getLogger(ChecksumGeneratorServlet.class);
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/JSONDumpServlet.java b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/JSONDumpServlet.java
+index 153457dbf..4159b9d24 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/JSONDumpServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/analysis/jcrchecksum/impl/servlets/JSONDumpServlet.java
+@@ -27,12 +27,9 @@
+ import com.google.gson.stream.JsonWriter;
+ 
+ import org.apache.commons.collections.CollectionUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
++import org.osgi.service.component.annotations.Component;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -48,19 +45,16 @@
+ import java.util.Set;
+ 
+ @SuppressWarnings("serial")
+-@Component
+-@Properties({
+-    @Property(
+-            name="sling.servlet.paths",
+-            value= JSONDumpServlet.SERVLET_PATH
+-            ),
+-    @Property(
+-            name="sling.auth.requirements",
+-            value= "-" + JSONDumpServlet.SERVLET_PATH
+-            )
+-})
+-@Service
++@Component(property= {
++        "sling.servlet.paths="+JSONDumpServlet.SERVLET_PATH,
++        "sling.auth.requirements=-"+JSONDumpServlet.SERVLET_PATH
++        })
++
+ public class JSONDumpServlet extends BaseChecksumServlet {
++    
++    
++    
++    
+     private static final Logger log = LoggerFactory.getLogger(JSONDumpServlet.class);
+ 
+     public static final String SERVLET_PATH =  ServletConstants.SERVLET_PATH  + "."
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/audit_log_search/impl/AuditLogSearchServlet.java b/bundle/src/main/java/com/adobe/acs/commons/audit_log_search/impl/AuditLogSearchServlet.java
+index 90ebc25ae..ef23e4a60 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/audit_log_search/impl/AuditLogSearchServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/audit_log_search/impl/AuditLogSearchServlet.java
+@@ -25,13 +25,14 @@
+ import com.google.gson.JsonPrimitive;
+ 
+ import org.apache.commons.lang.StringUtils;
+-import org.apache.felix.scr.annotations.sling.SlingServlet;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.apache.sling.api.resource.ValueMap;
+ import org.apache.sling.api.servlets.SlingSafeMethodsServlet;
++import org.apache.sling.servlets.annotations.SlingServletResourceTypes;
++import org.osgi.service.component.annotations.Component;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -40,6 +41,7 @@
+ import javax.jcr.Session;
+ import javax.jcr.query.Query;
+ import javax.jcr.query.QueryManager;
++import javax.servlet.Servlet;
+ import javax.servlet.ServletException;
+ import java.io.IOException;
+ import java.io.InputStream;
+@@ -49,11 +51,15 @@
+ import java.util.HashSet;
+ import java.util.Set;
+ 
+-@SlingServlet(label = "ACS AEM Commons - Audit Log Search Servlet",
+-        methods = {"GET"},
+-        resourceTypes = {"acs-commons/components/utilities/audit-log-search"},
+-        selectors = {"auditlogsearch"},
+-        extensions = {"json"}, metatype = false)
++
++@Component(service=Servlet.class)
++@SlingServletResourceTypes(
++        resourceTypes="acs-commons/components/utilities/audit-log-search", 
++        methods= "GET",
++        extensions="json",
++        selectors="auditlogsearch"
++        )
++
+ @SuppressWarnings("serial")
+ public class AuditLogSearchServlet extends SlingSafeMethodsServlet {
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandler.java b/bundle/src/main/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandler.java
+index 9154207e7..8bfd75a06 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandler.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandler.java
+@@ -20,21 +20,18 @@
+ package com.adobe.acs.commons.auth.saml.impl;
+ 
+ import java.io.IOException;
+-import java.util.Map;
+ 
+ import javax.servlet.http.HttpServletRequest;
+ import javax.servlet.http.HttpServletResponse;
+ 
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.ConfigurationPolicy;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.auth.core.spi.AuthenticationHandler;
+ import org.apache.sling.auth.core.spi.AuthenticationInfo;
+-import org.apache.sling.commons.osgi.PropertiesUtil;
+ import org.osgi.framework.Constants;
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+ 
+ /**
+  * When using the SAML 2.0 Template from Okta, traditional Single Log Out (SLO) support
+@@ -42,37 +39,48 @@
+  * 
+  * Details are here: https://community.okta.com/community/okta/blog/2014/01/31/logout-and-redirect-to-an-url
+  */
+-@Component(label = "ACS AEM Commons - Okta Logout Handler",
+-        description = "Specific Authentication Handler to handle logout to Okta SSO Provider which, in some configurations, does not support traditional Single Logout",
+-        metatype = true, policy = ConfigurationPolicy.REQUIRE)
+-@Service
+-@Properties({
+-    @Property(name = Constants.SERVICE_DESCRIPTION, value = "ACS AEM Commons Okta Logout Handler", propertyPrivate = true),
+-    @Property(name = Constants.SERVICE_RANKING, intValue = 5003, propertyPrivate = false),
+-    @Property(name = AuthenticationHandler.PATH_PROPERTY, value = "/", propertyPrivate = false)
+-})
+-public class OktaLogoutHandler implements AuthenticationHandler {
+ 
+-    @Property
+-    private static final String PROP_OKTA_HOST_NAME = "okta.host.name";
+ 
+-    @Property
+-    private static final String PROP_FROM_URI = "from.uri";
++/**
++ * 
++ * TODO: 
++ * - improve the descriptions
++ * - add a configuration policy to only work with a provided configuration
++ *
++ */
++
++@Component(property= {
++        Constants.SERVICE_DESCRIPTION + "= ACS AEM Commons Okta Logout Handler"
++})
++@Designate(ocd=OktaLogoutHandler.Config.class)
++public class OktaLogoutHandler implements AuthenticationHandler {
++    
++    @ObjectClassDefinition(name="ACS AEM Commons - Okta Logout Handler", description="Specific Authentication Handler to handle logout to Okta SSO Provider which, in some configurations, does not support traditional Single Logout")
++    @interface Config {
++        @AttributeDefinition(name="Okta host name",description="Okta host name")
++        String okta_host_name();
++        @AttributeDefinition(name="From Uri", description="From Uri")
++        String from_uri();
++        
++        @AttributeDefinition(name="Service Ranking", description = "Service Ranking")
++        int service_ranking() default 5003;
++        
++        @AttributeDefinition(name="Path", description="Path")
++        String path() default "/";
++    }
+ 
+     private String redirectLocation;
+ 
+     @Activate
+-    protected void activate(Map<String, Object> props) {
+-        String oktaHostName = PropertiesUtil.toString(props.get(PROP_OKTA_HOST_NAME), null);
+-        if (oktaHostName == null) {
++    protected void activate(Config conf) {
++        if (conf.okta_host_name() == null) {
+             throw new IllegalArgumentException("Okta Host Name must be provided");
+         }
+-        String fromUri = PropertiesUtil.toString(props.get(PROP_FROM_URI), null);
+         StringBuilder builder = new StringBuilder("https://");
+-        builder.append(oktaHostName);
++        builder.append(conf.okta_host_name());
+         builder.append("/login/signout");
+-        if (fromUri != null) {
+-            builder.append("?fromURI=").append(fromUri);
++        if (conf.from_uri() != null) {
++            builder.append("?fromURI=").append(conf.from_uri());
+         }
+         this.redirectLocation = builder.toString();
+     }
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/components/longformtext/impl/LongFormTextComponentImpl.java b/bundle/src/main/java/com/adobe/acs/commons/components/longformtext/impl/LongFormTextComponentImpl.java
+index a9c757636..45352ea4a 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/components/longformtext/impl/LongFormTextComponentImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/components/longformtext/impl/LongFormTextComponentImpl.java
+@@ -24,12 +24,11 @@
+ import com.day.cq.commons.jcr.JcrUtil;
+ import org.apache.commons.io.IOUtils;
+ import org.apache.commons.lang.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceUtil;
+ import org.apache.sling.commons.html.HtmlParser;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.w3c.dom.Document;
+@@ -52,7 +51,6 @@
+  * Provides support for the ACS AEM Commons Long-form Text Component.
+  */
+ @Component
+-@Service
+ public class LongFormTextComponentImpl implements LongFormTextComponent {
+     private static final Logger log = LoggerFactory.getLogger(LongFormTextComponentImpl.class);
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/querybuilder/ContentFinderResultHitWriter.java b/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/querybuilder/ContentFinderResultHitWriter.java
+index 691f679e3..54eafa8e3 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/querybuilder/ContentFinderResultHitWriter.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/querybuilder/ContentFinderResultHitWriter.java
+@@ -19,20 +19,30 @@
+  */
+ package com.adobe.acs.commons.contentfinder.querybuilder.impl.querybuilder;
+ 
++import java.util.Map;
++
++import javax.jcr.RepositoryException;
++
++import org.apache.felix.scr.annotations.Component;
++
+ import com.adobe.acs.commons.contentfinder.querybuilder.impl.ContentFinderHitBuilder;
+ import com.day.cq.search.Query;
+ import com.day.cq.search.result.Hit;
+ import com.day.cq.search.writer.ResultHitWriter;
+-import org.apache.felix.scr.annotations.Component;
+-
+-import javax.jcr.RepositoryException;
+-import java.util.Map;
+ 
+ /**
+  * ACS AEM Commons - ContentFinder Result Hit Writer
+  * QueryBuilder Hit Writer used for creating ContentFinder compatible results
++ * 
++ * @deprecated this class is not part of the API and internally not used
++ * 
++ * TODO:
++ * - is this class actually used? Haven't found anyone referencing it. 
++ * - deprecating it for the moment, and leaving the scr annotations in place
++ * 
+  */
+ @Component(factory = "com.day.cq.search.result.ResultHitWriter/cf")
++@Deprecated
+ public final class ContentFinderResultHitWriter implements ResultHitWriter {
+ 
+     @Override
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/viewhandler/QueryBuilderViewHandler.java b/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/viewhandler/QueryBuilderViewHandler.java
+index e96258fb6..371df944f 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/viewhandler/QueryBuilderViewHandler.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/contentfinder/querybuilder/impl/viewhandler/QueryBuilderViewHandler.java
+@@ -27,12 +27,9 @@
+ 
+ import org.apache.commons.lang.ArrayUtils;
+ import org.apache.commons.lang.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.resource.ResourceResolver;
++import org.osgi.service.component.annotations.Component;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -47,15 +44,10 @@
+  * Leverage Querybuilder to run ContentFinder queries
+  */
+ @SuppressWarnings("serial")
+-@Component
+-@Properties({
+-        @Property(
+-                label = "Servlet Paths",
+-                name = "sling.servlet.paths",
+-                value = "/bin/wcm/contentfinder/qb/view"
+-        )
++@Component(properties= {
++        "sling.servlet.paths=/bin/wcm/contentfinder/qb/view"
+ })
+-@Service
++
+ public final class QueryBuilderViewHandler extends ViewHandler {
+     private static final Logger log = LoggerFactory.getLogger(QueryBuilderViewHandler.class);
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/AudioHelperImpl.java b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/AudioHelperImpl.java
+index 0eb88a27b..91919ecca 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/AudioHelperImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/AudioHelperImpl.java
+@@ -19,46 +19,51 @@
+  */
+ package com.adobe.acs.commons.dam.audio.impl;
+ 
+-import com.day.cq.dam.api.Asset;
+-import com.day.cq.dam.handler.ffmpeg.ExecutableLocator;
+-import com.day.cq.dam.handler.ffmpeg.FfmpegNotFoundException;
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++
+ import org.apache.commons.io.FileUtils;
+ import org.apache.commons.io.IOUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.ReferencePolicy;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.osgi.service.component.ComponentContext;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.component.annotations.Reference;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+-import java.io.File;
+-import java.io.FileOutputStream;
+-import java.io.IOException;
+-import java.io.InputStream;
++import com.day.cq.dam.api.Asset;
++import com.day.cq.dam.handler.ffmpeg.ExecutableLocator;
++import com.day.cq.dam.handler.ffmpeg.FfmpegNotFoundException;
+ 
+-@Component(metatype = true, label = "ACS Commons - Audio Processor", description = "ACS Commons - Audio Processor")
+-@Service
++@Component(configurationPolicy=ConfigurationPolicy.REQUIRE)
++@Designate(ocd=AudioHelperImpl.Config.class)
+ public class AudioHelperImpl implements AudioHelper {
++    
++    @ObjectClassDefinition(name = "ACS AEM Commons - Audio Processor", description="ACS Commons - Audio Processor")
++    public @interface Config {
++        @AttributeDefinition(name="log path",
++                description="FFmpeg working directory. If relative, relative to ${sling.home}.",defaultValue=DEFAULT_FFMPEG_WORKINGDIR)
++        String ffmpeg_workingdir() default DEFAULT_FFMPEG_WORKINGDIR;
++    }
++    
++    private static final String DEFAULT_FFMPEG_WORKINGDIR = "./logs/ffmpeg";
+ 
+     private static final Logger log = LoggerFactory.getLogger(AudioHelperImpl.class);
+ 
+-    /**
+-     * FFmpeg working directory. If relative, relative to sling.home.
+-     */
+-    @Property(value = "./logs/ffmpeg")
+-    public static final String PROP_WORKING_DIR = "ffmpeg.workingdir";
+-
+-    @Reference(policy = ReferencePolicy.STATIC)
++    @Reference
+     private ExecutableLocator locator;
+ 
+     private File workingDir;
+ 
+-    protected final void activate(ComponentContext ctx) {
++    protected final void activate(ComponentContext ctx, Config conf) {
+         String slingHome = ctx.getBundleContext().getProperty("sling.home");
+-        workingDir = FFMpegAudioUtils.resolveWorkingDir(slingHome, (String) ctx.getProperties().get(PROP_WORKING_DIR));
++        workingDir = FFMpegAudioUtils.resolveWorkingDir(slingHome, conf.ffmpeg_workingdir());
+         if (!workingDir.exists() && !workingDir.mkdirs()) {
+             throw new IllegalStateException("Could not create " + workingDir.getPath());
+         }
+@@ -103,7 +108,7 @@ protected final void activate(ComponentContext ctx) {
+                     FileUtils.deleteDirectory(tmpDir);
+                 }
+             } catch (IOException e) {
+-                log.warn("Could not delete temp directory: {}", tmpDir.getPath());
++                log.warn("Could not delete temp directory: {}", tmpDir.getPath(),e);
+             }
+             try {
+                 // cleaning up ffmpeg's temp working directory
+@@ -111,7 +116,7 @@ protected final void activate(ComponentContext ctx) {
+                     FileUtils.deleteDirectory(tmpWorkingDir);
+                 }
+             } catch (IOException e) {
+-                log.warn("Could not delete ffmpeg's temporary working directory: {}", tmpWorkingDir.getPath());
++                log.warn("Could not delete ffmpeg's temporary working directory: {}", tmpWorkingDir.getPath(),e);
+             }
+         }
+     }
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/FFMpegAudioEncodeProcess.java b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/FFMpegAudioEncodeProcess.java
+index e7a113c88..52057d263 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/FFMpegAudioEncodeProcess.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/impl/FFMpegAudioEncodeProcess.java
+@@ -19,6 +19,9 @@
+  */
+ package com.adobe.acs.commons.dam.audio.impl;
+ 
++import static com.day.cq.dam.api.DamConstants.DC_EXTENT;
++import static com.day.cq.dam.api.DamConstants.METADATA_FOLDER;
++
+ import java.io.File;
+ import java.io.FileInputStream;
+ import java.io.IOException;
+@@ -28,40 +31,33 @@
+ import javax.jcr.Node;
+ import javax.jcr.RepositoryException;
+ 
+-import com.adobe.acs.commons.util.WorkflowHelper;
+-import com.day.cq.commons.jcr.JcrConstants;
+-import com.day.cq.dam.handler.ffmpeg.ExecutableLocator;
+-import com.day.cq.workflow.WorkflowException;
+-import com.day.cq.workflow.exec.WorkItem;
+-import com.day.cq.workflow.exec.WorkflowProcess;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceResolver;
+-import org.apache.sling.api.resource.ResourceResolverFactory;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
++import com.adobe.acs.commons.util.WorkflowHelper;
++import com.day.cq.commons.jcr.JcrConstants;
+ import com.day.cq.dam.api.Asset;
++import com.day.cq.dam.handler.ffmpeg.ExecutableLocator;
+ import com.day.cq.dam.handler.ffmpeg.FFMpegWrapper;
+ import com.day.cq.dam.video.FFMpegTranscodeProcess.Arguments;
+ import com.day.cq.dam.video.VideoProfile;
++import com.day.cq.workflow.WorkflowException;
+ import com.day.cq.workflow.WorkflowSession;
++import com.day.cq.workflow.exec.WorkItem;
++import com.day.cq.workflow.exec.WorkflowProcess;
+ import com.day.cq.workflow.metadata.MetaDataMap;
+ 
+-import static com.day.cq.dam.api.DamConstants.DC_EXTENT;
+-import static com.day.cq.dam.api.DamConstants.METADATA_FOLDER;
+-
+ /**
+  * CQ DAM FFmpeg Audio Encode Process
+  * Workflow process that transcodes audio files into different formats
+  */
+-@Component
+-@Service(WorkflowProcess.class)
+-@Properties({ @Property(name = "process.label", value = "Encode Audio") })
++@Component(service=WorkflowProcess.class,properties= {
++        "process.label=Encode Audio"
++})
+ @SuppressWarnings("checkstyle:abbreviationaswordinname")
+ public final class FFMpegAudioEncodeProcess implements WorkflowProcess, AudioHelper.AudioProcessor<MetaDataMap, Void> {
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionProcess.java b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionProcess.java
+index 61af0ab45..161e87e30 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionProcess.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionProcess.java
+@@ -19,6 +19,27 @@
+  */
+ package com.adobe.acs.commons.dam.audio.watson.impl;
+ 
++import java.io.ByteArrayInputStream;
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.IOException;
++import java.io.Serializable;
++import java.io.UnsupportedEncodingException;
++import java.nio.file.Files;
++
++import org.apache.commons.io.IOUtils;
++import org.apache.sling.api.resource.Resource;
++import org.apache.sling.api.resource.ResourceResolver;
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.component.annotations.Reference;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
+ import com.adobe.acs.commons.dam.audio.impl.AudioException;
+ import com.adobe.acs.commons.dam.audio.impl.AudioHelper;
+ import com.adobe.granite.workflow.WorkflowException;
+@@ -31,31 +52,11 @@
+ import com.day.cq.dam.handler.ffmpeg.ExecutableLocator;
+ import com.day.cq.dam.handler.ffmpeg.FFMpegWrapper;
+ import com.day.cq.dam.video.VideoProfile;
+-import org.apache.commons.io.IOUtils;
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+-import org.apache.sling.api.resource.Resource;
+-import org.apache.sling.api.resource.ResourceResolver;
+-import org.apache.sling.commons.osgi.PropertiesUtil;
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-
+-import java.io.ByteArrayInputStream;
+-import java.io.File;
+-import java.io.FileInputStream;
+-import java.io.IOException;
+-import java.io.Serializable;
+-import java.io.UnsupportedEncodingException;
+-import java.nio.file.Files;
+-import java.util.Map;
+ 
+-@Component(metatype = true, label = "ACS AEM Commons - Watson Transcription Workflow Process",
+-           description = "ACS AEM Commons - Watson Transcription Workflow Process")
+-@Service(WorkflowExternalProcess.class)
+-@Property(name = "process.name", value = "Generate Audio Transcript with IBM Watson", propertyPrivate = true)
++@Component(name = "ACS AEM Commons - Watson Transcription Workflow Process", service=WorkflowExternalProcess.class,properties= {
++                   "process.name=Generate Audio Transcript with IBM Watson"
++           },configurationPolicy=ConfigurationPolicy.REQUIRE)
++@Designate(ocd=TranscriptionProcess.Config.class)
+ public class TranscriptionProcess implements WorkflowExternalProcess, AudioHelper.AudioProcessor<MetaDataMap, Serializable> {
+ 
+     private static final Logger log = LoggerFactory.getLogger(TranscriptionProcess.class);
+@@ -65,18 +66,22 @@
+ 
+     @Reference
+     private AudioHelper audioHelper;
+-
++    
++    @ObjectClassDefinition(name="ACS AEM Commons - Watson Transcription Workflow Process")
++    public @interface Config {
++        @AttributeDefinition(name="Transocde Profile",
++                description="Profile name for audio transcoding. Must be a format acceptable to Watson",defaultValue=DEFAULT_PROFILE)
++        String profile() default DEFAULT_PROFILE;
++    }
++    
+     private static final String DEFAULT_PROFILE = "flacmono";
+ 
+-    @Property(label = "Trancode Profile", description = "Profile name for audio transcoding. Must be a format acceptable to Watson",
+-              value = DEFAULT_PROFILE)
+-    private static final String PROP_PROFILE = "profile";
+ 
+     private String profileName;
+ 
+     @Activate
+-    protected void activate(Map<String, Object> config) {
+-        this.profileName = PropertiesUtil.toString(config.get(PROP_PROFILE), DEFAULT_PROFILE);
++    protected void activate(Config conf) {
++        this.profileName = conf.profile();
+     }
+ 
+     @Override
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionServiceImpl.java b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionServiceImpl.java
+index 02391afc8..36806e44e 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionServiceImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/audio/watson/impl/TranscriptionServiceImpl.java
+@@ -19,24 +19,25 @@
+  */
+ package com.adobe.acs.commons.dam.audio.watson.impl;
+ 
+-import com.adobe.acs.commons.http.HttpClientFactory;
+-import com.adobe.acs.commons.http.JsonObjectResponseHandler;
+-import com.google.gson.Gson;
+-import com.google.gson.JsonArray;
+-import com.google.gson.JsonObject;
++
+ import java.io.IOException;
++import java.io.InputStream;
++
+ import org.apache.commons.lang3.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.http.client.fluent.Request;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+-import java.io.InputStream;
++import com.adobe.acs.commons.http.HttpClientFactory;
++import com.adobe.acs.commons.http.JsonObjectResponseHandler;
++import com.google.gson.Gson;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonObject;
++
+ 
+ @Component
+-@Service
+ public class TranscriptionServiceImpl implements TranscriptionService {
+ 
+     private static final Logger log = LoggerFactory.getLogger(TranscriptionServiceImpl.class);
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AddWatermarkToRenditionProcess.java b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AddWatermarkToRenditionProcess.java
+index aba13b2a7..77e804a7d 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AddWatermarkToRenditionProcess.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AddWatermarkToRenditionProcess.java
+@@ -22,26 +22,23 @@
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.ConcurrentMap;
+ 
+-import com.adobe.acs.commons.util.WorkflowHelper;
+-import com.day.cq.workflow.WorkflowException;
+-import com.day.cq.workflow.exec.WorkItem;
+-import com.day.cq.workflow.exec.WorkflowProcess;
+-import com.day.cq.workflow.metadata.MetaDataMap;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.LoginException;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceResolver;
+-import org.apache.sling.api.resource.ResourceResolverFactory;
+ import org.apache.sling.commons.mime.MimeTypeService;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+ import com.adobe.acs.commons.dam.AbstractRenditionModifyingProcess;
++import com.adobe.acs.commons.util.WorkflowHelper;
+ import com.day.cq.dam.api.Rendition;
++import com.day.cq.workflow.WorkflowException;
+ import com.day.cq.workflow.WorkflowSession;
++import com.day.cq.workflow.exec.WorkItem;
++import com.day.cq.workflow.exec.WorkflowProcess;
++import com.day.cq.workflow.metadata.MetaDataMap;
+ import com.day.image.Layer;
+ 
+ /**
+@@ -52,9 +49,9 @@
+  * <li>watermark - The repository path of the watermark.</li>
+  * </ul>
+  */
+-@Component
+-@Service
+-@Property(name = "process.label", value = "Add Watermark to Rendition")
++@Component (properties= {
++        "process.label=Add watermark to Rendition"
++})
+ public final class AddWatermarkToRenditionProcess extends AbstractRenditionModifyingProcess implements WorkflowProcess {
+ 
+     private static ConcurrentMap<String, Object> watermarkLogCache = new ConcurrentHashMap<String, Object>();
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AssetsFolderPropertiesSupport.java b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AssetsFolderPropertiesSupport.java
+index 3cbecc000..f8285b233 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AssetsFolderPropertiesSupport.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/AssetsFolderPropertiesSupport.java
+@@ -21,12 +21,6 @@
+ package com.adobe.acs.commons.dam.impl;
+ 
+ import org.apache.commons.lang3.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.ConfigurationPolicy;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
+ import org.apache.sling.api.resource.Resource;
+@@ -40,6 +34,9 @@
+ import org.apache.sling.servlets.post.Modification;
+ import org.apache.sling.servlets.post.PostOperation;
+ import org.apache.sling.servlets.post.SlingPostProcessor;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -54,39 +51,14 @@
+ import java.util.HashMap;
+ import java.util.List;
+ 
+-@Component(
+-        label = "ACS AEM Commons - Assets Folder Properties Support",
+-        policy = ConfigurationPolicy.REQUIRE,
+-        immediate = true
+-)
+-@Properties({
+-        @Property(
+-                name = "service.ranking",
+-                intValue = -2000,
+-                propertyPrivate = true
+-        ),
+-        @Property(
+-                name = "sling.filter.scope",
+-                value = "REQUEST",
+-                propertyPrivate = true
+-        ),
+-        @Property(
+-                name = "sling.filter.pattern",
+-                value = "/content/dam/.*",
+-                propertyPrivate = true
+-        ),
+-        @Property(
+-                name = "sling.servlet.methods",
+-                value = "GET",
+-                propertyPrivate = true
+-        ),
+-        @Property(
+-                name = "sling.servlet.resourceTypes",
+-                value = "acs-commons/touchui-widgets/asset-folder-properties-support",
+-                propertyPrivate = true
+-        )
++@Component(configurationPolicy=ConfigurationPolicy.REQUIRE,properties= {
++        "service.ranking:Integer=-2000",
++        "sling.filter.scope=REQUEST",
++        "sling.filter.pattern=/content/dam/.*",
++        "sling.servlet.methods=GET",
++        "sling.servlet.resourceTypes=acs-commons/touchui-widgets/asset-folder-properties-support"
+ })
+-@Service
++
+ public class AssetsFolderPropertiesSupport extends SlingSafeMethodsServlet implements Filter, SlingPostProcessor {
+     private static final Logger log = LoggerFactory.getLogger(AssetsFolderPropertiesSupport.class);
+ 
+@@ -97,9 +69,13 @@
+     private static final String GRANITE_UI_FORM_VALUES = "granite.ui.form.values";
+ 
+     /**
+-     * The is a reference to the OOTB AEM PostOperation that handles updates for Folder Properties; This is used below in process(..) to ensure that all OOTB behaviors are executed.
++     * The is a reference to the OOTB AEM PostOperation that handles updates for Folder Properties; This is used below in process(..) 
++     * to ensure that all OOTB behaviors are executed.
++     * NOTE: When switching to OSGI annotations, the original annotation caused validation errors; I had to put
++     * parenthesis ("(" and ")" characters) around the whole expression to make it pass validation. You might
++     * want to recheck this!
+      */
+-    @Reference(target="&(sling.post.operation=dam.share.folder)(sling.servlet.methods=POST)")
++    @Reference(target="(&(sling.post.operation=dam.share.folder)(sling.servlet.methods=POST))")
+     private PostOperation folderShareHandler;
+ 
+     /**
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/ColorConversionImpl.java b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/ColorConversionImpl.java
+index fcf237d34..6dc510d7f 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/ColorConversionImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/ColorConversionImpl.java
+@@ -19,44 +19,48 @@
+  */
+ package com.adobe.acs.commons.dam.impl;
+ 
+-import com.adobe.acs.commons.dam.ColorConversion;
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.PropertyOption;
+-import org.apache.felix.scr.annotations.Service;
+-import org.apache.sling.commons.osgi.PropertiesUtil;
+-
+ import java.awt.color.ColorSpace;
+ import java.awt.color.ICC_ColorSpace;
+ import java.awt.color.ICC_Profile;
+ import java.io.InputStream;
+-import java.util.Map;
+ 
+-@Component(label = "ACS AEM Commons - Color Conversion", description = "ACS AEM Commons - Color Conversion", metatype = true)
+-@Service
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
++import org.osgi.service.metatype.annotations.Option;
++
++import com.adobe.acs.commons.dam.ColorConversion;
++
++@Component()
++@Designate(ocd=ColorConversionImpl.Config.class)
++
+ @SuppressWarnings({"checkstyle:abbreviationaswordinname", "checkstyle:localvariablename"})
+ public final class ColorConversionImpl implements ColorConversion {
+ 
+     private static final String DEFAULT_CMYK_PROFILE = "JapanColor2001Coated";
+-
+-    @Property(label = "CMYK ICC Profile", description = "ICC Profile for CMYK to RGB Conversion",
+-            value = DEFAULT_CMYK_PROFILE,
+-            options = {
+-            @PropertyOption(name = "CoatedFOGRA27", value = "CoatedFOGRA27"),
+-            @PropertyOption(name = "CoatedFOGRA39", value = "CoatedFOGRA39"),
+-            @PropertyOption(name = "JapanColor2001Coated", value = "JapanColor2001Coated"),
+-            @PropertyOption(name = "JapanColor2001Uncoated", value = "JapanColor2001Uncoated"),
+-            @PropertyOption(name = "JapanColor2002Newspaper", value = "JapanColor2002Newspaper"),
+-            @PropertyOption(name = "JapanWebCoated", value = "JapanWebCoated"),
+-            @PropertyOption(name = "UncoatedFOGRA29", value = "UncoatedFOGRA29"),
+-            @PropertyOption(name = "USSheetfedCoated", value = "USSheetfedCoated"),
+-            @PropertyOption(name = "USSheetfedUncoated", value = "USSheetfedUncoated"),
+-            @PropertyOption(name = "USWebCoatedSWOP", value = "USWebCoatedSWOP"),
+-            @PropertyOption(name = "USWebUncoated", value = "USWebUncoated"),
+-            @PropertyOption(name = "WebCoatedFOGRA28", value = "WebCoatedFOGRA28")
+-    })
+-    private static final String PROP_CMKY_PROFILE = "cmyk.icc.profile";
++    
++    
++    @ObjectClassDefinition(name="ACS AEM Commons - Color Conversion")
++    public @interface Config {
++        @AttributeDefinition(name="CMYK ICC Profile",description="ICC Profile for CMYK to RGB Conversion", defaultValue=DEFAULT_CMYK_PROFILE,
++                options= {
++                        @Option(label = "CoatedFOGRA27", value = "CoatedFOGRA27"),
++                        @Option(label = "CoatedFOGRA39", value = "CoatedFOGRA39"),
++                        @Option(label = "JapanColor2001Coated", value = "JapanColor2001Coated"),
++                        @Option(label = "JapanColor2001Uncoated", value = "JapanColor2001Uncoated"),
++                        @Option(label = "JapanColor2002Newspaper", value = "JapanColor2002Newspaper"),
++                        @Option(label = "JapanWebCoated", value = "JapanWebCoated"),
++                        @Option(label = "UncoatedFOGRA29", value = "UncoatedFOGRA29"),
++                        @Option(label = "USSheetfedCoated", value = "USSheetfedCoated"),
++                        @Option(label = "USSheetfedUncoated", value = "USSheetfedUncoated"),
++                        @Option(label = "USWebCoatedSWOP", value = "USWebCoatedSWOP"),
++                        @Option(label = "USWebUncoated", value = "USWebUncoated"),
++                        @Option(label = "WebCoatedFOGRA28", value = "WebCoatedFOGRA28")
++                })
++        String cmyk_icc_profile() default DEFAULT_CMYK_PROFILE;
++    }
+ 
+     /**
+      * XYZ to sRGB conversion matrix
+@@ -66,8 +70,8 @@
+             { 0.0557, -0.2040,  1.0570}};
+ 
+     @Activate
+-    protected void activate(Map<String, Object> properties) throws Exception {
+-        String profileName = PropertiesUtil.toString(properties.get(PROP_CMKY_PROFILE), DEFAULT_CMYK_PROFILE);
++    protected void activate(Config conf) throws Exception {
++        String profileName = conf.cmyk_icc_profile();
+ 
+         InputStream iccData = getClass().getClassLoader().getResourceAsStream("icc/cmyk/" + profileName + ".icc");
+         ICC_Profile profile = ICC_Profile.getInstance(iccData);
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServlet.java b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServlet.java
+index dc24a1f78..0dfff5c95 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServlet.java
+@@ -19,27 +19,32 @@
+  */
+ package com.adobe.acs.commons.dam.impl;
+ 
+-import com.adobe.acs.commons.util.ParameterUtil;
+-import com.google.gson.JsonArray;
+-import com.google.gson.JsonObject;
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.ConfigurationPolicy;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.sling.SlingServlet;
++import java.io.IOException;
++import java.util.Map;
++
++import javax.annotation.Nonnull;
++import javax.servlet.ServletException;
++
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
+ import org.apache.sling.api.servlets.SlingSafeMethodsServlet;
+ import org.apache.sling.commons.osgi.PropertiesUtil;
++import org.apache.sling.servlets.annotations.SlingServletPaths;
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+ 
+-import javax.annotation.Nonnull;
+-import javax.servlet.ServletException;
+-import java.io.IOException;
+-import java.util.Map;
++import com.adobe.acs.commons.util.ParameterUtil;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonObject;
+ 
+-@SlingServlet(paths = "/bin/acs-commons/dam/custom-components.json", generateComponent = false)
+-@Component(metatype = true, policy = ConfigurationPolicy.REQUIRE, label = "ACS AEM Commons - Custom DAM Component List Servlet",
+-    description = "Servlet to list custom component paths to automatically replace in metadata editor.")
++@SuppressWarnings("serial")
++@SlingServletPaths("/bin/acs-commons/dam/custom-components.json")
++@Component(configurationPolicy=ConfigurationPolicy.REQUIRE)
++@Designate(ocd=CustomComponentActivatorListServlet.Config.class)
+ public class CustomComponentActivatorListServlet extends SlingSafeMethodsServlet {
+ 
+     private static final String HISTORY = "xmpMM:History=/apps/acs-commons/dam/content/admin/history";
+@@ -47,21 +52,21 @@
+     private static final String COLORANTS = "xmpTPg:Colorants=/apps/acs-commons/dam/content/admin/color-swatches";
+     private static final String LOCATION = "location=/apps/acs-commons/dam/content/admin/asset-location-map";
+ 
+-    private static final String[] DEFAULT_COMPONENTS = { HISTORY, FONTS, COLORANTS, LOCATION };
++    static final String[] DEFAULT_COMPONENTS = { HISTORY, FONTS, COLORANTS, LOCATION };
+ 
+-    @Property(label = "Components", description = "Map in the form <propertyName>=<replacement path>", value = {
+-            HISTORY,
+-            FONTS,
+-            COLORANTS,
+-            LOCATION
+-        })
+-    public static String PROP_COMPONENTS = "components";
++       
++    @ObjectClassDefinition(name="ACS AEM Commons - Custom Component Activator List Servlet")
++    public @interface Config {
++        @AttributeDefinition(defaultValue= {HISTORY, FONTS, COLORANTS, LOCATION },name="Components",
++                description="Map in the form <propertyName>=<replacement path>")
++        String[] components() default { HISTORY, FONTS, COLORANTS, LOCATION };
++    }
+ 
+     private JsonObject json;
+ 
+     @Activate
+-    protected void activate(Map<String, Object> config) {
+-        Map<String, String> components = ParameterUtil.toMap(PropertiesUtil.toStringArray(config.get(PROP_COMPONENTS), DEFAULT_COMPONENTS),"=");
++    protected void activate(Config conf) {
++        Map<String, String> components = ParameterUtil.toMap(PropertiesUtil.toStringArray(conf.components(), DEFAULT_COMPONENTS),"=");
+         JsonArray array = new JsonArray();
+         for (Map.Entry<String, String> entry : components.entrySet()) {
+             JsonObject obj = new JsonObject();
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/MatteRenditionProcess.java b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/MatteRenditionProcess.java
+index 4dbded864..78806161b 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dam/impl/MatteRenditionProcess.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dam/impl/MatteRenditionProcess.java
+@@ -26,10 +26,9 @@
+ import com.day.cq.workflow.exec.WorkItem;
+ import com.day.cq.workflow.exec.WorkflowProcess;
+ import com.day.cq.workflow.metadata.MetaDataMap;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
++
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -41,9 +40,7 @@
+ /**
+  * Workflow process which mattes an image against a solid background to the specified size.
+  */
+-@Component(metatype = false)
+-@Service
+-@Property(name = "process.label", value = "Matte Rendition")
++@Component(properties= {"process.label=Matte Rendition"})
+ @SuppressWarnings({"squid:S00115", "checkstyle:localvariablename"})
+ public final class MatteRenditionProcess extends AbstractRenditionModifyingProcess implements WorkflowProcess {
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/designer/impl/DesignHtmlLibraryManagerImpl.java b/bundle/src/main/java/com/adobe/acs/commons/designer/impl/DesignHtmlLibraryManagerImpl.java
+index 59fa0e9da..37593570d 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/designer/impl/DesignHtmlLibraryManagerImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/designer/impl/DesignHtmlLibraryManagerImpl.java
+@@ -25,12 +25,11 @@
+ import java.util.HashMap;
+ import java.util.LinkedHashSet;
+ 
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.resource.ValueMap;
+ import org.apache.sling.api.wrappers.ValueMapDecorator;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -45,7 +44,6 @@
+  *
+  */
+ @Component
+-@Service
+ public final class DesignHtmlLibraryManagerImpl implements DesignHtmlLibraryManager {
+     private static final Logger log = LoggerFactory.getLogger(DesignHtmlLibraryManagerImpl.class);
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/designer/impl/OptionsServlet.java b/bundle/src/main/java/com/adobe/acs/commons/designer/impl/OptionsServlet.java
+index de09258c4..ef7deacba 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/designer/impl/OptionsServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/designer/impl/OptionsServlet.java
+@@ -26,11 +26,12 @@
+ 
+ import javax.servlet.ServletException;
+ 
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.sling.SlingServlet;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
+ import org.apache.sling.api.servlets.SlingSafeMethodsServlet;
++import org.apache.sling.servlets.annotations.SlingServletPaths;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Reference;
+ 
+ import com.adobe.granite.ui.clientlibs.ClientLibrary;
+ import com.adobe.granite.ui.clientlibs.HtmlLibraryManager;
+@@ -42,8 +43,8 @@
+  *
+  */
+ @SuppressWarnings("serial")
+-@SlingServlet(paths = "/apps/acs-commons/components/utilities/designer/clientlibsmanager/options",
+-extensions = "json")
++@Component()
++@SlingServletPaths("/apps/acs-commons/components/utilities/designer/clientlibsmanager/options.json")
+ public class OptionsServlet extends SlingSafeMethodsServlet {
+ 
+     @Reference
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/dispatcher/impl/PermissionSensitiveCacheServlet.java b/bundle/src/main/java/com/adobe/acs/commons/dispatcher/impl/PermissionSensitiveCacheServlet.java
+index 9e3477965..17de2374c 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/dispatcher/impl/PermissionSensitiveCacheServlet.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/dispatcher/impl/PermissionSensitiveCacheServlet.java
+@@ -20,36 +20,31 @@
+ package com.adobe.acs.commons.dispatcher.impl;
+ 
+ import org.apache.commons.lang3.StringUtils;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Properties;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.SlingHttpServletRequest;
+ import org.apache.sling.api.SlingHttpServletResponse;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.apache.sling.api.resource.ResourceUtil;
+ import org.apache.sling.api.servlets.SlingSafeMethodsServlet;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+-@Component(
+-        label = "ACS AEM Commons - Permission Sensitive Cache Servlet",
+-        description = "Servlet that checks if the current sessions has access to a cached object",
+-        metatype = true, immediate = true
+-)
+-@Properties({
+-        @Property(
+-                name = "sling.servlet.paths",
+-                cardinality = Integer.MAX_VALUE,
+-                label = "Sling Servlet Paths",
+-                description = "Paths that this servlet will resolve to"
+-        )
+-})
+-@Service
++@Component(immediate = true, configurationPolicy=ConfigurationPolicy.REQUIRE)
++@Designate(ocd=PermissionSensitiveCacheServlet.Config.class)
+ public class PermissionSensitiveCacheServlet extends SlingSafeMethodsServlet {
+ 
+     private static final Logger log = LoggerFactory.getLogger(PermissionSensitiveCacheServlet.class);
++    
++    @ObjectClassDefinition
++    public @interface Config {
++        @AttributeDefinition(name="Sling Servlet Paths",description="Paths that this servlet will resolve to")
++        String[] sling_servlet_paths();
++    }
+ 
+ 
+     public void doHead(SlingHttpServletRequest request, SlingHttpServletResponse response) {
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/email/impl/EmailServiceImpl.java b/bundle/src/main/java/com/adobe/acs/commons/email/impl/EmailServiceImpl.java
+index 390a296ee..c7962e29e 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/email/impl/EmailServiceImpl.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/email/impl/EmailServiceImpl.java
+@@ -29,15 +29,17 @@
+ import org.apache.commons.mail.EmailException;
+ import org.apache.commons.mail.HtmlEmail;
+ import org.apache.commons.mail.SimpleEmail;
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.LoginException;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.apache.sling.api.resource.ResourceResolverFactory;
+ import org.apache.sling.commons.osgi.PropertiesUtil;
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.ConfigurationPolicy;
++import org.osgi.service.component.annotations.Reference;
++import org.osgi.service.metatype.annotations.AttributeDefinition;
++import org.osgi.service.metatype.annotations.Designate;
++import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -68,12 +70,22 @@
+  *      ...
+  *      List<String> participantList = emailService.sendEmail(htmlEmailTemplatePath, emailParams, attachments, key);
+  */
+-@Component(metatype = true, label = "ACS AEM Commons - Email Service", description = "ACS AEM Commons - Email Service")
+-@Service
++@Component(configurationPolicy=ConfigurationPolicy.REQUIRE)
++@Designate(ocd=EmailServiceImpl.Config.class)
+ public final class EmailServiceImpl implements EmailService {
+ 
+     private static final Logger log = LoggerFactory.getLogger(EmailServiceImpl.class);
+     private static final String MSG_INVALID_RECIPIENTS = "Invalid Recipients";
++    
++    @ObjectClassDefinition(name="ACS AEM COmmons - EMail Service", description="ACS AEM Commons - Email Service")
++    public @interface Config {
++        @AttributeDefinition(name="Connect Timeout", description="Connection timeout in miliseconds")
++        int conn_timeout() default DEFAULT_CONNECT_TIMEOUT;
++        
++        @AttributeDefinition(name="Socket Timeout", description="Socket timeout in miliseconds")
++        int so_timeout() default DEFAULT_SOCKET_TIMEOUT;
++    }
++    
+ 
+     @Reference
+     private MessageGatewayService messageGatewayService;
+@@ -85,11 +97,6 @@
+ 
+     public static final int DEFAULT_SOCKET_TIMEOUT = 30000;
+ 
+-    @Property(label = "Socket Timeout", description = "Socket timeout in milliseconds", intValue = DEFAULT_SOCKET_TIMEOUT)
+-    private static final String PROP_SO_TIMEOUT = "so.timeout";
+-
+-    @Property(label = "Connect Timeout", description = "Connect timeout in milliseconds", intValue = DEFAULT_CONNECT_TIMEOUT)
+-    private static final String PROP_CONNECT_TIMEOUT = "conn.timeout";
+ 
+     private static String SERVICE_NAME = "email-service";
+ 
+@@ -97,9 +104,9 @@
+     private int soTimeout;
+ 
+     @Activate
+-    protected void activate(Map<String, Object> config) {
+-        connectTimeout = PropertiesUtil.toInteger(config.get(PROP_CONNECT_TIMEOUT), DEFAULT_CONNECT_TIMEOUT);
+-        soTimeout = PropertiesUtil.toInteger(config.get(PROP_SO_TIMEOUT), DEFAULT_SOCKET_TIMEOUT);
++    protected void activate(Config conf) {
++        connectTimeout = conf.conn_timeout();
++        soTimeout = conf.so_timeout();
+     }
+ 
+     @Override
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/email/process/impl/SendTemplatedEmailProcess.java b/bundle/src/main/java/com/adobe/acs/commons/email/process/impl/SendTemplatedEmailProcess.java
+index 0dfc72207..b6edc8c88 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/email/process/impl/SendTemplatedEmailProcess.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/email/process/impl/SendTemplatedEmailProcess.java
+@@ -27,18 +27,16 @@
+ import javax.jcr.RepositoryException;
+ 
+ import org.apache.commons.lang.StringUtils;
+-import org.apache.felix.scr.annotations.Activate;
+-import org.apache.felix.scr.annotations.Component;
+-import org.apache.felix.scr.annotations.Deactivate;
+-import org.apache.felix.scr.annotations.Property;
+-import org.apache.felix.scr.annotations.Reference;
+-import org.apache.felix.scr.annotations.Service;
+ import org.apache.sling.api.resource.LoginException;
+ import org.apache.sling.api.resource.Resource;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.apache.sling.api.resource.ResourceResolverFactory;
+ import org.apache.sling.jcr.resource.api.JcrResourceConstants;
+ import org.osgi.service.component.ComponentContext;
++import org.osgi.service.component.annotations.Activate;
++import org.osgi.service.component.annotations.Component;
++import org.osgi.service.component.annotations.Deactivate;
++import org.osgi.service.component.annotations.Reference;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -93,9 +91,9 @@
+  * </dl>
+  * 
+  */
+-@Component
+-@Property(label = "Workflow Label", name = "process.label", value = "Send Templated Email", description = "Sends a templated email using the ACS Commons Email Service")
+-@Service
++@Component(properties= {
++        "process.label=Send Template Email"
++})
+ public class SendTemplatedEmailProcess implements WorkflowProcess {
+ 
+     private static final Logger log = LoggerFactory.getLogger(SendTemplatedEmailProcess.class);
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/TagCreator.java b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/TagCreator.java
+index a715e9141..563235c28 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/TagCreator.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/TagCreator.java
+@@ -85,7 +85,7 @@ public TagCreator(Map<String, ResourceDefinitionBuilder> resourceDefinitionBuild
+             component = FileUploadComponent.class,
+             options = {"mimeTypes=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "required"}
+     )
+-    public transient InputStream tagDefinitionFile = null;
++    public transient InputStream excelFile = null;
+ 
+     @FormField(
+             name = "Primary Converter",
+@@ -128,9 +128,16 @@ public void buildProcess(ProcessInstance instance, ResourceResolver rr) throws L
+     @SuppressWarnings({"squid:S3776", "squid:S1141"})
+     public void parseTags(ActionManager manager) throws Exception {
+         manager.withResolver(rr -> {
+-            final XSSFWorkbook workbook = new XSSFWorkbook(tagDefinitionFile);
++            final XSSFWorkbook workbook = new XSSFWorkbook(excelFile);
+             final XSSFSheet sheet = workbook.getSheetAt(0);
+             final Iterator<Row> rows = sheet.rowIterator();
++            final String tagsRootPath = new TagRootResolver(rr).getTagsLocationPath();
++
++            if (tagsRootPath == null) {
++                record(ReportRowSatus.FAILED_TO_PARSE,
++                        "Abandoning Tag parsing. Unable to determine AEM Tags root (/content/cq:tags vs /etc/tags). Please ensure the path exists and is accessible by the user running Tag Creator.", "N/A", "N/A");
++                return;
++            }
+ 
+             while(rows.hasNext()) {
+                 final Row row = rows.next();
+@@ -150,10 +157,10 @@ public void parseTags(ActionManager manager) throws Exception {
+                     }
+ 
+                     // Generate a tag definition that will in turn be used to drive the tag creation
+-                    TagDefinition tagDefinition = getTagDefinition(primary, cellIndex, cellValue, previousTagId);
++                    TagDefinition tagDefinition = getTagDefinition(primary, cellIndex, cellValue, previousTagId, tagsRootPath);
+ 
+                     if (tagDefinition == null) {
+-                        tagDefinition = getTagDefinition(fallback, cellIndex, cellValue, previousTagId);
++                        tagDefinition = getTagDefinition(fallback, cellIndex, cellValue, previousTagId, tagsRootPath);
+                     }
+ 
+                     if (tagDefinition == null) {
+@@ -232,11 +239,11 @@ private void createTag(TagDefinition tagDefinition, TagManager tagManager) {
+      * @param previousTagId The previous Tag Id to build up.
+      * @return a valid TagDefinition, or null if a valid TagDefinition cannot be generated.
+      */
+-    private TagDefinition getTagDefinition(final TagBuilder tagBuilder, final int index, final String value, final String previousTagId) {
++    private TagDefinition getTagDefinition(final TagBuilder tagBuilder, final int index, final String value, final String previousTagId, final String tagsRootPath) {
+         final ResourceDefinitionBuilder resourceDefinitionBuilder = resourceDefinitionBuilders.get(tagBuilder.name());
+ 
+         if (resourceDefinitionBuilder != null && resourceDefinitionBuilder.accepts(value)) {
+-            final TagDefinition tagDefinition = new TagDefinition(resourceDefinitionBuilder.convert(value));
++            final TagDefinition tagDefinition = new TagDefinition(resourceDefinitionBuilder.convert(value), tagsRootPath);
+ 
+             switch (index) {
+                 case 0: tagDefinition.setId(tagDefinition.getName() + TagConstants.NAMESPACE_DELIMITER);
+@@ -291,7 +298,7 @@ private void setTitles(final Tag tag, final TagDefinition tagDefinition) throws
+         CREATED,
+         UPDATED_EXISTING,
+         FAILED_TO_PARSE,
+-        FAILED_TO_CREATE,
++        FAILED_TO_CREATE
+     }
+ 
+     private void record(ReportRowSatus status, String tagId, String path, String title) {
+@@ -314,21 +321,80 @@ public void storeReport(ProcessInstance instance, ResourceResolver rr) throws Re
+     /** Tag Definition Class **/
+ 
+     private final class TagDefinition extends BasicResourceDefinition {
+-        public TagDefinition(ResourceDefinition resourceDefinition) {
++        private final String tagsRootPath;
++
++        public TagDefinition(ResourceDefinition resourceDefinition, String tagsRootPath) {
+             super(resourceDefinition.getName());
+             super.setId(resourceDefinition.getId());
+             super.setDescription(resourceDefinition.getDescription());
+             super.setTitle(resourceDefinition.getTitle());
+             super.setLocalizedTitles(resourceDefinition.getLocalizedTitles());
++
++            this.tagsRootPath = tagsRootPath;
+         }
+ 
+         @Override
+         public String getPath() {
+             if (getId() != null) {
+-                return "/etc/tags/" + StringUtils.replace(getId(), ":", "/");
++                return tagsRootPath + StringUtils.replace(getId(), ":", "/");
+             } else {
+                 return null;
+             }
+         }
+     }
++
++    protected enum TagsLocation {
++        ETC, CONTENT, UNKNOWN;
++    }
++
++    protected static final class TagRootResolver {
++        private static final String CONTENT_LOCATION = "/content/cq:tags";
++        private static final String ETC_LOCATION = "/etc/tags";
++
++        private final String tagsLocationPath;
++
++        public TagRootResolver(final ResourceResolver resourceResolver) {
++            final TagsLocation tagsLocation = resolveTagsLocation(resourceResolver);
++
++            if (tagsLocation == TagsLocation.CONTENT) {
++                tagsLocationPath = CONTENT_LOCATION;
++            } else if (tagsLocation == TagsLocation.ETC) {
++                tagsLocationPath = ETC_LOCATION;
++            } else if (contentLocationExists(resourceResolver)) {
++                tagsLocationPath = CONTENT_LOCATION;
++            } else if (etcLocationExists(resourceResolver)) {
++                tagsLocationPath = ETC_LOCATION;
++            } else {
++                tagsLocationPath = null;
++            }
++        }
++
++        public String getTagsLocationPath() {
++            return tagsLocationPath;
++        }
++
++        private TagsLocation resolveTagsLocation(ResourceResolver resourceResolver) {
++            final TagManager tagManager = resourceResolver.adaptTo(TagManager.class);
++            final Tag[] namespaces = tagManager.getNamespaces();
++
++            if (namespaces.length > 0) {
++                final Tag tag = namespaces[0];
++                if (StringUtils.startsWith(tag.getPath(), CONTENT_LOCATION)) {
++                    return TagsLocation.CONTENT;
++                } else {
++                    return TagsLocation.ETC;
++                }
++            }
++
++            return TagsLocation.UNKNOWN;
++        }
++
++        private boolean contentLocationExists(ResourceResolver resourceResolver) {
++            return resourceResolver.getResource(CONTENT_LOCATION) != null;
++        }
++
++        private boolean etcLocationExists(ResourceResolver resourceResolver) {
++            return resourceResolver.getResource(ETC_LOCATION) != null;
++        }
++    }
+ }
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestor.java b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestor.java
+index 33ad96a1e..a9c987458 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestor.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestor.java
+@@ -25,6 +25,7 @@
+ import com.adobe.acs.commons.functions.CheckedSupplier;
+ import com.adobe.acs.commons.mcp.ProcessInstance;
+ import com.adobe.acs.commons.mcp.form.FormField;
++import com.adobe.acs.commons.mcp.form.PasswordComponent;
+ import com.day.cq.commons.jcr.JcrUtil;
+ import com.jcraft.jsch.ChannelSftp;
+ import com.jcraft.jsch.JSch;
+@@ -62,11 +63,35 @@ public FileAssetIngestor(MimeTypeService mimeTypeService) {
+ 
+     @FormField(
+             name = "Source",
+-            description = "Source folder for content ingestion which can be a local folder or SFTP url with user/password",
+-            hint = "/var/mycontent, /mnt/all_the_things, sftp://user:password@host[:port]/base/path...",
++            description = "Source folder for content ingestion which can be a local folder or SFTP url",
++            hint = "/var/mycontent, /mnt/all_the_things, sftp://host[:port]/base/path...",
+             required = true
+     )
+     String fileBasePath;
++
++    @FormField(
++            name = "Connection timeout",
++            description = "Connection timeout (in milliseconds) for SFTP connection",
++            required = false,
++            options = ("default=30000")
++    )
++    int timeout = 30000;
++
++    @FormField(
++            name = "Username",
++            description = "Username for SFTP connection",
++            required = false
++    )
++    String username = null;
++
++    @FormField(
++            name = "Password",
++            description = "Password for SFTP connection",
++            required = false,
++            component = PasswordComponent.class
++    )
++    String password = null;
++
+     HierarchicalElement baseFolder;
+ 
+     @Override
+@@ -75,7 +100,7 @@ public void init() throws RepositoryException {
+             try {
+                 baseFolder = new SftpHierarchicalElement(fileBasePath);
+                 baseFolder.isFolder(); // Forces a login and check status of base folder
+-            } catch (JSchException | URISyntaxException ex) {
++            } catch (URISyntaxException ex) {
+                 Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+                 throw new RepositoryException("Unable to process URL!");
+             }
+@@ -270,13 +295,13 @@ public String getJcrBasePath() {
+         Source source;
+         boolean keepChannelOpen = false;
+ 
+-        SftpHierarchicalElement(String uri) throws URISyntaxException, JSchException {
++        SftpHierarchicalElement(String uri) throws URISyntaxException {
+             this.sourcePath = uri;
+             this.uri = new URI(uri);
+             this.path = this.uri.getPath();
+         }
+ 
+-        SftpHierarchicalElement(String uri, ChannelSftp channel, boolean holdOpen) throws URISyntaxException, JSchException {
++        SftpHierarchicalElement(String uri, ChannelSftp channel, boolean holdOpen) throws URISyntaxException {
+             this(uri);
+             this.channel = channel;
+             this.keepChannelOpen = holdOpen;
+@@ -292,16 +317,14 @@ public boolean excludeBaseFolder() {
+             return getParent() == null && isFolder();
+         }
+ 
+-        private ChannelSftp openChannel() throws URISyntaxException, JSchException {
++        private ChannelSftp openChannel() throws JSchException {
+             if (channel == null || !channel.isConnected()) {
+                 JSch jsch = new JSch();
+                 int port = uri.getPort() <= 0 ? 22 : uri.getPort();
+-                String userInfo = uri.getUserInfo();
+-                String username = StringUtils.substringBefore(userInfo, ":");
+-                String password = StringUtils.substringAfter(userInfo, ":");
+ 
+                 com.jcraft.jsch.Session session = jsch.getSession(username, uri.getHost(), port);
+                 session.setConfig("StrictHostKeyChecking", "no");
++                session.setTimeout(timeout);
+                 session.setPassword(password);
+                 session.connect();
+                 channel = (ChannelSftp) session.openChannel("sftp");
+@@ -324,7 +347,7 @@ private void closeChannel() {
+             channel = null;
+         }
+ 
+-        private void retrieveDetails() throws URISyntaxException, JSchException, SftpException {
++        private void retrieveDetails() throws JSchException, SftpException {
+             if (!retrieved) {
+                 openChannel();
+                 SftpATTRS attributes = channel.lstat(path);
+@@ -345,7 +368,7 @@ private void processAttrs(SftpATTRS attrs) {
+         public boolean isFile() {
+             try {
+                 retrieveDetails();
+-            } catch (URISyntaxException | JSchException | SftpException ex) {
++            } catch (JSchException | SftpException ex) {
+                 Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+             }
+             return isFile;
+@@ -356,7 +379,7 @@ public HierarchicalElement getParent() {
+             if (parent == null && !fileBasePath.equals(getSourcePath())) {
+                 try {
+                     parent = new SftpHierarchicalElement(StringUtils.substringBeforeLast(getSourcePath(), "/"));
+-                } catch (URISyntaxException | JSchException ex) {
++                } catch (URISyntaxException ex) {
+                     Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+                 }
+             }
+@@ -373,7 +396,7 @@ public HierarchicalElement getParent() {
+                         .filter(this::isNotDotFolder)
+                         .map(this::getChildFromEntry)
+                         .filter(Objects::nonNull);
+-            } catch (URISyntaxException | JSchException | SftpException ex) {
++            } catch (JSchException | SftpException ex) {
+                 Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+                 return Stream.empty();
+             } finally {
+@@ -393,7 +416,7 @@ private HierarchicalElement getChildFromEntry(ChannelSftp.LsEntry entry) {
+                 SftpHierarchicalElement child = new SftpHierarchicalElement(childPath, channel, true);
+                 child.processAttrs(entry.getAttrs());
+                 return child;
+-            } catch (URISyntaxException | JSchException ex) {
++            } catch (URISyntaxException ex) {
+                 Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+                 return null;
+             }
+@@ -415,7 +438,7 @@ public Source getSource() {
+                 try {
+                     retrieveDetails();
+                     source = new SftpSource(size, this::openChannel, this);
+-                } catch (URISyntaxException | JSchException | SftpException ex) {
++                } catch (JSchException | SftpException ex) {
+                     Logger.getLogger(FileAssetIngestor.class.getName()).log(Level.SEVERE, null, ex);
+                 }
+             }
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/UrlAssetImport.java b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/UrlAssetImport.java
+index 8559451dd..12f06e02e 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/UrlAssetImport.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/mcp/impl/processes/asset/UrlAssetImport.java
+@@ -27,6 +27,7 @@
+ import com.adobe.acs.commons.mcp.form.FormField;
+ import com.adobe.acs.commons.data.Spreadsheet;
+ import com.adobe.acs.commons.data.CompositeVariant;
++import com.adobe.acs.commons.mcp.form.PasswordComponent;
+ import com.day.cq.commons.jcr.JcrUtil;
+ import com.day.cq.dam.api.Asset;
+ import java.io.IOException;
+@@ -117,7 +118,8 @@ public UrlAssetImport(MimeTypeService mimeTypeService, HttpClientBuilderFactory
+         @FormField(
+             name = "Password",
+             description = "Password for connections that require login",
+-            required = false
++            required = false,
++            component = PasswordComponent.class
+     )
+     private String password = null;
+ 
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/mcp/model/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/mcp/model/package-info.java
+index 2ce7ad090..14e819ff0 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/mcp/model/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/mcp/model/package-info.java
+@@ -20,4 +20,4 @@
+ @Version("4.0.0")
+ package com.adobe.acs.commons.mcp.model;
+ 
+-import aQute.bnd.annotation.Version;
+\ No newline at end of file
++import org.osgi.annotation.versioning.Version;
+\ No newline at end of file
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/mcp/util/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/mcp/util/package-info.java
+index a53d761cb..30f8ca574 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/mcp/util/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/mcp/util/package-info.java
+@@ -20,4 +20,4 @@
+ @Version("4.0.0")
+ package com.adobe.acs.commons.mcp.util;
+ 
+-import aQute.bnd.annotation.Version;
+\ No newline at end of file
++import org.osgi.annotation.versioning.Version;
+\ No newline at end of file
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/redirectmaps/models/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/redirectmaps/models/package-info.java
+index b6ccf62c4..c8bf7544f 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/redirectmaps/models/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/redirectmaps/models/package-info.java
+@@ -17,5 +17,7 @@
+  * limitations under the License.
+  * #L%
+  */
+-@aQute.bnd.annotation.Version("4.0.0")
++@Version("4.0.0")
+ package com.adobe.acs.commons.redirectmaps.models;
++
++import org.osgi.annotation.versioning.Version;
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/util/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/util/package-info.java
+index 2ec4789f0..9f108bcc4 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/util/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/util/package-info.java
+@@ -23,4 +23,4 @@
+ @Version("4.0.0")
+ 
+ package com.adobe.acs.commons.util;
+-import aQute.bnd.annotation.Version;
++import org.osgi.annotation.versioning.Version;
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/workflow/bulk/execution/model/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/workflow/bulk/execution/model/package-info.java
+index 6e79a35f2..229f517e6 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/workflow/bulk/execution/model/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/workflow/bulk/execution/model/package-info.java
+@@ -21,5 +21,7 @@
+ /**
+  * Bulk Execution Model API
+  */
+-@aQute.bnd.annotation.Version("4.0.0")
+-package com.adobe.acs.commons.workflow.bulk.execution.model;
+\ No newline at end of file
++@Version("4.0.0")
++package com.adobe.acs.commons.workflow.bulk.execution.model;
++
++import org.osgi.annotation.versioning.Version;
+\ No newline at end of file
+diff --git a/bundle/src/main/java/com/adobe/acs/commons/xss/package-info.java b/bundle/src/main/java/com/adobe/acs/commons/xss/package-info.java
+index c79f3af97..078098f89 100644
+--- a/bundle/src/main/java/com/adobe/acs/commons/xss/package-info.java
++++ b/bundle/src/main/java/com/adobe/acs/commons/xss/package-info.java
+@@ -20,6 +20,8 @@
+ /**
+  * XSS JSP Functions.
+  */
+-@aQute.bnd.annotation.Version("4.0.0")
++@Version("4.0.0")
+ @tldgen.TagLibrary(value = "http://www.adobe.com/consulting/acs-aem-commons/xss", descriptorFile = "xss.tld")
+-package com.adobe.acs.commons.xss;
+\ No newline at end of file
++package com.adobe.acs.commons.xss;
++
++import org.osgi.annotation.versioning.Version;
+\ No newline at end of file
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandlerTest.java b/bundle/src/test/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandlerTest.java
+index e4b015bd2..2bcb1bd8f 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandlerTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/auth/saml/impl/OktaLogoutHandlerTest.java
+@@ -49,14 +49,14 @@ public void testRequestCredentialsReturnsFalse() throws Exception {
+         assertFalse(underTest.requestCredentials(context.request(), context.response()));
+     }
+ 
+-    @Test(expected = IllegalArgumentException.class)
++    @Test(expected = Exception.class)
+     public void activateWithoutHostThrowsIllegalArgumentException() {
+-        underTest.activate(Collections.emptyMap());
++        context.registerInjectActivateService(underTest, Collections.emptyMap());
+     }
+ 
+     @Test
+     public void testDropCredentials() throws Exception {
+-        underTest.activate(Collections.singletonMap("okta.host.name", "www.okta.com"));
++        context.registerInjectActivateService(underTest, Collections.singletonMap("okta.host.name", "www.okta.com"));
+         underTest.dropCredentials(context.request(), context.response());
+ 
+         assertRedirect("https://www.okta.com/login/signout", context.response());
+@@ -67,8 +67,8 @@ public void testDropCredentialsWithFromUri() throws Exception {
+         Map<String, Object> properties = new HashMap<>();
+         properties.put("okta.host.name", "www.okta.com");
+         properties.put("from.uri", "www.myco.com");
+-
+-        underTest.activate(properties);
++        context.registerInjectActivateService(underTest, properties);
++        
+         underTest.dropCredentials(context.request(), context.response());
+ 
+         assertRedirect("https://www.okta.com/login/signout?fromURI=www.myco.com", context.response());
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/dam/impl/ColorConversionImplTest.java b/bundle/src/test/java/com/adobe/acs/commons/dam/impl/ColorConversionImplTest.java
+index f4af113a8..7b4f37c83 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/dam/impl/ColorConversionImplTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/dam/impl/ColorConversionImplTest.java
+@@ -22,7 +22,11 @@
+ import static org.junit.Assert.assertEquals;
+ 
+ import com.adobe.acs.commons.dam.ColorConversion;
++
++import io.wcm.testing.mock.aem.junit.AemContext;
++
+ import org.junit.Before;
++import org.junit.Rule;
+ import org.junit.Test;
+ 
+ import java.util.Collections;
+@@ -30,11 +34,15 @@
+ public class ColorConversionImplTest {
+ 
+     private ColorConversionImpl impl;
++    
++    @Rule
++    public AemContext context = new AemContext();
++    
+ 
+     @Before
+     public void setup() throws Exception {
+         impl = new ColorConversionImpl();
+-        impl.activate(Collections.<String, Object>emptyMap());
++        context.registerInjectActivateService(impl, Collections.<String, Object>emptyMap());
+     }
+ 
+     @Test
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServletTest.java b/bundle/src/test/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServletTest.java
+index 168ef7443..2f23710c2 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServletTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/dam/impl/CustomComponentActivatorListServletTest.java
+@@ -21,10 +21,13 @@
+ 
+ import org.apache.sling.commons.testing.sling.MockSlingHttpServletRequest;
+ import org.apache.sling.commons.testing.sling.MockSlingHttpServletResponse;
++import org.junit.Rule;
+ import org.junit.Test;
+ import org.skyscreamer.jsonassert.JSONAssert;
+ import org.skyscreamer.jsonassert.JSONCompareMode;
+ 
++import io.wcm.testing.mock.aem.junit.AemContext;
++
+ import java.util.Collections;
+ 
+ public class CustomComponentActivatorListServletTest {
+@@ -33,11 +36,14 @@
+             + "{\"propertyName\":\"xmpTPg:Fonts\",\"componentPath\":\"/apps/acs-commons/dam/content/admin/fonts\"},"
+             + "{\"propertyName\":\"xmpTPg:Colorants\",\"componentPath\":\"/apps/acs-commons/dam/content/admin/color-swatches\"},"
+             + "{\"propertyName\":\"location\",\"componentPath\":\"/apps/acs-commons/dam/content/admin/asset-location-map\"}]}";
++    
++    @Rule
++    public AemContext context = new AemContext();
+ 
+     @Test
+     public void testDefault() throws Exception {
+         CustomComponentActivatorListServlet servlet = new CustomComponentActivatorListServlet();
+-        servlet.activate(Collections.emptyMap());
++        context.registerInjectActivateService(servlet, Collections.emptyMap());
+         MockSlingHttpServletRequest request = new MockSlingHttpServletRequest(null, null, null, null, null);
+         MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+         servlet.doGet(request, response);
+@@ -49,7 +55,7 @@ public void testDefault() throws Exception {
+     @Test
+     public void testCustom() throws Exception {
+         CustomComponentActivatorListServlet servlet = new CustomComponentActivatorListServlet();
+-        servlet.activate(Collections.singletonMap("components", new String[] { "test=my/test/component"}));
++        context.registerInjectActivateService(servlet, Collections.singletonMap("components", new String[] { "test=my/test/component"}));
+         MockSlingHttpServletRequest request = new MockSlingHttpServletRequest(null, null, null, null, null);
+         MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+         servlet.doGet(request, response);
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/data/SpreadsheetTest.java b/bundle/src/test/java/com/adobe/acs/commons/data/SpreadsheetTest.java
+index 0369ac2c0..2525b7980 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/data/SpreadsheetTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/data/SpreadsheetTest.java
+@@ -51,6 +51,8 @@ public SpreadsheetTest() {
+     static XSSFWorkbook testWorkbook;
+     static String[] header = new String[]{"path", "title", "someOtherCol", "int-val@integer", "string-list1@string[]", "string-list2@string[;]",
+         "double-val@double", "array", "array", "array", "date-val@date"};
++    static String[] headerNames = new String[]{"path", "title", "someOtherCol", "int-val", "string-list1", "string-list2",
++        "double-val", "array", "array", "array", "date-val"};
+     static ByteArrayOutputStream workbookData = new ByteArrayOutputStream();
+     static Date testDate = new Date();
+     static Spreadsheet dataTypesSheet;
+@@ -106,7 +108,7 @@ public void testGetRowCount() throws IOException {
+     @Test
+     public void testGetHeaderRow() throws IOException {
+         Spreadsheet instance = new Spreadsheet(false, new ByteArrayInputStream(workbookData.toByteArray()));
+-        List<String> expResult = Arrays.asList(header);
++        List<String> expResult = Arrays.asList(headerNames);
+         List<String> result = instance.getHeaderRow();
+         assertTrue("Header row should match", result.containsAll(expResult));
+     }
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/email/impl/EmailServiceImplTest.java b/bundle/src/test/java/com/adobe/acs/commons/email/impl/EmailServiceImplTest.java
+index a3aa22db1..4c0544083 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/email/impl/EmailServiceImplTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/email/impl/EmailServiceImplTest.java
+@@ -19,6 +19,7 @@
+  */
+ package com.adobe.acs.commons.email.impl;
+ 
++import com.adobe.acs.commons.email.EmailService;
+ import com.day.cq.commons.mail.MailTemplate;
+ import com.day.cq.mailer.MessageGateway;
+ import com.day.cq.mailer.MessageGatewayService;
+@@ -27,6 +28,8 @@
+ import org.apache.commons.mail.SimpleEmail;
+ import org.apache.sling.api.resource.ResourceResolver;
+ import org.apache.sling.api.resource.ResourceResolverFactory;
++import org.apache.sling.testing.mock.sling.ResourceResolverType;
++import org.apache.sling.testing.mock.sling.junit.SlingContext;
+ import org.junit.After;
+ import org.junit.Before;
+ import org.junit.Rule;
+@@ -65,52 +68,39 @@
+     @Mock
+     private MessageGatewayService messageGatewayService;
+ 
+-    @Mock
+-    private ResourceResolverFactory resourceResolverFactory;
+-
+-    @Mock
+-    private ResourceResolver resourceResolver;
+-
+     @Mock
+     private MessageGateway<SimpleEmail> messageGatewaySimpleEmail;
+ 
+     @Mock
+     private MessageGateway<HtmlEmail> messageGatewayHtmlEmail;
+ 
+-    @Mock
+-    private Session session;
+-
+-    @InjectMocks
+-    private EmailServiceImpl emailService = new EmailServiceImpl();
++    private EmailService emailService = new EmailServiceImpl();
+ 
+     @Rule
+     private ExpectedException thrown = ExpectedException.none();
++    
++    @Rule
++    public SlingContext context = new SlingContext(ResourceResolverType.JCR_MOCK);
+ 
+-    private String emailTemplatePath;
++    private static final String emailTemplatePath = "/emailTemplate.txt";
++    private static final String EMAIL_TEMPLATE = "emailTemplate.txt";
+ 
+-    private String emailTemplateAttachmentPath;
++    private static final String emailTemplateAttachmentPath = "/emailTemplateAttachment.html";
++    private static final String EMAIL_TEMPLATE_ATTACHMENT = "emailTemplateAttachment.html";
+ 
+     @Before
+     public final void setUp() throws Exception {
+ 
+         MockitoAnnotations.initMocks(this);
+ 
++        context.load().binaryFile(this.getClass().getResourceAsStream(EMAIL_TEMPLATE),emailTemplatePath);
++        context.load().binaryFile(this.getClass().getResourceAsStream(EMAIL_TEMPLATE_ATTACHMENT), emailTemplateAttachmentPath);
++
+         when(messageGatewayService.getGateway(SimpleEmail.class)).thenReturn(messageGatewaySimpleEmail);
+         when(messageGatewayService.getGateway(HtmlEmail.class)).thenReturn(messageGatewayHtmlEmail);
+-        when(resourceResolverFactory.getServiceResourceResolver(Matchers.anyMap())).thenReturn(resourceResolver);
+-        when(resourceResolver.adaptTo(Session.class)).thenReturn(session);
+-
+-        emailTemplatePath = new File(this.getClass().getResource("/emailTemplate.txt").toURI()).getPath();
+-
+-        emailTemplateAttachmentPath = new File(this.getClass().getResource("/emailTemplateAttachment.html").toURI()).getPath();
+-
+-        // Mock the Mail Template
+-        PowerMockito.mockStatic(MailTemplate.class);
+-        when(MailTemplate.create(emailTemplatePath, session)).thenReturn(
+-            new MailTemplate(new FileInputStream(emailTemplatePath), "UTF-8"));
+-
+-        when(MailTemplate.create(emailTemplateAttachmentPath, session)).thenReturn(
+-                new MailTemplate(new FileInputStream(emailTemplateAttachmentPath), "UTF-8"));
++        
++        context.registerService(MessageGatewayService.class, messageGatewayService);
++        context.registerInjectActivateService(emailService);
+ 
+     }
+ 
+@@ -235,13 +225,11 @@ public final void testSendEmailNoRecipients() throws Exception {
+         emailService.sendEmail(templatePath, params, recipients);
+     }
+ 
+-    @Test
++    @Test(expected=IllegalArgumentException.class)
+     public final void testBlankTemplatePath() throws Exception {
+         final String templatePath = null;
+         final Map<String, String> params = new HashMap<String, String>();
+         final String recipient =  "upasanac@acs.com";
+-        thrown.expect(IllegalArgumentException.class);
+-        thrown.expectMessage("Mail template path [ null ] could not resolve to a valid template");
+ 
+         emailService.sendEmail(templatePath, params, recipient);
+      }
+@@ -259,7 +247,8 @@ public final void testInValidTemplatePath() throws Exception {
+ 
+     @Test
+     public void testDefaultTimeouts() {
+-        emailService.activate(Collections.emptyMap());
++        //emailService.activate(Collections.emptyMap());
++        context.registerInjectActivateService(emailService,Collections.emptyMap());
+         SimpleEmail email = sendTestEmail();
+         assertEquals(30000, email.getSocketConnectionTimeout());
+         assertEquals(30000, email.getSocketTimeout());
+@@ -270,7 +259,8 @@ public void testCustomTimeouts() {
+         Map<String, Object> params = new HashMap<>();
+         params.put("so.timeout", 100);
+         params.put("conn.timeout", 500);
+-        emailService.activate(params);
++        //emailService.activate(params);
++        context.registerInjectActivateService(emailService, params);
+         SimpleEmail email = sendTestEmail();
+         assertEquals(500, email.getSocketConnectionTimeout());
+         assertEquals(100, email.getSocketTimeout());
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/TagCreatorTest.java b/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/TagCreatorTest.java
+new file mode 100644
+index 000000000..a4be635de
+--- /dev/null
++++ b/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/TagCreatorTest.java
+@@ -0,0 +1,125 @@
++/*
++ * #%L
++ * ACS AEM Commons Bundle
++ * %%
++ * Copyright (C) 2018 Adobe
++ * %%
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ * #L%
++ */
++package com.adobe.acs.commons.mcp.impl.processes;
++
++import com.adobe.acs.commons.fam.ActionManager;
++import com.adobe.acs.commons.functions.CheckedConsumer;
++import com.adobe.acs.commons.util.datadefinitions.ResourceDefinitionBuilder;
++import com.adobe.acs.commons.util.datadefinitions.impl.JcrValidNameDefinitionBuilderImpl;
++import com.adobe.acs.commons.util.datadefinitions.impl.LowercaseWithDashesDefinitionBuilderImpl;
++import com.adobe.acs.commons.util.datadefinitions.impl.TitleAndNodeNameDefinitionBuilderImpl;
++import io.wcm.testing.mock.aem.junit.AemContext;
++import org.apache.jackrabbit.JcrConstants;
++import org.apache.sling.api.resource.ResourceResolver;
++import org.apache.sling.testing.mock.sling.ResourceResolverType;
++import org.junit.Before;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.invocation.InvocationOnMock;
++import org.mockito.runners.MockitoJUnitRunner;
++import org.mockito.stubbing.Answer;
++
++import java.util.HashMap;
++import java.util.Map;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.Matchers.any;
++import static org.mockito.Mockito.doAnswer;
++
++@RunWith(MockitoJUnitRunner.class)
++public class TagCreatorTest {
++
++    @Rule
++    public AemContext ctx = new AemContext(ResourceResolverType.JCR_MOCK);
++
++    @Mock
++    private ActionManager actionManager;
++
++    private final Map<String, ResourceDefinitionBuilder> resourceDefinitionBuilders = new HashMap<>();
++
++    private TagCreator tagCreator;
++
++    @Before
++    public void setUp() throws Exception {
++        resourceDefinitionBuilders.put(AssetFolderCreator.AssetFolderBuilder.LOWERCASE_WITH_DASHES.name(), new LowercaseWithDashesDefinitionBuilderImpl());
++        resourceDefinitionBuilders.put(AssetFolderCreator.AssetFolderBuilder.TITLE_AND_NODE_NAME.name(), new TitleAndNodeNameDefinitionBuilderImpl());
++        resourceDefinitionBuilders.put(AssetFolderCreator.AssetFolderBuilder.TITLE_TO_NODE_NAME.name(), new JcrValidNameDefinitionBuilderImpl());
++
++        tagCreator = new TagCreator(resourceDefinitionBuilders);
++        tagCreator.excelFile = getClass().getResourceAsStream("/com/adobe/acs/commons/mcp/impl/processes/tag-creator.xlsx");
++
++        doAnswer(new Answer() {
++            @Override
++            public Object answer(InvocationOnMock invocation) throws Throwable {
++                CheckedConsumer<ResourceResolver> method = (CheckedConsumer<ResourceResolver>) invocation.getArguments()[0];
++                method.accept(ctx.resourceResolver());
++                return null;
++            }
++        }).when(actionManager).withResolver(any(CheckedConsumer.class));
++    }
++
++    @Test
++    public void testParseAssetFolderDefinitions() throws Exception {
++        tagCreator.parseTags(actionManager);
++
++        final int expected = 6;
++
++        assertEquals(expected, tagCreator.tagDefinitions.size());
++    }
++
++    @Test
++    public void testCreateAssetFolders() throws Exception {
++        final String rootPath = "/etc/tags";
++
++        ctx.create().resource(rootPath, JcrConstants.JCR_PRIMARYTYPE, "sling:Folder");
++        ctx.resourceResolver().commit();
++
++        tagCreator.primary = TagCreator.TagBuilder.TITLE_AND_NODE_NAME;
++        tagCreator.fallback = TagCreator.TagBuilder.LOWERCASE_WITH_DASHES;
++
++        tagCreator.parseTags(actionManager);
++        tagCreator.importTags(actionManager);
++
++        assertTrue(ctx.resourceResolver().hasChanges());
++
++        assertEquals("Tag Namespace 1",
++                ctx.resourceResolver().getResource(rootPath + "/ns1").getValueMap().get("jcr:title", String.class));
++
++        assertEquals("Tag 1",
++                ctx.resourceResolver().getResource(rootPath + "/ns1/tag_1").getValueMap().get("jcr:title", String.class));
++
++        assertEquals("Tag 2",
++                ctx.resourceResolver().getResource(rootPath + "/ns1/tag-2").getValueMap().get("jcr:title", String.class));
++
++
++        assertEquals("Tag Namespace 2",
++                ctx.resourceResolver().getResource(rootPath + "/ns2").getValueMap().get("jcr:title", String.class));
++
++        assertEquals("Tag 3",
++                ctx.resourceResolver().getResource(rootPath + "/ns2/tag_3").getValueMap().get("jcr:title", String.class));
++
++        assertEquals("Tag 4",
++                ctx.resourceResolver().getResource(rootPath + "/ns2/tag-4").getValueMap().get("jcr:title", String.class));
++
++    }
++}
+\ No newline at end of file
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestorTest.java b/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestorTest.java
+index b93a7eb02..83cb3869a 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestorTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/mcp/impl/processes/asset/FileAssetIngestorTest.java
+@@ -65,6 +65,9 @@
+ @RunWith(MockitoJUnitRunner.class)
+ public class FileAssetIngestorTest {
+     private static final int FILE_SIZE = 57797;
++    private static final String SFTP_HOST_TEST_PATH = "sftp://host/test/path";
++    private static final String SFTP_USER_TEST_NAME = "user";
++    private static final String SFTP_USER_TEST_PASSWORD = "password";
+ 
+     @Rule
+     public final SlingContext context = new SlingContext(ResourceResolverType.JCR_OAK);
+@@ -271,29 +274,27 @@ private File mkdir(File dir, String name) {
+     
+     @Test
+     public void testSftpStructures() throws URISyntaxException, JSchException {
+-        String baseUri = "sftp://user:password@host/test/path";
+-        ingestor.fileBasePath = baseUri;
+-        FileAssetIngestor.SftpHierarchicalElement elem1 = ingestor.new SftpHierarchicalElement(baseUri);
++        configureSftpFields();
++        FileAssetIngestor.SftpHierarchicalElement elem1 = ingestor.new SftpHierarchicalElement(SFTP_HOST_TEST_PATH);
+         elem1.isFile = true;
+         assertNull(elem1.getParent());
+-        assertEquals(baseUri, elem1.getSourcePath());
++        assertEquals(SFTP_HOST_TEST_PATH, elem1.getSourcePath());
+         // File should be a child node
+         assertEquals("/content/dam/path", elem1.getNodePath());
+         assertEquals("path", elem1.getNodeName());
+ 
+-        FileAssetIngestor.SftpHierarchicalElement elem2 = ingestor.new SftpHierarchicalElement(baseUri);
++        FileAssetIngestor.SftpHierarchicalElement elem2 = ingestor.new SftpHierarchicalElement(SFTP_HOST_TEST_PATH);
+         elem1.isFile = false;
+         assertNull(elem2.getParent());
+-        assertEquals(baseUri, elem2.getSourcePath());
++        assertEquals(SFTP_HOST_TEST_PATH, elem2.getSourcePath());
+         // Folder should map to the root folder
+         assertEquals("/content/dam", elem2.getNodePath());
+         assertEquals("path", elem2.getNodeName());
+     }
+-    
++
+     @Test
+     public void testSftpRecursion() throws URISyntaxException, JSchException, SftpException {
+-        String baseUri = "sftp://user:password@host/test/path";
+-        ingestor.fileBasePath = baseUri;
++        configureSftpFields();
+         ChannelSftp channel = mock(ChannelSftp.class);
+         when(channel.isConnected()).thenReturn(true);
+         when(channel.getSession()).thenReturn(mock(Session.class));
+@@ -306,7 +307,7 @@ public void testSftpRecursion() throws URISyntaxException, JSchException, SftpEx
+                 .asVector();
+         when(channel.ls(anyObject())).thenReturn(entries);
+         
+-        FileAssetIngestor.SftpHierarchicalElement elem1 = ingestor.new SftpHierarchicalElement(baseUri, channel, false);
++        FileAssetIngestor.SftpHierarchicalElement elem1 = ingestor.new SftpHierarchicalElement(SFTP_HOST_TEST_PATH, channel, false);
+         int count = 0;
+         for (HierarchicalElement e : elem1.getChildren().collect(Collectors.toList())) {
+             count++;
+@@ -321,4 +322,10 @@ private File addFile(File dir, String name, String resourcePath) throws IOExcept
+         FileUtils.copyInputStreamToFile(getClass().getResourceAsStream(resourcePath), newFile);
+         return newFile;
+     }
++
++    private void configureSftpFields() {
++        ingestor.fileBasePath = SFTP_HOST_TEST_PATH;
++        ingestor.username = SFTP_USER_TEST_NAME;
++        ingestor.password = SFTP_USER_TEST_PASSWORD;
++    }
+ }
+diff --git a/bundle/src/test/java/com/adobe/acs/commons/wcm/impl/FileImporterTest.java b/bundle/src/test/java/com/adobe/acs/commons/wcm/impl/FileImporterTest.java
+index 6de176e5a..2ff4e31c1 100644
+--- a/bundle/src/test/java/com/adobe/acs/commons/wcm/impl/FileImporterTest.java
++++ b/bundle/src/test/java/com/adobe/acs/commons/wcm/impl/FileImporterTest.java
+@@ -37,6 +37,7 @@
+ import org.apache.sling.commons.mime.MimeTypeService;
+ import org.apache.sling.commons.testing.jcr.RepositoryProvider;
+ import org.junit.After;
++import org.junit.Assert;
+ import org.junit.Before;
+ import org.junit.Test;
+ import org.junit.runner.RunWith;
+@@ -65,7 +66,8 @@
+     public void setup() throws Exception {
+         provider = RepositoryProvider.instance();
+         importer.activate(Collections.<String, Object> emptyMap());
+-        testFile = new File("src/test/resources/emailTemplate.txt");
++        testFile = new File(getClass().getResource("emailTemplate.txt").getFile());
++        Assert.assertTrue(testFile.exists());
+         when(mimeTypeService.getMimeType("emailTemplate.txt")).thenReturn("text/plain");
+ 
+         session = provider.getRepository().loginAdministrative(null);
+diff --git a/bundle/src/test/resources/emailTemplate.txt b/bundle/src/test/resources/com/adobe/acs/commons/email/impl/emailTemplate.txt
+similarity index 100%
+rename from bundle/src/test/resources/emailTemplate.txt
+rename to bundle/src/test/resources/com/adobe/acs/commons/email/impl/emailTemplate.txt
+diff --git a/bundle/src/test/resources/emailTemplateAttachment.html b/bundle/src/test/resources/com/adobe/acs/commons/email/impl/emailTemplateAttachment.html
+similarity index 100%
+rename from bundle/src/test/resources/emailTemplateAttachment.html
+rename to bundle/src/test/resources/com/adobe/acs/commons/email/impl/emailTemplateAttachment.html
+diff --git a/bundle/src/test/resources/com/adobe/acs/commons/mcp/impl/processes/tag-creator.xlsx b/bundle/src/test/resources/com/adobe/acs/commons/mcp/impl/processes/tag-creator.xlsx
+new file mode 100644
+index 000000000..746b74bc1
+Binary files /dev/null and b/bundle/src/test/resources/com/adobe/acs/commons/mcp/impl/processes/tag-creator.xlsx differ
+diff --git a/bundle/src/test/resources/com/adobe/acs/commons/wcm/impl/emailTemplate.txt b/bundle/src/test/resources/com/adobe/acs/commons/wcm/impl/emailTemplate.txt
+new file mode 100644
+index 000000000..436286db5
+--- /dev/null
++++ b/bundle/src/test/resources/com/adobe/acs/commons/wcm/impl/emailTemplate.txt
+@@ -0,0 +1,17 @@
++Subject: Greetings
++
++
++<div style="font-size: 12px; font-weight: normal; color: #000000; font-family:Arial,Helvetica,Verdana,sans-serif;">
++
++Hello,
++
++Find your message here : ${message}
++
++
++From,
++ACS AEM Commons Team
++
++-------------------------------------------------------
++This is an automatic generated message. Please do not reply.
++
++<div>
+diff --git a/pom.xml b/pom.xml
+index 3af60bab5..30632befd 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -71,7 +71,7 @@
+                         3.5.1: Manifest XML files are generated but are completely empty
+                         3.5.0: Produces 57 test failures
+                     -->
+-                    <version>3.4.0</version>
++                    <version>4.1.0</version>
+                     <extensions>true</extensions>
+                     <executions>
+                         <execution>
+@@ -344,6 +344,12 @@
+                 <version>1.7.4</version>
+                 <scope>test</scope>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.sling</groupId>
++                <artifactId>org.apache.sling.testing.sling-mock.junit4</artifactId>
++                <version>2.3.4</version>
++                <scope>test</scope>
++            </dependency>
+             <dependency>
+                 <groupId>org.apache.sling</groupId>
+                 <artifactId>org.apache.sling.testing.sling-mock</artifactId>
+@@ -370,7 +376,7 @@
+             </dependency>
+             <dependency>
+                 <groupId>io.wcm</groupId>
+-                <artifactId>io.wcm.testing.aem-mock</artifactId>
++                <artifactId>io.wcm.testing.aem-mock.junit4</artifactId>
+                 <version>2.3.2</version>
+                 <scope>test</scope>
+                 <exclusions>
+@@ -565,4 +571,4 @@
+         <module>bundle</module>
+         <module>content</module>
+     </modules>
+-</project>
+\ No newline at end of file
++</project>

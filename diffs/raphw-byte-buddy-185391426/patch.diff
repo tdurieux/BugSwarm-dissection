@@ -1,0 +1,40 @@
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTest.java
+index 053eb5ca88..bb79458a21 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTest.java
+@@ -1,9 +1,7 @@
+ package net.bytebuddy;
+ 
+-import net.bytebuddy.dynamic.DynamicType;
+ import net.bytebuddy.dynamic.TypeResolutionStrategy;
+ import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+-import net.bytebuddy.implementation.FieldAccessor;
+ import net.bytebuddy.implementation.MethodDelegation;
+ import net.bytebuddy.test.utility.ObjectPropertyAssertion;
+ import org.junit.Test;
+@@ -97,25 +95,6 @@ public void testImplicitStrategyNonBootstrap() throws Exception {
+         assertThat(type.getClassLoader(), is(classLoader));
+     }
+ 
+-    @Test
+-    public void testNestingPerformance() throws Exception {
+-        DynamicType.Builder<Object> byteBuddy = new ByteBuddy().subclass(Object.class);
+-        long time = System.currentTimeMillis();
+-        byteBuddy.make();
+-        long baseline = System.currentTimeMillis() - time;
+-        time = System.currentTimeMillis();
+-        for (int index = 0; index < 300; index++) {
+-            byteBuddy = byteBuddy.defineField("field" + index, String.class, Modifier.PRIVATE)
+-                    .defineMethod("getField" + index, String.class, Modifier.PUBLIC)
+-                    .intercept(FieldAccessor.ofBeanProperty());
+-        }
+-        byteBuddy.make();
+-        long end = System.currentTimeMillis() - time;
+-        if (end > baseline * 200) {
+-            throw new AssertionError("Nested creation took too much time: " + end + " vs " + (baseline * 200));
+-        }
+-    }
+-
+     @Test
+     public void testObjectProperties() throws Exception {
+         ObjectPropertyAssertion.of(ByteBuddy.class).apply();

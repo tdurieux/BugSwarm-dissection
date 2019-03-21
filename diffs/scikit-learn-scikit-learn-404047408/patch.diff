@@ -1,0 +1,783 @@
+diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
+index e55dc1cc1476..7638bcd7b955 100644
+--- a/doc/modules/model_evaluation.rst
++++ b/doc/modules/model_evaluation.rst
+@@ -98,9 +98,9 @@ Usage examples:
+     >>> from sklearn.model_selection import cross_val_score
+     >>> iris = datasets.load_iris()
+     >>> X, y = iris.data, iris.target
+-    >>> clf = svm.SVC(gamma='scale', probability=True, random_state=0)
+-    >>> cross_val_score(clf, X, y, scoring='neg_log_loss') # doctest: +ELLIPSIS
+-    array([-0.10..., -0.16..., -0.07...])
++    >>> clf = svm.SVC(gamma='scale', random_state=0)
++    >>> cross_val_score(clf, X, y, scoring='recall_macro') # doctest: +ELLIPSIS
++    array([0.980..., 0.960..., 0.979...])
+     >>> model = svm.SVC()
+     >>> cross_val_score(model, X, y, scoring='wrong_choice')
+     Traceback (most recent call last):
+diff --git a/sklearn/cluster/_hierarchical.pyx b/sklearn/cluster/_hierarchical.pyx
+index 7d46c804df04..aa098f560ce7 100644
+--- a/sklearn/cluster/_hierarchical.pyx
++++ b/sklearn/cluster/_hierarchical.pyx
+@@ -557,4 +557,4 @@ cpdef np.ndarray[DTYPE_t, ndim=2] mst_linkage_core(
+         result[i - 1, 2] = new_distance
+         current_node = new_node
+ 
+-    return result
++    return np.array(result)
+diff --git a/sklearn/cluster/k_means_.py b/sklearn/cluster/k_means_.py
+index 42ca6402df06..42e6698d88c4 100644
+--- a/sklearn/cluster/k_means_.py
++++ b/sklearn/cluster/k_means_.py
+@@ -889,7 +889,7 @@ class KMeans(BaseEstimator, ClusterMixin, TransformerMixin):
+ 
+     Notes
+     ------
+-    The k-means problem is solved using Lloyd's algorithm.
++    The k-means problem is solved using either Lloyd's or Elkan's algorithm.
+ 
+     The average complexity is given by O(k n T), were n is the number of
+     samples and T is the number of iteration.
+@@ -902,6 +902,12 @@ class KMeans(BaseEstimator, ClusterMixin, TransformerMixin):
+     clustering algorithms available), but it falls in local minima. That's why
+     it can be useful to restart it several times.
+ 
++    If the algorithm stops before fully converging (because of ``tol`` of
++    ``max_iter``), ``labels_`` and ``means_`` will not be consistent, i.e. the
++    ``means_`` will not be the means of the points in each cluster.
++    Also, the estimator will reassign ``labels_`` after the last iteration to
++    make ``labels_`` consistent with ``predict`` on the training set.
++
+     """
+ 
+     def __init__(self, n_clusters=8, init='k-means++', n_init=10,
+diff --git a/sklearn/covariance/graph_lasso_.py b/sklearn/covariance/graph_lasso_.py
+index b9d5821fc81d..94a9f63ea44b 100644
+--- a/sklearn/covariance/graph_lasso_.py
++++ b/sklearn/covariance/graph_lasso_.py
+@@ -19,11 +19,11 @@
+ from ..exceptions import ConvergenceWarning
+ from ..utils.validation import check_random_state, check_array
+ from ..utils import deprecated
++from ..utils.fixes import _Sequence as Sequence
+ from ..linear_model import lars_path
+ from ..linear_model import cd_fast
+ from ..model_selection import check_cv, cross_val_score
+ from ..externals.joblib import Parallel, delayed
+-import collections
+ 
+ 
+ # Helper functions to compute the objective and dual objective functions
+@@ -608,7 +608,7 @@ def fit(self, X, y=None):
+         n_alphas = self.alphas
+         inner_verbose = max(0, self.verbose - 1)
+ 
+-        if isinstance(n_alphas, collections.Sequence):
++        if isinstance(n_alphas, Sequence):
+             alphas = self.alphas
+             n_refinements = 1
+         else:
+@@ -684,7 +684,7 @@ def fit(self, X, y=None):
+                 alpha_1 = path[best_index - 1][0]
+                 alpha_0 = path[best_index + 1][0]
+ 
+-            if not isinstance(n_alphas, collections.Sequence):
++            if not isinstance(n_alphas, Sequence):
+                 alphas = np.logspace(np.log10(alpha_1), np.log10(alpha_0),
+                                      n_alphas + 2)
+                 alphas = alphas[1:-1]
+diff --git a/sklearn/datasets/samples_generator.py b/sklearn/datasets/samples_generator.py
+index 5cd54b438f13..f019139130fb 100644
+--- a/sklearn/datasets/samples_generator.py
++++ b/sklearn/datasets/samples_generator.py
+@@ -11,11 +11,11 @@
+ import numpy as np
+ from scipy import linalg
+ import scipy.sparse as sp
+-from collections import Iterable
+ 
+ from ..preprocessing import MultiLabelBinarizer
+ from ..utils import check_array, check_random_state
+ from ..utils import shuffle as util_shuffle
++from ..utils.fixes import _Iterable as Iterable
+ from ..utils.random import sample_without_replacement
+ from ..externals import six
+ map = six.moves.map
+diff --git a/sklearn/feature_extraction/dict_vectorizer.py b/sklearn/feature_extraction/dict_vectorizer.py
+index 3ab717d1cf29..d078a325b69a 100644
+--- a/sklearn/feature_extraction/dict_vectorizer.py
++++ b/sklearn/feature_extraction/dict_vectorizer.py
+@@ -3,7 +3,6 @@
+ # License: BSD 3 clause
+ 
+ from array import array
+-from collections import Mapping
+ from operator import itemgetter
+ 
+ import numpy as np
+@@ -13,6 +12,7 @@
+ from ..externals import six
+ from ..externals.six.moves import xrange
+ from ..utils import check_array, tosequence
++from ..utils.fixes import _Mapping as Mapping
+ 
+ 
+ def _tosequence(X):
+diff --git a/sklearn/feature_extraction/tests/test_text.py b/sklearn/feature_extraction/tests/test_text.py
+index 9cbc7004a227..9a9284d30f79 100644
+--- a/sklearn/feature_extraction/tests/test_text.py
++++ b/sklearn/feature_extraction/tests/test_text.py
+@@ -33,8 +33,8 @@
+                                    clean_warning_registry, ignore_warnings,
+                                    SkipTest, assert_raises,
+                                    assert_allclose_dense_sparse)
+-
+-from collections import defaultdict, Mapping
++from sklearn.utils.fixes import _Mapping as Mapping
++from collections import defaultdict
+ from functools import partial
+ import pickle
+ from io import StringIO
+diff --git a/sklearn/gaussian_process/kernels.py b/sklearn/gaussian_process/kernels.py
+index 4581b87ba948..7ab1ad8c90ee 100644
+--- a/sklearn/gaussian_process/kernels.py
++++ b/sklearn/gaussian_process/kernels.py
+@@ -199,7 +199,13 @@ def set_params(self, **params):
+         return self
+ 
+     def clone_with_theta(self, theta):
+-        """Returns a clone of self with given hyperparameters theta. """
++        """Returns a clone of self with given hyperparameters theta.
++
++        Parameters
++        ----------
++        theta : array, shape (n_dims,)
++            The hyperparameters
++        """
+         cloned = clone(self)
+         cloned.theta = theta
+         return cloned
+@@ -395,6 +401,11 @@ class CompoundKernel(Kernel):
+     """Kernel which is composed of a set of other kernels.
+ 
+     .. versionadded:: 0.18
++
++    Parameters
++    ----------
++    kernels : list of Kernel objects
++        The other kernels
+     """
+ 
+     def __init__(self, kernels):
+@@ -1268,7 +1279,7 @@ class Matern(RBF):
+     length_scale_bounds : pair of floats >= 0, default: (1e-5, 1e5)
+         The lower and upper bound on length_scale
+ 
+-    nu: float, default: 1.5
++    nu : float, default: 1.5
+         The parameter nu controlling the smoothness of the learned function.
+         The smaller nu, the less smooth the approximated function is.
+         For nu=inf, the kernel becomes equivalent to the RBF kernel and for
+@@ -1755,7 +1766,7 @@ class PairwiseKernel(Kernel):
+ 
+     Parameters
+     ----------
+-    gamma: float >= 0, default: 1.0
++    gamma : float >= 0, default: 1.0
+         Parameter gamma of the pairwise kernel specified by metric
+ 
+     gamma_bounds : pair of floats >= 0, default: (1e-5, 1e5)
+diff --git a/sklearn/impute.py b/sklearn/impute.py
+index 8acec9d010da..f315bad72a57 100644
+--- a/sklearn/impute.py
++++ b/sklearn/impute.py
+@@ -42,7 +42,7 @@
+ 
+ def _get_mask(X, value_to_mask):
+     """Compute the boolean mask X == missing_values."""
+-    if value_to_mask is np.nan:
++    if is_scalar_nan(value_to_mask):
+         if X.dtype.kind == "f":
+             return np.isnan(X)
+         elif X.dtype.kind in ("i", "u"):
+diff --git a/sklearn/linear_model/base.py b/sklearn/linear_model/base.py
+index 09c389cb336d..7887bcae241e 100644
+--- a/sklearn/linear_model/base.py
++++ b/sklearn/linear_model/base.py
+@@ -50,6 +50,29 @@ def make_dataset(X, y, sample_weight, random_state=None):
+ 
+     This also returns the ``intercept_decay`` which is different
+     for sparse datasets.
++
++    Parameters
++    ----------
++    X : array_like, shape (n_samples, n_features)
++        Training data
++
++    y : array_like, shape (n_samples, )
++        Target values.
++
++    sample_weight : numpy array of shape (n_samples,)
++        The weight of each sample
++
++    random_state : int, RandomState instance or None (default)
++        Determines random number generation for dataset shuffling and noise.
++        Pass an int for reproducible output across multiple function calls.
++        See :term:`Glossary <random_state>`.
++
++    Returns
++    -------
++    dataset
++        The ``Dataset`` abstraction
++    intercept_decay
++        The intercept decay
+     """
+ 
+     rng = check_random_state(random_state)
+@@ -171,12 +194,12 @@ def predict(self, X):
+ 
+         Parameters
+         ----------
+-        X : {array-like, sparse matrix}, shape = (n_samples, n_features)
++        X : array_like or sparse matrix, shape (n_samples, n_features)
+             Samples.
+ 
+         Returns
+         -------
+-        C : array, shape = (n_samples,)
++        C : array, shape (n_samples,)
+             Returns predicted values.
+         """
+         return self._decision_function(X)
+@@ -209,7 +232,7 @@ def decision_function(self, X):
+ 
+         Parameters
+         ----------
+-        X : {array-like, sparse matrix}, shape = (n_samples, n_features)
++        X : array_like or sparse matrix, shape (n_samples, n_features)
+             Samples.
+ 
+         Returns
+@@ -239,12 +262,12 @@ def predict(self, X):
+ 
+         Parameters
+         ----------
+-        X : {array-like, sparse matrix}, shape = [n_samples, n_features]
++        X : array_like or sparse matrix, shape (n_samples, n_features)
+             Samples.
+ 
+         Returns
+         -------
+-        C : array, shape = [n_samples]
++        C : array, shape [n_samples]
+             Predicted class label per sample.
+         """
+         scores = self.decision_function(X)
+@@ -386,10 +409,10 @@ def fit(self, X, y, sample_weight=None):
+ 
+         Parameters
+         ----------
+-        X : numpy array or sparse matrix of shape [n_samples,n_features]
++        X : array-like or sparse matrix, shape (n_samples, n_features)
+             Training data
+ 
+-        y : numpy array of shape [n_samples, n_targets]
++        y : array_like, shape (n_samples, n_targets)
+             Target values. Will be cast to X's dtype if necessary
+ 
+         sample_weight : numpy array of shape [n_samples]
+diff --git a/sklearn/linear_model/passive_aggressive.py b/sklearn/linear_model/passive_aggressive.py
+index dc48b7362b5d..6ad331772d96 100644
+--- a/sklearn/linear_model/passive_aggressive.py
++++ b/sklearn/linear_model/passive_aggressive.py
+@@ -45,11 +45,6 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
+-    n_iter_no_change : int, default=5
+-        Number of iterations with no improvement to wait before early stopping.
+-
+-        .. versionadded:: 0.20
+-
+     validation_fraction : float, default=0.1
+         The proportion of training data to set aside as validation set for
+         early stopping. Must be between 0 and 1.
+@@ -57,6 +52,11 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
++    n_iter_no_change : int, default=5
++        Number of iterations with no improvement to wait before early stopping.
++
++        .. versionadded:: 0.20
++
+     shuffle : bool, default=True
+         Whether or not the training data should be shuffled after each epoch.
+ 
+@@ -297,11 +297,6 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
+ 
+         .. versionadded:: 0.20
+ 
+-    n_iter_no_change : int, default=5
+-        Number of iterations with no improvement to wait before early stopping.
+-
+-        .. versionadded:: 0.20
+-
+     validation_fraction : float, default=0.1
+         The proportion of training data to set aside as validation set for
+         early stopping. Must be between 0 and 1.
+@@ -309,6 +304,11 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
+ 
+         .. versionadded:: 0.20
+ 
++    n_iter_no_change : int, default=5
++        Number of iterations with no improvement to wait before early stopping.
++
++        .. versionadded:: 0.20
++
+     shuffle : bool, default=True
+         Whether or not the training data should be shuffled after each epoch.
+ 
+diff --git a/sklearn/linear_model/perceptron.py b/sklearn/linear_model/perceptron.py
+index 64cbecef7ec4..1a01e1ba2236 100644
+--- a/sklearn/linear_model/perceptron.py
++++ b/sklearn/linear_model/perceptron.py
+@@ -68,11 +68,6 @@ class Perceptron(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
+-    n_iter_no_change : int, default=5
+-        Number of iterations with no improvement to wait before early stopping.
+-
+-        .. versionadded:: 0.20
+-
+     validation_fraction : float, default=0.1
+         The proportion of training data to set aside as validation set for
+         early stopping. Must be between 0 and 1.
+@@ -80,6 +75,11 @@ class Perceptron(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
++    n_iter_no_change : int, default=5
++        Number of iterations with no improvement to wait before early stopping.
++
++        .. versionadded:: 0.20
++
+     class_weight : dict, {class_label: weight} or "balanced" or None, optional
+         Preset for the class_weight fit parameter.
+ 
+diff --git a/sklearn/linear_model/stochastic_gradient.py b/sklearn/linear_model/stochastic_gradient.py
+index e5bc20e837d2..34b4025d01c9 100644
+--- a/sklearn/linear_model/stochastic_gradient.py
++++ b/sklearn/linear_model/stochastic_gradient.py
+@@ -352,6 +352,42 @@ def fit_binary(est, i, X, y, alpha, C, learning_rate, max_iter,
+     """Fit a single binary classifier.
+ 
+     The i'th class is considered the "positive" class.
++
++    Parameters
++    ----------
++    est : Estimator object
++        The estimator to fit
++
++    i : int
++        Index of the positive class
++
++    X : numpy array or sparse matrix of shape [n_samples,n_features]
++        Training data
++
++    y : numpy array of shape [n_samples, ]
++        Target values
++
++    alpha : float
++        The regularization parameter
++
++    C : float
++        Maximum step size for passive aggressive
++
++    learning_rate : string
++        The learning rate. Accepted values are 'constant', 'optimal',
++        'invscaling', 'pa1' and 'pa2'.
++
++    max_iter : int
++        The maximum number of iterations (epochs)
++
++    pos_weight : float
++        The weight of the positive class
++
++    neg_weight : float
++        The weight of the negative class
++
++    sample_weight : numpy array of shape [n_samples, ]
++        The weight of each sample
+     """
+     # if average is not true, average_coef, and average_intercept will be
+     # unused
+@@ -815,11 +851,6 @@ class SGDClassifier(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
+-    n_iter_no_change : int, default=5
+-        Number of iterations with no improvement to wait before early stopping.
+-
+-        .. versionadded:: 0.20
+-
+     validation_fraction : float, default=0.1
+         The proportion of training data to set aside as validation set for
+         early stopping. Must be between 0 and 1.
+@@ -827,6 +858,11 @@ class SGDClassifier(BaseSGDClassifier):
+ 
+         .. versionadded:: 0.20
+ 
++    n_iter_no_change : int, default=5
++        Number of iterations with no improvement to wait before early stopping.
++
++        .. versionadded:: 0.20
++
+     class_weight : dict, {class_label: weight} or "balanced" or None, optional
+         Preset for the class_weight fit parameter.
+ 
+@@ -1424,11 +1460,6 @@ class SGDRegressor(BaseSGDRegressor):
+ 
+         .. versionadded:: 0.20
+ 
+-    n_iter_no_change : int, default=5
+-        Number of iterations with no improvement to wait before early stopping.
+-
+-        .. versionadded:: 0.20
+-
+     validation_fraction : float, default=0.1
+         The proportion of training data to set aside as validation set for
+         early stopping. Must be between 0 and 1.
+@@ -1436,6 +1467,11 @@ class SGDRegressor(BaseSGDRegressor):
+ 
+         .. versionadded:: 0.20
+ 
++    n_iter_no_change : int, default=5
++        Number of iterations with no improvement to wait before early stopping.
++
++        .. versionadded:: 0.20
++
+     warm_start : bool, optional
+         When set to True, reuse the solution of the previous call to fit as
+         initialization, otherwise, just erase the previous solution.
+diff --git a/sklearn/metrics/scorer.py b/sklearn/metrics/scorer.py
+index 590b9826b4ef..021f1eca3762 100644
+--- a/sklearn/metrics/scorer.py
++++ b/sklearn/metrics/scorer.py
+@@ -19,7 +19,6 @@
+ # License: Simplified BSD
+ 
+ from abc import ABCMeta
+-from collections import Iterable
+ 
+ import numpy as np
+ 
+@@ -40,6 +39,7 @@
+ from .cluster import fowlkes_mallows_score
+ 
+ from ..utils.multiclass import type_of_target
++from ..utils.fixes import _Iterable as Iterable
+ from ..externals import six
+ from ..base import is_regressor
+ 
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index a45a4bf5b4e6..16859c7765f3 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -13,7 +13,7 @@
+ # License: BSD 3 clause
+ 
+ from abc import ABCMeta, abstractmethod
+-from collections import Mapping, namedtuple, defaultdict, Sequence, Iterable
++from collections import namedtuple, defaultdict
+ from functools import partial, reduce
+ from itertools import product
+ import operator
+@@ -34,6 +34,8 @@
+ from ..utils import check_random_state
+ from ..utils.fixes import sp_version
+ from ..utils.fixes import MaskedArray
++from ..utils.fixes import _Mapping as Mapping, _Sequence as Sequence
++from ..utils.fixes import _Iterable as Iterable
+ from ..utils.random import sample_without_replacement
+ from ..utils.validation import indexable, check_is_fitted
+ from ..utils.metaestimators import if_delegate_has_method
+diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py
+index c0367a2349e8..ded8b66b3af3 100644
+--- a/sklearn/model_selection/_split.py
++++ b/sklearn/model_selection/_split.py
+@@ -15,7 +15,6 @@
+ 
+ import warnings
+ from itertools import chain, combinations
+-from collections import Iterable
+ from math import ceil, floor
+ import numbers
+ from abc import ABCMeta, abstractmethod
+@@ -29,6 +28,7 @@
+ from ..externals.six import with_metaclass
+ from ..externals.six.moves import zip
+ from ..utils.fixes import signature, comb
++from ..utils.fixes import _Iterable as Iterable
+ from ..base import _pprint
+ 
+ __all__ = ['BaseCrossValidator',
+diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
+index d80e39f9f0c4..91d5a9fd841f 100644
+--- a/sklearn/model_selection/tests/test_search.py
++++ b/sklearn/model_selection/tests/test_search.py
+@@ -1,6 +1,5 @@
+ """Test the search module"""
+ 
+-from collections import Iterable, Sized
+ from sklearn.externals.six.moves import cStringIO as StringIO
+ from sklearn.externals.six.moves import xrange
+ from itertools import chain, product
+@@ -15,6 +14,7 @@
+ 
+ from sklearn.utils.fixes import sp_version
+ from sklearn.utils.fixes import PY3_OR_LATER
++from sklearn.utils.fixes import _Iterable as Iterable, _Sized as Sized
+ from sklearn.utils.testing import assert_equal
+ from sklearn.utils.testing import assert_not_equal
+ from sklearn.utils.testing import assert_raises
+diff --git a/sklearn/svm/classes.py b/sklearn/svm/classes.py
+index 4cb23d9cd13f..56869aeb5a0b 100644
+--- a/sklearn/svm/classes.py
++++ b/sklearn/svm/classes.py
+@@ -116,16 +116,15 @@ class LinearSVC(BaseEstimator, LinearClassifierMixin,
+     >>> from sklearn.svm import LinearSVC
+     >>> from sklearn.datasets import make_classification
+     >>> X, y = make_classification(n_features=4, random_state=0)
+-    >>> clf = LinearSVC(random_state=0)
++    >>> clf = LinearSVC(random_state=0, tol=1e-5)
+     >>> clf.fit(X, y)
+     LinearSVC(C=1.0, class_weight=None, dual=True, fit_intercept=True,
+          intercept_scaling=1, loss='squared_hinge', max_iter=1000,
+-         multi_class='ovr', penalty='l2', random_state=0, tol=0.0001,
+-         verbose=0)
++         multi_class='ovr', penalty='l2', random_state=0, tol=1e-05, verbose=0)
+     >>> print(clf.coef_)
+-    [[0.08551385 0.39414796 0.49847831 0.37513797]]
++    [[0.085... 0.394... 0.498... 0.375...]]
+     >>> print(clf.intercept_)
+-    [0.28418066]
++    [0.284...]
+     >>> print(clf.predict([[0, 0, 0, 0]]))
+     [1]
+ 
+@@ -329,17 +328,17 @@ class LinearSVR(LinearModel, RegressorMixin):
+     >>> from sklearn.svm import LinearSVR
+     >>> from sklearn.datasets import make_regression
+     >>> X, y = make_regression(n_features=4, random_state=0)
+-    >>> regr = LinearSVR(random_state=0)
++    >>> regr = LinearSVR(random_state=0, tol=1e-5)
+     >>> regr.fit(X, y)
+     LinearSVR(C=1.0, dual=True, epsilon=0.0, fit_intercept=True,
+          intercept_scaling=1.0, loss='epsilon_insensitive', max_iter=1000,
+-         random_state=0, tol=0.0001, verbose=0)
++         random_state=0, tol=1e-05, verbose=0)
+     >>> print(regr.coef_)
+-    [16.35750999 26.91499923 42.30652207 60.47843124]
++    [16.35... 26.91... 42.30... 60.47...]
+     >>> print(regr.intercept_)
+-    [-4.29756543]
++    [-4.29...]
+     >>> print(regr.predict([[0, 0, 0, 0]]))
+-    [-4.29756543]
++    [-4.29...]
+ 
+     See also
+     --------
+diff --git a/sklearn/tests/test_docstring_parameters.py b/sklearn/tests/test_docstring_parameters.py
+index 0fada63831c9..028030879729 100644
+--- a/sklearn/tests/test_docstring_parameters.py
++++ b/sklearn/tests/test_docstring_parameters.py
+@@ -27,8 +27,6 @@
+ IGNORED_MODULES = (
+     'cluster',
+     'datasets',
+-    'gaussian_process',
+-    'linear_model',
+     'ensemble',
+     'feature_selection',
+     'kernel_approximation',
+diff --git a/sklearn/tests/test_init.py b/sklearn/tests/test_init.py
+index 56dbcaafba2c..75c9dd92129f 100644
+--- a/sklearn/tests/test_init.py
++++ b/sklearn/tests/test_init.py
+@@ -1,11 +1,18 @@
+ # Basic unittests to test functioning of module's top-level
+ 
+-__author__ = 'Yaroslav Halchenko'
+-__license__ = 'BSD'
++import subprocess
++
++import pkgutil
+ 
++import pytest
+ 
++import sklearn
+ from sklearn.utils.testing import assert_equal
+ 
++__author__ = 'Yaroslav Halchenko'
++__license__ = 'BSD'
++
++
+ try:
+     from sklearn import *  # noqa
+     _top_import_error = None
+@@ -18,3 +25,37 @@ def test_import_skl():
+     # "import *" is discouraged outside of the module level, hence we
+     # rely on setting up the variable above
+     assert_equal(_top_import_error, None)
++
++
++def test_import_sklearn_no_warnings():
++    # Test that importing scikit-learn main modules doesn't raise any warnings.
++
++    try:
++        pkgs = pkgutil.iter_modules(path=sklearn.__path__, prefix='sklearn.')
++        import_modules = '; '.join(['import ' + modname
++                                    for _, modname, _ in pkgs
++                                    if (not modname.startswith('_') and
++                                        # add deprecated top level modules
++                                        # below to ignore them
++                                        modname not in [])])
++
++        message = subprocess.check_output(['python', '-Wdefault',
++                                           '-c', import_modules],
++                                          stderr=subprocess.STDOUT)
++        message = message.decode("utf-8")
++        message = '\n'.join([line for line in message.splitlines()
++                             if not (
++                                     # ignore ImportWarning due to Cython
++                                     "ImportWarning" in line or
++                                     # ignore DeprecationWarning due to pytest
++                                     "pytest" in line or
++                                     # ignore DeprecationWarnings due to
++                                     # numpy.oldnumeric
++                                     "oldnumeric" in line
++                                     )])
++        assert 'Warning' not in message
++        assert 'Error' not in message
++
++    except Exception as e:
++        pytest.skip('soft-failed test_import_sklearn_no_warnings.\n'
++                    ' %s, \n %s' % (e, message))
+diff --git a/sklearn/utils/__init__.py b/sklearn/utils/__init__.py
+index bb1f383505fe..24f2d7f21afc 100644
+--- a/sklearn/utils/__init__.py
++++ b/sklearn/utils/__init__.py
+@@ -1,7 +1,7 @@
+ """
+ The :mod:`sklearn.utils` module includes various utilities.
+ """
+-from collections import Sequence
++
+ import numbers
+ 
+ import numpy as np
+@@ -17,6 +17,7 @@
+ from .class_weight import compute_class_weight, compute_sample_weight
+ from ..externals.joblib import cpu_count
+ from ..exceptions import DataConversionWarning
++from ..utils.fixes import _Sequence as Sequence
+ from .deprecation import deprecated
+ from .. import get_config
+ 
+diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
+index 02d91ee80791..d25abbe6377d 100644
+--- a/sklearn/utils/estimator_checks.py
++++ b/sklearn/utils/estimator_checks.py
+@@ -51,7 +51,6 @@
+ from sklearn.svm.base import BaseLibSVM
+ from sklearn.linear_model.stochastic_gradient import BaseSGD
+ from sklearn.pipeline import make_pipeline
+-from sklearn.exceptions import ConvergenceWarning
+ from sklearn.exceptions import DataConversionWarning
+ from sklearn.exceptions import SkipTestWarning
+ from sklearn.model_selection import train_test_split
+@@ -1167,6 +1166,13 @@ def check_estimators_pickle(name, estimator_orig):
+         X += 1
+     X = pairwise_estimator_convert_X(X, estimator_orig, kernel=rbf_kernel)
+ 
++    # include NaN values when the estimator should deal with them
++    if name in ALLOW_NAN:
++        # set randomly 10 elements to np.nan
++        rng = np.random.RandomState(42)
++        mask = rng.choice(X.size, 10, replace=False)
++        X.reshape(-1)[mask] = np.nan
++
+     estimator = clone(estimator_orig)
+ 
+     # some estimators only take multioutputs
+@@ -1175,17 +1181,17 @@ def check_estimators_pickle(name, estimator_orig):
+     set_random_state(estimator)
+     estimator.fit(X, y)
+ 
+-    result = dict()
+-    for method in check_methods:
+-        if hasattr(estimator, method):
+-            result[method] = getattr(estimator, method)(X)
+-
+     # pickle and unpickle!
+     pickled_estimator = pickle.dumps(estimator)
+     if estimator.__module__.startswith('sklearn.'):
+         assert_true(b"version" in pickled_estimator)
+     unpickled_estimator = pickle.loads(pickled_estimator)
+ 
++    result = dict()
++    for method in check_methods:
++        if hasattr(estimator, method):
++            result[method] = getattr(estimator, method)(X)
++
+     for method in result:
+         unpickled_result = getattr(unpickled_estimator, method)(X)
+         assert_allclose_dense_sparse(result[method], unpickled_result)
+diff --git a/sklearn/utils/fixes.py b/sklearn/utils/fixes.py
+index 748670e4dd9a..12ac3ae8e55e 100644
+--- a/sklearn/utils/fixes.py
++++ b/sklearn/utils/fixes.py
+@@ -310,3 +310,16 @@ def _object_dtype_isnan(X):
+ else:
+     def _object_dtype_isnan(X):
+         return np.frompyfunc(lambda x: x != x, 1, 1)(X).astype(bool)
++
++
++# To be removed once this fix is included in six
++try:
++    from collections.abc import Sequence as _Sequence  # noqa
++    from collections.abc import Iterable as _Iterable  # noqa
++    from collections.abc import Mapping as _Mapping  # noqa
++    from collections.abc import Sized as _Sized  # noqa
++except ImportError:  # python <3.3
++    from collections import Sequence as _Sequence  # noqa
++    from collections import Iterable as _Iterable  # noqa
++    from collections import Mapping as _Mapping  # noqa
++    from collections import Sized as _Sized  # noqa
+diff --git a/sklearn/utils/multiclass.py b/sklearn/utils/multiclass.py
+index 4adefd4ff04f..f4d28ec227ba 100644
+--- a/sklearn/utils/multiclass.py
++++ b/sklearn/utils/multiclass.py
+@@ -7,7 +7,6 @@
+ 
+ """
+ from __future__ import division
+-from collections import Sequence
+ from itertools import chain
+ 
+ from scipy.sparse import issparse
+@@ -18,10 +17,10 @@
+ import numpy as np
+ 
+ from ..externals.six import string_types
++from ..utils.fixes import _Sequence as Sequence
+ from .validation import check_array
+ 
+ 
+-
+ def _unique_multiclass(y):
+     if hasattr(y, '__array__'):
+         return np.unique(np.asarray(y))

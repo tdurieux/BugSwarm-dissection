@@ -1,0 +1,821 @@
+diff --git a/.gitignore b/.gitignore
+index 1f04f254e70..f2401ad1bfa 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -12,6 +12,7 @@
+ *.iws
+ *.org
+ .project
++pmip
+ *.rej
+ .settings/
+ .*.sw[nop]
+diff --git a/numpy/f2py/f90mod_rules.py b/numpy/f2py/f90mod_rules.py
+index ec3a248397f..85eae804792 100644
+--- a/numpy/f2py/f90mod_rules.py
++++ b/numpy/f2py/f90mod_rules.py
+@@ -49,7 +49,7 @@ def findf90modules(m):
+ fgetdims1 = """\
+       external f2pysetdata
+       logical ns
+-      integer r,i,j
++      integer r,i
+       integer(%d) s(*)
+       ns = .FALSE.
+       if (allocated(d)) then
+diff --git a/numpy/random/mtrand/mtrand.pyx b/numpy/random/mtrand/mtrand.pyx
+index 3a4e132ec7c..35143bd9b46 100644
+--- a/numpy/random/mtrand/mtrand.pyx
++++ b/numpy/random/mtrand/mtrand.pyx
+@@ -593,11 +593,11 @@ def _shape_from_size(size, d):
+ # The functions are all the same except for changed types in
+ # a few places. It would be easy to template them.
+ 
+-def _rand_bool(low, high, size, rngstate):
++def _rand_bool_sc(low, high, size, rngstate):
+     """
+-    _rand_bool(low, high, size, rngstate)
++    _rand_bool_sc(low, high, size, rngstate)
+ 
+-    See `_rand_int32` for documentation, only the return type changes.
++    See `_rand_int32_sc` for documentation, only the return type changes.
+ 
+     """
+     cdef npy_bool off, rng, buf
+@@ -620,12 +620,50 @@ def _rand_bool(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_int8(low, high, size, rngstate):
++def _rand_bool(low, high, size, rngstate):
+     """
+-    _rand_int8(low, high, size, rngstate)
++    _rand_bool(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_bool off, rng, buf
++    cdef npy_bool *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.bool_)
++    else:
++        array = <ndarray>np.empty(size, np.bool_)
++
++    array_data = <npy_bool *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_bool>(int(high_data) - int(low_data))
++        off = <npy_bool>low_data
++
++        rk_random_bool(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_int8_sc(low, high, size, rngstate):
++    """
++    _rand_int8_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint8 off, rng, buf
+     cdef npy_uint8 *out
+@@ -647,12 +685,50 @@ def _rand_int8(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_int16(low, high, size, rngstate):
++def _rand_int8(low, high, size, rngstate):
+     """
+-    _rand_int16(low, high, size, rngstate)
++    _rand_int8(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint8 off, rng, buf
++    cdef npy_uint8 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.int8)
++    else:
++        array = <ndarray>np.empty(size, np.int8)
++
++    array_data = <npy_uint8 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint8>(int(high_data) - int(low_data))
++        off = <npy_uint8>(<npy_int8>low_data)
++
++        rk_random_uint8(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_int16_sc(low, high, size, rngstate):
++    """
++    _rand_int16_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint16 off, rng, buf
+     cdef npy_uint16 *out
+@@ -674,9 +750,47 @@ def _rand_int16(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_int32(low, high, size, rngstate):
++def _rand_int16(low, high, size, rngstate):
++    """
++    _rand_int16(low, high, size, rngstate)
++
++    See `_rand_int32` for documentation, only the return type changes.
++
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint16 off, rng, buf
++    cdef npy_uint16 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.int16)
++    else:
++        array = <ndarray>np.empty(size, np.int16)
++
++    array_data = <npy_uint16 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint16>(int(high_data) - int(low_data))
++        off = <npy_uint16>(<npy_int16>low_data)
++
++        rk_random_uint16(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_int32_sc(low, high, size, rngstate):
+     """
+-    _rand_int32(self, low, high, size, rngstate)
++    _rand_int32_sc(self, low, high, size, rngstate)
+ 
+     Return random np.int32 integers between `low` and `high`, inclusive.
+ 
+@@ -725,11 +839,80 @@ def _rand_int32(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_int64(low, high, size, rngstate):
++def _rand_int32(low, high, size, rngstate):
+     """
+-    _rand_int64(low, high, size, rngstate)
++    _rand_int32(low, high, size, rngstate)
+ 
+-    See `_rand_int32` for documentation, only the return type changes.
++    Return an array of random np.int32 integers between ``lo`` and ``hi``
++    inclusive for each ``lo``, ``hi`` pair in ``low`` and ``high``, where
++    the `low` and `high` arguments are broadcast.
++
++    Return random integers from the "discrete uniform" distribution in the
++    closed interval [``lo``, ``high``] for each ``lo``, ``hi`` pair in
++    `low` and `high`. On entry the arguments are presumed to have been
++    validated for size and order for the np.int32 type.
++
++    Parameters
++    ----------
++    low : array_like
++        An array of integers, each of which serves as the lowest (signed)
++        integer to be drawn from the distribution.
++    high : array_like
++        An array of integers, each of which serves as the highest (signed)
++        integer to be drawn from the distribution.
++    size : int or tuple of ints
++        Output shape.  If the given shape is, e.g., ``(m, n, k)``, then
++        ``m * n * k`` samples are drawn, so as long as the shape is compatible
++        with the size of `low` and `high`.  Default is None, in which case an
++        array corresponding to the shape of the `low` and `high` is returned.
++    rngstate : encapsulated pointer to rk_state
++        The specific type depends on the python version. In Python 2 it is
++        a PyCObject, in Python 3 a PyCapsule object.
++
++    Returns
++    -------
++    out : python ndarray of np.int32
++          `size`-shaped array of random integers from the appropriate
++          distribution, or an array corresponding to the shapes of
++          `low` and `high`.
++
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint32 off, rng, buf
++    cdef npy_uint32 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.int32)
++    else:
++        array = <ndarray>np.empty(size, np.int32)
++
++    array_data = <npy_uint32 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint32>(int(high_data) - int(low_data))
++        off = <npy_uint32>(<npy_int32>low_data)
++
++        rk_random_uint32(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_int64_sc(low, high, size, rngstate):
++    """
++    _rand_int64_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
+ 
+     """
+     cdef npy_uint64 off, rng, buf
+@@ -751,12 +934,51 @@ def _rand_int64(low, high, size, rngstate):
+             rk_random_uint64(off, rng, cnt, out, state)
+         return array
+ 
+-def _rand_uint8(low, high, size, rngstate):
++
++def _rand_int64(low, high, size, rngstate):
+     """
+-    _rand_uint8(low, high, size, rngstate)
++    _rand_int64(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint64 off, rng, buf
++    cdef npy_uint64 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.int64)
++    else:
++        array = <ndarray>np.empty(size, np.int64)
++
++    array_data = <npy_uint64 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint64>(int(high_data) - int(low_data))
++        off = <npy_uint64>(<npy_int64>low_data)
++
++        rk_random_uint64(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_uint8_sc(low, high, size, rngstate):
++    """
++    _rand_uint8_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint8 off, rng, buf
+     cdef npy_uint8 *out
+@@ -778,12 +1000,50 @@ def _rand_uint8(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_uint16(low, high, size, rngstate):
++def _rand_uint8(low, high, size, rngstate):
+     """
+-    _rand_uint16(low, high, size, rngstate)
++    _rand_uint8(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint8 off, rng, buf
++    cdef npy_uint8 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.uint8)
++    else:
++        array = <ndarray>np.empty(size, np.uint8)
++
++    array_data = <npy_uint8 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint8>(int(high_data) - int(low_data))
++        off = <npy_uint8>low_data
++
++        rk_random_uint8(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_uint16_sc(low, high, size, rngstate):
++    """
++    _rand_uint16_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint16 off, rng, buf
+     cdef npy_uint16 *out
+@@ -805,12 +1065,50 @@ def _rand_uint16(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_uint32(low, high, size, rngstate):
++def _rand_uint16(low, high, size, rngstate):
+     """
+-    _rand_uint32(self, low, high, size, rngstate)
++    _rand_uint16(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint16 off, rng, buf
++    cdef npy_uint16 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.uint16)
++    else:
++        array = <ndarray>np.empty(size, np.uint16)
++
++    array_data = <npy_uint16 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint16>(int(high_data) - int(low_data))
++        off = <npy_uint16>low_data
++
++        rk_random_uint16(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_uint32_sc(low, high, size, rngstate):
++    """
++    _rand_uint32_sc(self, low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint32 off, rng, buf
+     cdef npy_uint32 *out
+@@ -832,12 +1130,50 @@ def _rand_uint32(low, high, size, rngstate):
+         return array
+ 
+ 
+-def _rand_uint64(low, high, size, rngstate):
++def _rand_uint32(low, high, size, rngstate):
+     """
+-    _rand_uint64(low, high, size, rngstate)
++    _rand_uint32(low, high, size, rngstate)
+ 
+     See `_rand_int32` for documentation, only the return type changes.
+ 
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint32 off, rng, buf
++    cdef npy_uint32 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.uint32)
++    else:
++        array = <ndarray>np.empty(size, np.uint32)
++
++    array_data = <npy_uint32 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint32>(int(high_data) - int(low_data))
++        off = <npy_uint32>low_data
++
++        rk_random_uint32(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
++
++def _rand_uint64_sc(low, high, size, rngstate):
++    """
++    _rand_uint64_sc(low, high, size, rngstate)
++
++    See `_rand_int32_sc` for documentation, only the return type changes.
++
+     """
+     cdef npy_uint64 off, rng, buf
+     cdef npy_uint64 *out
+@@ -858,20 +1194,59 @@ def _rand_uint64(low, high, size, rngstate):
+             rk_random_uint64(off, rng, cnt, out, state)
+         return array
+ 
++
++def _rand_uint64(low, high, size, rngstate):
++    """
++    _rand_uint64(low, high, size, rngstate)
++
++    See `_rand_int32` for documentation, only the return type changes.
++
++    """
++    cdef ndarray array "arrayObject"
++    cdef npy_uint64 off, rng, buf
++    cdef npy_uint64 *array_data
++
++    cdef npy_intp i = 0
++    cdef ndarray lo = <ndarray>low
++    cdef ndarray hi = <ndarray>high
++    cdef broadcast multi = <broadcast>np.broadcast(lo, hi)
++    cdef rk_state *state = <rk_state *>NpyCapsule_AsVoidPtr(rngstate)
++
++    if size is None:
++        array = <ndarray>np.empty(multi.size, np.uint64)
++    else:
++        array = <ndarray>np.empty(size, np.uint64)
++
++    array_data = <npy_uint64 *>PyArray_DATA(array)
++
++    if multi.size != PyArray_SIZE(array):
++        raise ValueError("size is not compatible with inputs")
++
++    for low_data, high_data in multi:
++        rng = <npy_uint64>(int(high_data) - int(low_data))
++        off = <npy_uint64>low_data
++
++        rk_random_uint64(off, rng, 1, &buf, state)
++        array_data[i] = buf
++        i += 1
++
++    return array
++
+ # Look up table for randint functions keyed by type name. The stored data
+-# is a tuple (lbnd, ubnd, func), where lbnd is the smallest value for the
+-# type, ubnd is one greater than the largest value, and func is the
+-# function to call.
++# is a tuple (lbnd, ubnd, func_sc, func), where lbnd is the smallest value
++# for the type, ubnd is one greater than the largest value, func_sc is the
++# function to call when the arguments are not broadcast, and func is the
++# function to call when the arguments are broadcast.
+ _randint_type = {
+-    'bool': (0, 2, _rand_bool),
+-    'int8': (-2**7, 2**7, _rand_int8),
+-    'int16': (-2**15, 2**15, _rand_int16),
+-    'int32': (-2**31, 2**31, _rand_int32),
+-    'int64': (-2**63, 2**63, _rand_int64),
+-    'uint8': (0, 2**8, _rand_uint8),
+-    'uint16': (0, 2**16, _rand_uint16),
+-    'uint32': (0, 2**32, _rand_uint32),
+-    'uint64': (0, 2**64, _rand_uint64)
++    'bool': (0, 2, _rand_bool_sc, _rand_bool),
++    'int8': (-2**7, 2**7, _rand_int8_sc, _rand_int8),
++    'int16': (-2**15, 2**15, _rand_int16_sc, _rand_int16),
++    'int32': (-2**31, 2**31, _rand_int32_sc, _rand_int32),
++    'int64': (-2**63, 2**63, _rand_int64_sc, _rand_int64),
++    'uint8': (0, 2**8, _rand_uint8_sc, _rand_uint8),
++    'uint16': (0, 2**16, _rand_uint16_sc, _rand_uint16),
++    'uint32': (0, 2**32, _rand_uint32_sc, _rand_uint32),
++    'uint64': (0, 2**64, _rand_uint64_sc, _rand_uint64)
+     }
+ 
+ 
+@@ -1199,13 +1574,15 @@ cdef class RandomState:
+ 
+         Parameters
+         ----------
+-        low : int
++        low : int or array_like
+             Lowest (signed) integer to be drawn from the distribution (unless
+             ``high=None``, in which case this parameter is the *highest* such
+-            integer).
+-        high : int, optional
++            integer). Note that if `low` is array_like, all elements must be
++            integers.
++        high : int or array_like, optional
+             If provided, one above the largest (signed) integer to be drawn
+             from the distribution (see above for behavior if ``high=None``).
++            Note that if `high` is array_like, all elements must be integers.
+         size : int or tuple of ints, optional
+             Output shape.  If the given shape is, e.g., ``(m, n, k)``, then
+             ``m * n * k`` samples are drawn.  Default is None, in which case a
+@@ -1244,6 +1621,25 @@ cdef class RandomState:
+         array([[4, 0, 2, 1],
+                [3, 2, 2, 0]])
+ 
++        Generate a 1 x 3 array with 3 different upper bounds:
++        >>> np.random.randint(1, [3, 5, 10])
++        array([2, 2, 9])
++
++        Generate a 1 x 3 array with 3 different lower bounds:
++        >>> np.random.randint([1, 5, 7], 10)
++        array([9, 8, 7])
++
++        Generate a 1 x 3 array with 3 different lower and upper bounds:
++        >>> np.random.randint([1, 5, 7], [13, 30, 45])
++        array([12,  5, 18])
++
++        Generate a 2 x 4 array of ints of the data type np.uint8:
++        >>>> np.random.randint(np.iinfo(np.uint8).min,
++                           np.iinfo(np.uint8).max + 1,
++                           size=(2, 4), dtype=np.uint8)
++        array([[ 35, 252,  90, 214],
++               [ 47,  23, 214, 185]], dtype=uint8)
++
+         """
+         if high is None:
+             high = low
+@@ -1252,17 +1648,62 @@ cdef class RandomState:
+         key = np.dtype(dtype).name
+         if not key in _randint_type:
+             raise TypeError('Unsupported dtype "%s" for randint' % key)
+-        lowbnd, highbnd, randfunc = _randint_type[key]
++        lowbnd, highbnd, randfunc_sc, randfunc = _randint_type[key]
+ 
+-        if low < lowbnd:
+-            raise ValueError("low is out of bounds for %s" % (key,))
+-        if high > highbnd:
+-            raise ValueError("high is out of bounds for %s" % (key,))
+-        if low >= high:
+-            raise ValueError("low >= high")
++        try:
++            # Determine if `low` and `high` are both scalars
++            # Otherwise, at least one of them is array_like
++            #
++            # These conversions also ensure that we perform
++            # the subsequent comparisons with Python integers
++            # and not with Numpy integer types, which are
++            # susceptible to an unusual corner case described
++            # below under the EXCEPT-block
++            low = int(low)
++            high = int(high)
++
++            if low < lowbnd:
++                raise ValueError("low is out of bounds for %s" % (key,))
++            if high > highbnd:
++                raise ValueError("high is out of bounds for %s" % (key,))
++            if low >= high:
++                raise ValueError("low >= high")
+ 
+-        with self.lock:
+-            return randfunc(low, high - 1, size, self.state_address)
++            with self.lock:
++                return randfunc_sc(low, high - 1, size, self.state_address)
++
++        except TypeError:
++            # Casting the arrays as objects is necessary to
++            # avoid the corner case where we are generating
++            # a random integer between np.iinfo(np.int64).max
++            # and np.iinfo(np.int64).max + 1. When stored as
++            # Numpy integers, they are casted as np.int64
++            # and np.uint64 respectively. When Numpy tries
++            # to compare them, it converts both to np.float64
++            # because there is no superset of np.int64 and
++            # np.uint64. However, np.iinfo(np.int64).max + 1
++            # is too large to represent in np.float64, causing
++            # it be round down to np.iinfo(np.int64).max, leading
++            # to a ValueError because `low` now equals `high`
++            low = np.array(low)
++            high = np.array(high)
++
++            if np.any(np.less(low, lowbnd)):
++                raise ValueError("low is out of bounds for %s" % (key,))
++            if np.any(np.greater(high, highbnd)):
++                raise ValueError("high is out of bounds for %s" % (key,))
++
++            # We have to check whether `low` >= `high` in both ways
++            # to avoid issues of overflow and rounding when comparing
++            # an np.uint64 against np.iinfo(np.int64).max
++            if np.any(np.less(high - 1 - low, 0)) and \
++                    np.any(np.greater_equal(low, high)):
++                raise ValueError("low >= high")
++
++            with self.lock:
++                return randfunc(low, high - np.ones(
++                        high.shape, dtype=high.dtype), size,
++                                self.state_address)
+ 
+     def bytes(self, npy_intp length):
+         """
+diff --git a/numpy/random/tests/test_random.py b/numpy/random/tests/test_random.py
+index a6783fe8f47..c4fefa99189 100644
+--- a/numpy/random/tests/test_random.py
++++ b/numpy/random/tests/test_random.py
+@@ -143,21 +143,58 @@ def test_bounds_checking(self):
+         for dt in self.itype:
+             lbnd = 0 if dt is np.bool else np.iinfo(dt).min
+             ubnd = 2 if dt is np.bool else np.iinfo(dt).max + 1
+-            assert_raises(ValueError, self.rfunc, lbnd - 1 , ubnd, dtype=dt)
+-            assert_raises(ValueError, self.rfunc, lbnd , ubnd + 1, dtype=dt)
+-            assert_raises(ValueError, self.rfunc, ubnd , lbnd, dtype=dt)
+-            assert_raises(ValueError, self.rfunc, 1 , 0, dtype=dt)
++            assert_raises(ValueError, self.rfunc, lbnd - 1, ubnd, dtype=dt)
++            assert_raises(ValueError, self.rfunc, lbnd, ubnd + 1, dtype=dt)
++            assert_raises(ValueError, self.rfunc, ubnd, lbnd, dtype=dt)
++            assert_raises(ValueError, self.rfunc, 1, 0, dtype=dt)
++
++            # Broadcasting should not affect the bounds checking
++            assert_raises(ValueError, self.rfunc, [lbnd, lbnd - 1, lbnd], ubnd, dtype=dt)
++            assert_raises(ValueError, self.rfunc, lbnd, [ubnd, ubnd + 1, ubnd], dtype=dt)
++            assert_raises(ValueError, self.rfunc, [lbnd, ubnd, lbnd], lbnd + 1, dtype=dt)
++            assert_raises(ValueError, self.rfunc, ubnd - 1, [ubnd, lbnd, ubnd], dtype=dt)
++            assert_raises(ValueError, self.rfunc, [0, 2, 0], 1, dtype=dt)
++            assert_raises(ValueError, self.rfunc, 1, [2, 0, 2], dtype=dt)
+ 
+     def test_rng_zero_and_extremes(self):
+         for dt in self.itype:
+             lbnd = 0 if dt is np.bool else np.iinfo(dt).min
+             ubnd = 2 if dt is np.bool else np.iinfo(dt).max + 1
++
+             tgt = ubnd - 1
+             assert_equal(self.rfunc(tgt, tgt + 1, size=1000, dtype=dt), tgt)
++            assert_equal(self.rfunc([tgt] * 3, tgt + 1, dtype=dt), tgt)
++            assert_equal(self.rfunc(tgt, [tgt + 1] * 3, dtype=dt), tgt)
++
+             tgt = lbnd
+             assert_equal(self.rfunc(tgt, tgt + 1, size=1000, dtype=dt), tgt)
++            assert_equal(self.rfunc([tgt] * 3, tgt + 1, dtype=dt), tgt)
++            assert_equal(self.rfunc(tgt, [tgt + 1] * 3, dtype=dt), tgt)
++
+             tgt = (lbnd + ubnd)//2
+             assert_equal(self.rfunc(tgt, tgt + 1, size=1000, dtype=dt), tgt)
++            assert_equal(self.rfunc([tgt] * 3, tgt + 1, dtype=dt), tgt)
++            assert_equal(self.rfunc(tgt, [tgt + 1] * 3, dtype=dt), tgt)
++
++    def test_full_range(self):
++        # Test for ticket #1690
++        #
++        # Expanded in PR #6938 with the introduction of `dtype`
++        # as a parameter for `np.random.randint` from PR #6910
++        # and the addition of broadcasting functionality
++        for dt in self.itype:
++            lbnd = 0 if dt is np.bool else np.iinfo(dt).min
++            ubnd = 2 if dt is np.bool else np.iinfo(dt).max + 1
++
++            try:
++                self.rfunc(lbnd, ubnd, dtype=dt)
++                self.rfunc([lbnd] * 3, ubnd, dtype=dt)
++                self.rfunc(lbnd, [ubnd] * 3, dtype=dt)
++                self.rfunc([lbnd] * 3, [ubnd] * 3, dtype=dt)
++            except Exception as e:
++                raise AssertionError("No error should have been raised, "
++                                     "but one was with the following "
++                                     "message:\n\n%s" % str(e))
+ 
+     def test_in_bounds_fuzz(self):
+         # Don't use fixed seed
+@@ -204,6 +241,47 @@ def test_repeatability(self):
+         res = hashlib.md5(val).hexdigest()
+         assert_(tgt[np.dtype(np.bool).name] == res)
+ 
++    def test_broadcast(self):
++        # Case I: low = scalar, high = array
++        np.random.seed(1234)
++        actual = np.random.randint(1, [3, 6, 10])
++        desired = np.array([2, 4, 7])
++        assert_equal(actual, desired)
++
++        # Case II: low = array, high = scalar
++        np.random.seed(1234)
++        actual = np.random.randint([1, 5, 7], 10)
++        desired = np.array([4, 9, 7])
++        assert_equal(actual, desired)
++
++        # Case III: low = array, high = array
++        np.random.seed(1234)
++        actual = np.random.randint([1, 5, 7], [6, 9, 10])
++        desired = np.array([4, 7, 8])
++        assert_equal(actual, desired)
++
++    def test_int64_uint64_corner_case(self):
++        dt = np.int64
++        tgt = np.iinfo(np.int64).max
++        lbnd = np.int64(np.iinfo(np.int64).max)
++        ubnd = np.uint64(np.iinfo(np.int64).max + 1)
++
++        # None of these function calls should
++        # generate a ValueError because ``lbnd``
++        # and ``ubnd`` should be handled properly
++        # to avoid Numpy's rounding of ``ubnd`` to
++        # ``lbnd`` in np.float64
++        actual = np.random.randint(lbnd, ubnd, dtype=dt)
++        assert_equal(actual, tgt)
++
++        actual = np.random.randint([lbnd] * 3, ubnd, dtype=dt)
++        assert_equal(actual, tgt)
++
++        actual = np.random.randint(lbnd, [ubnd] * 3, dtype=dt)
++        assert_equal(actual, tgt)
++
++        actual = np.random.randint([lbnd] * 3, [ubnd] * 3, dtype=dt)
++        assert_equal(actual, tgt)
+ 
+ class TestRandomDist(TestCase):
+     # Make sure the random distribution returns the correct value for a
+diff --git a/numpy/random/tests/test_regression.py b/numpy/random/tests/test_regression.py
+index 133a1aa5ad6..0b554606896 100644
+--- a/numpy/random/tests/test_regression.py
++++ b/numpy/random/tests/test_regression.py
+@@ -55,15 +55,6 @@ def test_permutation_longs(self):
+         b = np.random.permutation(long(12))
+         assert_array_equal(a, b)
+ 
+-    def test_randint_range(self):
+-        # Test for ticket #1690
+-        lmax = np.iinfo('l').max
+-        lmin = np.iinfo('l').min
+-        try:
+-            random.randint(lmin, lmax)
+-        except:
+-            raise AssertionError
+-
+     def test_shuffle_mixed_dimension(self):
+         # Test for trac ticket #2074
+         for t in [[1, 2, 3, None],

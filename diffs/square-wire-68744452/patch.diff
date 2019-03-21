@@ -1,0 +1,1148 @@
+diff --git a/wire-compiler/pom.xml b/wire-compiler/pom.xml
+index ac01d586..407ca806 100644
+--- a/wire-compiler/pom.xml
++++ b/wire-compiler/pom.xml
+@@ -27,9 +27,9 @@
+       <artifactId>javawriter</artifactId>
+     </dependency>
+     <dependency>
+-    <groupId>com.squareup.okio</groupId>
+-    <artifactId>okio</artifactId>
+-  </dependency>
++      <groupId>com.squareup.okio</groupId>
++      <artifactId>okio</artifactId>
++    </dependency>
+     <dependency>
+       <groupId>junit</groupId>
+       <artifactId>junit</artifactId>
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/IO.java b/wire-compiler/src/main/java/com/squareup/wire/IO.java
+index cc30c27f..598b0ac5 100644
+--- a/wire-compiler/src/main/java/com/squareup/wire/IO.java
++++ b/wire-compiler/src/main/java/com/squareup/wire/IO.java
+@@ -14,7 +14,7 @@
+ /**
+  * Interface to abstract file reads and writes, may be mocked for testing.
+  */
+-interface IO {
++public interface IO {
+   /**
+    * Parses the given file.
+    */
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java b/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java
+new file mode 100644
+index 00000000..177b42bb
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/Linker.java
+@@ -0,0 +1,144 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.DataType;
++import com.squareup.protoparser.ProtoFile;
++import com.squareup.wire.IO;
++import java.io.File;
++import java.io.IOException;
++import java.util.Collections;
++import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++public final class Linker {
++  private final String repoPath;
++  private final IO io;
++  private final Set<String> loadedDependencies;
++  private final Map<String, WireType> protoTypeNames;
++  private final Map<ProtoFile, WireProtoFile> protoFilesMap;
++
++  // Context when linking.
++  private final String enclosingProtoPackage;
++  private final List<WireType> enclosingTypes;
++
++  public Linker(String repoPath, IO io) {
++    this.repoPath = repoPath;
++    this.io = io;
++    this.loadedDependencies = new LinkedHashSet<String>();
++    this.protoTypeNames = new LinkedHashMap<String, WireType>();
++    this.protoFilesMap = new LinkedHashMap<ProtoFile, WireProtoFile>();
++    this.enclosingProtoPackage = null;
++    this.enclosingTypes = Collections.emptyList();
++  }
++
++  private Linker(Linker enclosing, String protoPackage, WireType type) {
++    this.repoPath = enclosing.repoPath;
++    this.io = enclosing.io;
++    this.loadedDependencies = enclosing.loadedDependencies;
++    this.protoTypeNames = enclosing.protoTypeNames;
++    this.protoFilesMap = enclosing.protoFilesMap;
++    this.enclosingProtoPackage = protoPackage;
++    this.enclosingTypes = type != null
++        ? Util.concatenate(enclosing.enclosingTypes, type)
++        : enclosing.enclosingTypes;
++  }
++
++  /** Recursively add {@code protoFile} and its dependencies. */
++  public void add(ProtoFile protoFile) throws IOException {
++    WireProtoFile wireProtoFile = new WireProtoFile(protoFile);
++    protoFilesMap.put(protoFile, wireProtoFile);
++
++    // Register the enclosed types.
++    wireProtoFile.register(this);
++
++    // Also load dependencies.
++    for (String dependency : protoFile.dependencies()) {
++      if (!loadedDependencies.contains(dependency)) {
++        add(io.parse(repoPath + File.separator + dependency));
++        loadedDependencies.add(dependency);
++      }
++    }
++  }
++
++  /** Adds the types offered by {@code type} and its nested types to this linker. */
++  void register(WireType wireType) {
++    protoTypeNames.put(wireType.protoTypeName().toString(), wireType);
++  }
++
++  public void link() {
++    for (WireProtoFile wireProtoFile : protoFilesMap.values()) {
++      wireProtoFile.link(this);
++    }
++  }
++
++  /** Returns the proto type for {@code type} according to this linker. */
++  ProtoTypeName protoTypeName(DataType type) {
++    switch (type.kind()) {
++      case SCALAR:
++        return ProtoTypeName.getScalar(type.toString());
++
++      case NAMED:
++        return wireType(type.toString()).protoTypeName();
++
++      default:
++        // TODO(jwilson): report an error and return a sentinel instead of crashing here.
++        throw new UnsupportedOperationException("unexpected type: " + type);
++    }
++  }
++
++  /** Returns the wire type for the relative or fully-qualified name {@code name}. */
++  WireType wireType(String name) {
++    WireType fullyQualified = protoTypeNames.get(name);
++    if (fullyQualified != null) return fullyQualified;
++
++    if (enclosingProtoPackage != null) {
++      WireType samePackage = protoTypeNames.get(enclosingProtoPackage + "." + name);
++      if (samePackage != null) return samePackage;
++    }
++
++    // Look at the enclosing type, and it's children, all the way up the nesting hierarchy.
++    for (int i = enclosingTypes.size() - 1; i >= 0; i--) {
++      WireType enclosingType = enclosingTypes.get(i);
++
++      if (name.equals(enclosingType.protoTypeName().simpleName())) {
++        return enclosingType;
++      }
++
++      for (WireType peerType : enclosingType.nestedTypes()) {
++        if (name.equals(peerType.protoTypeName().simpleName())) {
++          return peerType;
++        }
++      }
++    }
++
++    // TODO(jwilson): report an error and return a sentinel instead of crashing here.
++    throw new IllegalArgumentException("unrecognized type name: " + name);
++  }
++
++  /** Returns a new linker that uses {@code protoPackage} to resolve local type names. */
++  public Linker withProtoPackage(String protoPackage) {
++    return new Linker(this, protoPackage, null);
++  }
++
++  /** Returns a new linker that uses {@code message} to resolve local type names. */
++  public Linker withMessage(WireMessage message) {
++    return new Linker(this, this.enclosingProtoPackage, message);
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java b/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java
+new file mode 100644
+index 00000000..059f7598
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/ProtoTypeName.java
+@@ -0,0 +1,117 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import java.lang.reflect.Field;
++import java.util.Collections;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++
++import static com.squareup.wire.model.Util.checkNotNull;
++import static com.squareup.wire.model.Util.checkState;
++
++/** Names a scalar or message. */
++public final class ProtoTypeName {
++  public static final ProtoTypeName BOOL = new ProtoTypeName("bool");
++  public static final ProtoTypeName BYTES = new ProtoTypeName("bytes");
++  public static final ProtoTypeName DOUBLE = new ProtoTypeName("double");
++  public static final ProtoTypeName FLOAT = new ProtoTypeName("float");
++  public static final ProtoTypeName FIXED32 = new ProtoTypeName("fixed32");
++  public static final ProtoTypeName FIXED64 = new ProtoTypeName("fixed64");
++  public static final ProtoTypeName INT32 = new ProtoTypeName("int32");
++  public static final ProtoTypeName INT64 = new ProtoTypeName("int64");
++  public static final ProtoTypeName SFIXED32 = new ProtoTypeName("sfixed32");
++  public static final ProtoTypeName SFIXED64 = new ProtoTypeName("sfixed64");
++  public static final ProtoTypeName SINT32 = new ProtoTypeName("sint32");
++  public static final ProtoTypeName SINT64 = new ProtoTypeName("sint64");
++  public static final ProtoTypeName STRING = new ProtoTypeName("string");
++  public static final ProtoTypeName UINT32 = new ProtoTypeName("uint32");
++  public static final ProtoTypeName UINT64 = new ProtoTypeName("uint64");
++
++  private static final Map<String, ProtoTypeName> SCALAR_TYPES;
++  static {
++    Map<String, ProtoTypeName> scalarTypes = new LinkedHashMap<String, ProtoTypeName>();
++    try {
++      for (Field field : ProtoTypeName.class.getDeclaredFields()) {
++        if (field.getType() == ProtoTypeName.class) {
++          ProtoTypeName scalar = (ProtoTypeName) field.get(null);
++          scalarTypes.put(scalar.names.get(0), scalar);
++        }
++      }
++      SCALAR_TYPES = Collections.unmodifiableMap(scalarTypes);
++    } catch (IllegalAccessException e) {
++      throw new AssertionError();
++    }
++  }
++
++  private final String protoPackage;
++  private final List<String> names;
++  private final boolean isScalar;
++
++  private ProtoTypeName(String scalarName) {
++    this(null, Collections.singletonList(scalarName), true);
++  }
++
++  private ProtoTypeName(String protoPackage, List<String> names, boolean isScalar) {
++    this.protoPackage = protoPackage;
++    this.names = names;
++    this.isScalar = isScalar;
++  }
++
++  public String simpleName() {
++    return names.get(names.size() - 1);
++  }
++
++  public static ProtoTypeName get(String protoPackage, String name) {
++    checkNotNull(name, "name");
++    return new ProtoTypeName(protoPackage, Collections.singletonList(name), false);
++  }
++
++  public static ProtoTypeName getScalar(String name) {
++    return SCALAR_TYPES.get(name);
++  }
++
++  public ProtoTypeName nestedType(String name) {
++    checkState(!isScalar);
++    checkNotNull(name, "name");
++    return new ProtoTypeName(protoPackage, Util.concatenate(names, name), false);
++  }
++
++  @Override public boolean equals(Object o) {
++    return o instanceof ProtoTypeName
++        && Util.equal(((ProtoTypeName) o).protoPackage, protoPackage)
++        && ((ProtoTypeName) o).names.equals(names)
++        && ((ProtoTypeName) o).isScalar == isScalar;
++  }
++
++  @Override public int hashCode() {
++    return super.hashCode();
++  }
++
++  @Override public String toString() {
++    StringBuilder result = new StringBuilder();
++    if (protoPackage != null) {
++      result.append(protoPackage);
++      result.append(".");
++    }
++    for (int i = 0; i < names.size(); i++) {
++      if (i > 0) result.append(".");
++      result.append(names.get(i));
++    }
++    return result.toString();
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/Util.java b/wire-compiler/src/main/java/com/squareup/wire/model/Util.java
+new file mode 100644
+index 00000000..12e0e110
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/Util.java
+@@ -0,0 +1,64 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import java.util.ArrayList;
++import java.util.List;
++
++final class Util {
++  private Util() {
++  }
++
++  public static <T> T checkNotNull(T value, String name) {
++    if (value == null) {
++      throw new NullPointerException(name + " == null");
++    }
++    return value;
++  }
++
++  public static void checkState(boolean assertion) {
++    if (!assertion) {
++      throw new IllegalStateException();
++    }
++  }
++
++  public static <T> List<T> concatenate(List<T> a, T b) {
++    List<T> result = new ArrayList<T>();
++    result.addAll(a);
++    result.add(b);
++    return result;
++  }
++
++  public static WireOption findOption(List<WireOption> options, String name) {
++    checkNotNull(options, "options");
++    checkNotNull(name, "name");
++
++    WireOption found = null;
++    for (WireOption option : options) {
++      if (option.name().equals(name)) {
++        if (found != null) {
++          throw new IllegalStateException("Multiple options match name: " + name);
++        }
++        found = option;
++      }
++    }
++    return found;
++  }
++
++  public static boolean equal(Object a, Object b) {
++    return a != null ? a.equals(b) : b == null;
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java
+new file mode 100644
+index 00000000..c2922dd2
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnum.java
+@@ -0,0 +1,70 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.EnumConstantElement;
++import com.squareup.protoparser.EnumElement;
++import com.squareup.protoparser.OptionElement;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++
++public final class WireEnum extends WireType {
++  private final ProtoTypeName protoTypeName;
++  private final EnumElement element;
++  private final List<WireEnumConstant> constants = new ArrayList<WireEnumConstant>();
++  private final List<WireOption> options = new ArrayList<WireOption>();
++
++  public WireEnum(ProtoTypeName protoTypeName, EnumElement element) {
++    this.protoTypeName = protoTypeName;
++    this.element = element;
++
++    for (EnumConstantElement constant : this.element.constants()) {
++      constants.add(new WireEnumConstant(constant));
++    }
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  @Override ProtoTypeName protoTypeName() {
++    return protoTypeName;
++  }
++
++  @Override public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireEnumConstant> constants() {
++    return constants;
++  }
++
++  @Override public List<WireOption> options() {
++    return options;
++  }
++
++  @Override public List<WireType> nestedTypes() {
++    return Collections.emptyList(); // Enums do not allow nested type declarations.
++  }
++
++  @Override void register(Linker linker) {
++    linker.register(this);
++  }
++
++  @Override public void link(Linker linker) {
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java
+new file mode 100644
+index 00000000..c02e7b99
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireEnumConstant.java
+@@ -0,0 +1,50 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.EnumConstantElement;
++import com.squareup.protoparser.OptionElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireEnumConstant {
++  private final EnumConstantElement element;
++  private final List<WireOption> options = new ArrayList<WireOption>();
++
++  public WireEnumConstant(EnumConstantElement element) {
++    this.element = element;
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  public String name() {
++    return element.name();
++  }
++
++  public int tag() {
++    return element.tag();
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireOption> options() {
++    return options;
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java
+new file mode 100644
+index 00000000..15a03096
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireExtend.java
+@@ -0,0 +1,54 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.ExtendElement;
++import com.squareup.protoparser.FieldElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireExtend {
++  private final ExtendElement element;
++  private final List<WireField> fields = new ArrayList<WireField>();
++  private ProtoTypeName protoTypeName;
++
++  public WireExtend(ExtendElement element) {
++    this.element = element;
++
++    for (FieldElement field : element.fields()) {
++      fields.add(new WireField(field));
++    }
++  }
++
++  public ProtoTypeName protoTypeName() {
++    return protoTypeName;
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireField> fields() {
++    return fields;
++  }
++
++  void link(Linker linker) {
++    for (WireField field : fields) {
++      field.link(linker);
++    }
++    protoTypeName = linker.wireType(element.name()).protoTypeName();
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java
+new file mode 100644
+index 00000000..cb39531b
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireField.java
+@@ -0,0 +1,75 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.FieldElement;
++import com.squareup.protoparser.OptionElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireField {
++  private final FieldElement element;
++  private final List<WireOption> options = new ArrayList<WireOption>();
++  private ProtoTypeName type;
++
++  WireField(FieldElement element) {
++    this.element = element;
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  public FieldElement.Label label() {
++    return element.label();
++  }
++
++  public ProtoTypeName type() {
++    return type;
++  }
++
++  public String name() {
++    return element.name();
++  }
++
++  public int tag() {
++    return element.tag();
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireOption> options() {
++    return options;
++  }
++
++  public boolean isDeprecated() {
++    return element.isDeprecated();
++  }
++
++  public boolean isPacked() {
++    return element.isPacked();
++  }
++
++  public WireOption getDefault() {
++    return Util.findOption(options, "default");
++  }
++
++  void link(Linker linker) {
++    type = linker.protoTypeName(element.type());
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java
+new file mode 100644
+index 00000000..c388d38c
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireMessage.java
+@@ -0,0 +1,103 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.ExtensionsElement;
++import com.squareup.protoparser.FieldElement;
++import com.squareup.protoparser.MessageElement;
++import com.squareup.protoparser.OneOfElement;
++import com.squareup.protoparser.OptionElement;
++import com.squareup.protoparser.TypeElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireMessage extends WireType {
++  private final ProtoTypeName protoTypeName;
++  private final MessageElement element;
++  private final List<WireField> fields = new ArrayList<WireField>();
++  private final List<WireOneOf> oneOfs = new ArrayList<WireOneOf>();
++  private final List<WireType> nestedTypes = new ArrayList<WireType>();
++  private final List<WireOption> options = new ArrayList<WireOption>();
++
++  public WireMessage(ProtoTypeName protoTypeName, MessageElement element) {
++    this.protoTypeName = protoTypeName;
++    this.element = element;
++
++    for (FieldElement field : element.fields()) {
++      fields.add(new WireField(field));
++    }
++
++    for (OneOfElement oneOf : element.oneOfs()) {
++      oneOfs.add(new WireOneOf(oneOf));
++    }
++
++    for (TypeElement type : element.nestedElements()) {
++      nestedTypes.add(WireType.get(protoTypeName.nestedType(type.name()), type));
++    }
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  @Override ProtoTypeName protoTypeName() {
++    return protoTypeName;
++  }
++
++  @Override public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireField> fields() {
++    return fields;
++  }
++
++  public List<WireOneOf> oneOfs() {
++    return oneOfs;
++  }
++
++  @Override public List<WireType> nestedTypes() {
++    return nestedTypes;
++  }
++
++  public List<ExtensionsElement> extensions() {
++    return element.extensions();
++  }
++
++  @Override public List<WireOption> options() {
++    return options;
++  }
++
++  @Override void register(Linker linker) {
++    linker.register(this);
++    for (WireType type : nestedTypes) {
++      type.register(linker);
++    }
++  }
++
++  @Override public void link(Linker linker) {
++    linker = linker.withMessage(this);
++    for (WireField field : fields) {
++      field.link(linker);
++    }
++    for (WireOneOf oneOf : oneOfs) {
++      oneOf.link(linker);
++    }
++    for (WireType type : nestedTypes) {
++      type.link(linker);
++    }
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java
+new file mode 100644
+index 00000000..eab1fbe9
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireOneOf.java
+@@ -0,0 +1,52 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.FieldElement;
++import com.squareup.protoparser.OneOfElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireOneOf {
++  private final OneOfElement element;
++  private final List<WireField> fields = new ArrayList<WireField>();
++
++  public WireOneOf(OneOfElement element) {
++    this.element = element;
++
++    for (FieldElement field : element.fields()) {
++      fields.add(new WireField(field));
++    }
++  }
++
++  public String name() {
++    return element.name();
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireField> fields() {
++    return fields;
++  }
++
++  void link(Linker linker) {
++    for (WireField field : fields) {
++      field.link(linker);
++    }
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java
+new file mode 100644
+index 00000000..1eca7217
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireOption.java
+@@ -0,0 +1,42 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.OptionElement;
++
++public final class WireOption {
++  private final OptionElement element;
++
++  public WireOption(OptionElement element) {
++    this.element = element;
++  }
++
++  public String name() {
++    return element.name();
++  }
++
++  public OptionElement.Kind kind() {
++    return element.kind();
++  }
++
++  public Object value() {
++    return element.value();
++  }
++
++  public boolean isParenthesized() {
++    return element.isParenthesized();
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java
+new file mode 100644
+index 00000000..acf79695
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireProtoFile.java
+@@ -0,0 +1,96 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.ExtendElement;
++import com.squareup.protoparser.OptionElement;
++import com.squareup.protoparser.ProtoFile;
++import com.squareup.protoparser.ServiceElement;
++import com.squareup.protoparser.TypeElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireProtoFile {
++  private final ProtoFile protoFile;
++  private final List<WireType> types = new ArrayList<WireType>();
++  private final List<WireService> services = new ArrayList<WireService>();
++  private final List<WireExtend> wireExtends = new ArrayList<WireExtend>();
++  private final List<WireOption> options = new ArrayList<WireOption>();
++
++  public WireProtoFile(ProtoFile protoFile) {
++    this.protoFile = protoFile;
++
++    String protoPackage = protoFile.packageName();
++
++    for (TypeElement type : protoFile.typeElements()) {
++      ProtoTypeName protoTypeName = ProtoTypeName.get(protoPackage, type.name());
++      types.add(WireType.get(protoTypeName, type));
++    }
++
++    for (ServiceElement service : protoFile.services()) {
++      ProtoTypeName protoTypeName = ProtoTypeName.get(protoPackage, service.name());
++      services.add(new WireService(protoTypeName, service));
++    }
++
++    for (ExtendElement extend : protoFile.extendDeclarations()) {
++      wireExtends.add(new WireExtend(extend));
++    }
++
++    for (OptionElement option : protoFile.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  public String packageName() {
++    return protoFile.packageName();
++  }
++
++  public List<WireType> types() {
++    return types;
++  }
++
++  public List<WireService> services() {
++    return services;
++  }
++
++  public List<WireExtend> wireExtends() {
++    return wireExtends;
++  }
++
++  public List<WireOption> options() {
++    return options;
++  }
++
++  public void register(Linker linker) {
++    linker = linker.withProtoPackage(packageName());
++    for (WireType type : types) {
++      type.register(linker);
++    }
++  }
++
++  public void link(Linker linker) {
++    linker = linker.withProtoPackage(packageName());
++    for (WireType type : types) {
++      type.link(linker);
++    }
++    for (WireService service : services) {
++      service.link(linker);
++    }
++    for (WireExtend extend : wireExtends) {
++      extend.link(linker);
++    }
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java
+new file mode 100644
+index 00000000..ec97e827
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireRpc.java
+@@ -0,0 +1,61 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.OptionElement;
++import com.squareup.protoparser.RpcElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireRpc {
++  private final RpcElement element;
++  private final List<WireOption> options = new ArrayList<WireOption>();
++  private ProtoTypeName requestType;
++  private ProtoTypeName responseType;
++
++  public WireRpc(RpcElement element) {
++    this.element = element;
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  public String name() {
++    return element.name();
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public ProtoTypeName requestType() {
++    return requestType;
++  }
++
++  public ProtoTypeName responseType() {
++    return responseType;
++  }
++
++  public List<WireOption> options() {
++    return options;
++  }
++
++  void link(Linker linker) {
++    requestType = linker.protoTypeName(element.requestType());
++    responseType = linker.protoTypeName(element.responseType());
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java
+new file mode 100644
+index 00000000..c149c6bc
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireService.java
+@@ -0,0 +1,64 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.OptionElement;
++import com.squareup.protoparser.RpcElement;
++import com.squareup.protoparser.ServiceElement;
++import java.util.ArrayList;
++import java.util.List;
++
++public final class WireService {
++  private final ProtoTypeName protoTypeName;
++  private final ServiceElement element;
++  private final List<WireRpc> rpcs = new ArrayList<WireRpc>();
++  private final List<WireOption> options = new ArrayList<WireOption>();
++
++  public WireService(ProtoTypeName protoTypeName, ServiceElement element) {
++    this.protoTypeName = protoTypeName;
++    this.element = element;
++
++    for (RpcElement rpc : element.rpcs()) {
++      rpcs.add(new WireRpc(rpc));
++    }
++
++    for (OptionElement option : element.options()) {
++      options.add(new WireOption(option));
++    }
++  }
++
++  public ProtoTypeName protoTypeName() {
++    return protoTypeName;
++  }
++
++  public String documentation() {
++    return element.documentation();
++  }
++
++  public List<WireRpc> rpcs() {
++    return rpcs;
++  }
++
++  public List<WireOption> options() {
++    return options;
++  }
++
++  void link(Linker linker) {
++    for (WireRpc rpc : rpcs) {
++      rpc.link(linker);
++    }
++  }
++}
+diff --git a/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java b/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java
+new file mode 100644
+index 00000000..4c36d1f4
+--- /dev/null
++++ b/wire-compiler/src/main/java/com/squareup/wire/model/WireType.java
+@@ -0,0 +1,42 @@
++/*
++ * Copyright (C) 2015 Square, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.squareup.wire.model;
++
++import com.squareup.protoparser.EnumElement;
++import com.squareup.protoparser.MessageElement;
++import com.squareup.protoparser.TypeElement;
++import java.util.List;
++
++public abstract class WireType {
++  abstract ProtoTypeName protoTypeName();
++  abstract String documentation();
++  abstract List<WireOption> options();
++  abstract List<WireType> nestedTypes();
++  abstract void register(Linker linker);
++  abstract void link(Linker linker);
++
++  public static WireType get(ProtoTypeName protoTypeName, TypeElement type) {
++    if (type instanceof EnumElement) {
++      return new WireEnum(protoTypeName, (EnumElement) type);
++
++    } else if (type instanceof MessageElement) {
++      return new WireMessage(protoTypeName, (MessageElement) type);
++
++    } else {
++      throw new IllegalArgumentException("unexpected type: " + type.getClass());
++    }
++  }
++}

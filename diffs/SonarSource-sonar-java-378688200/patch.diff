@@ -1,0 +1,494 @@
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+index 5008fd3604..b5e5b2be57 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
+@@ -43,8 +43,10 @@
+ import org.sonar.java.checks.naming.MethodNamedEqualsCheck;
+ import org.sonar.java.checks.naming.MethodNamedHashcodeOrEqualCheck;
+ import org.sonar.java.checks.security.AESAlgorithmCheck;
++import org.sonar.java.checks.security.CookieShouldNotContainSensitiveDataCheck;
+ import org.sonar.java.checks.security.HostnameVerifierImplementationCheck;
+ import org.sonar.java.checks.security.IntegerToHexStringCheck;
++import org.sonar.java.checks.security.LDAPDeserializationCheck;
+ import org.sonar.java.checks.security.TrustManagerCertificateCheck;
+ import org.sonar.java.checks.security.LDAPAuthenticatedConnectionCheck;
+ import org.sonar.java.checks.serialization.CustomSerializationMethodCheck;
+@@ -303,6 +305,7 @@ private CheckList() {
+       .add(ToStringReturningNullCheck.class)
+       .add(TransactionalMethodVisibilityCheck.class)
+       .add(CompareToResultTestCheck.class)
++      .add(CookieShouldNotContainSensitiveDataCheck.class)
+       .add(SecureCookieCheck.class)
+       .add(CatchIllegalMonitorStateExceptionCheck.class)
+       .add(ForLoopTerminationConditionCheck.class)
+@@ -335,6 +338,7 @@ private CheckList() {
+       .add(ConstructorCallingOverridableCheck.class)
+       .add(EqualsOnAtomicClassCheck.class)
+       .add(LDAPAuthenticatedConnectionCheck.class)
++      .add(LDAPDeserializationCheck.class)
+       .add(NonShortCircuitLogicCheck.class)
+       .add(ArrayHashCodeAndToStringCheck.class)
+       .add(DefaultEncodingUsageCheck.class)
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/DefaultInitializedFieldCheck.java b/java-checks/src/main/java/org/sonar/java/checks/DefaultInitializedFieldCheck.java
+index bfae4659c5..7bb2cd55db 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/DefaultInitializedFieldCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/DefaultInitializedFieldCheck.java
+@@ -75,7 +75,7 @@ private static boolean isDefault(ExpressionTree expression, boolean isPrimitive)
+         String charValue = ((LiteralTree) expression).value();
+         return "'\\u0000'".equals(charValue) || "'\\0'".equals(charValue);
+       case BOOLEAN_LITERAL:
+-        return "false".equals(((LiteralTree) expression).value());
++        return LiteralUtils.isFalse(expression);
+       case INT_LITERAL:
+       case LONG_LITERAL:
+         Long value = LiteralUtils.longLiteralValue(expression);
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/LoopExecutingAtMostOnceCheck.java b/java-checks/src/main/java/org/sonar/java/checks/LoopExecutingAtMostOnceCheck.java
+index 975140e06e..5e1c0009bd 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/LoopExecutingAtMostOnceCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/LoopExecutingAtMostOnceCheck.java
+@@ -28,6 +28,7 @@
+ import org.sonar.java.matcher.MethodMatcherCollection;
+ import org.sonar.java.matcher.TypeCriteria;
+ import org.sonar.java.model.ExpressionUtils;
++import org.sonar.java.model.LiteralUtils;
+ import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
+ import org.sonar.plugins.java.api.tree.BlockTree;
+ import org.sonar.plugins.java.api.tree.BreakStatementTree;
+@@ -37,7 +38,6 @@
+ import org.sonar.plugins.java.api.tree.ForEachStatement;
+ import org.sonar.plugins.java.api.tree.ForStatementTree;
+ import org.sonar.plugins.java.api.tree.LambdaExpressionTree;
+-import org.sonar.plugins.java.api.tree.LiteralTree;
+ import org.sonar.plugins.java.api.tree.MethodInvocationTree;
+ import org.sonar.plugins.java.api.tree.MethodTree;
+ import org.sonar.plugins.java.api.tree.ReturnStatementTree;
+@@ -123,7 +123,7 @@ private static boolean isEmptyConditionLoop(Tree loopTree) {
+ 
+   private static boolean isTrue(ExpressionTree expressionTree) {
+     ExpressionTree expr = ExpressionUtils.skipParentheses(expressionTree);
+-    return expr.is(Tree.Kind.BOOLEAN_LITERAL) && "true".equals(((LiteralTree) expr).value());
++    return LiteralUtils.isTrue(expr);
+   }
+ 
+   /**
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/SecureCookieCheck.java b/java-checks/src/main/java/org/sonar/java/checks/SecureCookieCheck.java
+index ed13a6c87e..83bd79eca3 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/SecureCookieCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/SecureCookieCheck.java
+@@ -22,13 +22,13 @@
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.Lists;
+ import org.sonar.check.Rule;
++import org.sonar.java.model.LiteralUtils;
+ import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
+ import org.sonar.plugins.java.api.JavaFileScannerContext;
+ import org.sonar.plugins.java.api.semantic.Symbol;
+ import org.sonar.plugins.java.api.semantic.Type;
+ import org.sonar.plugins.java.api.tree.ExpressionTree;
+ import org.sonar.plugins.java.api.tree.IdentifierTree;
+-import org.sonar.plugins.java.api.tree.LiteralTree;
+ import org.sonar.plugins.java.api.tree.MemberSelectExpressionTree;
+ import org.sonar.plugins.java.api.tree.MethodInvocationTree;
+ import org.sonar.plugins.java.api.tree.Tree;
+@@ -99,7 +99,7 @@ private static boolean isSetSecureCall(MethodInvocationTree mit) {
+     boolean hasArityOne = mit.arguments().size() == 1;
+     if (hasArityOne && isCallSiteCookie(methodSymbol)) {
+       ExpressionTree expressionTree = mit.arguments().get(0);
+-      if (expressionTree.is(Tree.Kind.BOOLEAN_LITERAL) && "false".equals(((LiteralTree) expressionTree).value())) {
++      if (LiteralUtils.isFalse(expressionTree)) {
+         return false;
+       }
+       return "setSecure".equals(getIdentifier(mit).name());
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/CookieShouldNotContainSensitiveDataCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
+similarity index 98%
+rename from java-checks/src/main/java/org/sonar/java/checks/CookieShouldNotContainSensitiveDataCheck.java
+rename to java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
+index 093f2d5cf0..35644bad88 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/CookieShouldNotContainSensitiveDataCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
+@@ -17,7 +17,7 @@
+  * along with this program; if not, write to the Free Software Foundation,
+  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+  */
+-package org.sonar.java.checks;
++package org.sonar.java.checks.security;
+ 
+ import java.util.Arrays;
+ import java.util.List;
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/HostnameVerifierImplementationCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/HostnameVerifierImplementationCheck.java
+index 2192880a68..116085339a 100644
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/HostnameVerifierImplementationCheck.java
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/HostnameVerifierImplementationCheck.java
+@@ -26,11 +26,11 @@
+ import org.sonar.java.matcher.MethodMatcher;
+ import org.sonar.java.matcher.TypeCriteria;
+ import org.sonar.java.model.ExpressionUtils;
++import org.sonar.java.model.LiteralUtils;
+ import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
+ import org.sonar.plugins.java.api.tree.BlockTree;
+ import org.sonar.plugins.java.api.tree.ExpressionTree;
+ import org.sonar.plugins.java.api.tree.LambdaExpressionTree;
+-import org.sonar.plugins.java.api.tree.LiteralTree;
+ import org.sonar.plugins.java.api.tree.MethodTree;
+ import org.sonar.plugins.java.api.tree.ReturnStatementTree;
+ import org.sonar.plugins.java.api.tree.StatementTree;
+@@ -113,7 +113,7 @@ private static boolean isReturnTrueStatement(List<StatementTree> statementTreeLi
+   private static boolean isTrueLiteral(Tree tree) {
+     if (tree.is(Tree.Kind.PARENTHESIZED_EXPRESSION) || tree.is(Tree.Kind.BOOLEAN_LITERAL)) {
+       ExpressionTree expression = ExpressionUtils.skipParentheses((ExpressionTree) tree);
+-      return expression.is(Tree.Kind.BOOLEAN_LITERAL) && "true".equals(((LiteralTree) expression).value());
++      return LiteralUtils.isTrue(expression);
+     }
+     return false;
+   }
+diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java
+new file mode 100644
+index 0000000000..83f8e4a973
+--- /dev/null
++++ b/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java
+@@ -0,0 +1,67 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.security;
++
++import java.util.Arrays;
++import java.util.List;
++import org.sonar.check.Rule;
++import org.sonar.java.checks.methods.AbstractMethodDetection;
++import org.sonar.java.matcher.MethodMatcher;
++import org.sonar.java.matcher.TypeCriteria;
++import org.sonar.java.model.LiteralUtils;
++import org.sonar.plugins.java.api.tree.ExpressionTree;
++import org.sonar.plugins.java.api.tree.MethodInvocationTree;
++import org.sonar.plugins.java.api.tree.NewClassTree;
++
++@Rule(key = "S4434")
++public class LDAPDeserializationCheck extends AbstractMethodDetection {
++  private static final String CLASS_NAME = "javax.naming.directory.SearchControls";
++  private static final int RET_OBJ_INDEX = 4;
++
++  @Override
++  protected List<MethodMatcher> getMethodInvocationMatchers() {
++    return Arrays.asList(
++      MethodMatcher.create().typeDefinition(TypeCriteria.subtypeOf(CLASS_NAME)).name("<init>").withAnyParameters(),
++      MethodMatcher.create().typeDefinition(TypeCriteria.subtypeOf(CLASS_NAME)).name("setReturningObjFlag").withAnyParameters());
++  }
++  @Override
++  protected void onConstructorFound(NewClassTree newClassTree) {
++    if (newClassTree.arguments().size() <= RET_OBJ_INDEX) {
++      return;
++    }
++    ExpressionTree retObjArgument = newClassTree.arguments().get(RET_OBJ_INDEX);
++    reportIfTrue(retObjArgument);
++  }
++
++  @Override
++  protected void onMethodInvocationFound(MethodInvocationTree methodTree) {
++    if (methodTree.arguments().size() != 1) {
++      return;
++    }
++    ExpressionTree setValue = methodTree.arguments().get(0);
++    reportIfTrue(setValue);
++  }
++
++  private void reportIfTrue(ExpressionTree toUnderline) {
++    if (LiteralUtils.isTrue(toUnderline)) {
++      reportIssue(toUnderline, "Disable object deserialization.");
++    }
++  }
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.html
+new file mode 100644
+index 0000000000..a76248d79f
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.html
+@@ -0,0 +1,29 @@
++<p>JNDI supports the deserialization of objects from LDAP directories, which is fundamentally insecure and can lead to remote code execution.</p>
++<p>This rule raises an issue when an LDAP search query is executed with <code>SearchControls</code> configured to allow deserialization.</p>
++<h2>Noncompliant Code Example</h2>
++<pre>
++DirContext ctx = new InitialDirContext();
++// ...
++ctx.search(query, filter,
++        new SearchControls(scope, countLimit, timeLimit, attributes,
++            true, // Noncompliant; allows deserialization
++            deref));
++</pre>
++<h2>Compliant Solution</h2>
++<pre>
++DirContext ctx = new InitialDirContext();
++// ...
++ctx.search(query, filter,
++        new SearchControls(scope, countLimit, timeLimit, attributes,
++            false,
++            deref));
++</pre>
++<h2>See</h2>
++<ul>
++  <li> <a href="https://cwe.mitre.org/data/definitions/502.html">MITRE, CWE-502</a> - Deserialization of Untrusted Data </li>
++  <li> OWASP Top 10 2017 Category A8 - Insecure Deserialization </li>
++  <li> <a href="https://www.blackhat.com/docs/us-16/materials/us-16-Munoz-A-Journey-From-JNDI-LDAP-Manipulation-To-RCE-wp.pdf">BlackHat
++  presentation</a> </li>
++  <li> Derived from FindSecBugs rule <a href="https://find-sec-bugs.github.io/bugs.htm#LDAP_ENTRY_POISONING">LDAP_ENTRY_POISONING</a> </li>
++</ul>
++
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.json
+new file mode 100644
+index 0000000000..b8fb336fb8
+--- /dev/null
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4434_java.json
+@@ -0,0 +1,22 @@
++{
++  "title": "LDAP deserialization should be disabled",
++  "type": "VULNERABILITY",
++  "status": "ready",
++  "remediation": {
++    "func": "Constant\/Issue",
++    "constantCost": "2min"
++  },
++  "tags": [
++    "cwe",
++    "owasp-a8",
++    "cert"
++  ],
++  "standards": [
++    "CWE",
++    "OWASP Top Ten"
++  ],
++  "defaultSeverity": "Blocker",
++  "ruleSpecification": "RSPEC-4434",
++  "sqKey": "S4434",
++  "scope": "Main"
++}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+index 4f0b266c72..cd7051f047 100644
+--- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
++++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
+@@ -308,6 +308,7 @@
+     "S4424",
+     "S4432",
+     "S4433",
++    "S4434",
+     "S4449",
+     "S4454",
+     "S4524"
+diff --git a/java-checks/src/test/files/checks/security/LDAPDeserializationCheck.java b/java-checks/src/test/files/checks/security/LDAPDeserializationCheck.java
+new file mode 100644
+index 0000000000..5470ade647
+--- /dev/null
++++ b/java-checks/src/test/files/checks/security/LDAPDeserializationCheck.java
+@@ -0,0 +1,19 @@
++import javax.naming.directory.SearchControls;
++import java.util.Date;
++import java.util.Properties;
++
++class S4434 {
++
++  void callConstructor(int scope, long countLimit, int timeLimit, String[] attributes, boolean returnObject, boolean deref) {
++    SearchControls ctrl1 = new SearchControls(scope, countLimit, timeLimit, attributes, true, deref); // Noncompliant {{Disable object deserialization.}}
++    SearchControls ctrl2 = new SearchControls(scope, countLimit, timeLimit, attributes, false, deref);
++    SearchControls ctrl3 = new SearchControls(scope, countLimit, timeLimit, attributes, returnObject, deref); // Should be noncompliant if we know returnObject is true
++  }
++
++  void callSetter(boolean returnObject) {
++    SearchControls ctrl = new SearchControls();
++    ctrl.setReturningObjFlag(true); // Noncompliant
++    ctrl.setReturningObjFlag(false);
++    ctrl.setReturningObjFlag(returnObject); // Should be noncompliant if we know returnObject is true
++  }
++}
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheckTest.java
+index 7285d9b94e..7aa72998b6 100644
+--- a/java-checks/src/test/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheckTest.java
++++ b/java-checks/src/test/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheckTest.java
+@@ -20,7 +20,7 @@
+ package org.sonar.java.checks.security;
+ 
+ import org.junit.Test;
+-import org.sonar.java.checks.CookieShouldNotContainSensitiveDataCheck;
++import org.sonar.java.checks.security.CookieShouldNotContainSensitiveDataCheck;
+ import org.sonar.java.checks.verifier.JavaCheckVerifier;
+ 
+ public class CookieShouldNotContainSensitiveDataCheckTest {
+diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/LDAPDeserializationCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/LDAPDeserializationCheckTest.java
+new file mode 100644
+index 0000000000..d1d1e51324
+--- /dev/null
++++ b/java-checks/src/test/java/org/sonar/java/checks/security/LDAPDeserializationCheckTest.java
+@@ -0,0 +1,31 @@
++/*
++ * SonarQube Java
++ * Copyright (C) 2012-2018 SonarSource SA
++ * mailto:info AT sonarsource DOT com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public License
++ * along with this program; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package org.sonar.java.checks.security;
++
++import org.junit.Test;
++import org.sonar.java.checks.verifier.JavaCheckVerifier;
++
++public class LDAPDeserializationCheckTest {
++
++  @Test
++  public void test() {
++    JavaCheckVerifier.verify("src/test/files/checks/security/LDAPDeserializationCheck.java", new LDAPDeserializationCheck());
++  }
++}
+diff --git a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
+index 2fb3fd6251..30e7b8540d 100644
+--- a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
++++ b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
+@@ -114,10 +114,18 @@ public static String trimLongSuffix(String longString) {
+   }
+ 
+   public static boolean hasValue(Tree tree, String expectedValue) {
+-    if (!tree.is(Tree.Kind.STRING_LITERAL)) {
++    if (!tree.is(Kind.STRING_LITERAL)) {
+       return false;
+     }
+-    String mechanismName = trimQuotes(((LiteralTree) tree).value());
+-    return expectedValue.equals(mechanismName);
++    String actualValue = trimQuotes(((LiteralTree) tree).value());
++    return expectedValue.equals(actualValue);
++  }
++
++  public static boolean isTrue(Tree tree) {
++    return tree.is(Kind.BOOLEAN_LITERAL) && "true".equals(((LiteralTree) tree).value());
++  }
++
++  public static boolean isFalse(Tree tree) {
++    return tree.is(Kind.BOOLEAN_LITERAL) && "false".equals(((LiteralTree) tree).value());
+   }
+ }
+diff --git a/java-frontend/src/main/java/org/sonar/java/se/checks/NoWayOutLoopCheck.java b/java-frontend/src/main/java/org/sonar/java/se/checks/NoWayOutLoopCheck.java
+index 451e4c3ab5..4cfd8ed469 100644
+--- a/java-frontend/src/main/java/org/sonar/java/se/checks/NoWayOutLoopCheck.java
++++ b/java-frontend/src/main/java/org/sonar/java/se/checks/NoWayOutLoopCheck.java
+@@ -24,6 +24,7 @@
+ import org.sonar.java.cfg.CFGLoop;
+ import org.sonar.java.matcher.MethodMatcher;
+ import org.sonar.java.matcher.TypeCriteria;
++import org.sonar.java.model.LiteralUtils;
+ import org.sonar.java.se.CheckerContext;
+ import org.sonar.java.se.ProgramState;
+ import org.sonar.plugins.java.api.semantic.Symbol;
+@@ -33,7 +34,6 @@
+ import org.sonar.plugins.java.api.tree.ExpressionTree;
+ import org.sonar.plugins.java.api.tree.ForStatementTree;
+ import org.sonar.plugins.java.api.tree.IdentifierTree;
+-import org.sonar.plugins.java.api.tree.LiteralTree;
+ import org.sonar.plugins.java.api.tree.MethodTree;
+ import org.sonar.plugins.java.api.tree.Tree;
+ import org.sonar.plugins.java.api.tree.UnaryExpressionTree;
+@@ -96,7 +96,7 @@ protected PreStatementVisitor(CheckerContext context) {
+ 
+     @Override
+     public void visitWhileStatement(WhileStatementTree tree) {
+-      if (isHardCodedTrue(tree.condition())) {
++      if (LiteralUtils.isTrue(tree.condition())) {
+         CFGLoop loopBlocks = contexts.peek().getLoop(tree);
+         if (loopBlocks != null && loopBlocks.hasNoWayOut()) {
+           context.reportIssue(tree, NoWayOutLoopCheck.this, "Add an end condition to this loop.");
+@@ -239,10 +239,6 @@ public void visitUnaryExpression(UnaryExpressionTree expression) {
+     }
+   }
+ 
+-  static boolean isHardCodedTrue(ExpressionTree condition) {
+-    return condition.is(Tree.Kind.BOOLEAN_LITERAL) && Boolean.parseBoolean(((LiteralTree) condition).value());
+-  }
+-
+   private static class MethodContext {
+ 
+     private final Map<Tree, CFGLoop> loopStarts;
+diff --git a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
+index b0f64e444b..213f58b6d0 100644
+--- a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
++++ b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
+@@ -155,14 +155,14 @@ public void hasValue_withNonStringLiteral_returnsFalse() {
+ 
+   @Test
+   public void hasValue_withOtherValue_returnsFalse() {
+-    LiteralTree tree = (LiteralTree) getReturnExpression("void foo(java.util.Properties props){ return \"other than expected\"; }");
++    LiteralTree tree = (LiteralTree) getReturnExpression("void foo(){ return \"other than expected\"; }");
+     boolean result = LiteralUtils.hasValue(tree, "expected");
+     assertThat(result).isFalse();
+   }
+ 
+   @Test
+   public void hasValue_withExpectedValue_returnsTrue() {
+-    LiteralTree tree = (LiteralTree) getReturnExpression("void foo(java.util.Properties props){ return \"expected\"; }");
++    LiteralTree tree = (LiteralTree) getReturnExpression("void foo(){ return \"expected\"; }");
+     boolean result = LiteralUtils.hasValue(tree, "expected");
+     assertThat(result).isTrue();
+   }
+@@ -179,6 +179,40 @@ public void is_0xff() {
+     assertThat(LiteralUtils.is0xff(tree)).isFalse();
+   }
+ 
++  public void isTrue_withNonBooleanLiteral_returnsFalse() {
++    ExpressionTree tree = getFirstExpression("void foo(java.util.Properties props){ props.setProperty(\"myKey\", \"myValue\"); }");
++    assertThat(LiteralUtils.isTrue(tree)).isFalse();
++  }
++
++  public void isFalse_withNonBooleanLiteral_returnsFalse() {
++    ExpressionTree tree = getFirstExpression("void foo(java.util.Properties props){ props.setProperty(\"myKey\", \"myValue\"); }");
++    assertThat(LiteralUtils.isFalse(tree)).isFalse();
++  }
++
++  @Test
++  public void isTrue_withFalseValue_returnsFalse() {
++    LiteralTree falseTree = (LiteralTree) getReturnExpression("void foo(){ return false; }");
++    assertThat(LiteralUtils.isTrue(falseTree)).isFalse();
++  }
++
++  @Test
++  public void isFalse_withTrueValue_returnsFalse() {
++    LiteralTree trueTree = (LiteralTree) getReturnExpression("void foo(){ return true; }");
++    assertThat(LiteralUtils.isFalse(trueTree)).isFalse();
++  }
++
++  @Test
++  public void isTrue_withExpectedValue_returnsTrue() {
++    LiteralTree trueTree = (LiteralTree) getReturnExpression("void foo(){ return true; }");
++    assertThat(LiteralUtils.isTrue(trueTree)).isTrue();
++  }
++
++  @Test
++  public void isFalse_withExpectedValue_returnsTrue() {
++    LiteralTree falseTree = (LiteralTree) getReturnExpression("void foo(){ return false; }");
++    assertThat(LiteralUtils.isFalse(falseTree)).isTrue();
++  }
++
+   private ExpressionTree getFirstExpression(String code) {
+     ClassTree firstType = getClassTree(code);
+     StatementTree firstStatement = ((MethodTree) firstType.members().get(0)).block().body().get(0);

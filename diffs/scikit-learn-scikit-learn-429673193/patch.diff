@@ -1,0 +1,536 @@
+diff --git a/.travis.yml b/.travis.yml
+index 7196296a386d..4b0a7d0f4281 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -46,7 +46,7 @@ matrix:
+            CYTHON_VERSION="*" PYAMG_VERSION="*" PILLOW_VERSION="*"
+            JOBLIB_VERSION="*" COVERAGE=true
+            CHECK_PYTEST_SOFT_DEPENDENCY="true" TEST_DOCSTRINGS="true"
+-           SKLEARN_SITE_JOBLIB=1
++           SKLEARN_SITE_JOBLIB=1 CHECK_WARNINGS="true"
+       if: type != cron
+     # flake8 linting on diff wrt common ancestor with upstream/master
+     - env: RUN_FLAKE8="true" SKIP_TESTS="true"
+@@ -58,7 +58,7 @@ matrix:
+     # installed from their CI wheels in a virtualenv with the Python
+     # interpreter provided by travis.
+     -  python: 3.6
+-       env: DISTRIB="scipy-dev"
++       env: DISTRIB="scipy-dev" CHECK_WARNINGS="true"
+        if: type = cron OR commit_message =~ /\[scipy-dev\]/
+ 
+ install: source build_tools/travis/install.sh
+diff --git a/appveyor.yml b/appveyor.yml
+index 5eb4d08a8737..c8a464723ff6 100644
+--- a/appveyor.yml
++++ b/appveyor.yml
+@@ -20,6 +20,7 @@ environment:
+     - PYTHON: "C:\\Python37-x64"
+       PYTHON_VERSION: "3.7.0"
+       PYTHON_ARCH: "64"
++      CHECK_WARNINGS: "true"
+ 
+     - PYTHON: "C:\\Python27"
+       PYTHON_VERSION: "2.7.8"
+@@ -72,7 +73,13 @@ test_script:
+   # installed library.
+   - mkdir "../empty_folder"
+   - cd "../empty_folder"
+-  - pytest --showlocals --durations=20 --pyargs sklearn
++  - ps: >-
++        if (Test-Path variable:global:CHECK_WARNINGS) {
++            $env:PYTEST_ARGS = "-Werror::DeprecationWarning -Werror::FutureWarning"
++        } else {
++            $env:PYTEST_ARGS = ""
++        }
++  - "pytest --showlocals --durations=20 %PYTEST_ARGS% --pyargs sklearn"
+   # Move back to the project folder
+   - cd "../scikit-learn"
+ 
+diff --git a/build_tools/travis/install.sh b/build_tools/travis/install.sh
+index b15e76ea397c..d41e746a1ab2 100755
+--- a/build_tools/travis/install.sh
++++ b/build_tools/travis/install.sh
+@@ -84,11 +84,7 @@ elif [[ "$DISTRIB" == "ubuntu" ]]; then
+     # and scipy
+     virtualenv --system-site-packages testvenv
+     source testvenv/bin/activate
+-    # FIXME: Importing scipy.sparse with numpy 1.8.2 and scipy 0.13.3 produces
+-    # a deprecation warning and the test suite fails on such warnings.
+-    # To test these numpy/scipy versions, we use pytest<3.8 as it has
+-    # a known limitation/bug of not capturing warnings during test collection.
+-    pip install pytest==3.7.4 pytest-cov cython==$CYTHON_VERSION
++    pip install pytest pytest-cov cython==$CYTHON_VERSION
+ 
+ elif [[ "$DISTRIB" == "scipy-dev" ]]; then
+     make_conda python=3.7
+diff --git a/build_tools/travis/test_script.sh b/build_tools/travis/test_script.sh
+index 1cf24d10837c..5036e19b3a6f 100755
+--- a/build_tools/travis/test_script.sh
++++ b/build_tools/travis/test_script.sh
+@@ -38,6 +38,13 @@ run_tests() {
+     if [[ "$COVERAGE" == "true" ]]; then
+         TEST_CMD="$TEST_CMD --cov sklearn"
+     fi
++
++    if [[ -n "$CHECK_WARNINGS" ]]; then
++        TEST_CMD="$TEST_CMD -Werror::DeprecationWarning -Werror::FutureWarning"
++    fi
++
++    set -x  # print executed commands to the terminal
++
+     $TEST_CMD sklearn
+ 
+     # Going back to git checkout folder needed to test documentation
+diff --git a/conftest.py b/conftest.py
+index bad99b5c9927..f175661165b2 100644
+--- a/conftest.py
++++ b/conftest.py
+@@ -11,12 +11,20 @@
+ import pytest
+ from _pytest.doctest import DoctestItem
+ 
++from sklearn.utils.fixes import PY3_OR_LATER
++
+ PYTEST_MIN_VERSION = '3.3.0'
+ 
+ if LooseVersion(pytest.__version__) < PYTEST_MIN_VERSION:
+     raise('Your version of pytest is too old, you should have at least '
+           'pytest >= {} installed.'.format(PYTEST_MIN_VERSION))
+ 
++
++def pytest_addoption(parser):
++    parser.addoption("--skip-network", action="store_true", default=False,
++                     help="skip network tests")
++
++
+ def pytest_collection_modifyitems(config, items):
+ 
+     # FeatureHasher is not compatible with PyPy
+@@ -27,19 +35,30 @@ def pytest_collection_modifyitems(config, items):
+             if item.name == 'sklearn.feature_extraction.hashing.FeatureHasher':
+                 item.add_marker(skip_marker)
+ 
++    # Skip tests which require internet if the flag is provided
++    if config.getoption("--skip-network"):
++        skip_network = pytest.mark.skip(
++            reason="test requires internet connectivity")
++        for item in items:
++            if "network" in item.keywords:
++                item.add_marker(skip_network)
++
+     # numpy changed the str/repr formatting of numpy arrays in 1.14. We want to
+-    # run doctests only for numpy >= 1.14.
+-    skip_doctests = True
++    # run doctests only for numpy >= 1.14. We want to skip the doctest for
++    # python 2 due to unicode.
++    skip_doctests = False
++    if not PY3_OR_LATER:
++        skip_doctests = True
+     try:
+         import numpy as np
+-        if LooseVersion(np.__version__) >= LooseVersion('1.14'):
+-            skip_doctests = False
++        if LooseVersion(np.__version__) < LooseVersion('1.14'):
++            skip_doctests = True
+     except ImportError:
+         pass
+ 
+     if skip_doctests:
+         skip_marker = pytest.mark.skip(
+-            reason='doctests are only run for numpy >= 1.14')
++            reason='doctests are only run for numpy >= 1.14 and python >= 3')
+ 
+         for item in items:
+             if isinstance(item, DoctestItem):
+diff --git a/doc/modules/svm.rst b/doc/modules/svm.rst
+index bd065c14f744..4429dd8b13cf 100644
+--- a/doc/modules/svm.rst
++++ b/doc/modules/svm.rst
+@@ -164,11 +164,12 @@ Each row of the coefficients corresponds to one of the ``n_class`` many
+ order of the "one" class.
+ 
+ In the case of "one-vs-one" :class:`SVC`, the layout of the attributes
+-is a little more involved. In the case of having a linear kernel,
+-The layout of ``coef_`` and ``intercept_`` is similar to the one
+-described for :class:`LinearSVC` described above, except that the shape of
+-``coef_`` is ``[n_class * (n_class - 1) / 2, n_features]``, corresponding to as
+-many binary classifiers. The order for classes
++is a little more involved. In the case of having a linear kernel, the
++attributes ``coef_`` and ``intercept_`` have the shape
++``[n_class * (n_class - 1) / 2, n_features]`` and
++``[n_class * (n_class - 1) / 2]`` respectively. This is similar to the
++layout for :class:`LinearSVC` described above, with each row now corresponding
++to a binary classifier. The order for classes
+ 0 to n is "0 vs 1", "0 vs 2" , ... "0 vs n", "1 vs 2", "1 vs 3", "1 vs n", . .
+ . "n-1 vs n".
+ 
+diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
+index 3bb7bb100fd3..d35b48c00da4 100644
+--- a/doc/whats_new/v0.20.rst
++++ b/doc/whats_new/v0.20.rst
+@@ -108,10 +108,6 @@ Support for Python 3.3 has been officially dropped.
+ :mod:`sklearn.cluster`
+ ......................
+ 
+-- |MajorFeature| A new clustering algorithm: :class:`cluster.OPTICS`: an
+-  algoritm related to :class:`cluster.DBSCAN`, that has hyperparameters easier
+-  to set and that scales better, by :user:`Shane <espg>`.
+-
+ - |MajorFeature| :class:`cluster.AgglomerativeClustering` now supports Single
+   Linkage clustering via ``linkage='single'``. :issue:`9372` by :user:`Leland
+   McInnes <lmcinnes>` and :user:`Steve Astels <sastels>`.
+diff --git a/doc/whats_new/v0.21.rst b/doc/whats_new/v0.21.rst
+index 202972f0575c..03440502aecb 100644
+--- a/doc/whats_new/v0.21.rst
++++ b/doc/whats_new/v0.21.rst
+@@ -40,6 +40,14 @@ Support for Python 3.4 and below has been officially dropped.
+ - An entry goes here
+ - An entry goes here
+ 
++:mod:`sklearn.cluster`
++......................
++
++- |MajorFeature| A new clustering algorithm: :class:`cluster.OPTICS`: an
++  algoritm related to :class:`cluster.DBSCAN`, that has hyperparameters easier
++  to set and that scales better, by :user:`Shane <espg>` and
++  :user:`Adrin Jalali <adrinjalali>`.
++
+ Multiple modules
+ ................
+ 
+diff --git a/setup.cfg b/setup.cfg
+index 93aca4a44f9e..59c4804c1447 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -12,9 +12,6 @@ addopts =
+     --doctest-modules
+     --disable-pytest-warnings
+     -rs
+-filterwarnings =
+-    error::DeprecationWarning
+-    error::FutureWarning
+ 
+ [wheelhouse_uploader]
+ artifact_indexes=
+diff --git a/sklearn/cluster/_optics_inner.pyx b/sklearn/cluster/_optics_inner.pyx
+index 24e861907854..0c1b056bb172 100644
+--- a/sklearn/cluster/_optics_inner.pyx
++++ b/sklearn/cluster/_optics_inner.pyx
+@@ -5,6 +5,13 @@ cimport cython
+ ctypedef np.float64_t DTYPE_t
+ ctypedef np.int_t DTYPE
+ 
++# as defined in PEP485 (python3.5)
++cdef inline isclose(double a, 
++                    double b,
++                    double rel_tol=1e-09,
++                    double abs_tol=0.0):
++    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
++
+ @cython.boundscheck(False)
+ @cython.wraparound(False)
+ # Checks for smallest reachability distance
+@@ -24,7 +31,7 @@ cpdef quick_scan(double[:] rdists, double[:] dists):
+             rdist = rdists[i]
+             dist = dists[i]
+             idx = i
+-        if rdists[i] == rdist:
++        elif isclose(rdists[i], rdist):
+             if dists[i] < dist:
+                 dist = dists[i]
+                 idx = i
+diff --git a/sklearn/cluster/optics_.py b/sklearn/cluster/optics_.py
+index 899da518ae79..19b6a79f4599 100755
+--- a/sklearn/cluster/optics_.py
++++ b/sklearn/cluster/optics_.py
+@@ -30,9 +30,10 @@ def optics(X, min_samples=5, max_eps=np.inf, metric='euclidean',
+     """Perform OPTICS clustering from vector array
+ 
+     OPTICS: Ordering Points To Identify the Clustering Structure
+-    Equivalent to DBSCAN, finds core sample of high density and expands
++    Closely related to DBSCAN, finds core sample of high density and expands
+     clusters from them. Unlike DBSCAN, keeps cluster hierarchy for a variable
+-    neighborhood radius. Optimized for usage on large point datasets.
++    neighborhood radius. Better suited for usage on large point datasets than
++    the current sklearn implementation of DBSCAN.
+ 
+     Read more in the :ref:`User Guide <optics>`.
+ 
+@@ -52,11 +53,30 @@ def optics(X, min_samples=5, max_eps=np.inf, metric='euclidean',
+         shorter run times.
+ 
+     metric : string or callable, optional (default='euclidean')
+-        The distance metric to use for neighborhood lookups. Default is
+-        "euclidean". Other options include "minkowski", "manhattan",
+-        "chebyshev", "haversine", "seuclidean", "hamming", "canberra",
+-        and "braycurtis". The "wminkowski" and "mahalanobis" metrics are
+-        also valid with an additional argument.
++        metric to use for distance computation. Any metric from scikit-learn
++        or scipy.spatial.distance can be used.
++
++        If metric is a callable function, it is called on each
++        pair of instances (rows) and the resulting value recorded. The callable
++        should take two arrays as input and return one value indicating the
++        distance between them. This works for Scipy's metrics, but is less
++        efficient than passing the metric name as a string.
++
++        Distance matrices are not supported.
++
++        Valid values for metric are:
++
++        - from scikit-learn: ['cityblock', 'cosine', 'euclidean', 'l1', 'l2',
++          'manhattan']
++
++        - from scipy.spatial.distance: ['braycurtis', 'canberra', 'chebyshev',
++          'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski',
++          'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao',
++          'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean',
++          'yule']
++
++        See the documentation for scipy.spatial.distance for details on these
++        metrics.
+ 
+     p : integer, optional (default=2)
+         Parameter for the Minkowski metric from
+@@ -163,9 +183,10 @@ class OPTICS(BaseEstimator, ClusterMixin):
+     """Estimate clustering structure from vector array
+ 
+     OPTICS: Ordering Points To Identify the Clustering Structure
+-    Equivalent to DBSCAN, finds core sample of high density and expands
++    Closely related to DBSCAN, finds core sample of high density and expands
+     clusters from them. Unlike DBSCAN, keeps cluster hierarchy for a variable
+-    neighborhood radius. Optimized for usage on large point datasets.
++    neighborhood radius. Better suited for usage on large point datasets than
++    the current sklearn implementation of DBSCAN.
+ 
+     Read more in the :ref:`User Guide <optics>`.
+ 
+@@ -182,11 +203,30 @@ class OPTICS(BaseEstimator, ClusterMixin):
+         shorter run times.
+ 
+     metric : string or callable, optional (default='euclidean')
+-        The distance metric to use for neighborhood lookups. Default is
+-        "euclidean". Other options include "minkowski", "manhattan",
+-        "chebyshev", "haversine", "seuclidean", "hamming", "canberra",
+-        and "braycurtis". The "wminkowski" and "mahalanobis" metrics are
+-        also valid with an additional argument.
++        metric to use for distance computation. Any metric from scikit-learn
++        or scipy.spatial.distance can be used.
++
++        If metric is a callable function, it is called on each
++        pair of instances (rows) and the resulting value recorded. The callable
++        should take two arrays as input and return one value indicating the
++        distance between them. This works for Scipy's metrics, but is less
++        efficient than passing the metric name as a string.
++
++        Distance matrices are not supported.
++
++        Valid values for metric are:
++
++        - from scikit-learn: ['cityblock', 'cosine', 'euclidean', 'l1', 'l2',
++          'manhattan']
++
++        - from scipy.spatial.distance: ['braycurtis', 'canberra', 'chebyshev',
++          'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski',
++          'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao',
++          'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean',
++          'yule']
++
++        See the documentation for scipy.spatial.distance for details on these
++        metrics.
+ 
+     p : integer, optional (default=2)
+         Parameter for the Minkowski metric from
+@@ -419,8 +459,11 @@ def _set_reach_dist(self, point_index, processed, X, nbrs):
+             # Everything is already processed. Return to main loop
+             return point_index
+ 
+-        dists = pairwise_distances(P, np.take(X, unproc, axis=0),
+-                                   self.metric, n_jobs=1).ravel()
++        if self.metric == 'precomputed':
++            dists = X[point_index, unproc]
++        else:
++            dists = pairwise_distances(P, np.take(X, unproc, axis=0),
++                                       self.metric, n_jobs=None).ravel()
+ 
+         rdists = np.maximum(dists, self.core_distances_[point_index])
+         new_reach = np.minimum(np.take(self.reachability_, unproc), rdists)
+diff --git a/sklearn/cluster/tests/test_optics.py b/sklearn/cluster/tests/test_optics.py
+index bddf57ec7b5d..1215746faa4c 100755
+--- a/sklearn/cluster/tests/test_optics.py
++++ b/sklearn/cluster/tests/test_optics.py
+@@ -11,6 +11,7 @@
+ from sklearn.cluster.optics_ import _TreeNode, _cluster_tree
+ from sklearn.cluster.optics_ import _find_local_maxima
+ from sklearn.metrics.cluster import contingency_matrix
++from sklearn.metrics.pairwise import pairwise_distances
+ from sklearn.cluster.dbscan_ import DBSCAN
+ from sklearn.utils.testing import assert_equal, assert_warns
+ from sklearn.utils.testing import assert_array_equal
+@@ -436,3 +437,15 @@ def test_reach_dists():
+     else:
+         # we compare to truncated decimals, so use atol
+         assert_allclose(clust.reachability_, np.array(v), atol=1e-5)
++
++
++def test_precomputed_dists():
++    redX = X[::10]
++    dists = pairwise_distances(redX, metric='euclidean')
++    clust1 = OPTICS(min_samples=10, algorithm='brute',
++                    metric='precomputed').fit(dists)
++    clust2 = OPTICS(min_samples=10, algorithm='brute',
++                    metric='euclidean').fit(redX)
++
++    assert_allclose(clust1.reachability_, clust2.reachability_)
++    assert_array_equal(clust1.labels_, clust2.labels_)
+diff --git a/sklearn/decomposition/tests/test_kernel_pca.py b/sklearn/decomposition/tests/test_kernel_pca.py
+index 333ffdfa5494..5b8d9628142f 100644
+--- a/sklearn/decomposition/tests/test_kernel_pca.py
++++ b/sklearn/decomposition/tests/test_kernel_pca.py
+@@ -105,8 +105,7 @@ def test_kernel_pca_sparse():
+ 
+ 
+ def test_kernel_pca_linear_kernel():
+-    """ Tests that kPCA with a linear kernel is equivalent to PCA, for all
+-    solvers"""
++    """ Tests that kPCA with a linear kernel is equivalent to PCA """
+     rng = np.random.RandomState(0)
+     X_fit = rng.random_sample((5, 4))
+     X_pred = rng.random_sample((2, 4))
+@@ -115,11 +114,27 @@ def test_kernel_pca_linear_kernel():
+     # modulo the sign (direction)
+     # fit only the first four components: fifth is near zero eigenvalue, so
+     # can be trimmed due to roundoff error
+-    for solver in ("auto", "arpack", "randomized"):
++    assert_array_almost_equal(
++        np.abs(KernelPCA(4).fit(X_fit).transform(X_pred)),
++        np.abs(PCA(4).fit(X_fit).transform(X_pred)))
++
++
++def test_kernel_pca_linear_kernel2():
++    """ Tests that kPCA with a linear kernel is equivalent to PCA, for all
++    solvers"""
++    rng = np.random.RandomState(0)
++    X_fit = rng.random_sample((6, 10))
++    X_pred = rng.random_sample((2, 10))
++
++    # for a linear kernel, kernel PCA should find the same projection as PCA
++    # modulo the sign (direction)
++    for solver in ("auto", "dense", "arpack", "randomized"):
+         assert_array_almost_equal(
+             np.abs(KernelPCA(4, eigen_solver=solver).fit(X_fit)
+                    .transform(X_pred)),
+-            np.abs(PCA(4, svd_solver=solver).fit(X_fit).transform(X_pred)))
++            np.abs(PCA(4, svd_solver=solver if solver != "dense" else "full")
++                   .fit(X_fit).transform(X_pred)))
++
+ 
+ def test_kernel_pca_n_components():
+     """ Tests that the number of components selected is correctly taken into
+diff --git a/sklearn/ensemble/tests/test_gradient_boosting.py b/sklearn/ensemble/tests/test_gradient_boosting.py
+index 6f7654c7d606..e407ca8ef255 100644
+--- a/sklearn/ensemble/tests/test_gradient_boosting.py
++++ b/sklearn/ensemble/tests/test_gradient_boosting.py
+@@ -452,6 +452,7 @@ def test_max_feature_regression():
+     assert_true(deviance < 0.5, "GB failed with deviance %.4f" % deviance)
+ 
+ 
++@pytest.mark.network
+ def test_feature_importance_regression():
+     """Test that Gini importance is calculated correctly.
+ 
+diff --git a/sklearn/linear_model/stochastic_gradient.py b/sklearn/linear_model/stochastic_gradient.py
+index 93a2a6c91209..5e253003a2fe 100644
+--- a/sklearn/linear_model/stochastic_gradient.py
++++ b/sklearn/linear_model/stochastic_gradient.py
+@@ -845,7 +845,7 @@ class SGDClassifier(BaseSGDClassifier):
+         The exponent for inverse scaling learning rate [default 0.5].
+ 
+     early_stopping : bool, default=False
+-        Whether to use early stopping to terminate training when validation.
++        Whether to use early stopping to terminate training when validation
+         score is not improving. If set to True, it will automatically set aside
+         a fraction of training data as validation and terminate training when
+         validation score is not improving by at least tol for
+@@ -1454,7 +1454,7 @@ class SGDRegressor(BaseSGDRegressor):
+         The exponent for inverse scaling learning rate [default 0.5].
+ 
+     early_stopping : bool, default=False
+-        Whether to use early stopping to terminate training when validation.
++        Whether to use early stopping to terminate training when validation
+         score is not improving. If set to True, it will automatically set aside
+         a fraction of training data as validation and terminate training when
+         validation score is not improving by at least tol for
+diff --git a/sklearn/neighbors/__init__.py b/sklearn/neighbors/__init__.py
+index 8510e5d1c8b8..93c1bbbba0ba 100644
+--- a/sklearn/neighbors/__init__.py
++++ b/sklearn/neighbors/__init__.py
+@@ -14,7 +14,7 @@
+ from .kde import KernelDensity
+ from .approximate import LSHForest
+ from .lof import LocalOutlierFactor
+-from .base import VALID_METRICS
++from .base import VALID_METRICS, VALID_METRICS_SPARSE
+ 
+ __all__ = ['BallTree',
+            'DistanceMetric',
+@@ -30,4 +30,5 @@
+            'KernelDensity',
+            'LSHForest',
+            'LocalOutlierFactor',
+-           'VALID_METRICS']
++           'VALID_METRICS',
++           'VALID_METRICS_SPARSE']
+diff --git a/sklearn/neighbors/base.py b/sklearn/neighbors/base.py
+index 8ec53d8e23a0..9f30ba3ebd3f 100644
+--- a/sklearn/neighbors/base.py
++++ b/sklearn/neighbors/base.py
+@@ -217,9 +217,12 @@ def _fit(self, X):
+                               "using brute force")
+             if self.effective_metric_ not in VALID_METRICS_SPARSE['brute'] \
+                     and not callable(self.effective_metric_):
+-
+-                raise ValueError("metric '%s' not valid for sparse input"
+-                                 % self.effective_metric_)
++                raise ValueError("Metric '%s' not valid for sparse input. "
++                                 "Use sorted(sklearn.neighbors."
++                                 "VALID_METRICS_SPARSE['brute']) "
++                                 "to get valid options. "
++                                 "Metric can also be a callable function."
++                                 % (self.effective_metric_))
+             self._fit_X = X.copy()
+             self._tree = None
+             self._fit_method = 'brute'
+diff --git a/sklearn/tests/test_common.py b/sklearn/tests/test_common.py
+index 8e5f020985b1..c84962ed63e6 100644
+--- a/sklearn/tests/test_common.py
++++ b/sklearn/tests/test_common.py
+@@ -72,10 +72,11 @@ def _tested_non_meta_estimators():
+ 
+ 
+ def _generate_checks_per_estimator(check_generator, estimators):
+-    for name, Estimator in estimators:
+-        estimator = Estimator()
+-        for check in check_generator(name, estimator):
+-            yield name, Estimator, check
++    with ignore_warnings(category=(DeprecationWarning, FutureWarning)):
++        for name, Estimator in estimators:
++            estimator = Estimator()
++            for check in check_generator(name, estimator):
++                yield name, Estimator, check
+ 
+ 
+ def _rename_partial(val):
+diff --git a/sklearn/tests/test_pipeline.py b/sklearn/tests/test_pipeline.py
+index 14eba1eb5515..6a77d5215d7c 100644
+--- a/sklearn/tests/test_pipeline.py
++++ b/sklearn/tests/test_pipeline.py
+@@ -9,7 +9,6 @@
+ import pytest
+ import numpy as np
+ from scipy import sparse
+-import pytest
+ 
+ from sklearn.externals.six.moves import zip
+ from sklearn.utils.testing import assert_raises

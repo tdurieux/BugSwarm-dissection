@@ -1,0 +1,31 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
+index 4d5537ecc0..36abcb0699 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/asm/Advice.java
+@@ -1182,7 +1182,7 @@ public void injectCompletionFrame(MethodVisitor methodVisitor, boolean secondary
+ 
+                 @Override
+                 public String toString() {
+-                    return "Advice.StackMapFrameHandler.Default.TranslationMode.ForAdvice{" +
++                    return "Advice.StackMapFrameHandler.Default.ForAdvice{" +
+                             "methodDescription=" + methodDescription +
+                             ", requiredTypes=" + requiredTypes +
+                             ", yieldedTypes=" + yieldedTypes +
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AdviceTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AdviceTest.java
+index daec2fae5e..c287b55a42 100644
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AdviceTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/asm/AdviceTest.java
+@@ -1324,7 +1324,12 @@ public void testObjectProperties() throws Exception {
+         ObjectPropertyAssertion.of(Advice.WithCustomMapping.class).apply();
+         ObjectPropertyAssertion.of(Advice.MethodSizeHandler.NoOp.class).apply();
+         ObjectPropertyAssertion.of(Advice.MethodSizeHandler.Default.class).applyBasic();
+-        ObjectPropertyAssertion.of(Advice.MethodSizeHandler.Default.ForAdvice.class).applyBasic();
++        ObjectPropertyAssertion.of(Advice.MethodSizeHandler.Default.ForAdvice.class).refine(new ObjectPropertyAssertion.Refinement<MethodDescription>() {
++            @Override
++            public void apply(MethodDescription mock) {
++                when(mock.getReturnType()).thenReturn(TypeDescription.Generic.VOID);
++            }
++        }).applyBasic();
+         ObjectPropertyAssertion.of(Advice.StackMapFrameHandler.NoOp.class).apply();
+         ObjectPropertyAssertion.of(Advice.StackMapFrameHandler.Default.class).applyBasic();
+         ObjectPropertyAssertion.of(Advice.StackMapFrameHandler.Default.ForAdvice.class).applyBasic();

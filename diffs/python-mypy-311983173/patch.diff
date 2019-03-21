@@ -1,0 +1,124 @@
+diff --git a/docs/source/builtin_types.rst b/docs/source/builtin_types.rst
+index 4426df7386..e41c5db6fb 100644
+--- a/docs/source/builtin_types.rst
++++ b/docs/source/builtin_types.rst
+@@ -13,6 +13,8 @@ Type                Description
+ ``bytes``           8-bit string
+ ``object``          an arbitrary object (``object`` is the common base class)
+ ``List[str]``       list of ``str`` objects
++``Tuple[int, int]`` tuple of two ``int``s (``Tuple[()]`` is the empty tuple)
++``Tuple[int, ...]`` tuple of an arbitrary number of ``int`` objects
+ ``Dict[str, int]``  dictionary from ``str`` keys to ``int`` values
+ ``Iterable[int]``   iterable object containing ints
+ ``Sequence[bool]``  sequence of booleans
+diff --git a/docs/source/cheat_sheet.rst b/docs/source/cheat_sheet.rst
+index a1cdb980df..590820c943 100644
+--- a/docs/source/cheat_sheet.rst
++++ b/docs/source/cheat_sheet.rst
+@@ -33,6 +33,9 @@ Built-in types
+    x = [1] # type: List[int]
+    x = set([6, 7]) # type: Set[int]
+ 
++   # Empty Tuple types are a bit special
++   x = ()  # type: Tuple[()]
++
+    # For mappings, we need the types of both keys and values.
+    x = dict(field=2.0) # type: Dict[str, float]
+ 
+diff --git a/docs/source/cheat_sheet_py3.rst b/docs/source/cheat_sheet_py3.rst
+index 09eab13d4b..86280257a8 100644
+--- a/docs/source/cheat_sheet_py3.rst
++++ b/docs/source/cheat_sheet_py3.rst
+@@ -34,6 +34,9 @@ Built-in types
+    x = [1]  # type: List[int]
+    x = {6, 7}  # type: Set[int]
+ 
++   # Empty Tuple types are a bit special
++   x = ()  # type: Tuple[()]
++
+    # For mappings, we need the types of both keys and values.
+    x = {'field': 2.0}  # type: Dict[str, float]
+ 
+diff --git a/docs/source/common_issues.rst b/docs/source/common_issues.rst
+index e944936f61..ca052ff6d7 100644
+--- a/docs/source/common_issues.rst
++++ b/docs/source/common_issues.rst
+@@ -472,3 +472,25 @@ Here's the above example modified to use ``MYPY``:
+ 
+    def listify(arg: 'bar.BarClass') -> 'List[bar.BarClass]':
+        return [arg]
++
++
++Silencing Linters
++-----------------
++
++In some cases, linters will complain about unused imports or code. In
++these cases, you can silence them with a comment after type comments, or on
++the same line as the import:
++
++.. code-block:: python
++
++   # to silence complaints about unused imports
++   from typing import List  # noqa
++   a = None  # type: List[int]
++
++
++To silence the linter on the same line as a type comment
++put the linter comment *after* the type comment:
++
++.. code-block:: python
++
++    a = some_complex_thing()  # type: ignore  # noqa
+diff --git a/docs/source/config_file.rst b/docs/source/config_file.rst
+index 075e2f3ba8..3088afda85 100644
+--- a/docs/source/config_file.rst
++++ b/docs/source/config_file.rst
+@@ -209,8 +209,8 @@ overridden by the pattern sections matching the module name.
+ - ``no_implicit_optional`` (Boolean, default false) changes the treatment of
+   arguments with a default value of None by not implicitly making their type Optional
+ 
+-Example
+-*******
++Examples
++********
+ 
+ You might put this in your ``mypy.ini`` file at the root of your repo:
+ 
+@@ -227,6 +227,17 @@ for all mypy runs in this tree, and also selectively turns on the
+ package.  This issues an error for function definitions without
+ type annotations in that subdirectory only.
+ 
++If you would like to ignore specific imports, instead of ignoring all missing
++imports with ``--ignore-missing-imports``, use a section of the configuration
++file per module such as the following to ignore missing imports from
++``lib_module``:
++
++.. code-block:: text
++
++    [mypy-lib_module]
++    ignore_missing_imports = True
++
++
+ .. note::
+ 
+    Configuration flags are liable to change between releases.
+diff --git a/mypy/nodes.py b/mypy/nodes.py
+index 1a13f145a2..9ccd928871 100644
+--- a/mypy/nodes.py
++++ b/mypy/nodes.py
+@@ -566,7 +566,7 @@ def info(self) -> 'TypeInfo':
+         return self.func.info
+ 
+     @property
+-    def type(self) -> Optional['mypy.types.Type']:
++    def type(self) -> 'Optional[mypy.types.Type]':
+         return self.var.type
+ 
+     def accept(self, visitor: StatementVisitor[T]) -> T:
+diff --git a/typeshed b/typeshed
+index fc10a94db1..97fb265a4c 160000
+--- a/typeshed
++++ b/typeshed
+@@ -1 +1 @@
+-Subproject commit fc10a94db1f222875d5072ea223c3644c84ffa97
++Subproject commit 97fb265a4c80812c3205a953f3201fc909c43a44

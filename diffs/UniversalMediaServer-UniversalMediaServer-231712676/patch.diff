@@ -1,0 +1,119 @@
+diff --git a/src/main/java/net/pms/formats/v2/AudioProperties.java b/src/main/java/net/pms/formats/v2/AudioProperties.java
+index 34265f3354..6d687d6be9 100644
+--- a/src/main/java/net/pms/formats/v2/AudioProperties.java
++++ b/src/main/java/net/pms/formats/v2/AudioProperties.java
+@@ -38,7 +38,9 @@
+ 	private static final Pattern intPattern = Pattern.compile("([\\+-]?\\d+)([eE][\\+-]?\\d+)?");
+ //	private static final Pattern floatPattern = Pattern.compile("([\\+-]?\\d(\\.\\d*)?|\\.\\d+)([eE][\\+-]?(\\d(\\.\\d*)?|\\.\\d+))?");
+ 
+-	private int bitRate = 8000;
++	public static final int BITRATE_DEFAULT = 8000;
++
++	private int bitRate;
+ 	private int numberOfChannels = 2;
+ 	private int audioDelay = 0;
+ 	private int sampleFrequency = 48000;
+@@ -62,11 +64,13 @@ public int getAttribute(AudioAttribute attribute) {
+ 	}
+ 
+ 	/**
+-	 * Get bitrate for this audio track.
+-	 * @return bitrate (default is 8000).
++	 * Gets bitrate for this audio track.
++	 *
++	 * @return The bitrate, or {@link #BITRATE_DEFAULT} if {@code bitRate} is
++	 *         invalid.
+ 	 */
+ 	public int getBitRate() {
+-		return bitRate;
++		return bitRate > 0 ? bitRate : BITRATE_DEFAULT;
+ 	}
+ 
+ 	/**
+@@ -75,9 +79,6 @@ public int getBitRate() {
+ 	 * @param bitrate to set.
+ 	 */
+ 	public void setBitRate(int bitRate) {
+-		if (bitRate < 1) {
+-			throw new IllegalArgumentException("Bitrate can't be less than 1.");
+-		}
+ 		this.bitRate = bitRate;
+ 	}
+ 
+@@ -326,8 +327,8 @@ public static int getSampleFrequencyFromLibMediaInfo(String mediaInfoValue) {
+ 
+ 	public static int getBitRateFromLibMediaInfo(String mediaInfoValue) {
+ 		if (isEmpty(mediaInfoValue)) {
+-			LOGGER.warn("Empty value passed in. Returning default number 8000.");
+-			return 8000;
++			LOGGER.warn("Empty value passed in. Returning default number {}.", BITRATE_DEFAULT);
++			return BITRATE_DEFAULT;
+ 		}
+ 
+ 		// examples of libmediainfo output (mediainfo --Full --Language=raw file):
+@@ -336,24 +337,20 @@ public static int getBitRateFromLibMediaInfo(String mediaInfoValue) {
+ 
+ 		int result = -1;
+ 		Matcher intMatcher = intPattern.matcher(mediaInfoValue);
+-		while (intMatcher.find()) {
++		if (intMatcher.find()) {
+ 			String matchResult = intMatcher.group();
+ 			try {
+-				int currentResult = Integer.parseInt(matchResult);
+-				if (currentResult > result) {
+-					result = currentResult;
+-				}
++				result = Integer.parseInt(matchResult);
+ 			} catch (NumberFormatException ex) {
+ 				LOGGER.warn("NumberFormatException during parsing substring {} from value {}", matchResult, mediaInfoValue);
+ 			}
+ 		}
+ 
+ 		if (result < 1) {
+-			LOGGER.warn("Can't parse value {}. Returning default number 8000.", mediaInfoValue);
+-			return 8000;
+-		} else {
+-			return result;
++			LOGGER.warn("Can't parse bitrate {}. Returning default value {}.", mediaInfoValue, BITRATE_DEFAULT);
++			return BITRATE_DEFAULT;
+ 		}
++		return result;
+ 	}
+ 
+ 	@Override
+diff --git a/src/test/java/net/pms/formats/v2/AudioPropertiesTest.java b/src/test/java/net/pms/formats/v2/AudioPropertiesTest.java
+index 0e74079cda..c4ed1fe7e9 100644
+--- a/src/test/java/net/pms/formats/v2/AudioPropertiesTest.java
++++ b/src/test/java/net/pms/formats/v2/AudioPropertiesTest.java
+@@ -38,18 +38,13 @@ public void setUp() {
+ 
+ 	@Test
+ 	public void testDefaultValues() {
+-		assertThat(properties.getBitRate()).isEqualTo(8000);
++		assertThat(properties.getBitRate()).isEqualTo(AudioProperties.BITRATE_DEFAULT);
+ 		assertThat(properties.getNumberOfChannels()).isEqualTo(2);
+ 		assertThat(properties.getAudioDelay()).isEqualTo(0);
+ 		assertThat(properties.getSampleFrequency()).isEqualTo(48000);
+ 		assertThat(properties.getBitsperSample()).isEqualTo(16);
+ 	}
+ 
+-	@Test(expected = IllegalArgumentException.class)
+-	public void testSetBitRate_withIllegalArgument() {
+-		properties.setBitRate(0);
+-	}
+-
+ 	@Test(expected = IllegalArgumentException.class)
+ 	public void testSetNumberOfChannels_withIllegalArgument() {
+ 		properties.setNumberOfChannels(0);
+@@ -78,8 +73,10 @@ public void testSetBitRate() {
+ 		assertThat(properties.getBitRate()).isEqualTo(5000);
+ 		properties.setBitRate("unknown / unknown / 1509000");
+ 		assertThat(properties.getBitRate()).isEqualTo(1509000);
++		properties.setBitRate("0");
++		assertThat(properties.getBitRate()).isEqualTo(AudioProperties.BITRATE_DEFAULT);
+ 		properties.setBitRate("-3");
+-		assertThat(properties.getBitRate()).isEqualTo(8000);
++		assertThat(properties.getBitRate()).isEqualTo(AudioProperties.BITRATE_DEFAULT);
+ 	}
+ 
+ 	@Test

@@ -1,0 +1,1137 @@
+diff --git a/config/checkstyle_checks.xml b/config/checkstyle_checks.xml
+index 2d4e38e506..f58dd9c4ea 100644
+--- a/config/checkstyle_checks.xml
++++ b/config/checkstyle_checks.xml
+@@ -380,4 +380,31 @@
+   <module name="Translation">
+     <property name="requiredTranslations" value="de, fr, fi, es, pt, ja, tr"/>
+   </module>
++  <module name="SuppressWarningsFilter"/>
++  <module name="SeverityMatchFilter">
++    <!--
++      report all violations except ignore
++    -->
++    <property name="severity" value="ignore"/>
++    <property name="acceptOnMatch" value="false"/>
++  </module>
++  <module name="SuppressWithNearbyCommentFilter">
++    <!--
++      Use suppressions.xml for suppressions, this is only example.
++      checkFormat will prevent suppression comments from being valid.
++    -->
++    <property name="checkFormat" value="IGNORETHIS"/>
++    <property name="commentFormat" value="SUPPRESS CHECKSTYLE, (\w+)"/>
++    <property name="messageFormat" value="$1"/>
++    <property name="influenceFormat" value="-1"/>
++  </module>
++  <module name="SuppressionCommentFilter">
++    <!--
++      Use suppressions.xml for suppressions, this is only example.
++      checkFormat will prevent suppression comments from being valid.
++    -->
++    <property name="checkFormat" value="IGNORETHIS"/>
++    <property name="offCommentFormat" value="CSOFF\: .*"/>
++    <property name="onCommentFormat" value="CSON\: .*"/>
++  </module>
+ </module>
+diff --git a/config/suppressions.xml b/config/suppressions.xml
+index 311af6aa7a..fe18472f24 100644
+--- a/config/suppressions.xml
++++ b/config/suppressions.xml
+@@ -37,7 +37,7 @@
+               files="AbstractClassNameCheckTest.java|AbstractTypeAwareCheckTest.java|AbstractJavadocCheckTest.java|AbstractViolationReporterTest.java"/>
+ 
+     <!-- Tone down the checking for test code -->
+-    <suppress checks="CyclomaticComplexity" files="[\\/]XDocsPagesTest\.java" lines="322"/>
++    <suppress checks="CyclomaticComplexity" files="[\\/]XDocsPagesTest\.java" lines="320"/>
+     <suppress checks="EmptyBlock" files=".*[\\/]src[\\/]test[\\/]"/>
+     <suppress checks="ImportControl" files=".*[\\/]src[\\/](test|it)[\\/]"/>
+     <suppress checks="Javadoc" files=".*[\\/]src[\\/](test|it)[\\/]"/>
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/PackageNamesLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/PackageNamesLoader.java
+index 7941730ffa..414550b948 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/PackageNamesLoader.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/PackageNamesLoader.java
+@@ -132,7 +132,7 @@ public void endElement(String uri,
+     public static Set<String> getPackageNames(ClassLoader classLoader)
+             throws CheckstyleException {
+ 
+-        Set<String> result;
++        final Set<String> result;
+         try {
+             //create the loader outside the loop to prevent PackageObjectFactory
+             //being created anew for each file
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java b/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
+index 08ef8b9504..fb5ee5ee31 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
+@@ -345,7 +345,7 @@ private void processFiles(Checker checker, final SeverityLevelCounter warningCou
+                 + " files", Project.MSG_INFO);
+         log("Using configuration " + configLocation, Project.MSG_VERBOSE);
+ 
+-        int numErrs;
++        final int numErrs;
+ 
+         try {
+             final long processingStartTime = System.currentTimeMillis();
+@@ -380,7 +380,7 @@ private void processFiles(Checker checker, final SeverityLevelCounter warningCou
+      * @return new instance of {@code Checker}
+      */
+     private Checker createChecker() {
+-        Checker checker;
++        final Checker checker;
+         try {
+             final Properties props = createOverridingProperties();
+             final Configuration config =
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
+index da90b2f2ba..2eae4039bc 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
+@@ -306,7 +306,7 @@ private static boolean isAnnotationEmpty(List<String> values) {
+      * @return get target of annotation
+      */
+     private static DetailAST getAnnotationTarget(DetailAST ast) {
+-        DetailAST targetAST;
++        final DetailAST targetAST;
+         final DetailAST parentAST = ast.getParent();
+         switch (parentAST.getType()) {
+             case TokenTypes.MODIFIERS:
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
+index 9f54c756b1..40c3e35776 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
+@@ -20,13 +20,15 @@
+ package com.puppycrawl.tools.checkstyle.checks.annotation;
+ 
+ import java.util.regex.Matcher;
++import java.util.regex.Pattern;
+ 
+ import org.apache.commons.lang3.ArrayUtils;
+ 
++import com.puppycrawl.tools.checkstyle.api.Check;
+ import com.puppycrawl.tools.checkstyle.api.DetailAST;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+-import com.puppycrawl.tools.checkstyle.checks.AbstractFormatCheck;
+ import com.puppycrawl.tools.checkstyle.utils.AnnotationUtility;
++import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
+ 
+ /**
+  * <p>
+@@ -38,7 +40,7 @@
+  * </p>
+  *
+  * <p>
+- * The {@link AbstractFormatCheck#setFormat warnings} property is a
++ * The {@link #setFormat warnings} property is a
+  * regex pattern.  Any warning being suppressed matching
+  * this pattern will be flagged.
+  * </p>
+@@ -47,7 +49,7 @@
+  * By default, any warning specified will be disallowed on
+  * all legal TokenTypes unless otherwise specified via
+  * the
+- * {@link com.puppycrawl.tools.checkstyle.api.Check#setTokens(String[]) tokens}
++ * {@link Check#setTokens(String[]) tokens}
+  * property.
+  *
+  * Also, by default warnings that are empty strings or all
+@@ -89,7 +91,7 @@
+  * </pre>
+  * @author Travis Schneeberger
+  */
+-public class SuppressWarningsCheck extends AbstractFormatCheck {
++public class SuppressWarningsCheck extends Check {
+     /**
+      * A key is pointing to the warning message text in "messages.properties"
+      * file.
+@@ -107,12 +109,20 @@
+     private static final String FQ_SUPPRESS_WARNINGS =
+         "java.lang." + SUPPRESS_WARNINGS;
+ 
++    /** The format string of the regexp. */
++    private String format = "^$|^\\s+$";
++
++    /** The regexp to match against. */
++    private Pattern regexp = Pattern.compile(format);
++
+     /**
+-     * Ctor that specifies the default for the format property
+-     * as specified in the class javadocs.
++     * Set the format to the specified regular expression.
++     * @param format a {@code String} value
++     * @throws org.apache.commons.beanutils.ConversionException unable to parse format
+      */
+-    public SuppressWarningsCheck() {
+-        super("^$|^\\s+$");
++    public final void setFormat(String format) {
++        this.format = format;
++        regexp = CommonUtils.createPattern(format);
+     }
+ 
+     @Override
+@@ -234,7 +244,7 @@ private static DetailAST getSuppressWarnings(DetailAST ast) {
+      */
+     private void logMatch(final int lineNo,
+         final int colNum, final String warningText) {
+-        final Matcher matcher = getRegexp().matcher(warningText);
++        final Matcher matcher = regexp.matcher(warningText);
+         if (matcher.matches()) {
+             log(lineNo, colNum,
+                     MSG_KEY_SUPPRESSED_WARNING_NOT_ALLOWED, warningText);
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
+index ae1cfc1d94..fa2cf38de6 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
+@@ -37,11 +37,11 @@
+  * must be declared final.
+  * </p>
+  * <p>
+- * An example of how to configure the check is:
++ * An example of how to configure the check to validate variable definition is:
+  * </p>
+  * <pre>
+  * &lt;module name="FinalLocalVariable"&gt;
+- *     &lt;property name="token" value="VARIABLE_DEF"/&gt;
++ *     &lt;property name="tokens" value="VARIABLE_DEF"/&gt;
+  * &lt;/module&gt;
+  * </pre>
+  * <p>
+@@ -58,7 +58,7 @@
+  * </p>
+  * <pre>
+  * &lt;module name="FinalLocalVariable"&gt;
+- *     &lt;property name="token" value="VARIABLE_DEF"/&gt;
++ *     &lt;property name="tokens" value="VARIABLE_DEF"/&gt;
+  *     &lt;property name="validateEnhancedForLoopVariable" value="true"/&gt;
+  * &lt;/module&gt;
+  * </pre>
+@@ -71,6 +71,7 @@
+  * }
+  * </p>
+  * @author k_gibbs, r_auckenthaler
++ * @author Vladislav Lisetskiy
+  */
+ public class FinalLocalVariableCheck extends Check {
+ 
+@@ -81,7 +82,7 @@
+     public static final String MSG_KEY = "final.variable";
+ 
+     /**
+-     * Assign operators types.
++     * Assign operator types.
+      */
+     private static final int[] ASSIGN_OPERATOR_TYPES = {
+         TokenTypes.POST_INC,
+@@ -102,8 +103,17 @@
+         TokenTypes.DEC,
+     };
+ 
+-    /** Scope Stack. */
+-    private final Deque<Map<String, DetailAST>> scopeStack = new ArrayDeque<>();
++    /**
++     * Loop types.
++     */
++    private static final int[] LOOP_TYPES = {
++        TokenTypes.LITERAL_FOR,
++        TokenTypes.LITERAL_WHILE,
++        TokenTypes.LITERAL_DO,
++    };
++
++    /** Scope Deque. */
++    private final Deque<ScopeData> scopeStack = new ArrayDeque<>();
+ 
+     /** Controls whether to check enhanced for-loop variable. */
+     private boolean validateEnhancedForLoopVariable;
+@@ -111,6 +121,7 @@
+     static {
+         // Array sorting for binary search
+         Arrays.sort(ASSIGN_OPERATOR_TYPES);
++        Arrays.sort(LOOP_TYPES);
+     }
+ 
+     /**
+@@ -122,47 +133,38 @@ public final void setValidateEnhancedForLoopVariable(boolean validateEnhancedFor
+     }
+ 
+     @Override
+-    public int[] getDefaultTokens() {
++    public int[] getRequiredTokens() {
+         return new int[] {
+             TokenTypes.IDENT,
+             TokenTypes.CTOR_DEF,
+             TokenTypes.METHOD_DEF,
+-            TokenTypes.VARIABLE_DEF,
+-            TokenTypes.INSTANCE_INIT,
+-            TokenTypes.STATIC_INIT,
+-            TokenTypes.LITERAL_FOR,
+             TokenTypes.SLIST,
+             TokenTypes.OBJBLOCK,
+         };
+     }
+ 
+     @Override
+-    public int[] getAcceptableTokens() {
++    public int[] getDefaultTokens() {
+         return new int[] {
+             TokenTypes.IDENT,
+             TokenTypes.CTOR_DEF,
+             TokenTypes.METHOD_DEF,
+-            TokenTypes.VARIABLE_DEF,
+-            TokenTypes.INSTANCE_INIT,
+-            TokenTypes.STATIC_INIT,
+-            TokenTypes.LITERAL_FOR,
+             TokenTypes.SLIST,
+             TokenTypes.OBJBLOCK,
+-            TokenTypes.PARAMETER_DEF,
++            TokenTypes.VARIABLE_DEF,
+         };
+     }
+ 
+     @Override
+-    public int[] getRequiredTokens() {
++    public int[] getAcceptableTokens() {
+         return new int[] {
+             TokenTypes.IDENT,
+             TokenTypes.CTOR_DEF,
+             TokenTypes.METHOD_DEF,
+-            TokenTypes.INSTANCE_INIT,
+-            TokenTypes.STATIC_INIT,
+-            TokenTypes.LITERAL_FOR,
+             TokenTypes.SLIST,
+             TokenTypes.OBJBLOCK,
++            TokenTypes.VARIABLE_DEF,
++            TokenTypes.PARAMETER_DEF,
+         };
+     }
+ 
+@@ -171,12 +173,9 @@ public void visitToken(DetailAST ast) {
+         switch (ast.getType()) {
+             case TokenTypes.OBJBLOCK:
+             case TokenTypes.SLIST:
+-            case TokenTypes.LITERAL_FOR:
+             case TokenTypes.METHOD_DEF:
+             case TokenTypes.CTOR_DEF:
+-            case TokenTypes.STATIC_INIT:
+-            case TokenTypes.INSTANCE_INIT:
+-                scopeStack.push(new HashMap<String, DetailAST>());
++                scopeStack.push(new ScopeData());
+                 break;
+ 
+             case TokenTypes.PARAMETER_DEF:
+@@ -184,14 +183,14 @@ public void visitToken(DetailAST ast) {
+                         && !ast.branchContains(TokenTypes.FINAL)
+                         && !isInAbstractOrNativeMethod(ast)
+                         && !ScopeUtils.isInInterfaceBlock(ast)) {
+-                    insertVariable(ast);
++                    insertParameter(ast);
+                 }
+                 break;
+             case TokenTypes.VARIABLE_DEF:
+                 if (ast.getParent().getType() != TokenTypes.OBJBLOCK
++                        && !ast.branchContains(TokenTypes.FINAL)
+                         && !isVariableInForInit(ast)
+-                        && shouldCheckEnhancedForLoopVariable(ast)
+-                        && !ast.branchContains(TokenTypes.FINAL)) {
++                        && shouldCheckEnhancedForLoopVariable(ast)) {
+                     insertVariable(ast);
+                 }
+                 break;
+@@ -199,7 +198,7 @@ public void visitToken(DetailAST ast) {
+             case TokenTypes.IDENT:
+                 final int parentType = ast.getParent().getType();
+                 if (isAssignOperator(parentType)
+-                        && ast.getParent().getFirstChild() == ast) {
++                        && isFirstChild(ast)) {
+                     removeVariable(ast);
+                 }
+                 break;
+@@ -209,13 +208,22 @@ public void visitToken(DetailAST ast) {
+         }
+     }
+ 
+-    /**
+-     * Is Arithmetic operator.
+-     * @param parentType token AST
+-     * @return true is token type is in arithmetic operator
+-     */
+-    private static boolean isAssignOperator(int parentType) {
+-        return Arrays.binarySearch(ASSIGN_OPERATOR_TYPES, parentType) >= 0;
++    @Override
++    public void leaveToken(DetailAST ast) {
++        switch (ast.getType()) {
++            case TokenTypes.OBJBLOCK:
++            case TokenTypes.SLIST:
++            case TokenTypes.CTOR_DEF:
++            case TokenTypes.METHOD_DEF:
++                final Map<String, DetailAST> scope = scopeStack.pop().scope;
++                for (DetailAST node : scope.values()) {
++                    log(node.getLineNo(), node.getColumnNo(), MSG_KEY, node
++                        .getText());
++                }
++                break;
++            default:
++                // do nothing
++        }
+     }
+ 
+     /**
+@@ -228,6 +236,100 @@ private boolean shouldCheckEnhancedForLoopVariable(DetailAST ast) {
+                 || ast.getParent().getType() != TokenTypes.FOR_EACH_CLAUSE;
+     }
+ 
++    /**
++     * Insert a parameter at the topmost scope stack.
++     * @param ast the variable to insert.
++     */
++    private void insertParameter(DetailAST ast) {
++        final Map<String, DetailAST> scope = scopeStack.peek().scope;
++        final DetailAST astNode = ast.findFirstToken(TokenTypes.IDENT);
++        scope.put(astNode.getText(), astNode);
++    }
++
++    /**
++     * Insert a variable at the topmost scope stack.
++     * @param ast the variable to insert.
++     */
++    private void insertVariable(DetailAST ast) {
++        final Map<String, DetailAST> scope = scopeStack.peek().scope;
++        final DetailAST astNode = ast.findFirstToken(TokenTypes.IDENT);
++        scope.put(astNode.getText(), astNode);
++        if (!isInitialized(astNode)) {
++            scopeStack.peek().uninitializedVariables.add(astNode);
++        }
++    }
++
++    /**
++     * Check if VARIABLE_DEF is initialized or not.
++     * @param ast VARIABLE_DEF to be checked
++     * @return true if initialized
++     */
++    private static boolean isInitialized(DetailAST ast) {
++        return ast.getParent().getLastChild().getType() == TokenTypes.ASSIGN;
++    }
++
++    /**
++     * Whether the ast is the first child of its parent.
++     * @param ast the ast to check.
++     * @return true if the ast is the first child of its parent.
++     */
++    private static boolean isFirstChild(DetailAST ast) {
++        return ast.getPreviousSibling() == null;
++    }
++
++    /**
++     * Remove the variable from the Stack.
++     * @param ast Variable to remove
++     */
++    private void removeVariable(DetailAST ast) {
++        final Iterator<ScopeData> iterator = scopeStack.descendingIterator();
++        while (iterator.hasNext()) {
++            final ScopeData scopeData = iterator.next();
++            final Map<String, DetailAST> scope = scopeData.scope;
++            final DetailAST storedVariable = scope.get(ast.getText());
++            if (storedVariable != null && isSameVariables(storedVariable, ast)) {
++                if (shouldRemoveVariable(scopeData, ast)) {
++                    scope.remove(ast.getText());
++                }
++                break;
++            }
++        }
++    }
++
++    /**
++     * Whether the variable should be removed from the list of final local variable
++     * candidates.
++     * @param scopeData the scope data of the variable.
++     * @param ast the variable ast.
++     * @return true, if the variable should be removed.
++     */
++    private boolean shouldRemoveVariable(ScopeData scopeData, DetailAST ast) {
++        boolean shouldRemove = true;
++        for (DetailAST variable : scopeData.uninitializedVariables) {
++            if (variable.getText().equals(ast.getText())) {
++
++                // if the variable is declared outside the loop and initialized inside
++                // the loop, then it cannot be declared final, as it can be initialized
++                // more than once in this case
++                if (isInTheSameLoop(variable, ast)) {
++                    shouldRemove = false;
++                }
++                scopeData.uninitializedVariables.remove(variable);
++                break;
++            }
++        }
++        return shouldRemove;
++    }
++
++    /**
++     * Is Arithmetic operator.
++     * @param parentType token AST
++     * @return true is token type is in arithmetic operator
++     */
++    private static boolean isAssignOperator(int parentType) {
++        return Arrays.binarySearch(ASSIGN_OPERATOR_TYPES, parentType) >= 0;
++    }
++
+     /**
+      * Checks if current variable is defined in
+      *  {@link TokenTypes#FOR_INIT for-loop init}, e.g.:
+@@ -274,87 +376,71 @@ private static boolean isInLambda(DetailAST paramDef) {
+     }
+ 
+     /**
+-     * Find the Class or Constructor or Method in which it is defined.
++     * Find the Class, Constructor, Enum or Method in which it is defined.
+      * @param ast Variable for which we want to find the scope in which it is defined
+      * @return ast The Class or Constructor or Method in which it is defined.
+      */
+-    private static DetailAST findClassOrConstructorOrMethodInWhichItIsDefined(DetailAST ast) {
++    private static DetailAST findFirstUpperNamedBlock(DetailAST ast) {
+         DetailAST astTraverse = ast;
+-        while (!(astTraverse.getType() == TokenTypes.METHOD_DEF
+-                || astTraverse.getType() == TokenTypes.CLASS_DEF
+-                || astTraverse.getType() == TokenTypes.ENUM_DEF
+-                || astTraverse.getType() == TokenTypes.CTOR_DEF)) {
++        while (astTraverse.getType() != TokenTypes.METHOD_DEF
++                && astTraverse.getType() != TokenTypes.CLASS_DEF
++                && astTraverse.getType() != TokenTypes.ENUM_DEF
++                && astTraverse.getType() != TokenTypes.CTOR_DEF) {
+             astTraverse = astTraverse.getParent();
+         }
+         return astTraverse;
+     }
+ 
+     /**
+-     * Check if both the Variable are same.
++     * Check if both the Variables are same.
+      * @param ast1 Variable to compare
+      * @param ast2 Variable to compare
+-     * @return true if both the variable are same, otherwise false
++     * @return true if both the variables are same, otherwise false
+      */
+     private static boolean isSameVariables(DetailAST ast1, DetailAST ast2) {
+         final DetailAST classOrMethodOfAst1 =
+-            findClassOrConstructorOrMethodInWhichItIsDefined(ast1);
++            findFirstUpperNamedBlock(ast1);
+         final DetailAST classOrMethodOfAst2 =
+-            findClassOrConstructorOrMethodInWhichItIsDefined(ast2);
+-
+-        final String identifierOfAst1 =
+-            classOrMethodOfAst1.findFirstToken(TokenTypes.IDENT).getText();
+-        final String identifierOfAst2 =
+-            classOrMethodOfAst2.findFirstToken(TokenTypes.IDENT).getText();
+-
+-        return identifierOfAst1.equals(identifierOfAst2);
++            findFirstUpperNamedBlock(ast2);
++        return classOrMethodOfAst1 == classOrMethodOfAst2;
+     }
+ 
+     /**
+-     * Inserts a variable at the topmost scope stack.
+-     * @param ast the variable to insert
++     * Check if both the variables are in the same loop.
++     * @param ast1 variable to compare.
++     * @param ast2 variable to compare.
++     * @return true if both the variables are in the same loop.
+      */
+-    private void insertVariable(DetailAST ast) {
+-        final Map<String, DetailAST> state = scopeStack.peek();
+-        final DetailAST astNode = ast.findFirstToken(TokenTypes.IDENT);
+-        state.put(astNode.getText(), astNode);
++    private static boolean isInTheSameLoop(DetailAST ast1, DetailAST ast2) {
++        DetailAST loop1 = ast1.getParent();
++        while (loop1 != null && !isLoopAst(loop1.getType())) {
++            loop1 = loop1.getParent();
++        }
++        DetailAST loop2 = ast2.getParent();
++        while (loop2 != null && !isLoopAst(loop2.getType())) {
++            loop2 = loop2.getParent();
++        }
++        return loop1 == null && loop2 == null
++                || loop1 != null && loop1 == loop2;
+     }
+ 
+     /**
+-     * Removes the variable from the Stacks.
+-     * @param ast Variable to remove
++     * Checks whether the ast is a loop.
++     * @param ast the ast to check.
++     * @return true if the ast is a loop.
+      */
+-    private void removeVariable(DetailAST ast) {
+-        final Iterator<Map<String, DetailAST>> iterator = scopeStack.descendingIterator();
+-        while (iterator.hasNext()) {
+-            final Map<String, DetailAST> state = iterator.next();
+-            final DetailAST storedVariable = state.get(ast.getText());
+-            if (storedVariable != null && isSameVariables(storedVariable, ast)) {
+-                state.remove(ast.getText());
+-                break;
+-            }
+-        }
++    private static boolean isLoopAst(int ast) {
++        return Arrays.binarySearch(LOOP_TYPES, ast) >= 0;
+     }
+ 
+-    @Override
+-    public void leaveToken(DetailAST ast) {
+-        super.leaveToken(ast);
+-
+-        switch (ast.getType()) {
+-            case TokenTypes.OBJBLOCK:
+-            case TokenTypes.SLIST:
+-            case TokenTypes.LITERAL_FOR:
+-            case TokenTypes.CTOR_DEF:
+-            case TokenTypes.STATIC_INIT:
+-            case TokenTypes.INSTANCE_INIT:
+-            case TokenTypes.METHOD_DEF:
+-                final Map<String, DetailAST> state = scopeStack.pop();
+-                for (DetailAST node : state.values()) {
+-                    log(node.getLineNo(), node.getColumnNo(), MSG_KEY, node
+-                        .getText());
+-                }
+-                break;
++    /**
++     * Holder for the scope data.
++     */
++    private static class ScopeData {
++        /** Contains variable definitions. */
++        private final Map<String, DetailAST> scope = new HashMap<>();
+ 
+-            default:
+-        }
++        /** Contains definitions of uninitialized variables. */
++        private final Deque<DetailAST> uninitializedVariables = new ArrayDeque<>();
+     }
+ }
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
+index 26184214af..bb9f6598a3 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
+@@ -23,13 +23,15 @@
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Set;
++import java.util.regex.Pattern;
+ 
+ import com.google.common.collect.Sets;
++import com.puppycrawl.tools.checkstyle.api.Check;
+ import com.puppycrawl.tools.checkstyle.api.DetailAST;
+ import com.puppycrawl.tools.checkstyle.api.FullIdent;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+-import com.puppycrawl.tools.checkstyle.checks.AbstractFormatCheck;
+ import com.puppycrawl.tools.checkstyle.utils.CheckUtils;
++import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
+ import com.puppycrawl.tools.checkstyle.utils.TokenUtils;
+ 
+ /**
+@@ -89,7 +91,7 @@
+  * @author <a href="mailto:nesterenko-aleksey@list.ru">Aleksey Nesterenko</a>
+  * @author <a href="mailto:andreyselkin@gmail.com">Andrei Selkin</a>
+  */
+-public final class IllegalTypeCheck extends AbstractFormatCheck {
++public final class IllegalTypeCheck extends Check {
+ 
+     /**
+      * A key is pointing to the warning message text in "messages.properties"
+@@ -97,8 +99,6 @@
+      */
+     public static final String MSG_KEY = "illegal.type";
+ 
+-    /** Default value of pattern for illegal class name. */
+-    private static final String DEFAULT_FORMAT = "^(.*[\\.])?Abstract.*$";
+     /** Abstract classes legal by default. */
+     private static final String[] DEFAULT_LEGAL_ABSTRACT_NAMES = {};
+     /** Types illegal by default. */
+@@ -132,6 +132,12 @@
+     /** Check methods and fields with only corresponding modifiers. */
+     private List<Integer> memberModifiers;
+ 
++    /** The format string of the regexp. */
++    private String format = "^(.*[\\.])?Abstract.*$";
++
++    /** The regexp to match against. */
++    private Pattern regexp = Pattern.compile(format);
++
+     /**
+      * Controls whether to validate abstract class names.
+      */
+@@ -139,12 +145,21 @@
+ 
+     /** Creates new instance of the check. */
+     public IllegalTypeCheck() {
+-        super(DEFAULT_FORMAT);
+         setIllegalClassNames(DEFAULT_ILLEGAL_TYPES);
+         setLegalAbstractClassNames(DEFAULT_LEGAL_ABSTRACT_NAMES);
+         setIgnoredMethodNames(DEFAULT_IGNORED_METHOD_NAMES);
+     }
+ 
++    /**
++     * Set the format to the specified regular expression.
++     * @param format a {@code String} value
++     * @throws org.apache.commons.beanutils.ConversionException unable to parse format
++     */
++    public void setFormat(String format) {
++        this.format = format;
++        regexp = CommonUtils.createPattern(format);
++    }
++
+     /**
+      * Sets whether to validate abstract class names.
+      * @param validateAbstractClassNames whether abstract class names must be ignored.
+@@ -325,7 +340,7 @@ private boolean isMatchingClassName(String className) {
+                 || illegalClassNames.contains(shortName)
+                 || validateAbstractClassNames
+                     && !legalAbstractClassNames.contains(className)
+-                    && getRegexp().matcher(className).find();
++                    && regexp.matcher(className).find();
+     }
+ 
+     /**
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlLoader.java
+index 878d5879b6..95c09a3f0b 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlLoader.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlLoader.java
+@@ -143,7 +143,7 @@ public void endElement(final String namespaceURI, final String localName,
+      * @throws CheckstyleException if an error occurs.
+      */
+     static PkgControl load(final URI uri) throws CheckstyleException {
+-        InputStream inputStream;
++        final InputStream inputStream;
+         try {
+             inputStream = uri.toURL().openStream();
+         }
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
+index c8ccf233f6..e2f388c918 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
+@@ -37,7 +37,8 @@
+  * </p>
+  *
+  * <p>
+- * Import statements (lines matching pattern {@code ^import .*}) are not verified by this check.
++ * Package statements and import statements (lines matching pattern
++ * {@code ^(package|import) .*}), and are not verified by this check.
+  * </p>
+  * <p>
+  * The default maximum allowable line length is 80 characters. To change the
+@@ -84,8 +85,8 @@
+     /** Default maximum number of columns in a line. */
+     private static final int DEFAULT_MAX_COLUMNS = 80;
+ 
+-    /** Pattern matching import and import static statements. */
+-    private static final Pattern IMPORT_PATTERN = Pattern.compile("^import .*");
++    /** Patterns matching package, import, and import static statements. */
++    private static final Pattern IGNORE_PATTERN = Pattern.compile("^(package|import) .*");
+ 
+     /** The maximum number of columns in a line. */
+     private int max = DEFAULT_MAX_COLUMNS;
+@@ -124,7 +125,7 @@ public void beginTree(DetailAST rootAST) {
+             final int realLength = CommonUtils.lengthExpandedTabs(
+                 line, line.length(), getTabWidth());
+ 
+-            if (realLength > max && !IMPORT_PATTERN.matcher(line).find()
++            if (realLength > max && !IGNORE_PATTERN.matcher(line).find()
+                 && !ignorePattern.matcher(line).find()) {
+                 log(i + 1, MSG_KEY, max, realLength);
+             }
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
+index 70bdd86dac..dfcee3c431 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
+@@ -333,7 +333,7 @@ public Tag(String text, int line, SuppressWithNearbyCommentFilter filter) {
+                 }
+                 format = CommonUtils.fillTemplateWithStringsByRegexp(
+                         filter.influenceFormat, text, filter.commentRegexp);
+-                int influence;
++                final int influence;
+                 try {
+                     if (CommonUtils.startsWithChar(format, '+')) {
+                         format = format.substring(1);
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
+index 7e53d5dbb1..091e063206 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
+@@ -191,13 +191,6 @@ public void testAllCheckstyleModulesInCheckstyleConfig() throws Exception {
+         final Set<String> configChecks = getCheckStyleChecksReferencedInConfig(CONFIG_PATH);
+ 
+         for (String moduleName : getSimpleNames(getCheckstyleModules())) {
+-            if ("SuppressionCommentFilter".equals(moduleName)
+-                || "SeverityMatchFilter".equals(moduleName)
+-                || "SuppressWithNearbyCommentFilter".equals(moduleName)
+-                || "SuppressWarningsFilter".equals(moduleName)) {
+-                continue;
+-            }
+-
+             Assert.assertTrue("checkstyle_checks.xml is missing module: " + moduleName,
+                     configChecks.contains(moduleName));
+         }
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
+index 20b4e4b067..0ffb433da3 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
+@@ -109,11 +109,9 @@
+     private static final Set<String> FILESET_PROPERTIES = getProperties(AbstractFileSetCheck.class);
+ 
+     private static final List<String> UNDOCUMENTED_PROPERTIES = Arrays.asList(
+-            "SuppressWarningsCheck.compileFlags",
+             "SuppressWithNearbyCommentFilter.fileContents",
+             "IllegalTokenTextCheck.compileFlags",
+             "ReturnCountCheck.compileFlags",
+-            "IllegalTypeCheck.compileFlags",
+             "MutableExceptionCheck.compileFlags",
+             "AbstractClassNameCheck.compileFlags",
+             "ClassTypeParameterNameCheck.compileFlags",
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
+index 2f4d8bed59..75ffd85d03 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
+@@ -39,7 +39,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class AnnotationUseStyleTest extends BaseCheckTestSupport {
++public class AnnotationUseStyleCheckTest extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+         return super.getPath("checks" + File.separator
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
+index f60d47e849..e36b839718 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
+@@ -34,7 +34,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class MissingDeprecatedTest extends BaseCheckTestSupport {
++public class MissingDeprecatedCheckTest extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+         return super.getPath("checks" + File.separator
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationCheckTest.java
+similarity index 97%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationCheckTest.java
+index cd0074166d..a383b1cf3f 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationCheckTest.java
+@@ -30,7 +30,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class PackageAnnotationTest extends BaseCheckTestSupport {
++public class PackageAnnotationCheckTest extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+         return super.getPath("checks" + File.separator
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheckTest.java
+index 0c12b07953..ee3bec32cc 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheckTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheckTest.java
+@@ -71,6 +71,15 @@ public void testDefault() throws Exception {
+             "96:17: " + getCheckMessage(MSG_KEY, "weird"),
+             "97:17: " + getCheckMessage(MSG_KEY, "j"),
+             "98:17: " + getCheckMessage(MSG_KEY, "k"),
++            "185:13: " + getCheckMessage(MSG_KEY, "x"),
++            "190:17: " + getCheckMessage(MSG_KEY, "x"),
++            "210:17: " + getCheckMessage(MSG_KEY, "n"),
++            "216:13: " + getCheckMessage(MSG_KEY, "q"),
++            "217:13: " + getCheckMessage(MSG_KEY, "w"),
++            "226:21: " + getCheckMessage(MSG_KEY, "w"),
++            "227:21: " + getCheckMessage(MSG_KEY, "e"),
++            "247:17: " + getCheckMessage(MSG_KEY, "n"),
++            "259:17: " + getCheckMessage(MSG_KEY, "t"),
+         };
+         verify(checkConfig, getPath("InputFinalLocalVariable.java"), expected);
+     }
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportCheckTest.java
+index 409078b28c..f1d287b774 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportCheckTest.java
+@@ -31,7 +31,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class AvoidStarImportTest
++public class AvoidStarImportCheckTest
+     extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportCheckTest.java
+index d6a043fecc..2db80505d9 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportCheckTest.java
+@@ -31,7 +31,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class AvoidStaticImportTest
++public class AvoidStaticImportCheckTest
+     extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheckTest.java
+index 217899ceb6..3f08002ec8 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheckTest.java
+@@ -32,7 +32,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class RedundantModifierTest
++public class RedundantModifierCheckTest
+     extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypeParameterNameTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypeParameterNameTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
+index 2aa2133a91..5de40a3eb5 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypeParameterNameTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
+@@ -31,7 +31,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class TypeParameterNameTest
++public class ClassTypeParameterNameCheckTest
+     extends BaseCheckTestSupport {
+     @Override
+     protected String getPath(String filename) throws IOException {
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
+index 2e0f2063ff..ec447e8f77 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
+@@ -38,6 +38,12 @@ protected String getPath(String filename) throws IOException {
+                 + "sizes" + File.separator + filename);
+     }
+ 
++    @Override
++    protected String getNonCompilablePath(String filename) throws IOException {
++        return super.getNonCompilablePath("checks" + File.separator
++                + "sizes" + File.separator + filename);
++    }
++
+     @Test
+     public void testGetRequiredTokens() {
+         final LineLengthCheck checkObj = new LineLengthCheck();
+@@ -89,4 +95,15 @@ public void shouldNotLogLongImportStatements() throws Exception {
+         };
+         verify(checkConfig, getPath("InputLongImportStatements.java"), expected);
+     }
++
++    @Test
++    public void shouldNotLogLongPackageStatements() throws Exception {
++        final DefaultConfiguration checkConfig =
++            createCheckConfig(LineLengthCheck.class);
++        checkConfig.addAttribute("max", "80");
++        final String[] expected = {
++            "6: " + getCheckMessage(MSG_KEY, 80, 88),
++        };
++        verify(checkConfig, getNonCompilablePath("InputLongPackageStatement.java"), expected);
++    }
+ }
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
+similarity index 99%
+rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundTest.java
+rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
+index 836d2681f7..4305a37c09 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
+@@ -34,7 +34,7 @@
+ import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
+ 
+-public class WhitespaceAroundTest
++public class WhitespaceAroundCheckTest
+     extends BaseCheckTestSupport {
+     private DefaultConfiguration checkConfig;
+ 
+diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java
+new file mode 100644
+index 0000000000..a14b0640f8
+--- /dev/null
++++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java
+@@ -0,0 +1,8 @@
++package com.nameofcompany.nameofdivision.nameofproject.systemtests.parallel.areaoftest.featuretested.flowtested;
++
++public class InputLongImportStatements {
++    @Override
++    public String toString() {
++        return "This is very long line that should be logged because it is not package";
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
+index c4c73db2c2..5d2513e0c0 100644
+--- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
+@@ -179,3 +179,85 @@ public class1(final int x){
+         var = 1;
+     }
+ }
++
++class class2 {
++    public void method1(){
++        int x;
++        x = 3;
++    }
++    public void method2() {
++        for(int i=0;i<5;i++){
++            int x;
++            x = 3;
++        }
++        int y;
++        for(int i=0;i<5;i++) {
++            y = 3;
++        }
++        for(int i=0;i<5;i++) {
++            int z;
++            for(int j=0;j<5;j++) {
++                z = 3;
++            }
++        }
++    }
++    public void method3() {
++        int m;
++        do {
++           m = 0;
++        } while (false);
++        do {
++            int n;
++           n = 0;
++        } while (true);        
++    }
++
++    private void foo() {
++        int q;
++        int w;
++        int e;
++        q = 1;
++        w = 1;
++        e = 1;
++        e = 2;
++        class Local {
++            void bar() {
++                int q;
++                int w;
++                int e;
++                q = 1;
++                q = 2;
++                w = 1;
++                e = 1;
++            }
++        }
++
++        int i;
++        for (;; i = 1) { }
++    }
++
++    public void method4() {
++        int m;
++        int i = 5;
++        while (i > 1) {
++            m = 0;
++            i++;
++        }
++        while (true) {
++            int n;
++            n = 0;
++        }
++    }
++
++    int[] array = new int[10];
++    public void method5() {
++        int r;
++        for (int a: array) {
++            r = 0;
++        }
++        for (int a: array) {
++            int t;
++            t = 0;
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/src/xdocs/config_filters.xml b/src/xdocs/config_filters.xml
+index 12f29003ff..32832a2bca 100644
+--- a/src/xdocs/config_filters.xml
++++ b/src/xdocs/config_filters.xml
+@@ -73,6 +73,12 @@
+           </source>
+       </subsection>
+       <subsection name="Example of Usage">
++        <ul>
++          <li>
++            <a href="https://github.com/checkstyle/checkstyle/blob/master/config/checkstyle_checks.xml#L384-L390">
++            Checkstyle Style</a>
++          </li>
++        </ul>
+       </subsection>
+       <subsection name="Package">
+         <p> com.puppycrawl.tools.checkstyle.filters </p>
+@@ -528,6 +534,12 @@ HashSet hashSet; // Warning here: Declaring variables, return values or paramete
+           </source>
+       </subsection>
+       <subsection name="Example of Usage">
++        <ul>
++          <li>
++            <a href="https://github.com/checkstyle/checkstyle/blob/master/config/checkstyle_checks.xml#L401-L409">
++            Checkstyle Style</a>
++          </li>
++        </ul>
+       </subsection>
+       <subsection name="Package">
+         <p> com.puppycrawl.tools.checkstyle.filters </p>
+@@ -713,6 +725,12 @@ public static final int [] array; // @cs.suppress ConstantName | NoWhitespaceAft
+             </source>
+         </subsection>
+         <subsection name="Example of Usage">
++        <ul>
++          <li>
++            <a href="https://github.com/checkstyle/checkstyle/blob/master/config/checkstyle_checks.xml#L391-L400">
++            Checkstyle Style</a>
++          </li>
++        </ul>
+         </subsection>
+         <subsection name="Package">
+             <p> com.puppycrawl.tools.checkstyle.filters </p>
+@@ -774,6 +792,12 @@ private int [] ARRAY; // should NOT fail MemberNameCheck and NoWhitespaceAfterCh
+           </source>
+       </subsection>
+       <subsection name="Example of Usage">
++        <ul>
++          <li>
++            <a href="https://github.com/checkstyle/checkstyle/blob/master/config/checkstyle_checks.xml#L383">
++            Checkstyle Style</a>
++          </li>
++        </ul>
+       </subsection>
+       <subsection name="Package">
+         <p> com.puppycrawl.tools.checkstyle.filters </p>
+diff --git a/src/xdocs/config_sizes.xml b/src/xdocs/config_sizes.xml
+index 64bd09a1ae..9936f6ed08 100644
+--- a/src/xdocs/config_sizes.xml
++++ b/src/xdocs/config_sizes.xml
+@@ -245,7 +245,7 @@
+             property <code>tabWidth</code> for <code>LineLength</code> alone.
+           </li>
+           <li>
+-            Import statements (lines matching pattern <code>^import .*</code>) are not verified by
++            Package and import statements (lines matching pattern <code>^(package|import) .*</code>) are not verified by
+             this check.
+           </li>
+         </ul>

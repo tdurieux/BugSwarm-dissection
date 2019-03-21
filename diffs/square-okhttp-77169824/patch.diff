@@ -1,0 +1,770 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index a9cd519e0..00ad4c393 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,55 @@
+ Change Log
+ ==========
+ 
++## Version 2.5.0
++
++_2015-08-25_
++
++ *  **Timeouts now default to 10 seconds.** Previously we defaulted to never
++    timing out, and that was a lousy policy. If establishing a connection,
++    reading the next byte from a connection, or writing the next byte to a
++    connection takes more than 10 seconds to complete, you’ll need to adjust
++    the timeouts manually.
++
++ *  **OkHttp now rejects request headers that contain invalid characters.** This
++    includes potential security problems (newline characters) as well as simple
++    non-ASCII characters (including international characters and emoji).
++
++ *  **Call canceling is more reliable.**  We had a bug where a socket being
++     connected wasn't being closed when the application used `Call.cancel()`.
++
++ *  **Changing a HttpUrl’s scheme now tracks the default port.** We had a bug
++    where changing a URL from `http` to `https` would leave it on port 80.
++
++ *  **Okio has been updated to 1.6.0.**
++     ```
++     <dependency>
++       <groupId>com.squareup.okio</groupId>
++       <artifactId>okio</artifactId>
++       <version>1.6.0</version>
++     </dependency>
++     ```
++
++ *  New: `Cache.initialize()`. Call this on a background thread to eagerly
++    initialize the response cache.
++ *  New: Fold `MockWebServerRule` into `MockWebServer`. This makes it easier to
++    write JUnit tests with `MockWebServer`. The `MockWebServer` library now
++    depends on JUnit, though it continues to work with all testing frameworks.
++ *  Fix: `FormEncodingBuilder` is now consistent with browsers in which
++    characters it escapes. Previously we weren’t percent-encoding commas,
++    parens, and other characters.
++ *  Fix: Relax `FormEncodingBuilder` to support building empty forms.
++ *  Fix: Timeouts throw `SocketTimeoutException`, not `InterruptedIOException`.
++ *  Fix: Change `MockWebServer` to use the same logic as OkHttp when determining
++    whether an HTTP request permits a body.
++ *  Fix: `HttpUrl` now uses the canonical form for IPv6 addresses.
++ *  Fix: Use `HttpUrl` internally.
++ *  Fix: Recover from Android 4.2.2 EBADF crashes.
++ *  Fix: Don't crash with an `IllegalStateException` if an HTTP/2 or SPDY
++    write fails, leaving the connection in an inconsistent state.
++ *  Fix: Make sure the default user agent is ASCII.
++
++
+ ## Version 2.4.0
+ 
+ _2015-05-22_
+diff --git a/README.md b/README.md
+index 6e010257b..4fde155df 100644
+--- a/README.md
++++ b/README.md
+@@ -11,12 +11,12 @@ Download [the latest JAR][3] or grab via Maven:
+ <dependency>
+   <groupId>com.squareup.okhttp</groupId>
+   <artifactId>okhttp</artifactId>
+-  <version>2.4.0</version>
++  <version>2.5.0</version>
+ </dependency>
+ ```
+ or Gradle:
+ ```groovy
+-compile 'com.squareup.okhttp:okhttp:2.4.0'
++compile 'com.squareup.okhttp:okhttp:2.5.0'
+ ```
+ 
+ Snapshots of the development version are available in [Sonatype's `snapshots` repository][snap].
+@@ -36,13 +36,13 @@ Download [the latest JAR][4] or grab via Maven:
+ <dependency>
+   <groupId>com.squareup.okhttp</groupId>
+   <artifactId>mockwebserver</artifactId>
+-  <version>2.4.0</version>
++  <version>2.5.0</version>
+   <scope>test</scope>
+ </dependency>
+ ```
+ or Gradle:
+ ```groovy
+-testCompile 'com.squareup.okhttp:mockwebserver:2.4.0'
++testCompile 'com.squareup.okhttp:mockwebserver:2.5.0'
+ ```
+ 
+ 
+diff --git a/benchmarks/pom.xml b/benchmarks/pom.xml
+index a56c4112d..d0d256652 100644
+--- a/benchmarks/pom.xml
++++ b/benchmarks/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>benchmarks</artifactId>
+diff --git a/mockwebserver/README.md b/mockwebserver/README.md
+index 00a3b0f54..3fd6ca6e9 100644
+--- a/mockwebserver/README.md
++++ b/mockwebserver/README.md
+@@ -42,7 +42,7 @@ public void test() throws Exception {
+   server.start();
+ 
+   // Ask the server for its URL. You'll need this to make HTTP requests.
+-  URL baseUrl = server.getUrl("/v1/chat/");
++  URL baseUrl = server.url("/v1/chat/");
+ 
+   // Exercise your application code, which should make those HTTP requests.
+   // Responses are returned in the same order that they are enqueued.
+diff --git a/mockwebserver/pom.xml b/mockwebserver/pom.xml
+index 3d5c842f8..9ef5211d1 100644
+--- a/mockwebserver/pom.xml
++++ b/mockwebserver/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>mockwebserver</artifactId>
+diff --git a/okcurl/pom.xml b/okcurl/pom.xml
+index 70cab20dd..e80d121ea 100644
+--- a/okcurl/pom.xml
++++ b/okcurl/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okcurl</artifactId>
+diff --git a/okhttp-android-support/pom.xml b/okhttp-android-support/pom.xml
+index 5453b955d..f51480830 100644
+--- a/okhttp-android-support/pom.xml
++++ b/okhttp-android-support/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-android-support</artifactId>
+diff --git a/okhttp-apache/pom.xml b/okhttp-apache/pom.xml
+index 70722835f..74ff837b6 100644
+--- a/okhttp-apache/pom.xml
++++ b/okhttp-apache/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-apache</artifactId>
+diff --git a/okhttp-testing-support/pom.xml b/okhttp-testing-support/pom.xml
+index 2b19defa4..654b0e39e 100644
+--- a/okhttp-testing-support/pom.xml
++++ b/okhttp-testing-support/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-testing-support</artifactId>
+diff --git a/okhttp-tests/pom.xml b/okhttp-tests/pom.xml
+index ae31be751..2bb198258 100644
+--- a/okhttp-tests/pom.xml
++++ b/okhttp-tests/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-tests</artifactId>
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/HttpUrlTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/HttpUrlTest.java
+index b281069f5..66288a198 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/HttpUrlTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/HttpUrlTest.java
+@@ -17,8 +17,10 @@
+ 
+ import com.squareup.okhttp.UrlComponentEncodingTester.Component;
+ import com.squareup.okhttp.UrlComponentEncodingTester.Encoding;
++import java.net.MalformedURLException;
+ import java.net.URI;
+ import java.net.URL;
++import java.net.UnknownHostException;
+ import java.util.Arrays;
+ import java.util.Collections;
+ import java.util.LinkedHashSet;
+@@ -949,6 +951,27 @@
+     assertEquals(null, HttpUrl.get(uri));
+   }
+ 
++  @Test public void fromJavaNetUrl_checked() throws Exception {
++    HttpUrl httpUrl = HttpUrl.getChecked("http://username:password@host/path?query#fragment");
++    assertEquals("http://username:password@host/path?query#fragment", httpUrl.toString());
++  }
++
++  @Test public void fromJavaNetUrlUnsupportedScheme_checked() throws Exception {
++    try {
++      HttpUrl.getChecked("mailto:user@example.com");
++      fail();
++    } catch (MalformedURLException e) {
++    }
++  }
++
++  @Test public void fromJavaNetUrlBadHost_checked() throws Exception {
++    try {
++      HttpUrl.getChecked("http://hostw ithspace/");
++      fail();
++    } catch (UnknownHostException expected) {
++    }
++  }
++
+   @Test public void composeQueryWithComponents() throws Exception {
+     HttpUrl base = HttpUrl.parse("http://host/");
+     HttpUrl url = base.newBuilder().addQueryParameter("a+=& b", "c+=& d").build();
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
+index 2ea599707..65c1c057a 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
+@@ -3178,6 +3178,37 @@ private void zeroLengthPayload(String method)
+     assertContent("abc", client.open(server.getUrl("/")));
+   }
+ 
++  @Test public void urlWithSpaceInHost() throws Exception {
++    URLConnection urlConnection = client.open(new URL("http://and roid.com/"));
++    try {
++      urlConnection.getInputStream();
++      fail();
++    } catch (UnknownHostException expected) {
++    }
++  }
++
++  @Test public void urlWithSpaceInHostViaHttpProxy() throws Exception {
++    server.enqueue(new MockResponse());
++    URLConnection urlConnection =
++        client.open(new URL("http://and roid.com/"), server.toProxyAddress());
++
++    try {
++      // This test is to check that a NullPointerException is not thrown.
++      urlConnection.getInputStream();
++      fail(); // the RI makes a bogus proxy request for "GET http://and roid.com/ HTTP/1.1"
++    } catch (UnknownHostException expected) {
++    }
++  }
++
++  @Test public void urlHostWithNul() throws Exception {
++    URLConnection urlConnection = client.open(new URL("http://host\u0000/"));
++    try {
++      urlConnection.getInputStream();
++      fail();
++    } catch (UnknownHostException expected) {
++    }
++  }
++
+   /** Returns a gzipped copy of {@code bytes}. */
+   public Buffer gzip(String data) throws IOException {
+     Buffer result = new Buffer();
+diff --git a/okhttp-urlconnection/pom.xml b/okhttp-urlconnection/pom.xml
+index 7b7ee3f96..be60560ad 100644
+--- a/okhttp-urlconnection/pom.xml
++++ b/okhttp-urlconnection/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-urlconnection</artifactId>
+diff --git a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
+index 8db26d75f..1cddd3ecb 100644
+--- a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
++++ b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
+@@ -46,10 +46,12 @@
+ import java.net.HttpRetryException;
+ import java.net.HttpURLConnection;
+ import java.net.InetSocketAddress;
++import java.net.MalformedURLException;
+ import java.net.ProtocolException;
+ import java.net.Proxy;
+ import java.net.SocketPermission;
+ import java.net.URL;
++import java.net.UnknownHostException;
+ import java.security.Permission;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+@@ -321,14 +323,16 @@ private void initHttpEngine() throws IOException {
+     }
+   }
+ 
+-  private HttpEngine newHttpEngine(String method, Connection connection,
+-      RetryableSink requestBody, Response priorResponse) {
++  private HttpEngine newHttpEngine(String method, Connection connection, RetryableSink requestBody,
++      Response priorResponse) throws MalformedURLException, UnknownHostException {
+     // OkHttp's Call API requires a placeholder body; the real body will be streamed separately.
+     RequestBody placeholderBody = HttpMethod.requiresRequestBody(method)
+         ? EMPTY_REQUEST_BODY
+         : null;
++    URL url = getURL();
++    HttpUrl httpUrl = Internal.instance.getHttpUrlChecked(url.toString());
+     Request.Builder builder = new Request.Builder()
+-        .url(getURL())
++        .url(httpUrl)
+         .method(method, placeholderBody);
+     Headers headers = requestHeaders.build();
+     for (int i = 0, size = headers.size(); i < size; i++) {
+diff --git a/okhttp-ws-tests/pom.xml b/okhttp-ws-tests/pom.xml
+index 870b99cd6..c7d1778e6 100644
+--- a/okhttp-ws-tests/pom.xml
++++ b/okhttp-ws-tests/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-ws-tests</artifactId>
+diff --git a/okhttp-ws/pom.xml b/okhttp-ws/pom.xml
+index 80561c1ee..81f8afd8c 100644
+--- a/okhttp-ws/pom.xml
++++ b/okhttp-ws/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp-ws</artifactId>
+diff --git a/okhttp/pom.xml b/okhttp/pom.xml
+index 8d8b5244f..5cd118711 100644
+--- a/okhttp/pom.xml
++++ b/okhttp/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>okhttp</artifactId>
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/Cache.java b/okhttp/src/main/java/com/squareup/okhttp/Cache.java
+index 5461e40ea..dcf363486 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/Cache.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/Cache.java
+@@ -279,7 +279,7 @@ private void abortQuietly(DiskLruCache.Editor editor) {
+    * <p>
+    * The initialization time may vary depending on the journal file size and
+    * the current actual cache size. The application needs to be aware of calling
+-   * this function during the initialization phase and preferrably in a background
++   * this function during the initialization phase and preferably in a background
+    * worker thread.
+    * <p>
+    * Note that if the application chooses to not call this method to initialize
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/Connection.java b/okhttp/src/main/java/com/squareup/okhttp/Connection.java
+index b184b8a8b..2a3614e8d 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/Connection.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/Connection.java
+@@ -258,6 +258,9 @@ private void connectTls(int readTimeout, int writeTimeout, Request request,
+       handshake = unverifiedHandshake;
+       socket = sslSocket;
+       success = true;
++    } catch (AssertionError e) {
++      if (Util.isAndroidGetsocknameError(e)) throw new IOException(e);
++      throw e;
+     } finally {
+       if (sslSocket != null) {
+         Platform.get().afterHandshake(sslSocket);
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/HttpUrl.java b/okhttp/src/main/java/com/squareup/okhttp/HttpUrl.java
+index dc8c7f2e0..2f0abfa1f 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/HttpUrl.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/HttpUrl.java
+@@ -561,7 +561,9 @@ public String fragment() {
+ 
+   /** Returns the URL that would be retrieved by following {@code link} from this URL. */
+   public HttpUrl resolve(String link) {
+-    return new Builder().parse(this, link);
++    Builder builder = new Builder();
++    Builder.ParseResult result = builder.parse(this, link);
++    return result == Builder.ParseResult.SUCCESS ? builder.build() : null;
+   }
+ 
+   public Builder newBuilder() {
+@@ -584,11 +586,13 @@ public Builder newBuilder() {
+   }
+ 
+   /**
+-   * Returns a new {@code OkUrl} representing {@code url} if it is a well-formed HTTP or HTTPS URL,
+-   * or null if it isn't.
++   * Returns a new {@code HttpUrl} representing {@code url} if it is a well-formed HTTP or HTTPS
++   * URL, or null if it isn't.
+    */
+   public static HttpUrl parse(String url) {
+-    return new Builder().parse(null, url);
++    Builder builder = new Builder();
++    Builder.ParseResult result = builder.parse(null, url);
++    return result == Builder.ParseResult.SUCCESS ? builder.build() : null;
+   }
+ 
+   /**
+@@ -599,6 +603,29 @@ public static HttpUrl get(URL url) {
+     return parse(url.toString());
+   }
+ 
++  /**
++   * Returns a new {@code HttpUrl} representing {@code url} if it is a well-formed HTTP or HTTPS
++   * URL, or throws an exception if it isn't.
++   *
++   * @throws MalformedURLException if there was a non-host related URL issue
++   * @throws UnknownHostException if the host was invalid
++   */
++  static HttpUrl getChecked(String url) throws MalformedURLException, UnknownHostException {
++    Builder builder = new Builder();
++    Builder.ParseResult result = builder.parse(null, url);
++    switch (result) {
++      case SUCCESS:
++        return builder.build();
++      case INVALID_HOST:
++        throw new UnknownHostException("Invalid host: " + url);
++      case UNSUPPORTED_SCHEME:
++      case MISSING_SCHEME:
++      case INVALID_PORT:
++      default:
++        throw new MalformedURLException("Invalid URL: " + result + " for " + url);
++    }
++  }
++
+   public static HttpUrl get(URI uri) {
+     return parse(uri.toString());
+   }
+@@ -883,7 +910,15 @@ public HttpUrl build() {
+       return result.toString();
+     }
+ 
+-    HttpUrl parse(HttpUrl base, String input) {
++    enum ParseResult {
++      SUCCESS,
++      MISSING_SCHEME,
++      UNSUPPORTED_SCHEME,
++      INVALID_PORT,
++      INVALID_HOST,
++    }
++
++    ParseResult parse(HttpUrl base, String input) {
+       int pos = skipLeadingAsciiWhitespace(input, 0, input.length());
+       int limit = skipTrailingAsciiWhitespace(input, pos, input.length());
+ 
+@@ -897,12 +932,12 @@ HttpUrl parse(HttpUrl base, String input) {
+           this.scheme = "http";
+           pos += "http:".length();
+         } else {
+-          return null; // Not an HTTP scheme.
++          return ParseResult.UNSUPPORTED_SCHEME; // Not an HTTP scheme.
+         }
+       } else if (base != null) {
+         this.scheme = base.scheme;
+       } else {
+-        return null; // No scheme.
++        return ParseResult.MISSING_SCHEME; // No scheme.
+       }
+ 
+       // Authority.
+@@ -960,12 +995,12 @@ HttpUrl parse(HttpUrl base, String input) {
+               if (portColonOffset + 1 < componentDelimiterOffset) {
+                 this.host = canonicalizeHost(input, pos, portColonOffset);
+                 this.port = parsePort(input, portColonOffset + 1, componentDelimiterOffset);
+-                if (this.port == -1) return null; // Invalid port.
++                if (this.port == -1) return ParseResult.INVALID_PORT; // Invalid port.
+               } else {
+                 this.host = canonicalizeHost(input, pos, portColonOffset);
+                 this.port = defaultPort(this.scheme);
+               }
+-              if (this.host == null) return null; // Invalid host.
++              if (this.host == null) return ParseResult.INVALID_HOST; // Invalid host.
+               pos = componentDelimiterOffset;
+               break authority;
+           }
+@@ -1002,7 +1037,7 @@ HttpUrl parse(HttpUrl base, String input) {
+             input, pos + 1, limit, FRAGMENT_ENCODE_SET, true, false);
+       }
+ 
+-      return build();
++      return ParseResult.SUCCESS;
+     }
+ 
+     private void resolvePath(String input, int pos, int limit) {
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java b/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
+index 1ef79b0f6..4ed8000a6 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/OkHttpClient.java
+@@ -27,9 +27,11 @@
+ import com.squareup.okhttp.internal.tls.OkHostnameVerifier;
+ import java.io.IOException;
+ import java.net.CookieHandler;
++import java.net.MalformedURLException;
+ import java.net.Proxy;
+ import java.net.ProxySelector;
+ import java.net.URLConnection;
++import java.net.UnknownHostException;
+ import java.security.GeneralSecurityException;
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -157,6 +159,11 @@ public void callEnqueue(Call call, Callback responseCallback, boolean forWebSock
+       public void apply(ConnectionSpec tlsConfiguration, SSLSocket sslSocket, boolean isFallback) {
+         tlsConfiguration.apply(sslSocket, isFallback);
+       }
++
++      @Override public HttpUrl getHttpUrlChecked(String url)
++          throws MalformedURLException, UnknownHostException {
++        return HttpUrl.getChecked(url);
++      }
+     };
+   }
+ 
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/ConnectionSpecSelector.java b/okhttp/src/main/java/com/squareup/okhttp/internal/ConnectionSpecSelector.java
+index e6833a826..1b2dc0386 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/ConnectionSpecSelector.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/ConnectionSpecSelector.java
+@@ -91,13 +91,18 @@ public boolean connectionFailed(IOException e) {
+     // Any future attempt to connect using this strategy will be a fallback attempt.
+     isFallback = true;
+ 
+-    // TODO(nfuller): This is the same logic as in HttpEngine.
++    if (!isFallbackPossible) {
++      return false;
++    }
++
+     // If there was a protocol problem, don't recover.
+     if (e instanceof ProtocolException) {
+       return false;
+     }
+ 
+-    // If there was an interruption or timeout, don't recover.
++    // If there was an interruption or timeout (SocketTimeoutException), don't recover.
++    // For the socket connect timeout case we do not try the same host with a different
++    // ConnectionSpec: we assume it is unreachable.
+     if (e instanceof InterruptedIOException) {
+       return false;
+     }
+@@ -115,13 +120,11 @@ public boolean connectionFailed(IOException e) {
+       // e.g. a certificate pinning error.
+       return false;
+     }
+-    // TODO(nfuller): End of common code.
+ 
+ 
+     // On Android, SSLProtocolExceptions can be caused by TLS_FALLBACK_SCSV failures, which means we
+     // retry those when we probably should not.
+-    return ((e instanceof SSLHandshakeException || e instanceof SSLProtocolException))
+-        && isFallbackPossible;
++    return (e instanceof SSLHandshakeException || e instanceof SSLProtocolException);
+   }
+ 
+   /**
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java b/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
+index 1e583ba1b..21bcbf5c3 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/Internal.java
+@@ -21,6 +21,7 @@
+ import com.squareup.okhttp.ConnectionPool;
+ import com.squareup.okhttp.ConnectionSpec;
+ import com.squareup.okhttp.Headers;
++import com.squareup.okhttp.HttpUrl;
+ import com.squareup.okhttp.OkHttpClient;
+ import com.squareup.okhttp.Protocol;
+ import com.squareup.okhttp.Request;
+@@ -28,6 +29,8 @@
+ import com.squareup.okhttp.internal.http.RouteException;
+ import com.squareup.okhttp.internal.http.Transport;
+ import java.io.IOException;
++import java.net.MalformedURLException;
++import java.net.UnknownHostException;
+ import java.util.logging.Logger;
+ import javax.net.ssl.SSLSocket;
+ import okio.BufferedSink;
+@@ -85,6 +88,9 @@ public abstract void connectAndSetOwner(OkHttpClient client, Connection connecti
+   public abstract void apply(ConnectionSpec tlsConfiguration, SSLSocket sslSocket,
+       boolean isFallback);
+ 
++  public abstract HttpUrl getHttpUrlChecked(String url)
++      throws MalformedURLException, UnknownHostException;
++
+   // TODO delete the following when web sockets move into the main package.
+   public abstract void callEnqueue(Call call, Callback responseCallback, boolean forWebSocket);
+   public abstract void callEngineReleaseConnection(Call call) throws IOException;
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/Util.java b/okhttp/src/main/java/com/squareup/okhttp/internal/Util.java
+index d44972d27..efc26ec81 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/Util.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/Util.java
+@@ -84,6 +84,8 @@ public static void closeQuietly(Socket socket) {
+     if (socket != null) {
+       try {
+         socket.close();
++      } catch (AssertionError e) {
++        if (!isAndroidGetsocknameError(e)) throw e;
+       } catch (RuntimeException rethrown) {
+         throw rethrown;
+       } catch (Exception ignored) {
+@@ -277,4 +279,13 @@ public static String toHumanReadableAscii(String s) {
+     }
+     return s;
+   }
++
++  /**
++   * Returns true if {@code e} is due to a firmware bug fixed after Android 4.2.2.
++   * https://code.google.com/p/android/issues/detail?id=54072
++   */
++  public static boolean isAndroidGetsocknameError(AssertionError e) {
++    return e.getCause() != null && e.getMessage() != null
++        && e.getMessage().contains("getsockname failed");
++  }
+ }
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
+index fbd6603ac..70eeaaa2e 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
+@@ -40,6 +40,7 @@
+ import java.net.CookieHandler;
+ import java.net.ProtocolException;
+ import java.net.Proxy;
++import java.net.SocketTimeoutException;
+ import java.security.cert.CertificateException;
+ import java.util.Date;
+ import java.util.List;
+@@ -430,15 +431,15 @@ private boolean isRecoverable(RouteException e) {
+ 
+     IOException ioe = e.getLastConnectException();
+ 
+-    // TODO(nfuller): This is the same logic as in ConnectionSpecSelector
+     // If there was a protocol problem, don't recover.
+     if (ioe instanceof ProtocolException) {
+       return false;
+     }
+ 
+-    // If there was an interruption or timeout, don't recover.
++    // If there was an interruption don't recover, but if there was a timeout
++    // we should try the next route (if there is one).
+     if (ioe instanceof InterruptedIOException) {
+-      return false;
++      return ioe instanceof SocketTimeoutException;
+     }
+ 
+     // Look for known client-side or negotiation errors that are unlikely to be fixed by trying
+@@ -454,7 +455,6 @@ private boolean isRecoverable(RouteException e) {
+       // e.g. a certificate pinning error.
+       return false;
+     }
+-    // TODO(nfuller): End of common code.
+ 
+     // An example of one we might want to retry with a different route is a problem connecting to a
+     // proxy and would manifest as a standard IOException. Unless it is one we know we should not
+diff --git a/pom.xml b/pom.xml
+index 9ecff5dda..721901897 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -11,7 +11,7 @@
+ 
+   <groupId>com.squareup.okhttp</groupId>
+   <artifactId>parent</artifactId>
+-  <version>2.5.0-SNAPSHOT</version>
++  <version>2.6.0-SNAPSHOT</version>
+   <packaging>pom</packaging>
+ 
+   <name>OkHttp (Parent)</name>
+@@ -42,7 +42,7 @@
+ 
+     <!-- Compilation -->
+     <java.version>1.7</java.version>
+-    <okio.version>1.5.0</okio.version>
++    <okio.version>1.6.0</okio.version>
+     <!-- ALPN library targeted to Java 7 -->
+     <alpn.jdk7.version>7.1.2.v20141202</alpn.jdk7.version>
+     <!-- ALPN library targeted to Java 8 update 25. -->
+diff --git a/samples/crawler/pom.xml b/samples/crawler/pom.xml
+index 1703c305a..aebd0eb2e 100644
+--- a/samples/crawler/pom.xml
++++ b/samples/crawler/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp.sample</groupId>
+     <artifactId>sample-parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>crawler</artifactId>
+diff --git a/samples/guide/pom.xml b/samples/guide/pom.xml
+index c1c133912..55e2671c2 100644
+--- a/samples/guide/pom.xml
++++ b/samples/guide/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp.sample</groupId>
+     <artifactId>sample-parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>guide</artifactId>
+diff --git a/samples/pom.xml b/samples/pom.xml
+index e2be70ea5..29f1e87db 100644
+--- a/samples/pom.xml
++++ b/samples/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp</groupId>
+     <artifactId>parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <groupId>com.squareup.okhttp.sample</groupId>
+diff --git a/samples/simple-client/pom.xml b/samples/simple-client/pom.xml
+index a6092921f..3a1aa7d0f 100644
+--- a/samples/simple-client/pom.xml
++++ b/samples/simple-client/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp.sample</groupId>
+     <artifactId>sample-parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>simple-client</artifactId>
+diff --git a/samples/static-server/pom.xml b/samples/static-server/pom.xml
+index 6432b4019..f22315101 100644
+--- a/samples/static-server/pom.xml
++++ b/samples/static-server/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <groupId>com.squareup.okhttp.sample</groupId>
+     <artifactId>sample-parent</artifactId>
+-    <version>2.5.0-SNAPSHOT</version>
++    <version>2.6.0-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>static-server</artifactId>

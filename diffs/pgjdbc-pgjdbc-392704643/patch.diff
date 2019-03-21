@@ -1,0 +1,53 @@
+diff --git a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+index e15e57e30..484e1215e 100644
+--- a/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/v3/QueryExecutorImpl.java
+@@ -63,9 +63,6 @@
+ import java.util.TimeZone;
+ import java.util.logging.Level;
+ import java.util.logging.Logger;
+-import java.util.regex.Matcher;
+-import java.util.regex.Pattern;
+-
+ 
+ /**
+  * QueryExecutor implementation for the V3 protocol.
+@@ -73,7 +70,6 @@
+ public class QueryExecutorImpl extends QueryExecutorBase {
+ 
+   private static final Logger LOGGER = Logger.getLogger(QueryExecutorImpl.class.getName());
+-  private static final Pattern COMMAND_COMPLETE_PATTERN = Pattern.compile("^([A-Za-z]++)(?: (\\d++))?+(?: (\\d++))?+$");
+ 
+   /**
+    * TimeZone of the current connection (TimeZone backend parameter)
+@@ -2466,19 +2462,18 @@ private String receiveCommandStatus() throws IOException {
+   private void interpretCommandStatus(String status, ResultHandler handler) {
+     long oid = 0;
+     long count = 0;
+-    Matcher matcher = COMMAND_COMPLETE_PATTERN.matcher(status);
+-    if (matcher.matches()) {
+-      // String command = matcher.group(1);
+-      String group2 = matcher.group(2);
+-      String group3 = matcher.group(3);
++    int delim1 = status.indexOf(" ");
++    // Status is in the format of "COMMAND OID ROWS" where both 'OID' and 'ROWS' are optional
++    // and COMMAND can have spaces within it.
++    if (delim1 != -1) {
++      delim1 += 1;
++      int delim2 = status.indexOf(" ", delim1);
+       try {
+-        if (group3 != null) {
+-          // COMMAND OID ROWS
+-          oid = Long.parseLong(group2);
+-          count = Long.parseLong(group3);
+-        } else if (group2 != null) {
+-          // COMMAND ROWS
+-          count = Long.parseLong(group2);
++        if (delim2 != -1) {
++          oid = Long.parseLong(status.substring(delim1, delim2));
++          count = Long.parseLong(status.substring(delim2 + 1));
++        } else if (Character.isDigit(status.charAt(delim1))) {
++          count = Long.parseLong(status.substring(delim1));
+         }
+       } catch (NumberFormatException e) {
+         // As we're performing a regex validation prior to parsing, this should only

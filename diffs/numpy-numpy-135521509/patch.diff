@@ -1,0 +1,374 @@
+diff --git a/doc/release/1.12.0-notes.rst b/doc/release/1.12.0-notes.rst
+index 07871c10cee..028d7766311 100644
+--- a/doc/release/1.12.0-notes.rst
++++ b/doc/release/1.12.0-notes.rst
+@@ -164,8 +164,8 @@ Generalized Ufuncs will now unlock the GIL
+ Generalized Ufuncs, including most of the linalg module, will now unlock
+ the Python global interpreter lock.
+ 
+-np.roll can now roll multiple axes at the same time
+-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++``np.roll can now roll multiple axes at the same time``
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ The ``shift`` and ``axis`` arguments to ``roll`` are now broadcast against each
+ other, and each specified axis is shifted accordingly.
+ 
+@@ -180,6 +180,18 @@ The standard ``np.load``, ``np.save``, ``np.loadtxt``, ``np.savez``, and similar
+ functions can now take ``pathlib.Path`` objects as an argument instead of a
+ filename or open file object.
+ 
++Add ``bits`` attribute to ``np.finfo``
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++This makes ``np.finfo`` consistent with ``np.iinfo`` which already has that
++attribute.
++
++Caches in `np.fft` are now bounded in total size and item count
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++The caches in `np.fft` that speed up successive FFTs of the same length can no
++longer grow without bounds. They have been replaced with LRU (least recently
++used) caches that automatically evict no longer needed items if either the
++memory size or item count limit has been reached.
++
+ 
+ Changes
+ =======
+diff --git a/numpy/core/getlimits.py b/numpy/core/getlimits.py
+index 2ea9c0e11af..d4025cb3be9 100644
+--- a/numpy/core/getlimits.py
++++ b/numpy/core/getlimits.py
+@@ -30,6 +30,8 @@ class finfo(object):
+ 
+     Attributes
+     ----------
++    bits : int
++        The number of bits occupied by the type.
+     eps : float
+         The smallest representable positive number such that
+         ``1.0 + eps != 1.0``.  Type of `eps` is an appropriate floating
+@@ -157,6 +159,7 @@ def _init(self, dtype):
+             setattr(self, word, getattr(machar, word))
+         for word in ['tiny', 'resolution', 'epsneg']:
+             setattr(self, word, getattr(machar, word).flat[0])
++        self.bits = self.dtype.itemsize * 8
+         self.max = machar.huge.flat[0]
+         self.min = -self.max
+         self.eps = machar.eps.flat[0]
+@@ -174,12 +177,12 @@ def __str__(self):
+         fmt = (
+             'Machine parameters for %(dtype)s\n'
+             '---------------------------------------------------------------\n'
+-            'precision=%(precision)3s   resolution= %(_str_resolution)s\n'
+-            'machep=%(machep)6s   eps=        %(_str_eps)s\n'
+-            'negep =%(negep)6s   epsneg=     %(_str_epsneg)s\n'
+-            'minexp=%(minexp)6s   tiny=       %(_str_tiny)s\n'
+-            'maxexp=%(maxexp)6s   max=        %(_str_max)s\n'
+-            'nexp  =%(nexp)6s   min=        -max\n'
++            'precision = %(precision)3s   resolution = %(_str_resolution)s\n'
++            'machep = %(machep)6s   eps =        %(_str_eps)s\n'
++            'negep =  %(negep)6s   epsneg =     %(_str_epsneg)s\n'
++            'minexp = %(minexp)6s   tiny =       %(_str_tiny)s\n'
++            'maxexp = %(maxexp)6s   max =        %(_str_max)s\n'
++            'nexp =   %(nexp)6s   min =        -max\n'
+             '---------------------------------------------------------------\n'
+             )
+         return fmt % self.__dict__
+@@ -200,6 +203,8 @@ class iinfo(object):
+ 
+     Attributes
+     ----------
++    bits : int
++        The number of bits occupied by the type.
+     min : int
+         The smallest integer expressible by the type.
+     max : int
+diff --git a/numpy/core/src/multiarray/calculation.c b/numpy/core/src/multiarray/calculation.c
+index e3cec21b1a9..c82c6c46c17 100644
+--- a/numpy/core/src/multiarray/calculation.c
++++ b/numpy/core/src/multiarray/calculation.c
+@@ -830,28 +830,24 @@ _GenericBinaryOutFunction(PyArrayObject *m1, PyObject *m2, PyArrayObject *out,
+         return PyObject_CallFunction(op, "OO", m1, m2);
+     }
+     else {
+-        PyObject *args, *kw, *ret;
++        PyObject *args, *ret;
++        static PyObject *kw = NULL;
+ 
+-        args = Py_BuildValue("OOO", m1, m2, out);
+-        if (args == NULL) {
+-            return NULL;
+-        }
+-        kw = PyDict_New();
+         if (kw == NULL) {
+-            Py_DECREF(args);
+-            return NULL;
++            kw = Py_BuildValue("{s:s}", "casting", "unsafe");
++            if (kw == NULL) {
++                return NULL;
++            }
+         }
+-        if (PyDict_SetItemString(kw, "casting",
+-                        PyUString_FromString("unsafe")) < 0) {
+-            Py_DECREF(args);
+-            Py_DECREF(kw);
++
++        args = Py_BuildValue("OOO", m1, m2, out);
++        if (args == NULL) {
+             return NULL;
+         }
+ 
+         ret = PyObject_Call(op, args, kw);
+ 
+         Py_DECREF(args);
+-        Py_DECREF(kw);
+ 
+         return ret;
+     }
+diff --git a/numpy/core/tests/test_getlimits.py b/numpy/core/tests/test_getlimits.py
+index c36d7c0684b..600f8f52c5c 100644
+--- a/numpy/core/tests/test_getlimits.py
++++ b/numpy/core/tests/test_getlimits.py
+@@ -42,6 +42,19 @@ def test_singleton(self,level=2):
+         ftype2 = finfo(longdouble)
+         assert_equal(id(ftype), id(ftype2))
+ 
++class TestFinfo(TestCase):
++    def test_basic(self):
++        dts = list(zip(['f2', 'f4', 'f8', 'c8', 'c16'],
++                       [np.float16, np.float32, np.float64, np.complex64,
++                        np.complex128]))
++        for dt1, dt2 in dts:
++            for attr in ('bits', 'eps', 'epsneg', 'iexp', 'machar', 'machep',
++                         'max', 'maxexp', 'min', 'minexp', 'negep', 'nexp',
++                         'nmant', 'precision', 'resolution', 'tiny'):
++                assert_equal(getattr(finfo(dt1), attr),
++                             getattr(finfo(dt2), attr), attr)
++        self.assertRaises(ValueError, finfo, 'i4')
++
+ class TestIinfo(TestCase):
+     def test_basic(self):
+         dts = list(zip(['i1', 'i2', 'i4', 'i8',
+@@ -49,8 +62,9 @@ def test_basic(self):
+                   [np.int8, np.int16, np.int32, np.int64,
+                    np.uint8, np.uint16, np.uint32, np.uint64]))
+         for dt1, dt2 in dts:
+-            assert_equal(iinfo(dt1).min, iinfo(dt2).min)
+-            assert_equal(iinfo(dt1).max, iinfo(dt2).max)
++            for attr in ('bits', 'min', 'max'):
++                assert_equal(getattr(iinfo(dt1), attr),
++                             getattr(iinfo(dt2), attr), attr)
+         self.assertRaises(ValueError, iinfo, 'f4')
+ 
+     def test_unsigned_max(self):
+diff --git a/numpy/fft/fftpack.py b/numpy/fft/fftpack.py
+index fe5b76e1ace..78cf214d27d 100644
+--- a/numpy/fft/fftpack.py
++++ b/numpy/fft/fftpack.py
+@@ -38,9 +38,10 @@
+ from numpy.core import (array, asarray, zeros, swapaxes, shape, conjugate,
+                         take, sqrt)
+ from . import fftpack_lite as fftpack
++from .helper import _FFTCache
+ 
+-_fft_cache = {}
+-_real_fft_cache = {}
++_fft_cache = _FFTCache(max_size_in_mb=100, max_item_count=32)
++_real_fft_cache = _FFTCache(max_size_in_mb=100, max_item_count=32)
+ 
+ 
+ def _raw_fft(a, n=None, axis=-1, init_function=fftpack.cffti,
+diff --git a/numpy/fft/helper.py b/numpy/fft/helper.py
+index 160120e585b..5d51c1a2498 100644
+--- a/numpy/fft/helper.py
++++ b/numpy/fft/helper.py
+@@ -4,6 +4,8 @@
+ """
+ from __future__ import division, absolute_import, print_function
+ 
++from collections import OrderedDict
++
+ from numpy.compat import integer_types
+ from numpy.core import (
+         asarray, concatenate, arange, take, integer, empty
+@@ -222,3 +224,63 @@ def rfftfreq(n, d=1.0):
+     N = n//2 + 1
+     results = arange(0, N, dtype=int)
+     return results * val
++
++
++class _FFTCache(object):
++    """
++    Cache for the FFT init functions as an LRU (least recently used) cache.
++
++    Parameters
++    ----------
++    max_size_in_mb : int
++        Maximum memory usage of the cache before items are being evicted.
++    max_item_count : int
++        Maximum item count of the cache before items are being evicted.
++
++    Notes
++    -----
++    Items will be evicted if either limit has been reached upon getting and
++    setting. The maximum memory usages is not strictly the given
++    ``max_size_in_mb`` but rather
++    ``max(max_size_in_mb, 1.5 * size_of_largest_item)``. Thus the cache will
++    never be completely cleared - at least one item will remain and a single
++    large item can cause the cache to retain several smaller items even if the
++    given maximum cache size has been exceeded.
++    """
++    def __init__(self, max_size_in_mb, max_item_count):
++        self._max_size_in_bytes = max_size_in_mb * 1024 ** 2
++        self._max_item_count = max_item_count
++        # Much simpler than inheriting from it and having to work around
++        # recursive behaviour.
++        self._dict = OrderedDict()
++
++    def setdefault(self, key, value):
++        return self._dict.setdefault(key, value)
++
++    def __getitem__(self, key):
++        # pop + add to move it to the end.
++        value = self._dict.pop(key)
++        self._dict[key] = value
++        self._prune_dict()
++        return value
++
++    def __setitem__(self, key, value):
++        # Just setting is it not enough to move it to the end if it already
++        # exists.
++        try:
++            del self._dict[key]
++        except:
++            pass
++        self._dict[key] = value
++        self._prune_dict()
++
++    def _prune_dict(self):
++        # Always keep at least one item.
++        while len(self._dict) > 1 and (
++                len(self._dict) > self._max_item_count or self._check_size()):
++            self._dict.popitem(last=False)
++
++    def _check_size(self):
++        item_sizes = [_i[0].nbytes for _i in self._dict.values() if _i]
++        max_size = max(self._max_size_in_bytes, 1.5 * max(item_sizes))
++        return sum(item_sizes) > max_size
+diff --git a/numpy/fft/tests/test_helper.py b/numpy/fft/tests/test_helper.py
+index 1a51f8e3a57..9fd0e496db6 100644
+--- a/numpy/fft/tests/test_helper.py
++++ b/numpy/fft/tests/test_helper.py
+@@ -10,6 +10,7 @@
+ from numpy.testing import TestCase, run_module_suite, assert_array_almost_equal
+ from numpy import fft
+ from numpy import pi
++from numpy.fft.helper import _FFTCache
+ 
+ 
+ class TestFFTShift(TestCase):
+@@ -74,5 +75,91 @@ def test_not_last_axis_success(self):
+         fft.irfftn(a, axes=axes)
+ 
+ 
++class TestFFTCache(TestCase):
++
++    def test_basic_behaviour(self):
++        c = _FFTCache(max_size_in_mb=1, max_item_count=4)
++        # Setting
++        c[1] = [np.ones(2, dtype=np.float32)]
++        c[2] = [np.zeros(2, dtype=np.float32)]
++        # Getting
++        assert_array_almost_equal(c[1][0], np.ones(2, dtype=np.float32))
++        assert_array_almost_equal(c[2][0], np.zeros(2, dtype=np.float32))
++        # Setdefault
++        c.setdefault(1, [np.array([1, 2], dtype=np.float32)])
++        assert_array_almost_equal(c[1][0], np.ones(2, dtype=np.float32))
++        c.setdefault(3, [np.array([1, 2], dtype=np.float32)])
++        assert_array_almost_equal(c[3][0], np.array([1, 2], dtype=np.float32))
++
++        self.assertEqual(len(c._dict), 3)
++
++    def test_automatic_pruning(self):
++        # Thats around 2600 single precision samples.
++        c = _FFTCache(max_size_in_mb=0.01, max_item_count=4)
++        c[1] = [np.ones(200, dtype=np.float32)]
++        c[2] = [np.ones(200, dtype=np.float32)]
++
++        # Don't raise errors.
++        c[1], c[2], c[1], c[2]
++
++        # This is larger than the limit but should still be kept.
++        c[3] = [np.ones(3000, dtype=np.float32)]
++        # Should exist.
++        c[1], c[2], c[3]
++        # Add one more.
++        c[4] = [np.ones(3000, dtype=np.float32)]
++
++        # The other three should no longer exist.
++        with self.assertRaises(KeyError):
++            c[1]
++        with self.assertRaises(KeyError):
++            c[2]
++        with self.assertRaises(KeyError):
++            c[3]
++
++        # Now test the max item count pruning.
++        c = _FFTCache(max_size_in_mb=0.01, max_item_count=2)
++        c[1] = [np.empty(2)]
++        c[2] = [np.empty(2)]
++        # Can still be accessed.
++        c[2], c[1]
++
++        c[3] = [np.empty(2)]
++
++        # 1 and 3 can still be accessed - c[2] has been touched least recently
++        # and is thus evicted.
++        c[1], c[3]
++
++        with self.assertRaises(KeyError):
++            c[2]
++
++        c[1], c[3]
++
++        # One last test. We will add a single large item that is slightly
++        # bigger then the cache size. Some small items can still be added.
++        c = _FFTCache(max_size_in_mb=0.01, max_item_count=5)
++        c[1] = [np.ones(3000, dtype=np.float32)]
++        c[1]
++        c[2] = [np.ones(2, dtype=np.float32)]
++        c[3] = [np.ones(2, dtype=np.float32)]
++        c[4] = [np.ones(2, dtype=np.float32)]
++        c[1], c[2], c[3], c[4]
++
++        # One more big item.
++        c[5] = [np.ones(3000, dtype=np.float32)]
++
++        # c[1] no longer in the cache. Rest still in the cache.
++        c[2], c[3], c[4], c[5]
++        with self.assertRaises(KeyError):
++            c[1]
++
++        # Another big item - should now be the only item in the cache.
++        c[6] = [np.ones(4000, dtype=np.float32)]
++        for _i in range(1, 6):
++            with self.assertRaises(KeyError):
++                c[_i]
++        c[6]
++
++
+ if __name__ == "__main__":
+     run_module_suite()
+diff --git a/numpy/testing/tests/test_utils.py b/numpy/testing/tests/test_utils.py
+index fe1f411c47f..91dcd738c51 100644
+--- a/numpy/testing/tests/test_utils.py
++++ b/numpy/testing/tests/test_utils.py
+@@ -236,9 +236,7 @@ def test_error_message(self):
+                 "\nArrays are not equal\n\n"
+                 "(shapes (2,), (1, 2) mismatch)\n"
+                 " x: array([1, 2])\n"
+-                " y: [repr failed for <matrix>: The truth value of an array "
+-                "with more than one element is ambiguous. Use a.any() or "
+-                "a.all()]")
++                " y: matrix([[1 2]])")
+ 
+ 
+ class TestArrayAlmostEqual(_GenericTest, unittest.TestCase):

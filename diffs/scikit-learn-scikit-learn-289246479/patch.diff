@@ -1,0 +1,3364 @@
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index cc59ecbd6df6..6f643fc46c4e 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -70,9 +70,19 @@ following rules before you submit a pull request:
+    [Utilities for Developers](http://scikit-learn.org/dev/developers/utilities.html#developers-utils)
+    page.
+ 
+--  If your pull request addresses an issue, please use the pull request title
+-   to describe the issue and mention the issue number in the pull request description. This will make sure a link back to the original issue is
+-   created.
++-  Give your pull request a helpful title that summarises what your
++   contribution does. In some cases `Fix <ISSUE TITLE>` is enough.
++   `Fix #<ISSUE NUMBER>` is not enough.
++
++-  Often pull requests resolve one or more other issues (or pull requests).
++   If merging your pull request means that some other issues/PRs should
++   be closed, you should
++   [use keywords to create link to them](https://github.com/blog/1506-closing-issues-via-pull-requests/)
++   (e.g., `Fixes #1234`; multiple issues/PRs are allowed as long as each one
++   is preceded by a keyword). Upon merging, those issues/PRs will
++   automatically be closed by GitHub. If your pull request is simply related
++   to some other issues/PRs, create a link to them without using the keywords
++   (e.g., `See also #1234`).
+ 
+ -  All public methods should have informative docstrings with sample
+    usage presented as doctests when appropriate.
+@@ -199,13 +209,15 @@ following rules before submitting:
+ New contributor tips
+ --------------------
+ 
+-A great way to start contributing to scikit-learn is to pick an item
+-from the list of [Easy issues](https://github.com/scikit-learn/scikit-learn/issues?labels=Easy)
+-in the issue tracker. Resolving these issues allow you to start
+-contributing to the project without much prior knowledge. Your
+-assistance in this area will be greatly appreciated by the more
+-experienced developers as it helps free up their time to concentrate on
+-other issues.
++A great way to start contributing to scikit-learn is to pick an item from the
++list of
++[good first issues](https://github.com/scikit-learn/scikit-learn/labels/good%20first%20issue). If
++you have already contributed to scikit-learn look at
++[Easy issues](https://github.com/scikit-learn/scikit-learn/labels/Easy)
++instead. Resolving these issues allow you to start contributing to the project
++without much prior knowledge. Your assistance in this area will be greatly
++appreciated by the more experienced developers as it helps free up their time to
++concentrate on other issues.
+ 
+ Documentation
+ -------------
+diff --git a/PULL_REQUEST_TEMPLATE.md b/PULL_REQUEST_TEMPLATE.md
+index 3321b703320b..9db6ade08b69 100644
+--- a/PULL_REQUEST_TEMPLATE.md
++++ b/PULL_REQUEST_TEMPLATE.md
+@@ -1,9 +1,15 @@
+ <!--
+ Thanks for contributing a pull request! Please ensure you have taken a look at
+-the contribution guidelines: https://github.com/scikit-learn/scikit-learn/blob/master/CONTRIBUTING.md#Contributing-Pull-Requests
++the contribution guidelines: https://github.com/scikit-learn/scikit-learn/blob/master/CONTRIBUTING.md#pull-request-checklist
++-->
++
++#### Reference Issues/PRs
++<!--
++Example: Fixes #1234. See also #3456.
++Please use keywords (e.g., Fixes) to create link to the issues or pull requests
++you resolved, so that they will automatically be closed when your pull request
++is merged. See https://github.com/blog/1506-closing-issues-via-pull-requests
+ -->
+-#### Reference Issue
+-<!-- Example: Fixes #1234 -->
+ 
+ 
+ #### What does this implement/fix? Explain your changes.
+diff --git a/build_tools/travis/install.sh b/build_tools/travis/install.sh
+index efc3a81182c0..2c8dc0119dc4 100755
+--- a/build_tools/travis/install.sh
++++ b/build_tools/travis/install.sh
+@@ -85,7 +85,7 @@ elif [[ "$DISTRIB" == "scipy-dev-wheels" ]]; then
+ 
+     echo "Installing numpy and scipy master wheels"
+     dev_url=https://7933911d6844c6c53a7d-47bd50c35cd79bd838daf386af554a83.ssl.cf2.rackcdn.com
+-    pip install --pre --upgrade --timeout=60 -f $dev_url numpy scipy cython
++    pip install --pre --upgrade --timeout=60 -f $dev_url numpy scipy pandas cython
+     if [[ $USE_PYTEST == "true" ]]; then
+         pip install pytest
+     else
+diff --git a/doc/conf.py b/doc/conf.py
+index 408e250c6a96..0633126abd43 100644
+--- a/doc/conf.py
++++ b/doc/conf.py
+@@ -34,6 +34,7 @@
+     'sphinx.ext.autodoc', 'sphinx.ext.autosummary',
+     'numpydoc',
+     'sphinx.ext.linkcode', 'sphinx.ext.doctest',
++    'sphinx.ext.intersphinx',
+     'sphinx_gallery.gen_gallery',
+     'sphinx_issues',
+ ]
+@@ -96,12 +97,9 @@
+ # Else, today_fmt is used as the format for a strftime call.
+ #today_fmt = '%B %d, %Y'
+ 
+-# List of documents that shouldn't be included in the build.
+-#unused_docs = []
+-
+-# List of directories, relative to source directory, that shouldn't be
+-# searched for source files.
+-exclude_trees = ['_build', 'templates', 'includes']
++# List of patterns, relative to source directory, that match files and
++# directories to ignore when looking for source files.
++exclude_patterns = ['_build', 'templates', 'includes']
+ 
+ # The reST default role (used for this markup: `text`) to use for all
+ # documents.
+@@ -167,10 +165,6 @@
+ # using the given strftime format.
+ #html_last_updated_fmt = '%b %d, %Y'
+ 
+-# If true, SmartyPants will be used to convert quotes and dashes to
+-# typographically correct entities.
+-#html_use_smartypants = True
+-
+ # Custom sidebar templates, maps document names to template names.
+ #html_sidebars = {}
+ 
+@@ -203,12 +197,19 @@
+ 
+ 
+ # -- Options for LaTeX output ------------------------------------------------
+-
+-# The paper size ('letter' or 'a4').
+-#latex_paper_size = 'letter'
+-
+-# The font size ('10pt', '11pt' or '12pt').
+-#latex_font_size = '10pt'
++latex_elements = {
++    # The paper size ('letterpaper' or 'a4paper').
++    # 'papersize': 'letterpaper',
++
++    # The font size ('10pt', '11pt' or '12pt').
++    # 'pointsize': '10pt',
++
++    # Additional stuff for the LaTeX preamble.
++    'preamble': r"""
++        \usepackage{amsmath}\usepackage{amsfonts}\usepackage{bm}
++        \usepackage{morefloats}\usepackage{enumitem} \setlistdepth{10}
++        """
++}
+ 
+ # Grouping the document tree into LaTeX files. List of tuples
+ # (source start file, target name, title, author, documentclass
+@@ -220,33 +221,28 @@
+ # the title page.
+ latex_logo = "logos/scikit-learn-logo.png"
+ 
+-# For "manual" documents, if this is true, then toplevel headings are parts,
+-# not chapters.
+-#latex_use_parts = False
+-
+-# Additional stuff for the LaTeX preamble.
+-latex_preamble = r"""
+-\usepackage{amsmath}\usepackage{amsfonts}\usepackage{bm}\usepackage{morefloats}
+-\usepackage{enumitem} \setlistdepth{10}
+-"""
+-
+ # Documents to append as an appendix to all manuals.
+-#latex_appendices = []
++# latex_appendices = []
+ 
+ # If false, no module index is generated.
+ latex_domain_indices = False
+ 
+ trim_doctests_flags = True
+ 
++# intersphinx configuration
++intersphinx_mapping = {
++    'python': ('https://docs.python.org/{.major}'.format(
++        sys.version_info), None),
++    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
++    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
++    'matplotlib': ('https://matplotlib.org/', None),
++}
+ 
+ sphinx_gallery_conf = {
+     'doc_module': 'sklearn',
+     'backreferences_dir': os.path.join('modules', 'generated'),
+     'reference_url': {
+-        'sklearn': None,
+-        'matplotlib': 'http://matplotlib.org',
+-        'numpy': 'http://docs.scipy.org/doc/numpy-1.8.1',
+-        'scipy': 'http://docs.scipy.org/doc/scipy-0.13.3/reference'}
++        'sklearn': None}
+ }
+ 
+ 
+diff --git a/doc/datasets/index.rst b/doc/datasets/index.rst
+index 580d9e395056..bc664609db23 100644
+--- a/doc/datasets/index.rst
++++ b/doc/datasets/index.rst
+@@ -322,6 +322,7 @@ writing data in that format.
+     labeled_faces
+     covtype
+     rcv1
++    kddcup99
+ 
+ 
+ .. include:: olivetti_faces.rst
+@@ -338,6 +339,8 @@ writing data in that format.
+ 
+ .. include:: rcv1.rst
+ 
++.. include:: kddcup99.rst
++
+ .. _boston_house_prices:
+ 
+ .. include:: ../../sklearn/datasets/descr/boston_house_prices.rst
+diff --git a/doc/datasets/openml.rst b/doc/datasets/openml.rst
+index 8a080fffc1ed..d82f12fa6e60 100644
+--- a/doc/datasets/openml.rst
++++ b/doc/datasets/openml.rst
+@@ -33,21 +33,21 @@ of size 28x28 pixels, labeled from 0 to 9::
+   (1080, 81)
+   >>> mice.target.shape
+   (1080,)
+-  >>> np.unique(mice.target) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
++  >>> np.unique(mice.target) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS +SKIP
+   array([b"'c-CS-m'", b"'c-CS-s'", b"'c-SC-m'", b"'c-SC-s'", b"'t-CS-m'",
+   b"'t-CS-s'", b"'t-SC-m'", b"'t-SC-s'"], dtype='|S8')
+ 
+ You can get more information on the dataset by looking at the ``DESCR``
+ and ``details`` attributes::
+ 
+-  >>> print(mice.DESCR) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
++  >>> print(mice.DESCR) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS +SKIP
+   **Author**: Clara Higuera, Katheleen J. Gardiner, Krzysztof J. Cios  
+   **Source**: [UCI](https://archive.ics.uci.edu/ml/datasets/Mice+Protein+Expression) - 2015   
+   **Please cite**: Higuera C, Gardiner KJ, Cios KJ (2015) Self-Organizing
+   Feature Maps Identify Proteins Critical to Learning in a Mouse Model of Down
+   Syndrome. PLoS ONE 10(6): e0129126...
+ 
+-  >>> mice.details # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
++  >>> mice.details # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS +SKIP
+   {'id': '4550', 'name': 'MiceProtein', 'version': '1', 'format': 'ARFF',
+   'creator': ...,
+   'upload_date': '2016-02-17T14:32:49', 'licence': 'Public', 'url':
+@@ -68,7 +68,7 @@ to get more information on the dataset on the openml website: https://www.openml
+ The id is also the best way to specify how to fetch a dataset from OpenML::
+ 
+   >>> mice = fetch_openml(4550, data_home=custom_data_home)
+-  >>> mice.details # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
++  >>> mice.details # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS +SKIP
+   {'id': '4550', 'name': 'MiceProtein', 'version': '1', 'format': 'ARFF',
+   'creator': ...,
+   'upload_date': '2016-02-17T14:32:49', 'licence': 'Public', 'url':
+@@ -93,28 +93,28 @@ if earlier versions become inactive.
+ You can see that the dataset with id 4550 that we fetched above is the version 1
+ of the "miceprotein" dataset::
+ 
+-  >>> mice.details['version']
++  >>> mice.details['version']  #doctest: +SKIP
+   '1'
+ 
+ In fact, this dataset only has one version. The iris dataset on the other hand
+ has multiple versions::
+ 
+   >>> iris = fetch_openml("iris", data_home=custom_data_home)
+-  >>> iris.details['version']
++  >>> iris.details['version']  #doctest: +SKIP
+   '1'
+-  >>> iris.details['id']
++  >>> iris.details['id']  #doctest: +SKIP
+   '61'
+ 
+   >>> iris_61 = fetch_openml(61, data_home=custom_data_home)
+-  >>> iris_61.details['version']
++  >>> iris_61.details['version']  #doctest: +SKIP
+   '1'
+-  >>> iris_61.details['id']
++  >>> iris_61.details['id']  #doctest: +SKIP
+   '61'
+ 
+   >>> iris_969 = fetch_openml(969, data_home=custom_data_home)
+-  >>> iris_969.details['version']
++  >>> iris_969.details['version']  #doctest: +SKIP
+   '3'
+-  >>> iris_969.details['id']
++  >>> iris_969.details['id']  #doctest: +SKIP
+   '969'
+ 
+ 'Specifying the dataset by the name "iris" yields the lowest version, version 1, with the id 61.
+@@ -122,7 +122,7 @@ To make sure you always get this exact dataset, it is safest to specify it by th
+ The other dataset, with id 969, is version 3 (version 2 has become inactive), and contains
+ a binarized version of the data::
+ 
+-  >>> np.unique(iris_969.target)
++  >>> np.unique(iris_969.target)  #doctest: +SKIP
+   array([b'N', b'P'],
+         dtype='|S1')
+ 
+diff --git a/doc/developers/contributing.rst b/doc/developers/contributing.rst
+index 04168f443a82..72e68bc45875 100644
+--- a/doc/developers/contributing.rst
++++ b/doc/developers/contributing.rst
+@@ -43,6 +43,32 @@ ticket to the
+ also welcome to post feature requests or pull requests.
+ 
+ 
++Ways to contribute
++==================
++
++There are many ways to contribute to scikit-learn, with the most common ones
++being contribution of code or documentation to the project. Improving the
++documentation is no less important than improving the library itself.  If you
++find a typo in the documentation, or have made improvements, do not hesitate to
++send an email to the mailing list or preferably submit a GitHub pull request.
++Full documentation can be found under the doc/ directory.
++
++But there are many other ways to help. In particular answering queries on the
++`issue tracker <https://github.com/scikit-learn/scikit-learn/issues>`_,
++investigating bugs, and :ref:`reviewing other developers' pull requests
++<code_review>` are very valuable contributions that decrease the burden on the
++project maintainers.
++
++Another way to contribute is to report issues you're facing, and give a "thumbs up"
++on issues that others reported and that are relevant to you.
++It also helps us if you spread the word: reference the project from your blog
++and articles, link to it from your website, or simply say "I use it":
++
++.. raw:: html
++
++   <script type="text/javascript" src="http://www.ohloh.net/p/480792/widgets/project_users.js?style=rainbow"></script>
++
++
+ .. _git_repo:
+ 
+ Retrieving the latest code
+@@ -192,10 +218,20 @@ rules before submitting a pull request:
+       ``sklearn.utils`` submodule.  A list of utility routines available
+       for developers can be found in the :ref:`developers-utils` page.
+ 
+-    * If your pull request addresses an issue, please use the title to describe
+-      the issue and mention the issue number in the pull request description to
+-      ensure a link is created to the original issue.
+-
++    * Give your pull request a helpful title that summarises what your
++      contribution does. In some cases "Fix <ISSUE TITLE>" is enough.
++      "Fix #<ISSUE NUMBER>" is not enough.
++
++    * Often pull requests resolve one or more other issues (or pull requests).
++      If merging your pull request means that some other issues/PRs should
++      be closed, you should `use keywords to create link to them
++      <https://github.com/blog/1506-closing-issues-via-pull-requests/>`_
++      (e.g., ``Fixes #1234``; multiple issues/PRs are allowed as long as each
++      one is preceded by a keyword). Upon merging, those issues/PRs will
++      automatically be closed by GitHub. If your pull request is simply
++      related to some other issues/PRs, create a link to them without using
++      the keywords (e.g., ``See also #1234``).
++    
+     * All public methods should have informative docstrings with sample
+       usage presented as doctests when appropriate.
+ 
+@@ -351,29 +387,37 @@ following rules before submitting:
+ Issues for New Contributors
+ ---------------------------
+ 
+-New contributors should look for the following tags when looking for issues.
+-We strongly recommend that new contributors tackle "easy" issues first: this
+-helps the contributor become familiar with the contribution workflow, and
+-for the core devs to become acquainted with the contributor; besides which,
+-we frequently underestimate how easy an issue is to solve!
++New contributors should look for the following tags when looking for issues.  We
++strongly recommend that new contributors tackle "easy" issues first: this helps
++the contributor become familiar with the contribution workflow, and for the core
++devs to become acquainted with the contributor; besides which, we frequently
++underestimate how easy an issue is to solve!
+ 
+-.. topic:: Easy Tags
++.. topic:: good first issue tag
+ 
+-    A great way to start contributing to scikit-learn is to pick an item from the
+-    list of `Easy issues
+-    <https://github.com/scikit-learn/scikit-learn/issues?q=is%3Aopen+label%3AEasy+is%3Aissue>`_
++    A great way to start contributing to scikit-learn is to pick an item from
++    the list of `good first issues
++    <https://github.com/scikit-learn/scikit-learn/labels/good%20first%20issue>`_
+     in the issue tracker. Resolving these issues allow you to start contributing
+-    to the project without much prior knowledge. Your assistance in this area will
+-    be greatly appreciated by the more experienced developers as it helps free up
+-    their time to concentrate on other issues.
++    to the project without much prior knowledge. If you have already contributed
++    to scikit-learn, you should look at Easy issues instead.
+ 
+-.. topic:: Need Contributor Tags
++.. topic:: Easy tag
+ 
+-    We often use the Need Contributor tag to mark issues regardless of difficulty. Additionally,
+-    we use the Need Contributor tag to mark Pull Requests which have been abandoned
++    Another great way to contribute to scikit-learn is to pick an item from the
++    list of `Easy issues
++    <https://github.com/scikit-learn/scikit-learn/labels/Easy>`_ in the issue
++    tracker.  Your assistance in this area will be greatly appreciated by the
++    more experienced developers as it helps free up their time to concentrate on
++    other issues.
++
++.. topic:: help wanted tag
++
++    We often use the help wanted tag to mark issues regardless of difficulty. Additionally,
++    we use the help wanted tag to mark Pull Requests which have been abandoned
+     by their original contributor and are available for someone to pick up where the original
+-    contributor left off. The list of issues with the Need Contributor tag can be found
+-    `here <https://github.com/scikit-learn/scikit-learn/labels/Need%20Contributor>`_ .
++    contributor left off. The list of issues with the help wanted tag can be found
++    `here <https://github.com/scikit-learn/scikit-learn/labels/help%20wanted>`_ .
+ 
+     Note that not all issues which need contributors will have this tag.
+ 
+@@ -527,17 +571,21 @@ should have (at least) one of the following tags:
+ :New Feature:
+     Feature requests and pull requests implementing a new feature.
+ 
+-There are three other tags to help new contributors:
++There are four other tags to help new contributors:
++
++:good first issue:
++    This issue is ideal for a first contribution to scikit-learn. Ask for help
++    if the formulation is unclear. If you have already contributed to
++    scikit-learn, look at Easy issues instead.
+ 
+ :Easy:
+-    This issue can be tackled by anyone, no experience needed.
+-    Ask for help if the formulation is unclear.
++    This issue can be tackled without much prior experience.
+ 
+ :Moderate:
+     Might need some knowledge of machine learning or the package,
+     but is still approachable for someone new to the project.
+ 
+-:Needs Contributor:
++:help wanted:
+     This tag marks an issue which currently lacks a contributor or a
+     PR that needs another contributor to take over the work. These
+     issues can range in difficulty, and may not be approachable
+@@ -545,24 +593,6 @@ There are three other tags to help new contributors:
+     contributors will have this tag.
+ 
+ 
+-Other ways to contribute
+-========================
+-
+-Code is not the only way to contribute to scikit-learn. For instance,
+-documentation is also a very important part of the project and often
+-doesn't get as much attention as it deserves. If you find a typo in
+-the documentation, or have made improvements, do not hesitate to send
+-an email to the mailing list or submit a GitHub pull request. Full
+-documentation can be found under the doc/ directory.
+-
+-It also helps us if you spread the word: reference the project from your blog
+-and articles, link to it from your website, or simply say "I use it":
+-
+-.. raw:: html
+-
+-   <script type="text/javascript" src="http://www.ohloh.net/p/480792/widgets/project_users.js?style=rainbow"></script>
+-
+-
+ .. _coding-guidelines:
+ 
+ Coding guidelines
+@@ -782,6 +812,66 @@ cross-compatibility and is included in scikit-learn as
+ ``sklearn.externals.six``.
+ 
+ 
++.. _code_review:
++
++Code Review Guidelines
++======================
++Reviewing code contributed to the project as PRs is a crucial component of
++scikit-learn development. We encourage anyone to start reviewing code of other
++developers. The code review process is often highly educational for everybody
++involved. This is particularly appropriate if it is a feature you would like to
++use, and so can respond critically about whether the PR meets your needs. While
++each pull request needs to be signed off by two core developers, you can speed
++up this process by providing your feedback.
++
++Here are a few important aspects that need to be covered in any code review,
++from high-level questions to a more detailed check-list.
++
++- Do we want this in the library? Is it likely to be used? Do you, as
++  a scikit-learn user, like the change and intend to use it? Is it in
++  the scope of scikit-learn? Will the cost of maintaining a new
++  feature be worth its benefits?
++
++- Is the code consistent with the API of scikit-learn? Are public
++  functions/classes/parameters well named and intuitively designed?
++
++- Are all public functions/classes and their parameters, return types, and
++  stored attributes named according to scikit-learn conventions and documented clearly?
++
++- Is any new functionality described in the user-guide and illustrated with examples?
++
++- Is every public function/class tested? Are a reasonable set of
++  parameters, their values, value types, and combinations tested? Do
++  the tests validate that the code is correct, i.e. doing what the
++  documentation says it does? If the change is a bug-fix, is a
++  non-regression test included? Look at `this
++  <https://jeffknupp.com/blog/2013/12/09/improve-your-python-understanding-unit-testing>`_
++  to get started with testing in Python.
++
++- Do the tests pass in the continuous integration build? If
++  appropriate, help the contributor understand why tests failed.
++
++- Do the tests cover every line of code (see the coverage report in the build
++  log)? If not, are the lines missing coverage good exceptions?
++
++- Is the code easy to read and low on redundancy? Should variable names be
++  improved for clarity or consistency? Should comments be added? Should comments
++  be removed as unhelpful or extraneous?
++
++- Could the code easily be rewritten to run much more efficiently for
++  relevant settings?
++
++- Is the code backwards compatible with previous versions? (or is a
++  deprecation cycle necessary?)
++
++- Will the new code add any dependencies on other libraries? (this is
++  unlikely to be accepted)
++
++- Does the documentation render properly (see the
++  :ref:`contribute_documentation` section for more details), and are the plots
++  instructive?
++
++
+ APIs of scikit-learn objects
+ ============================
+ 
+diff --git a/doc/index.rst b/doc/index.rst
+index ecea32e3229b..2df8c8b1919e 100644
+--- a/doc/index.rst
++++ b/doc/index.rst
+@@ -207,27 +207,17 @@
+                     <li><em>On-going development:</em>
+                     <a href="/dev/whats_new.html"><em>What's new</em> (Changelog)</a>
+                     </li>
+-                    <li><em>September 2016.</em> scikit-learn 0.18.0 is available for download (<a href="whats_new/v0.18.html">Changelog</a>).
++                    <li><em>October 2017.</em> scikit-learn 0.19.1 is available for download (<a href="whats_new.html#version-0-19">Changelog</a>).
+                     </li>
+-                    <li><em>November 2015.</em> scikit-learn 0.17.0 is available for download (<a href="whats_new/v0.17.html">Changelog</a>).
++                    <li><em>July 2017.</em> scikit-learn 0.19.0 is available for download (<a href="whats_new/v0.19.html#version-0-19">Changelog</a>).
+                     </li>
+-                    <li><em>March 2015.</em> scikit-learn 0.16.0 is available for download (<a href="whats_new/v0.16.html">Changelog</a>).
++                    <li><em>June 2017.</em> scikit-learn 0.18.2 is available for download (<a href="whats_new/v0.18.html#version-0-18-2">Changelog</a>).
+                     </li>
+-                    <li><em>July 2014.</em> scikit-learn 0.15.0 is available for download (<a href="whats_new/v0.15.html">Changelog</a>).
++                    <li><em>September 2016.</em> scikit-learn 0.18.0 is available for download (<a href="whats_new/v0.18.html#version-0-18">Changelog</a>).
+                     </li>
+-                    <li><em>July 14-20th, 2014: international sprint.</em>
+-                    During this week-long sprint, we gathered 18 of the core
+-                    contributors in Paris.
+-                    We want to thank our sponsors:
+-                    <a href="http://www.campus-paris-saclay.fr/en/Idex-Paris-Saclay/Les-Lidex/Paris-Saclay-Center-for-Data-Science">
+-                    Paris-Saclay Center for Data Science</a>
+-                    & <a href="https://digicosme.lri.fr">Digicosme</a> and our
+-                    hosts <a href="http://lapaillasse.org">La Paillasse</a>,
+-                    <a href="http://www.criteo.com/">Criteo</a>,
+-                    <a href="http://www.inria.fr/">Inria</a>,
+-                    and <a href="http://www.tinyclues.com/">tinyclues</a>.
++                    <li><em>November 2015.</em> scikit-learn 0.17.0 is available for download (<a href="whats_new/v0.17.html">Changelog</a>).
+                     </li>
+-                    <li><em>August 2013.</em> scikit-learn 0.14 is available for download (<a href="whats_new/v0.14.html">Changelog</a>).
++                    <li><em>March 2015.</em> scikit-learn 0.16.0 is available for download (<a href="whats_new/v0.16.html">Changelog</a>).
+                     </li>
+                     </ul>
+                 </div>
+diff --git a/doc/modules/classes.rst b/doc/modules/classes.rst
+index b6cbb05a01f5..5af088351df2 100644
+--- a/doc/modules/classes.rst
++++ b/doc/modules/classes.rst
+@@ -26,8 +26,10 @@ Base classes
+    :template: class.rst
+ 
+    base.BaseEstimator
++   base.BiclusterMixin
+    base.ClassifierMixin
+    base.ClusterMixin
++   base.DensityMixin
+    base.RegressorMixin
+    base.TransformerMixin
+ 
+@@ -780,11 +782,11 @@ details.
+    metrics.accuracy_score
+    metrics.auc
+    metrics.average_precision_score
++   metrics.balanced_accuracy_score
+    metrics.brier_score_loss
+    metrics.classification_report
+    metrics.cohen_kappa_score
+    metrics.confusion_matrix
+-   metrics.dcg_score
+    metrics.f1_score
+    metrics.fbeta_score
+    metrics.hamming_loss
+@@ -792,7 +794,6 @@ details.
+    metrics.jaccard_similarity_score
+    metrics.log_loss
+    metrics.matthews_corrcoef
+-   metrics.ndcg_score
+    metrics.precision_recall_curve
+    metrics.precision_recall_fscore_support
+    metrics.precision_score
+diff --git a/doc/modules/ensemble.rst b/doc/modules/ensemble.rst
+index 56bddcd172d9..ef46d5a3fe5f 100644
+--- a/doc/modules/ensemble.rst
++++ b/doc/modules/ensemble.rst
+@@ -598,7 +598,7 @@ minimize the loss function :math:`L` given the current model
+   .. math::
+ 
+     F_m(x) = F_{m-1}(x) + \arg\min_{h} \sum_{i=1}^{n} L(y_i,
+-    F_{m-1}(x_i) - h(x))
++    F_{m-1}(x_i) + h(x))
+ 
+ The initial model :math:`F_{0}` is problem specific, for least-squares
+ regression one usually chooses the mean of the target values.
+@@ -614,7 +614,7 @@ loss function:
+ 
+   .. math::
+ 
+-    F_m(x) = F_{m-1}(x) + \gamma_m \sum_{i=1}^{n} \nabla_F L(y_i,
++    F_m(x) = F_{m-1}(x) - \gamma_m \sum_{i=1}^{n} \nabla_F L(y_i,
+     F_{m-1}(x_i))
+ 
+ Where the step length :math:`\gamma_m` is chosen using line search:
+diff --git a/doc/modules/gaussian_process.rst b/doc/modules/gaussian_process.rst
+index 1937e3897444..a1dc01266956 100644
+--- a/doc/modules/gaussian_process.rst
++++ b/doc/modules/gaussian_process.rst
+@@ -605,286 +605,3 @@ References
+ 
+ .. currentmodule:: sklearn.gaussian_process
+ 
+-
+-
+-
+-Legacy Gaussian Processes
+-=========================
+-
+-In this section, the implementation of Gaussian processes used in scikit-learn
+-until release 0.16.1 is described. Note that this implementation is deprecated
+-and will be removed in version 0.18.
+-
+-An introductory regression example
+-----------------------------------
+-
+-Say we want to surrogate the function :math:`g(x) = x \sin(x)`. To do so,
+-the function is evaluated onto a design of experiments. Then, we define a
+-GaussianProcess model whose regression and correlation models might be
+-specified using additional kwargs, and ask for the model to be fitted to the
+-data. Depending on the number of parameters provided at instantiation, the
+-fitting procedure may recourse to maximum likelihood estimation for the
+-parameters or alternatively it uses the given parameters.
+-
+-
+-::
+-
+-    >>> import numpy as np
+-    >>> from sklearn import gaussian_process
+-    >>> def f(x):
+-    ...	    return x * np.sin(x)
+-    >>> X = np.atleast_2d([1., 3., 5., 6., 7., 8.]).T
+-    >>> y = f(X).ravel()
+-    >>> x = np.atleast_2d(np.linspace(0, 10, 1000)).T
+-    >>> gp = gaussian_process.GaussianProcess(theta0=1e-2, thetaL=1e-4, thetaU=1e-1)
+-    >>> gp.fit(X, y)  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+-    GaussianProcess(beta0=None, corr=<function squared_exponential at 0x...>,
+-            normalize=True, nugget=array(2.22...-15),
+-            optimizer='fmin_cobyla', random_start=1, random_state=...
+-            regr=<function constant at 0x...>, storage_mode='full',
+-            theta0=array([[ 0.01]]), thetaL=array([[ 0.0001]]),
+-            thetaU=array([[ 0.1]]), verbose=False)
+-    >>> y_pred, sigma2_pred = gp.predict(x, eval_MSE=True)
+-
+-
+-Fitting Noisy Data
+-------------------
+-
+-When the data to be fit includes noise, the Gaussian process model can be
+-used by specifying the variance of the noise for each point.
+-:class:`GaussianProcess` takes a parameter ``nugget`` which
+-is added to the diagonal of the correlation matrix between training points:
+-in general this is a type of Tikhonov regularization.  In the special case
+-of a squared-exponential correlation function, this normalization is
+-equivalent to specifying a fractional variance in the input.  That is
+-
+-.. math::
+-   \mathrm{nugget}_i = \left[\frac{\sigma_i}{y_i}\right]^2
+-
+-With ``nugget`` and ``corr`` properly set, Gaussian Processes can be
+-used to robustly recover an underlying function from noisy data.
+-
+-
+-
+-Mathematical formulation
+-------------------------
+-
+-
+-The initial assumption
+-^^^^^^^^^^^^^^^^^^^^^^
+-
+-Suppose one wants to model the output of a computer experiment, say a
+-mathematical function:
+-
+-.. math::
+-
+-        g: & \mathbb{R}^{n_{\rm features}} \rightarrow \mathbb{R} \\
+-           & X \mapsto y = g(X)
+-
+-GPML starts with the assumption that this function is *a* conditional sample
+-path of *a* Gaussian process :math:`G` which is additionally assumed to read as
+-follows:
+-
+-.. math::
+-
+-        G(X) = f(X)^T \beta + Z(X)
+-
+-where :math:`f(X)^T \beta` is a linear regression model and :math:`Z(X)` is a
+-zero-mean Gaussian process with a fully stationary covariance function:
+-
+-.. math::
+-
+-        C(X, X') = \sigma^2 R(|X - X'|)
+-
+-:math:`\sigma^2` being its variance and :math:`R` being the correlation
+-function which solely depends on the absolute relative distance between each
+-sample, possibly featurewise (this is the stationarity assumption).
+-
+-From this basic formulation, note that GPML is nothing but an extension of a
+-basic least squares linear regression problem:
+-
+-.. math::
+-
+-        g(X) \approx f(X)^T \beta
+-
+-Except we additionally assume some spatial coherence (correlation) between the
+-samples dictated by the correlation function. Indeed, ordinary least squares
+-assumes the correlation model :math:`R(|X - X'|)` is one when :math:`X = X'`
+-and zero otherwise : a *dirac* correlation model -- sometimes referred to as a
+-*nugget* correlation model in the kriging literature.
+-
+-
+-The best linear unbiased prediction (BLUP)
+-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-
+-We now derive the *best linear unbiased prediction* of the sample path
+-:math:`g` conditioned on the observations:
+-
+-.. math::
+-
+-    \hat{G}(X) = G(X | y_1 = g(X_1), ...,
+-                                y_{n_{\rm samples}} = g(X_{n_{\rm samples}}))
+-
+-It is derived from its *given properties*:
+-
+-- It is linear (a linear combination of the observations)
+-
+-.. math::
+-
+-    \hat{G}(X) \equiv a(X)^T y
+-
+-- It is unbiased
+-
+-.. math::
+-
+-    \mathbb{E}[G(X) - \hat{G}(X)] = 0
+-
+-- It is the best (in the Mean Squared Error sense)
+-
+-.. math::
+-
+-    \hat{G}(X)^* = \arg \min\limits_{\hat{G}(X)} \;
+-                                            \mathbb{E}[(G(X) - \hat{G}(X))^2]
+-
+-So that the optimal weight vector :math:`a(X)` is solution of the following
+-equality constrained optimization problem:
+-
+-.. math::
+-
+-    a(X)^* = \arg \min\limits_{a(X)} & \; \mathbb{E}[(G(X) - a(X)^T y)^2] \\
+-                       {\rm s. t.} & \; \mathbb{E}[G(X) - a(X)^T y] = 0
+-
+-Rewriting this constrained optimization problem in the form of a Lagrangian and
+-looking further for the first order optimality conditions to be satisfied, one
+-ends up with a closed form expression for the sought predictor -- see
+-references for the complete proof.
+-
+-In the end, the BLUP is shown to be a Gaussian random variate with mean:
+-
+-.. math::
+-
+-    \mu_{\hat{Y}}(X) = f(X)^T\,\hat{\beta} + r(X)^T\,\gamma
+-
+-and variance:
+-
+-.. math::
+-
+-    \sigma_{\hat{Y}}^2(X) = \sigma_{Y}^2\,
+-    ( 1
+-    - r(X)^T\,R^{-1}\,r(X)
+-    + u(X)^T\,(F^T\,R^{-1}\,F)^{-1}\,u(X)
+-    )
+-
+-where we have introduced:
+-
+-* the correlation matrix whose terms are defined wrt the autocorrelation
+-  function and its built-in parameters :math:`\theta`:
+-
+-.. math::
+-
+-    R_{i\,j} = R(|X_i - X_j|, \theta), \; i,\,j = 1, ..., m
+-
+-* the vector of cross-correlations between the point where the prediction is
+-  made and the points in the DOE:
+-
+-.. math::
+-
+-    r_i = R(|X - X_i|, \theta), \; i = 1, ..., m
+-
+-* the regression matrix (eg the Vandermonde matrix if :math:`f` is a polynomial
+-  basis):
+-
+-.. math::
+-
+-    F_{i\,j} = f_i(X_j), \; i = 1, ..., p, \, j = 1, ..., m
+-
+-* the generalized least square regression weights:
+-
+-.. math::
+-
+-    \hat{\beta} =(F^T\,R^{-1}\,F)^{-1}\,F^T\,R^{-1}\,Y
+-
+-* and the vectors:
+-
+-.. math::
+-
+-    \gamma & = R^{-1}(Y - F\,\hat{\beta}) \\
+-    u(X) & = F^T\,R^{-1}\,r(X) - f(X)
+-
+-It is important to notice that the probabilistic response of a Gaussian Process
+-predictor is fully analytic and mostly relies on basic linear algebra
+-operations. More precisely the mean prediction is the sum of two simple linear
+-combinations (dot products), and the variance requires two matrix inversions,
+-but the correlation matrix can be decomposed only once using a Cholesky
+-decomposition algorithm.
+-
+-
+-The empirical best linear unbiased predictor (EBLUP)
+-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-
+-Until now, both the autocorrelation and regression models were assumed given.
+-In practice however they are never known in advance so that one has to make
+-(motivated) empirical choices for these models :ref:`correlation_models`.
+-
+-Provided these choices are made, one should estimate the remaining unknown
+-parameters involved in the BLUP. To do so, one uses the set of provided
+-observations in conjunction with some inference technique. The present
+-implementation, which is based on the DACE's Matlab toolbox uses the *maximum
+-likelihood estimation* technique -- see DACE manual in references for the
+-complete equations. This maximum likelihood estimation problem is turned into
+-a global optimization problem onto the autocorrelation parameters. In the
+-present implementation, this global optimization is solved by means of the
+-fmin_cobyla optimization function from scipy.optimize. In the case of
+-anisotropy however, we provide an implementation of Welch's componentwise
+-optimization algorithm -- see references.
+-
+-.. _correlation_models:
+-
+-Correlation Models
+-------------------
+-
+-Common correlation models matches some famous SVM's kernels because they are
+-mostly built on equivalent assumptions. They must fulfill Mercer's conditions
+-and should additionally remain stationary. Note however, that the choice of the
+-correlation model should be made in agreement with the known properties of the
+-original experiment from which the observations come. For instance:
+-
+-* If the original experiment is known to be infinitely differentiable (smooth),
+-  then one should use the *squared-exponential correlation model*.
+-* If it's not, then one should rather use the *exponential correlation model*.
+-* Note also that there exists a correlation model that takes the degree of
+-  derivability as input: this is the Matern correlation model, but it's not
+-  implemented here (TODO).
+-
+-For a more detailed discussion on the selection of appropriate correlation
+-models, see the book by Rasmussen & Williams in references.
+-
+-.. _regression_models:
+-
+-
+-Regression Models
+------------------
+-
+-Common linear regression models involve zero- (constant), first- and
+-second-order polynomials. But one may specify its own in the form of a Python
+-function that takes the features X as input and that returns a vector
+-containing the values of the functional set. The only constraint is that the
+-number of functions must not exceed the number of available observations so
+-that the underlying regression problem is not *underdetermined*.
+-
+-
+-Implementation details
+-----------------------
+-
+-The implementation is based on a translation of the DACE Matlab
+-toolbox.
+-
+-.. topic:: References:
+-
+-    * `DACE, A Matlab Kriging Toolbox
+-      <http://imedea.uib-csic.es/master/cambioglobal/Modulo_V_cod101615/Lab/lab_maps/krigging/DACE-krigingsoft/dace/dace.pdf>`_ S Lophaven, HB Nielsen, J
+-      Sondergaard 2002,
+-
+-    * W.J. Welch, R.J. Buck, J. Sacks, H.P. Wynn, T.J. Mitchell, and M.D.
+-      Morris (1992). Screening, predicting, and computer experiments.
+-      Technometrics, 34(1) 15--25.
+diff --git a/doc/modules/manifold.rst b/doc/modules/manifold.rst
+index 2586daffa2e2..76a49145191f 100644
+--- a/doc/modules/manifold.rst
++++ b/doc/modules/manifold.rst
+@@ -533,7 +533,7 @@ the quality of the resulting embedding:
+ * maximum number of iterations
+ * angle (not used in the exact method)
+ 
+-The perplexity is defined as :math:`k=2^(S)` where :math:`S` is the Shannon
++The perplexity is defined as :math:`k=2^{(S)}` where :math:`S` is the Shannon
+ entropy of the conditional probability distribution. The perplexity of a
+ :math:`k`-sided die is :math:`k`, so that :math:`k` is effectively the number of
+ nearest neighbors t-SNE considers when generating the conditional probabilities.
+@@ -598,8 +598,8 @@ where label regions largely overlap. This is a strong clue that this data can
+ be well separated by non linear methods that focus on the local structure (e.g.
+ an SVM with a Gaussian RBF kernel). However, failing to visualize well
+ separated homogeneously labeled groups with t-SNE in 2D does not necessarily
+-implie that the data cannot be correctly classified by a supervised model. It
+-might be the case that 2 dimensions are not enough low to accurately represents
++imply that the data cannot be correctly classified by a supervised model. It
++might be the case that 2 dimensions are not low enough to accurately represents
+ the internal structure of the data.
+ 
+ 
+diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
+index fc5010c2f766..cba974c7e3de 100644
+--- a/doc/modules/model_evaluation.rst
++++ b/doc/modules/model_evaluation.rst
+@@ -59,6 +59,7 @@ Scoring                           Function
+ ==============================    =============================================     ==================================
+ **Classification**
+ 'accuracy'                        :func:`metrics.accuracy_score`
++'balanced_accuracy'               :func:`metrics.balanced_accuracy_score`           for binary targets
+ 'average_precision'               :func:`metrics.average_precision_score`
+ 'brier_score_loss'                :func:`metrics.brier_score_loss`
+ 'f1'                              :func:`metrics.f1_score`                          for binary targets
+@@ -103,7 +104,7 @@ Usage examples:
+     >>> model = svm.SVC()
+     >>> cross_val_score(model, X, y, scoring='wrong_choice')
+     Traceback (most recent call last):
+-    ValueError: 'wrong_choice' is not a valid scoring value. Valid options are ['accuracy', 'adjusted_mutual_info_score', 'adjusted_rand_score', 'average_precision', 'brier_score_loss', 'completeness_score', 'explained_variance', 'f1', 'f1_macro', 'f1_micro', 'f1_samples', 'f1_weighted', 'fowlkes_mallows_score', 'homogeneity_score', 'mutual_info_score', 'neg_log_loss', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_mean_squared_log_error', 'neg_median_absolute_error', 'normalized_mutual_info_score', 'precision', 'precision_macro', 'precision_micro', 'precision_samples', 'precision_weighted', 'r2', 'recall', 'recall_macro', 'recall_micro', 'recall_samples', 'recall_weighted', 'roc_auc', 'v_measure_score']
++    ValueError: 'wrong_choice' is not a valid scoring value. Valid options are ['accuracy', 'adjusted_mutual_info_score', 'adjusted_rand_score', 'average_precision', 'balanced_accuracy', 'brier_score_loss', 'completeness_score', 'explained_variance', 'f1', 'f1_macro', 'f1_micro', 'f1_samples', 'f1_weighted', 'fowlkes_mallows_score', 'homogeneity_score', 'mutual_info_score', 'neg_log_loss', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_mean_squared_log_error', 'neg_median_absolute_error', 'normalized_mutual_info_score', 'precision', 'precision_macro', 'precision_micro', 'precision_samples', 'precision_weighted', 'r2', 'recall', 'recall_macro', 'recall_micro', 'recall_samples', 'recall_weighted', 'roc_auc', 'v_measure_score']
+ 
+ .. note::
+ 
+@@ -279,6 +280,7 @@ Some of these are restricted to the binary classification case:
+ 
+    precision_recall_curve
+    roc_curve
++   balanced_accuracy_score
+ 
+ 
+ Others also work in the multiclass case:
+@@ -309,14 +311,6 @@ Some also work in the multilabel case:
+    recall_score
+    zero_one_loss
+ 
+-Some are typically used for ranking:
+-
+-.. autosummary::
+-   :template: function.rst
+-
+-   dcg_score
+-   ndcg_score
+-
+ And some work with binary and multilabel (but not multiclass) problems:
+ 
+ .. autosummary::
+@@ -419,6 +413,54 @@ In the multilabel case with binary label indicators: ::
+     for an example of accuracy score usage using permutations of
+     the dataset.
+ 
++.. _balanced_accuracy_score:
++
++Balanced accuracy score
++-----------------------
++
++The :func:`balanced_accuracy_score` function computes the
++`balanced accuracy <https://en.wikipedia.org/wiki/Accuracy_and_precision>`_, which
++avoids inflated performance estimates on imbalanced datasets. It is defined as the
++arithmetic mean of `sensitivity <https://en.wikipedia.org/wiki/Sensitivity_and_specificity>`_
++(true positive rate) and `specificity <https://en.wikipedia.org/wiki/Sensitivity_and_specificity>`_
++(true negative rate), or the average of `recall scores <https://en.wikipedia.org/wiki/Precision_and_recall>`_
++obtained on either class.
++
++If the classifier performs equally well on either class, this term reduces to the
++conventional accuracy (i.e., the number of correct predictions divided by the total
++number of predictions). In contrast, if the conventional accuracy is above chance only
++because the classifier takes advantage of an imbalanced test set, then the balanced
++accuracy, as appropriate, will drop to 50%.
++
++If :math:`\hat{y}_i\in\{0,1\}` is the predicted value of
++the :math:`i`-th sample and :math:`y_i\in\{0,1\}` is the corresponding true value,
++then the balanced accuracy is defined as
++
++.. math::
++
++   \texttt{balanced-accuracy}(y, \hat{y}) = \frac{1}{2} \left(\frac{\sum_i 1(\hat{y}_i = 1 \land y_i = 1)}{\sum_i 1(y_i = 1)} + \frac{\sum_i 1(\hat{y}_i = 0 \land y_i = 0)}{\sum_i 1(y_i = 0)}\right)
++
++where :math:`1(x)` is the `indicator function <https://en.wikipedia.org/wiki/Indicator_function>`_.
++
++Under this definition, the balanced accuracy coincides with :func:`roc_auc_score`
++given binary ``y_true`` and ``y_pred``:
++
++  >>> import numpy as np
++  >>> from sklearn.metrics import balanced_accuracy_score, roc_auc_score
++  >>> y_true = [0, 1, 0, 0, 1, 0]
++  >>> y_pred = [0, 1, 0, 0, 0, 1]
++  >>> balanced_accuracy_score(y_true, y_pred)
++  0.625
++  >>> roc_auc_score(y_true, y_pred)
++  0.625
++
++(but in general, :func:`roc_auc_score` takes as its second argument non-binary scores).
++
++.. note::
++
++    Currently this score function is only defined for binary classification problems, you
++    may need to wrap it by yourself if you want to use it for multilabel problems.
++
+ .. _cohen_kappa:
+ 
+ Cohen's kappa
+diff --git a/doc/modules/naive_bayes.rst b/doc/modules/naive_bayes.rst
+index 802bfae5c36f..b61637c12d87 100644
+--- a/doc/modules/naive_bayes.rst
++++ b/doc/modules/naive_bayes.rst
+@@ -154,7 +154,7 @@ calculating the weights is as follows:
+ 
+     w_{ci} = \log \hat{\theta}_{ci}
+ 
+-    w_{ci} = \frac{w_{ci}}{\sum_{j} w_{cj}}
++    w_{ci} = \frac{w_{ci}}{\sum_{j} |w_{cj}|}
+ 
+ where the summations are over all documents :math:`j` not in class :math:`c`,
+ :math:`d_{ij}` is either the count or tf-idf value of term :math:`i` in document
+diff --git a/doc/whats_new/v0.19.rst b/doc/whats_new/v0.19.rst
+index 2fba9b08b409..5b38f409ea28 100644
+--- a/doc/whats_new/v0.19.rst
++++ b/doc/whats_new/v0.19.rst
+@@ -4,6 +4,136 @@
+ 
+ .. _changes_0_19:
+ 
++Version 0.19.1
++==============
++
++**October 23, 2017**
++
++This is a bug-fix release with some minor documentation improvements and
++enhancements to features released in 0.19.0.
++
++Note there may be minor differences in TSNE output in this release (due to
++:issue:`9623`), in the case where multiple samples have equal distance to some
++sample.
++
++Changelog
++---------
++
++API changes
++...........
++
++- Reverted the addition of ``metrics.ndcg_score`` and ``metrics.dcg_score``
++  which had been merged into version 0.19.0 by error.  The implementations
++  were broken and undocumented.
++
++- ``return_train_score`` which was added to
++  :class:`model_selection.GridSearchCV`,
++  :class:`model_selection.RandomizedSearchCV` and
++  :func:`model_selection.cross_validate` in version 0.19.0 will be changing its
++  default value from True to False in version 0.21.  We found that calculating
++  training score could have a great effect on cross validation runtime in some
++  cases.  Users should explicitly set ``return_train_score`` to False if
++  prediction or scoring functions are slow, resulting in a deleterious effect
++  on CV runtime, or to True if they wish to use the calculated scores.
++  :issue:`9677` by :user:`Kumar Ashutosh <thechargedneutron>` and `Joel
++  Nothman`_.
++
++- ``correlation_models`` and ``regression_models`` from the legacy gaussian
++  processes implementation have been belatedly deprecated. :issue:`9717` by
++  :user:`Kumar Ashutosh <thechargedneutron>`.
++
++Bug fixes
++.........
++
++- Avoid integer overflows in :func:`metrics.matthews_corrcoef`.
++  :issue:`9693` by :user:`Sam Steingold <sam-s>`.
++
++- Fix ValueError in :class:`preprocessing.LabelEncoder` when using
++  ``inverse_transform`` on unseen labels. :issue:`9816` by :user:`Charlie Newey
++  <newey01c>`.
++
++- Fixed a bug in the objective function for :class:`manifold.TSNE` (both exact
++  and with the Barnes-Hut approximation) when ``n_components >= 3``.
++  :issue:`9711` by :user:`goncalo-rodrigues`.
++
++- Fix regression in :func:`model_selection.cross_val_predict` where it
++  raised an error with ``method='predict_proba'`` for some probabilistic
++  classifiers. :issue:`9641` by :user:`James Bourbeau <jrbourbeau>`.
++
++- Fixed a bug where :func:`datasets.make_classification` modified its input
++  ``weights``. :issue:`9865` by :user:`Sachin Kelkar <s4chin>`.
++
++- :class:`model_selection.StratifiedShuffleSplit` now works with multioutput
++  multiclass or multilabel data with more than 1000 columns.  :issue:`9922` by
++  :user:`Charlie Brummitt <crbrummitt>`.
++
++- Fixed a bug with nested and conditional parameter setting, e.g. setting a
++  pipeline step and its parameter at the same time. :issue:`9945` by `Andreas
++  Müller`_ and `Joel Nothman`_.
++
++Regressions in 0.19.0 fixed in 0.19.1:
++
++- Fixed a bug where parallelised prediction in random forests was not
++  thread-safe and could (rarely) result in arbitrary errors. :issue:`9830` by
++  `Joel Nothman`_.
++
++- Fix regression in :func:`model_selection.cross_val_predict` where it no
++  longer accepted ``X`` as a list. :issue:`9600` by :user:`Rasul Kerimov
++  <CoderINusE>`.
++
++- Fixed handling of :func:`cross_val_predict` for binary classification with
++  ``method='decision_function'``. :issue:`9593` by :user:`Reiichiro Nakano
++  <reiinakano>` and core devs.
++
++- Fix regression in :class:`pipeline.Pipeline` where it no longer accepted
++  ``steps`` as a tuple. :issue:`9604` by :user:`Joris Van den Bossche
++  <jorisvandenbossche>`.
++
++- Fix bug where ``n_iter`` was not properly deprecated, leaving ``n_iter``
++  unavailable for interim use in
++  :class:`linear_model.SGDClassifier`, :class:`linear_model.SGDRegressor`,
++  :class:`linear_model.PassiveAggressiveClassifier`,
++  :class:`linear_model.PassiveAggressiveRegressor` and
++  :class:`linear_model.Perceptron`. :issue:`9558` by `Andreas Müller`_.
++
++- Dataset fetchers make sure temporary files are closed before removing them,
++  which caused errors on Windows. :issue:`9847` by :user:`Joan Massich <massich>`.
++
++- Fixed a regression in :class:`manifold.TSNE` where it no longer supported
++  metrics other than 'euclidean' and 'precomputed'. :issue:`9623` by :user:`Oli
++  Blum <oliblum90>`.
++
++Enhancements
++............
++
++- Our test suite and :func:`utils.estimator_checks.check_estimators` can now be
++  run without Nose installed. :issue:`9697` by :user:`Joan Massich <massich>`.
++
++- To improve usability of version 0.19's :class:`pipeline.Pipeline`
++  caching, ``memory`` now allows ``joblib.Memory`` instances.
++  This make use of the new :func:`utils.validation.check_memory` helper.
++  issue:`9584` by :user:`Kumar Ashutosh <thechargedneutron>`
++
++- Some fixes to examples: :issue:`9750`, :issue:`9788`, :issue:`9815`
++
++- Made a FutureWarning in SGD-based estimators less verbose. :issue:`9802` by
++  :user:`Vrishank Bhardwaj <vrishank97>`.
++
++Code and Documentation Contributors
++-----------------------------------
++
++With thanks to:
++
++Joel Nothman, Loic Esteve, Andreas Mueller, Kumar Ashutosh,
++Vrishank Bhardwaj, Hanmin Qin, Rasul Kerimov, James Bourbeau,
++Nagarjuna Kumar, Nathaniel Saul, Olivier Grisel, Roman
++Yurchak, Reiichiro Nakano, Sachin Kelkar, Sam Steingold,
++Yaroslav Halchenko, diegodlh, felix, goncalo-rodrigues,
++jkleint, oliblum90, pasbi, Anthony Gitter, Ben Lawson, Charlie
++Brummitt, Didi Bar-Zev, Gael Varoquaux, Joan Massich, Joris
++Van den Bossche, nielsenmarkus11
++
++
+ Version 0.19
+ ============
+ 
+diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
+index f495ede0cbb5..13efcfd6cc84 100644
+--- a/doc/whats_new/v0.20.rst
++++ b/doc/whats_new/v0.20.rst
+@@ -40,6 +40,12 @@ Classifiers and regressors
+ - Added :class:`naive_bayes.ComplementNB`, which implements the Complement
+   Naive Bayes classifier described in Rennie et al. (2003).
+   By :user:`Michael A. Alcorn <airalcorn2>`.
++  
++Model evaluation
++
++- Added the :func:`metrics.balanced_accuracy` metric and a corresponding
++  ``'balanced_accuracy'`` scorer for binary classification.
++  :issue:`8066` by :user:`xyguo` and :user:`Aman Dalmia <dalmia>`.
+ 
+ Enhancements
+ ............
+@@ -64,6 +70,11 @@ Model evaluation and meta-estimators
+ - A scorer based on :func:`metrics.brier_score_loss` is also available.
+   :issue:`9521` by :user:`Hanmin Qin <qinhanmin2014>`.
+ 
++Metrics
++
++- :func:`metrics.roc_auc_score` now supports binary ``y_true`` other than
++  ``{0, 1}`` or ``{-1, 1}``. :issue:`9828` by :user:`Hanmin Qin <qinhanmin2014>`.
++
+ Linear, kernelized and related models
+ 
+ - Deprecate ``random_state`` parameter in :class:`svm.OneClassSVM` as the
+@@ -124,3 +135,16 @@ Linear, kernelized and related models
+ - Deprecate ``random_state`` parameter in :class:`svm.OneClassSVM` as the
+   underlying implementation is not random.
+   :issue:`9497` by :user:`Albert Thomas <albertcthomas>`.
++
++Metrics
++
++- Deprecate ``reorder`` parameter in :func:`metrics.auc` as it's no longer required
++  for :func:`metrics.roc_auc_score`. Moreover using ``reorder=True`` can hide bugs
++  due to floating point error in the input.
++  :issue:`9851` by :user:`Hanmin Qin <qinhanmin2014>`.
++
++Cluster
++
++- Deprecate ``pooling_func`` unused parameter in
++  :class:`cluster.AgglomerativeClustering`. :issue:`9875` by :user:`Kumar Ashutosh
++  <thechargedneutron>`.
+diff --git a/examples/applications/plot_stock_market.py b/examples/applications/plot_stock_market.py
+index a79b4975e464..75273d1ea7ec 100644
+--- a/examples/applications/plot_stock_market.py
++++ b/examples/applications/plot_stock_market.py
+@@ -124,8 +124,8 @@ def quotes_historical_google(symbol, start_date, end_date):
+     data = np.genfromtxt(response, delimiter=',', skip_header=1,
+                          dtype=dtype, converters=converters,
+                          missing_values='-', filling_values=-1)
+-    min_date = min(data['date'], default=datetime.min.date())
+-    max_date = max(data['date'], default=datetime.max.date())
++    min_date = min(data['date']) if len(data) else datetime.min.date()
++    max_date = max(data['date']) if len(data) else datetime.max.date()
+     start_end_diff = (end_date - start_date).days
+     min_max_diff = (max_date - min_date).days
+     data_is_fine = (
+diff --git a/examples/cluster/plot_kmeans_stability_low_dim_dense.py b/examples/cluster/plot_kmeans_stability_low_dim_dense.py
+index 109d2097b6be..dc325b182d93 100644
+--- a/examples/cluster/plot_kmeans_stability_low_dim_dense.py
++++ b/examples/cluster/plot_kmeans_stability_low_dim_dense.py
+@@ -5,8 +5,8 @@
+ 
+ Evaluate the ability of k-means initializations strategies to make
+ the algorithm convergence robust as measured by the relative standard
+-deviation of the inertia of the clustering (i.e. the sum of distances
+-to the nearest cluster center).
++deviation of the inertia of the clustering (i.e. the sum of squared
++distances to the nearest cluster center).
+ 
+ The first plot shows the best inertia reached for each combination
+ of the model (``KMeans`` or ``MiniBatchKMeans``) and the init method
+diff --git a/examples/covariance/plot_outlier_detection.py b/examples/covariance/plot_outlier_detection.py
+index a680bc35e0a2..9c697c04716e 100644
+--- a/examples/covariance/plot_outlier_detection.py
++++ b/examples/covariance/plot_outlier_detection.py
+@@ -43,12 +43,15 @@
+ 
+ print(__doc__)
+ 
+-rng = np.random.RandomState(42)
++SEED = 42
++GRID_PRECISION = 100
++
++rng = np.random.RandomState(SEED)
+ 
+ # Example settings
+ n_samples = 200
+ outliers_fraction = 0.25
+-clusters_separation = [0, 1, 2]
++clusters_separation = (0, 1, 2)
+ 
+ # define two outlier detection tools to be compared
+ classifiers = {
+@@ -63,21 +66,23 @@
+         contamination=outliers_fraction)}
+ 
+ # Compare given classifiers under given settings
+-xx, yy = np.meshgrid(np.linspace(-7, 7, 100), np.linspace(-7, 7, 100))
+-n_inliers = int((1. - outliers_fraction) * n_samples)
++xx, yy = np.meshgrid(np.linspace(-7, 7, GRID_PRECISION),
++                     np.linspace(-7, 7, GRID_PRECISION))
+ n_outliers = int(outliers_fraction * n_samples)
++n_inliers = n_samples - n_outliers
+ ground_truth = np.ones(n_samples, dtype=int)
+ ground_truth[-n_outliers:] = -1
+ 
+ # Fit the problem with varying cluster separation
+-for i, offset in enumerate(clusters_separation):
+-    np.random.seed(42)
++for _, offset in enumerate(clusters_separation):
++    np.random.seed(SEED)
+     # Data generation
+     X1 = 0.3 * np.random.randn(n_inliers // 2, 2) - offset
+     X2 = 0.3 * np.random.randn(n_inliers // 2, 2) + offset
+-    X = np.r_[X1, X2]
++    X = np.concatenate([X1, X2], axis=0)
+     # Add outliers
+-    X = np.r_[X, np.random.uniform(low=-6, high=6, size=(n_outliers, 2))]
++    X = np.concatenate([X, np.random.uniform(low=-6, high=6,
++                       size=(n_outliers, 2))], axis=0)
+ 
+     # Fit the model
+     plt.figure(figsize=(9, 7))
+diff --git a/examples/ensemble/plot_forest_iris.py b/examples/ensemble/plot_forest_iris.py
+index 73db88d829b1..81cd54a9bb4d 100644
+--- a/examples/ensemble/plot_forest_iris.py
++++ b/examples/ensemble/plot_forest_iris.py
+@@ -107,7 +107,7 @@
+         plt.subplot(3, 4, plot_idx)
+         if plot_idx <= len(models):
+             # Add a title at the top of each column
+-            plt.title(model_title)
++            plt.title(model_title, fontsize=9)
+ 
+         # Now plot the decision boundary using a fine mesh as input to a
+         # filled contour plot
+@@ -154,7 +154,7 @@
+                     edgecolor='k', s=20)
+         plot_idx += 1  # move on to the next plot in sequence
+ 
+-plt.suptitle("Classifiers on feature subsets of the Iris dataset")
++plt.suptitle("Classifiers on feature subsets of the Iris dataset", fontsize=12)
+ plt.axis("tight")
+-
++plt.tight_layout(h_pad=0.2, w_pad=0.2, pad=2.5)
+ plt.show()
+diff --git a/examples/svm/plot_separating_hyperplane_unbalanced.py b/examples/svm/plot_separating_hyperplane_unbalanced.py
+index cf3130a6ae5c..85a35734fe9a 100644
+--- a/examples/svm/plot_separating_hyperplane_unbalanced.py
++++ b/examples/svm/plot_separating_hyperplane_unbalanced.py
+@@ -30,7 +30,7 @@
+ import matplotlib.pyplot as plt
+ from sklearn import svm
+ 
+-# we create 40 separable points
++# we create clusters with 1000 and 100 points
+ rng = np.random.RandomState(0)
+ n_samples_1 = 1000
+ n_samples_2 = 100
+@@ -75,3 +75,4 @@
+ 
+ plt.legend([a.collections[0], b.collections[0]], ["non weighted", "weighted"],
+            loc="upper right")
++plt.show()
+diff --git a/sklearn/base.py b/sklearn/base.py
+index d97fe92ccdd4..b653b7149c37 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -5,6 +5,7 @@
+ 
+ import copy
+ import warnings
++from collections import defaultdict
+ 
+ import numpy as np
+ from scipy import sparse
+@@ -248,26 +249,24 @@ def set_params(self, **params):
+             # Simple optimization to gain speed (inspect is slow)
+             return self
+         valid_params = self.get_params(deep=True)
+-        for key, value in six.iteritems(params):
+-            split = key.split('__', 1)
+-            if len(split) > 1:
+-                # nested objects case
+-                name, sub_name = split
+-                if name not in valid_params:
+-                    raise ValueError('Invalid parameter %s for estimator %s. '
+-                                     'Check the list of available parameters '
+-                                     'with `estimator.get_params().keys()`.' %
+-                                     (name, self))
+-                sub_object = valid_params[name]
+-                sub_object.set_params(**{sub_name: value})
++
++        nested_params = defaultdict(dict)  # grouped by prefix
++        for key, value in params.items():
++            key, delim, sub_key = key.partition('__')
++            if key not in valid_params:
++                raise ValueError('Invalid parameter %s for estimator %s. '
++                                 'Check the list of available parameters '
++                                 'with `estimator.get_params().keys()`.' %
++                                 (key, self))
++
++            if delim:
++                nested_params[key][sub_key] = value
+             else:
+-                # simple objects case
+-                if key not in valid_params:
+-                    raise ValueError('Invalid parameter %s for estimator %s. '
+-                                     'Check the list of available parameters '
+-                                     'with `estimator.get_params().keys()`.' %
+-                                     (key, self.__class__.__name__))
+                 setattr(self, key, value)
++
++        for key, sub_params in nested_params.items():
++            valid_params[key].set_params(**sub_params)
++
+         return self
+ 
+     def __repr__(self):
+diff --git a/sklearn/cluster/_k_means.pyx b/sklearn/cluster/_k_means.pyx
+index cdaa31fcb78e..9a391e6dcb1c 100644
+--- a/sklearn/cluster/_k_means.pyx
++++ b/sklearn/cluster/_k_means.pyx
+@@ -192,8 +192,8 @@ def _mini_batch_update_csr(X, np.ndarray[DOUBLE, ndim=1] x_squared_norms,
+     -------
+     inertia : float
+         The inertia of the batch prior to centers update, i.e. the sum
+-        distances to the closest center for each sample. This is the objective
+-        function being minimized by the k-means algorithm.
++        of squared distances to the closest center for each sample. This 
++        is the objective function being minimized by the k-means algorithm.
+ 
+     squared_diff : float
+         The sum of squared update (squared norm of the centers position
+diff --git a/sklearn/cluster/hierarchical.py b/sklearn/cluster/hierarchical.py
+index c8ead243192b..deb0bb5b0c23 100644
+--- a/sklearn/cluster/hierarchical.py
++++ b/sklearn/cluster/hierarchical.py
+@@ -641,10 +641,12 @@ class AgglomerativeClustering(BaseEstimator, ClusterMixin):
+         - complete or maximum linkage uses the maximum distances between
+           all observations of the two sets.
+ 
+-    pooling_func : callable, default=np.mean
+-        This combines the values of agglomerated features into a single
+-        value, and should accept an array of shape [M, N] and the keyword
+-        argument ``axis=1``, and reduce it to an array of size [M].
++    pooling_func : callable, default='deprecated'
++        Ignored.
++
++        .. deprecated:: 0.20
++            ``pooling_func`` has been deprecated in 0.20 and will be removed
++            in 0.22.
+ 
+     Attributes
+     ----------
+@@ -670,7 +672,7 @@ class AgglomerativeClustering(BaseEstimator, ClusterMixin):
+     def __init__(self, n_clusters=2, affinity="euclidean",
+                  memory=None,
+                  connectivity=None, compute_full_tree='auto',
+-                 linkage='ward', pooling_func=np.mean):
++                 linkage='ward', pooling_func='deprecated'):
+         self.n_clusters = n_clusters
+         self.memory = memory
+         self.connectivity = connectivity
+@@ -694,6 +696,10 @@ def fit(self, X, y=None):
+         -------
+         self
+         """
++        if self.pooling_func != 'deprecated':
++            warnings.warn('Agglomerative "pooling_func" parameter is not used.'
++                          ' It has been deprecated in version 0.20 and will be'
++                          'removed in 0.22', DeprecationWarning)
+         X = check_array(X, ensure_min_samples=2, estimator=self)
+         memory = check_memory(self.memory)
+ 
+@@ -829,6 +835,16 @@ class FeatureAgglomeration(AgglomerativeClustering, AgglomerationTransform):
+         are merged to form node `n_features + i`
+     """
+ 
++    def __init__(self, n_clusters=2, affinity="euclidean",
++                 memory=None,
++                 connectivity=None, compute_full_tree='auto',
++                 linkage='ward', pooling_func=np.mean):
++        super(FeatureAgglomeration, self).__init__(
++            n_clusters=n_clusters, memory=memory, connectivity=connectivity,
++            compute_full_tree=compute_full_tree, linkage=linkage,
++            affinity=affinity)
++        self.pooling_func = pooling_func
++
+     def fit(self, X, y=None, **params):
+         """Fit the hierarchical clustering on the data
+ 
+diff --git a/sklearn/cluster/k_means_.py b/sklearn/cluster/k_means_.py
+index 06f26b52aa0e..0da014417270 100644
+--- a/sklearn/cluster/k_means_.py
++++ b/sklearn/cluster/k_means_.py
+@@ -551,7 +551,7 @@ def _labels_inertia_precompute_dense(X, x_squared_norms, centers, distances):
+         Indices of clusters that samples are assigned to.
+ 
+     inertia : float
+-        Sum of distances of samples to their closest cluster center.
++        Sum of squared distances of samples to their closest cluster center.
+ 
+     """
+     n_samples = X.shape[0]
+@@ -602,7 +602,7 @@ def _labels_inertia(X, x_squared_norms, centers,
+         The resulting assignment
+ 
+     inertia : float
+-        Sum of distances of samples to their closest cluster center.
++        Sum of squared distances of samples to their closest cluster center.
+     """
+     n_samples = X.shape[0]
+     # set the default value of centers to -1 to be able to detect any anomaly
+@@ -792,7 +792,7 @@ class KMeans(BaseEstimator, ClusterMixin, TransformerMixin):
+         Labels of each point
+ 
+     inertia_ : float
+-        Sum of distances of samples to their closest cluster center.
++        Sum of squared distances of samples to their closest cluster center.
+ 
+     Examples
+     --------
+@@ -1068,7 +1068,7 @@ def _mini_batch_step(X, x_squared_norms, centers, counts,
+     Returns
+     -------
+     inertia : float
+-        Sum of distances of samples to their closest cluster center.
++        Sum of squared distances of samples to their closest cluster center.
+ 
+     squared_diff : numpy array, shape (n_clusters,)
+         Squared distances between previous and updated cluster centers.
+diff --git a/sklearn/covariance/robust_covariance.py b/sklearn/covariance/robust_covariance.py
+index de5ee308764b..8420d49543cf 100644
+--- a/sklearn/covariance/robust_covariance.py
++++ b/sklearn/covariance/robust_covariance.py
+@@ -405,7 +405,7 @@ def fast_mcd(X, support_fraction=None,
+             # get precision matrix in an optimized way
+             precision = linalg.pinvh(covariance)
+             dist = (np.dot(X_centered, precision) * (X_centered)).sum(axis=1)
+-# Starting FastMCD algorithm for p-dimensional case
++    # Starting FastMCD algorithm for p-dimensional case
+     if (n_samples > 500) and (n_features > 1):
+         # 1. Find candidate supports on subsets
+         # a. split the set in subsets of size ~ 300
+@@ -672,6 +672,14 @@ def correct_covariance(self, data):
+             Corrected robust covariance estimate.
+ 
+         """
++
++        # Check that the covariance of the support data is not equal to 0.
++        # Otherwise self.dist_ = 0 and thus correction = 0.
++        n_samples = len(self.dist_)
++        n_support = np.sum(self.support_)
++        if n_support < n_samples and np.allclose(self.raw_covariance_, 0):
++            raise ValueError('The covariance matrix of the support data '
++                             'is equal to 0, try to increase support_fraction')
+         correction = np.median(self.dist_) / chi2(data.shape[1]).isf(0.5)
+         covariance_corrected = self.raw_covariance_ * correction
+         self.dist_ /= correction
+diff --git a/sklearn/covariance/tests/test_robust_covariance.py b/sklearn/covariance/tests/test_robust_covariance.py
+index b6205f2cba9f..f4c43d001162 100644
+--- a/sklearn/covariance/tests/test_robust_covariance.py
++++ b/sklearn/covariance/tests/test_robust_covariance.py
+@@ -126,6 +126,19 @@ def test_mcd_issue3367():
+     MinCovDet(random_state=rand_gen).fit(data)
+ 
+ 
++def test_mcd_support_covariance_is_zero():
++    # Check that MCD returns a ValueError with informative message when the
++    # covariance of the support data is equal to 0.
++    X_1 = np.array([0.5, 0.1, 0.1, 0.1, 0.957, 0.1, 0.1, 0.1, 0.4285, 0.1])
++    X_1 = X_1.reshape(-1, 1)
++    X_2 = np.array([0.5, 0.3, 0.3, 0.3, 0.957, 0.3, 0.3, 0.3, 0.4285, 0.3])
++    X_2 = X_2.reshape(-1, 1)
++    msg = ('The covariance matrix of the support data is equal to 0, try to '
++           'increase support_fraction')
++    for X in [X_1, X_2]:
++        assert_raise_message(ValueError, msg, MinCovDet().fit, X)
++
++
+ def test_outlier_detection():
+     rnd = np.random.RandomState(0)
+     X = rnd.randn(100, 10)
+diff --git a/sklearn/datasets/samples_generator.py b/sklearn/datasets/samples_generator.py
+index 06bb8d41ec0a..259c8f1c13ee 100644
+--- a/sklearn/datasets/samples_generator.py
++++ b/sklearn/datasets/samples_generator.py
+@@ -42,9 +42,10 @@ def make_classification(n_samples=100, n_features=20, n_informative=2,
+     """Generate a random n-class classification problem.
+ 
+     This initially creates clusters of points normally distributed (std=1)
+-    about vertices of a `2 * class_sep`-sided hypercube, and assigns an equal
+-    number of clusters to each class. It introduces interdependence between
+-    these features and adds various types of further noise to the data.
++    about vertices of an `n_informative`-dimensional hypercube with sides of
++    length `2*class_sep` and assigns an equal number of clusters to each
++    class. It introduces interdependence between these features and adds
++    various types of further noise to the data.
+ 
+     Prior to shuffling, `X` stacks a number of these primary "informative"
+     features, "redundant" linear combinations of these, "repeated" duplicates
+@@ -94,10 +95,13 @@ def make_classification(n_samples=100, n_features=20, n_informative=2,
+         exceeds 1.
+ 
+     flip_y : float, optional (default=0.01)
+-        The fraction of samples whose class are randomly exchanged.
++        The fraction of samples whose class are randomly exchanged. Larger
++        values introduce noise in the labels and make the classification
++        task harder.
+ 
+     class_sep : float, optional (default=1.0)
+-        The factor multiplying the hypercube dimension.
++        The factor multiplying the hypercube size.  Larger values spread
++        out the clusters/classes and make the classification task easier.
+ 
+     hypercube : boolean, optional (default=True)
+         If True, the clusters are put on the vertices of a hypercube. If
+diff --git a/sklearn/decomposition/truncated_svd.py b/sklearn/decomposition/truncated_svd.py
+index 028304672e4d..726f9162eb92 100644
+--- a/sklearn/decomposition/truncated_svd.py
++++ b/sklearn/decomposition/truncated_svd.py
+@@ -110,7 +110,7 @@ class TruncatedSVD(BaseEstimator, TransformerMixin):
+ 
+     Notes
+     -----
+-    SVD suffers from a problem called "sign indeterminancy", which means the
++    SVD suffers from a problem called "sign indeterminacy", which means the
+     sign of the ``components_`` and the output from transform depend on the
+     algorithm and random state. To work around this, fit instances of this
+     class to data once, then keep the instance around to do transformations.
+diff --git a/sklearn/ensemble/forest.py b/sklearn/ensemble/forest.py
+index 53538866be1f..0e6a23e399a3 100644
+--- a/sklearn/ensemble/forest.py
++++ b/sklearn/ensemble/forest.py
+@@ -43,6 +43,7 @@ class calls the ``fit`` method of each sub-estimator on random samples
+ 
+ import warnings
+ from warnings import warn
++import threading
+ 
+ from abc import ABCMeta, abstractmethod
+ import numpy as np
+@@ -378,13 +379,14 @@ def feature_importances_(self):
+ # ForestClassifier or ForestRegressor, because joblib complains that it cannot
+ # pickle it when placed there.
+ 
+-def accumulate_prediction(predict, X, out):
++def accumulate_prediction(predict, X, out, lock):
+     prediction = predict(X, check_input=False)
+-    if len(out) == 1:
+-        out[0] += prediction
+-    else:
+-        for i in range(len(out)):
+-            out[i] += prediction[i]
++    with lock:
++        if len(out) == 1:
++            out[0] += prediction
++        else:
++            for i in range(len(out)):
++                out[i] += prediction[i]
+ 
+ 
+ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
+@@ -581,8 +583,9 @@ class in a leaf.
+         # avoid storing the output of every estimator by summing them here
+         all_proba = [np.zeros((X.shape[0], j), dtype=np.float64)
+                      for j in np.atleast_1d(self.n_classes_)]
++        lock = threading.Lock()
+         Parallel(n_jobs=n_jobs, verbose=self.verbose, backend="threading")(
+-            delayed(accumulate_prediction)(e.predict_proba, X, all_proba)
++            delayed(accumulate_prediction)(e.predict_proba, X, all_proba, lock)
+             for e in self.estimators_)
+ 
+         for proba in all_proba:
+@@ -687,8 +690,9 @@ def predict(self, X):
+             y_hat = np.zeros((X.shape[0]), dtype=np.float64)
+ 
+         # Parallel loop
++        lock = threading.Lock()
+         Parallel(n_jobs=n_jobs, verbose=self.verbose, backend="threading")(
+-            delayed(accumulate_prediction)(e.predict, X, [y_hat])
++            delayed(accumulate_prediction)(e.predict, X, [y_hat], lock)
+             for e in self.estimators_)
+ 
+         y_hat /= len(self.estimators_)
+diff --git a/sklearn/feature_selection/variance_threshold.py b/sklearn/feature_selection/variance_threshold.py
+index 13e1aa707831..c9e018d94a84 100644
+--- a/sklearn/feature_selection/variance_threshold.py
++++ b/sklearn/feature_selection/variance_threshold.py
+@@ -54,7 +54,7 @@ def fit(self, X, y=None):
+             Sample vectors from which to compute variances.
+ 
+         y : any
+-            Ignored This parameter exists only for compatibility with
++            Ignored. This parameter exists only for compatibility with
+             sklearn.pipeline.Pipeline.
+ 
+         Returns
+diff --git a/sklearn/gaussian_process/correlation_models.py b/sklearn/gaussian_process/correlation_models.py
+index 1678e70fc560..3b954e2582b0 100644
+--- a/sklearn/gaussian_process/correlation_models.py
++++ b/sklearn/gaussian_process/correlation_models.py
+@@ -10,8 +10,11 @@
+ 
+ 
+ import numpy as np
++from ..utils import deprecated
+ 
+ 
++@deprecated("The function absolute_exponential of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def absolute_exponential(theta, d):
+     """
+     Absolute exponential autocorrelation model.
+@@ -54,6 +57,8 @@ def absolute_exponential(theta, d):
+         return np.exp(- np.sum(theta.reshape(1, n_features) * d, axis=1))
+ 
+ 
++@deprecated("The function squared_exponential of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def squared_exponential(theta, d):
+     """
+     Squared exponential correlation model (Radial Basis Function).
+@@ -97,6 +102,8 @@ def squared_exponential(theta, d):
+         return np.exp(-np.sum(theta.reshape(1, n_features) * d ** 2, axis=1))
+ 
+ 
++@deprecated("The function generalized_exponential of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def generalized_exponential(theta, d):
+     """
+     Generalized exponential correlation model.
+@@ -147,6 +154,8 @@ def generalized_exponential(theta, d):
+     return r
+ 
+ 
++@deprecated("The function pure_nugget of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def pure_nugget(theta, d):
+     """
+     Spatial independence correlation model (pure nugget).
+@@ -184,6 +193,8 @@ def pure_nugget(theta, d):
+     return r
+ 
+ 
++@deprecated("The function cubic of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def cubic(theta, d):
+     """
+     Cubic correlation model::
+@@ -234,6 +245,8 @@ def cubic(theta, d):
+     return r
+ 
+ 
++@deprecated("The function linear of correlation_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def linear(theta, d):
+     """
+     Linear correlation model::
+diff --git a/sklearn/gaussian_process/regression_models.py b/sklearn/gaussian_process/regression_models.py
+index 041837eaf7de..b0f7535d11ee 100644
+--- a/sklearn/gaussian_process/regression_models.py
++++ b/sklearn/gaussian_process/regression_models.py
+@@ -10,8 +10,11 @@
+ 
+ 
+ import numpy as np
++from ..utils import deprecated
+ 
+ 
++@deprecated("The function constant of regression_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def constant(x):
+     """
+     Zero order polynomial (constant, p = 1) regression model.
+@@ -36,6 +39,8 @@ def constant(x):
+     return f
+ 
+ 
++@deprecated("The function linear of regression_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def linear(x):
+     """
+     First order polynomial (linear, p = n+1) regression model.
+@@ -60,6 +65,8 @@ def linear(x):
+     return f
+ 
+ 
++@deprecated("The function quadratic of regression_models is "
++            "deprecated in version 0.19.1 and will be removed in 0.22.")
+ def quadratic(x):
+     """
+     Second order polynomial (quadratic, p = n*(n-1)/2+n+1) regression model.
+diff --git a/sklearn/kernel_ridge.py b/sklearn/kernel_ridge.py
+index 3ae1cfac595a..308d0661bced 100644
+--- a/sklearn/kernel_ridge.py
++++ b/sklearn/kernel_ridge.py
+@@ -83,9 +83,9 @@ class KernelRidge(BaseEstimator, RegressorMixin):
+ 
+     See also
+     --------
+-    Ridge
++    sklearn.linear_model.Ridge:
+         Linear ridge regression.
+-    SVR
++    sklearn.svm.SVR:
+         Support Vector Regression implemented using libsvm.
+ 
+     Examples
+diff --git a/sklearn/linear_model/logistic.py b/sklearn/linear_model/logistic.py
+index 59e6db8457a4..7c8a8d9ae461 100644
+--- a/sklearn/linear_model/logistic.py
++++ b/sklearn/linear_model/logistic.py
+@@ -1415,7 +1415,7 @@ class LogisticRegressionCV(LogisticRegression, BaseEstimator,
+         default scoring option used is 'accuracy'.
+ 
+     solver : {'newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'},
+-        default: 'liblinear'
++        default: 'lbfgs'
+         Algorithm to use in the optimization problem.
+ 
+         - For small datasets, 'liblinear' is a good choice, whereas 'sag' and
+diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
+index 255bfb7c090a..8a48cef65ce5 100644
+--- a/sklearn/linear_model/ridge.py
++++ b/sklearn/linear_model/ridge.py
+@@ -512,6 +512,10 @@ def fit(self, X, y, sample_weight=None):
+ class Ridge(_BaseRidge, RegressorMixin):
+     """Linear least squares with l2 regularization.
+ 
++    Minimizes the objective function::
++
++    ||y - Xw||^2_2 + alpha * ||w||^2_2
++
+     This model solves a regression model where the loss function is
+     the linear least squares function and regularization is given by
+     the l2-norm. Also known as Ridge Regression or Tikhonov regularization.
+diff --git a/sklearn/manifold/t_sne.py b/sklearn/manifold/t_sne.py
+index d5edf2191455..f0bbb7cb78e2 100644
+--- a/sklearn/manifold/t_sne.py
++++ b/sklearn/manifold/t_sne.py
+@@ -423,9 +423,9 @@ def trustworthiness(X, X_embedded, n_neighbors=5, precomputed=False):
+         dist_X = X
+     else:
+         dist_X = pairwise_distances(X, squared=True)
+-    dist_X_embedded = pairwise_distances(X_embedded, squared=True)
+     ind_X = np.argsort(dist_X, axis=1)
+-    ind_X_embedded = np.argsort(dist_X_embedded, axis=1)[:, 1:n_neighbors + 1]
++    ind_X_embedded = NearestNeighbors(n_neighbors).fit(X_embedded).kneighbors(
++        return_distance=False)
+ 
+     n_samples = X.shape[0]
+     t = 0.0
+diff --git a/sklearn/metrics/__init__.py b/sklearn/metrics/__init__.py
+index 93d21a146619..9428680d08de 100644
+--- a/sklearn/metrics/__init__.py
++++ b/sklearn/metrics/__init__.py
+@@ -12,10 +12,9 @@
+ from .ranking import precision_recall_curve
+ from .ranking import roc_auc_score
+ from .ranking import roc_curve
+-from .ranking import dcg_score
+-from .ranking import ndcg_score
+ 
+ from .classification import accuracy_score
++from .classification import balanced_accuracy_score
+ from .classification import classification_report
+ from .classification import cohen_kappa_score
+ from .classification import confusion_matrix
+@@ -70,6 +69,7 @@
+     'adjusted_rand_score',
+     'auc',
+     'average_precision_score',
++    'balanced_accuracy_score',
+     'calinski_harabaz_score',
+     'classification_report',
+     'cluster',
+@@ -118,6 +118,4 @@
+     'v_measure_score',
+     'zero_one_loss',
+     'brier_score_loss',
+-    'dcg_score',
+-    'ndcg_score'
+ ]
+diff --git a/sklearn/metrics/classification.py b/sklearn/metrics/classification.py
+index 3f169fe1b46d..7d8b887c6662 100644
+--- a/sklearn/metrics/classification.py
++++ b/sklearn/metrics/classification.py
+@@ -174,6 +174,7 @@ def accuracy_score(y_true, y_pred, normalize=True, sample_weight=None):
+ 
+     # Compute accuracy for each possible representation
+     y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     if y_type.startswith('multilabel'):
+         differing_labels = count_nonzero(y_true - y_pred, axis=1)
+         score = differing_labels == 0
+@@ -263,7 +264,7 @@ def confusion_matrix(y_true, y_pred, labels=None, sample_weight=None):
+     else:
+         sample_weight = np.asarray(sample_weight)
+ 
+-    check_consistent_length(sample_weight, y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+ 
+     n_labels = labels.size
+     label_to_ind = dict((y, x) for x, y in enumerate(labels))
+@@ -444,6 +445,7 @@ def jaccard_similarity_score(y_true, y_pred, normalize=True,
+ 
+     # Compute accuracy for each possible representation
+     y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     if y_type.startswith('multilabel'):
+         with np.errstate(divide='ignore', invalid='ignore'):
+             # oddly, we may get an "invalid" rather than a "divide" error here
+@@ -519,6 +521,7 @@ def matthews_corrcoef(y_true, y_pred, sample_weight=None):
+     -0.33...
+     """
+     y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     if y_type not in {"binary", "multiclass"}:
+         raise ValueError("%s is not supported" % y_type)
+ 
+@@ -1023,6 +1026,7 @@ def precision_recall_fscore_support(y_true, y_pred, beta=1.0, labels=None,
+         raise ValueError("beta should be >0 in the F-beta score")
+ 
+     y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     present_labels = unique_labels(y_true, y_pred)
+ 
+     if average == 'binary':
+@@ -1360,6 +1364,67 @@ def recall_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
+     return r
+ 
+ 
++def balanced_accuracy_score(y_true, y_pred, sample_weight=None):
++    """Compute the balanced accuracy
++
++    The balanced accuracy is used in binary classification problems to deal
++    with imbalanced datasets. It is defined as the arithmetic mean of
++    sensitivity (true positive rate) and specificity (true negative rate),
++    or the average recall obtained on either class. It is also equal to the
++    ROC AUC score given binary inputs.
++
++    The best value is 1 and the worst value is 0.
++
++    Read more in the :ref:`User Guide <balanced_accuracy_score>`.
++
++    Parameters
++    ----------
++    y_true : 1d array-like
++        Ground truth (correct) target values.
++
++    y_pred : 1d array-like
++        Estimated targets as returned by a classifier.
++
++    sample_weight : array-like of shape = [n_samples], optional
++        Sample weights.
++
++    Returns
++    -------
++    balanced_accuracy : float.
++        The average of sensitivity and specificity
++
++    See also
++    --------
++    recall_score, roc_auc_score
++
++    References
++    ----------
++    .. [1] Brodersen, K.H.; Ong, C.S.; Stephan, K.E.; Buhmann, J.M. (2010).
++           The balanced accuracy and its posterior distribution.
++           Proceedings of the 20th International Conference on Pattern
++           Recognition, 3121-24.
++
++    Examples
++    --------
++    >>> from sklearn.metrics import balanced_accuracy_score
++    >>> y_true = [0, 1, 0, 0, 1, 0]
++    >>> y_pred = [0, 1, 0, 0, 0, 1]
++    >>> balanced_accuracy_score(y_true, y_pred)
++    0.625
++
++    """
++    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++
++    if y_type != 'binary':
++        raise ValueError('Balanced accuracy is only meaningful '
++                         'for binary classification problems.')
++    # simply wrap the ``recall_score`` function
++    return recall_score(y_true, y_pred,
++                        pos_label=None,
++                        average='macro',
++                        sample_weight=sample_weight)
++
++
+ def classification_report(y_true, y_pred, labels=None, target_names=None,
+                           sample_weight=None, digits=2):
+     """Build a text report showing the main classification metrics
+@@ -1550,6 +1615,7 @@ def hamming_loss(y_true, y_pred, labels=None, sample_weight=None,
+         labels = classes
+ 
+     y_type, y_true, y_pred = _check_targets(y_true, y_pred)
++    check_consistent_length(y_true, y_pred, sample_weight)
+ 
+     if labels is None:
+         labels = unique_labels(y_true, y_pred)
+@@ -1638,7 +1704,7 @@ def log_loss(y_true, y_pred, eps=1e-15, normalize=True, sample_weight=None,
+     The logarithm used is the natural logarithm (base-e).
+     """
+     y_pred = check_array(y_pred, ensure_2d=False)
+-    check_consistent_length(y_pred, y_true)
++    check_consistent_length(y_pred, y_true, sample_weight)
+ 
+     lb = LabelBinarizer()
+ 
+@@ -1911,6 +1977,7 @@ def brier_score_loss(y_true, y_prob, sample_weight=None, pos_label=None):
+     y_prob = column_or_1d(y_prob)
+     assert_all_finite(y_true)
+     assert_all_finite(y_prob)
++    check_consistent_length(y_true, y_prob, sample_weight)
+ 
+     if pos_label is None:
+         pos_label = y_true.max()
+diff --git a/sklearn/metrics/ranking.py b/sklearn/metrics/ranking.py
+index 9c01741d0327..bc18b248cadf 100644
+--- a/sklearn/metrics/ranking.py
++++ b/sklearn/metrics/ranking.py
+@@ -26,17 +26,17 @@
+ 
+ from ..utils import assert_all_finite
+ from ..utils import check_consistent_length
+-from ..utils import column_or_1d, check_array, check_X_y
++from ..utils import column_or_1d, check_array
+ from ..utils.multiclass import type_of_target
+ from ..utils.extmath import stable_cumsum
+ from ..utils.sparsefuncs import count_nonzero
+ from ..exceptions import UndefinedMetricWarning
+-from ..preprocessing import LabelBinarizer
++from ..preprocessing import label_binarize
+ 
+ from .base import _average_binary_score
+ 
+ 
+-def auc(x, y, reorder=False):
++def auc(x, y, reorder='deprecated'):
+     """Compute Area Under the Curve (AUC) using the trapezoidal rule
+ 
+     This is a general function, given points on a curve.  For computing the
+@@ -47,12 +47,23 @@ def auc(x, y, reorder=False):
+     Parameters
+     ----------
+     x : array, shape = [n]
+-        x coordinates.
++        x coordinates. These must be either monotonic increasing or monotonic
++        decreasing.
+     y : array, shape = [n]
+         y coordinates.
+-    reorder : boolean, optional (default=False)
+-        If True, assume that the curve is ascending in the case of ties, as for
+-        an ROC curve. If the curve is non-ascending, the result will be wrong.
++    reorder : boolean, optional (default='deprecated')
++        Whether to sort x before computing. If False, assume that x must be
++        either monotonic increasing or monotonic decreasing. If True, y is
++        used to break ties when sorting x. Make sure that y has a monotonic
++        relation to x when setting reorder to True.
++
++        .. deprecated:: 0.20
++           Parameter ``reorder`` has been deprecated in version 0.20 and will
++           be removed in 0.22. It's introduced for roc_auc_score (not for
++           general use) and is no longer used there. What's more, the result
++           from auc will be significantly influenced if x is sorted
++           unexpectedly due to slight floating point error (See issue #9786).
++           Future (and default) behavior is equivalent to ``reorder=False``.
+ 
+     Returns
+     -------
+@@ -83,8 +94,15 @@ def auc(x, y, reorder=False):
+         raise ValueError('At least 2 points are needed to compute'
+                          ' area under curve, but x.shape = %s' % x.shape)
+ 
++    if reorder != 'deprecated':
++        warnings.warn("The 'reorder' parameter has been deprecated in "
++                      "version 0.20 and will be removed in 0.22. It is "
++                      "recommended not to set 'reorder' and ensure that x "
++                      "is monotonic increasing or monotonic decreasing.",
++                      DeprecationWarning)
++
+     direction = 1
+-    if reorder:
++    if reorder is True:
+         # reorder the data points according to the x axis and using y to
+         # break ties
+         order = np.lexsort((y, x))
+@@ -95,8 +113,8 @@ def auc(x, y, reorder=False):
+             if np.all(dx <= 0):
+                 direction = -1
+             else:
+-                raise ValueError("Reordering is not turned on, and "
+-                                 "the x array is not increasing: %s" % x)
++                raise ValueError("x is neither increasing nor decreasing "
++                                 ": {}.".format(x))
+ 
+     area = direction * np.trapz(y, x)
+     if isinstance(area, np.memmap):
+@@ -212,12 +230,14 @@ def roc_auc_score(y_true, y_score, average="macro", sample_weight=None):
+     Parameters
+     ----------
+     y_true : array, shape = [n_samples] or [n_samples, n_classes]
+-        True binary labels (either {0, 1} or {-1, 1}).
++        True binary labels or binary label indicators.
+ 
+     y_score : array, shape = [n_samples] or [n_samples, n_classes]
+         Target scores, can either be probability estimates of the positive
+         class, confidence values, or non-thresholded measure of decisions
+-        (as returned by "decision_function" on some classifiers).
++        (as returned by "decision_function" on some classifiers). For binary
++        y_true, y_score is supposed to be the score of the class with greater
++        label.
+ 
+     average : string, [None, 'micro', 'macro' (default), 'samples', 'weighted']
+         If ``None``, the scores for each class are returned. Otherwise,
+@@ -272,6 +292,11 @@ def _binary_roc_auc_score(y_true, y_score, sample_weight=None):
+                                         sample_weight=sample_weight)
+         return auc(fpr, tpr)
+ 
++    y_type = type_of_target(y_true)
++    if y_type == "binary":
++        labels = np.unique(y_true)
++        y_true = label_binarize(y_true, labels)[:, 0]
++
+     return _average_binary_score(
+         _binary_roc_auc_score, y_true, y_score, average,
+         sample_weight=sample_weight)
+@@ -796,91 +821,3 @@ def label_ranking_loss(y_true, y_score, sample_weight=None):
+     loss[np.logical_or(n_positives == 0, n_positives == n_labels)] = 0.
+ 
+     return np.average(loss, weights=sample_weight)
+-
+-
+-def dcg_score(y_true, y_score, k=5):
+-    """Discounted cumulative gain (DCG) at rank K.
+-
+-    Parameters
+-    ----------
+-    y_true : array, shape = [n_samples]
+-        Ground truth (true relevance labels).
+-    y_score : array, shape = [n_samples]
+-        Predicted scores.
+-    k : int
+-        Rank.
+-
+-    Returns
+-    -------
+-    score : float
+-
+-    References
+-    ----------
+-    .. [1] `Wikipedia entry for the Discounted Cumulative Gain
+-           <https://en.wikipedia.org/wiki/Discounted_cumulative_gain>`_
+-    """
+-    order = np.argsort(y_score)[::-1]
+-    y_true = np.take(y_true, order[:k])
+-
+-    gain = 2 ** y_true - 1
+-
+-    discounts = np.log2(np.arange(len(y_true)) + 2)
+-    return np.sum(gain / discounts)
+-
+-
+-def ndcg_score(y_true, y_score, k=5):
+-    """Normalized discounted cumulative gain (NDCG) at rank K.
+-
+-    Normalized Discounted Cumulative Gain (NDCG) measures the performance of a
+-    recommendation system based on the graded relevance of the recommended
+-    entities. It varies from 0.0 to 1.0, with 1.0 representing the ideal
+-    ranking of the entities.
+-
+-    Parameters
+-    ----------
+-    y_true : array, shape = [n_samples]
+-        Ground truth (true labels represended as integers).
+-    y_score : array, shape = [n_samples, n_classes]
+-        Predicted probabilities.
+-    k : int
+-        Rank.
+-
+-    Returns
+-    -------
+-    score : float
+-
+-    Examples
+-    --------
+-    >>> y_true = [1, 0, 2]
+-    >>> y_score = [[0.15, 0.55, 0.2], [0.7, 0.2, 0.1], [0.06, 0.04, 0.9]]
+-    >>> ndcg_score(y_true, y_score, k=2)
+-    1.0
+-    >>> y_score = [[0.9, 0.5, 0.8], [0.7, 0.2, 0.1], [0.06, 0.04, 0.9]]
+-    >>> ndcg_score(y_true, y_score, k=2)
+-    0.66666666666666663
+-
+-    References
+-    ----------
+-    .. [1] `Kaggle entry for the Normalized Discounted Cumulative Gain
+-           <https://www.kaggle.com/wiki/NormalizedDiscountedCumulativeGain>`_
+-    """
+-    y_score, y_true = check_X_y(y_score, y_true)
+-
+-    # Make sure we use all the labels (max between the length and the higher
+-    # number in the array)
+-    lb = LabelBinarizer()
+-    lb.fit(np.arange(max(np.max(y_true) + 1, len(y_true))))
+-    binarized_y_true = lb.transform(y_true)
+-
+-    if binarized_y_true.shape != y_score.shape:
+-        raise ValueError("y_true and y_score have different value ranges")
+-
+-    scores = []
+-
+-    # Iterate over each y_value_true and compute the DCG score
+-    for y_value_true, y_value_score in zip(binarized_y_true, y_score):
+-        actual = dcg_score(y_value_true, y_value_score, k)
+-        best = dcg_score(y_value_true, y_value_true, k)
+-        scores.append(actual / best)
+-
+-    return np.mean(scores)
+diff --git a/sklearn/metrics/regression.py b/sklearn/metrics/regression.py
+index f831a1326179..b85ee9a1ba3f 100644
+--- a/sklearn/metrics/regression.py
++++ b/sklearn/metrics/regression.py
+@@ -168,6 +168,7 @@ def mean_absolute_error(y_true, y_pred,
+     """
+     y_type, y_true, y_pred, multioutput = _check_reg_targets(
+         y_true, y_pred, multioutput)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     output_errors = np.average(np.abs(y_pred - y_true),
+                                weights=sample_weight, axis=0)
+     if isinstance(multioutput, string_types):
+@@ -236,6 +237,7 @@ def mean_squared_error(y_true, y_pred,
+     """
+     y_type, y_true, y_pred, multioutput = _check_reg_targets(
+         y_true, y_pred, multioutput)
++    check_consistent_length(y_true, y_pred, sample_weight)
+     output_errors = np.average((y_true - y_pred) ** 2, axis=0,
+                                weights=sample_weight)
+     if isinstance(multioutput, string_types):
+@@ -306,6 +308,7 @@ def mean_squared_log_error(y_true, y_pred,
+     """
+     y_type, y_true, y_pred, multioutput = _check_reg_targets(
+         y_true, y_pred, multioutput)
++    check_consistent_length(y_true, y_pred, sample_weight)
+ 
+     if not (y_true >= 0).all() and not (y_pred >= 0).all():
+         raise ValueError("Mean Squared Logarithmic Error cannot be used when "
+@@ -409,6 +412,7 @@ def explained_variance_score(y_true, y_pred,
+     """
+     y_type, y_true, y_pred, multioutput = _check_reg_targets(
+         y_true, y_pred, multioutput)
++    check_consistent_length(y_true, y_pred, sample_weight)
+ 
+     y_diff_avg = np.average(y_true - y_pred, weights=sample_weight, axis=0)
+     numerator = np.average((y_true - y_pred - y_diff_avg) ** 2,
+@@ -528,6 +532,7 @@ def r2_score(y_true, y_pred, sample_weight=None,
+     """
+     y_type, y_true, y_pred, multioutput = _check_reg_targets(
+         y_true, y_pred, multioutput)
++    check_consistent_length(y_true, y_pred, sample_weight)
+ 
+     if sample_weight is not None:
+         sample_weight = column_or_1d(sample_weight)
+diff --git a/sklearn/metrics/scorer.py b/sklearn/metrics/scorer.py
+index 3fb35994c351..05231826a899 100644
+--- a/sklearn/metrics/scorer.py
++++ b/sklearn/metrics/scorer.py
+@@ -26,7 +26,7 @@
+ from . import (r2_score, median_absolute_error, mean_absolute_error,
+                mean_squared_error, mean_squared_log_error, accuracy_score,
+                f1_score, roc_auc_score, average_precision_score,
+-               precision_score, recall_score, log_loss,
++               precision_score, recall_score, log_loss, balanced_accuracy_score,
+                explained_variance_score, brier_score_loss)
+ 
+ from .cluster import adjusted_rand_score
+@@ -500,6 +500,7 @@ def make_scorer(score_func, greater_is_better=True, needs_proba=False,
+ # Standard Classification Scores
+ accuracy_scorer = make_scorer(accuracy_score)
+ f1_scorer = make_scorer(f1_score)
++balanced_accuracy_scorer = make_scorer(balanced_accuracy_score)
+ 
+ # Score functions that need decision values
+ roc_auc_scorer = make_scorer(roc_auc_score, greater_is_better=True,
+@@ -543,6 +544,7 @@ def make_scorer(score_func, greater_is_better=True, needs_proba=False,
+                mean_absolute_error=mean_absolute_error_scorer,
+                mean_squared_error=mean_squared_error_scorer,
+                accuracy=accuracy_scorer, roc_auc=roc_auc_scorer,
++               balanced_accuracy=balanced_accuracy_scorer,
+                average_precision=average_precision_scorer,
+                log_loss=log_loss_scorer,
+                neg_log_loss=neg_log_loss_scorer,
+diff --git a/sklearn/metrics/tests/test_common.py b/sklearn/metrics/tests/test_common.py
+index b935ccbe2991..e68f4024b24a 100644
+--- a/sklearn/metrics/tests/test_common.py
++++ b/sklearn/metrics/tests/test_common.py
+@@ -9,6 +9,7 @@
+ from sklearn.datasets import make_multilabel_classification
+ from sklearn.preprocessing import LabelBinarizer
+ from sklearn.utils.multiclass import type_of_target
++from sklearn.utils.validation import _num_samples
+ from sklearn.utils.validation import check_random_state
+ from sklearn.utils import shuffle
+ 
+@@ -25,6 +26,7 @@
+ from sklearn.utils.testing import _named_check
+ 
+ from sklearn.metrics import accuracy_score
++from sklearn.metrics import balanced_accuracy_score
+ from sklearn.metrics import average_precision_score
+ from sklearn.metrics import brier_score_loss
+ from sklearn.metrics import cohen_kappa_score
+@@ -100,6 +102,7 @@
+ 
+ CLASSIFICATION_METRICS = {
+     "accuracy_score": accuracy_score,
++    "balanced_accuracy_score": balanced_accuracy_score,
+     "unnormalized_accuracy_score": partial(accuracy_score, normalize=False),
+     "confusion_matrix": confusion_matrix,
+     "hamming_loss": hamming_loss,
+@@ -211,6 +214,7 @@
+ # Those metrics don't support multiclass inputs
+ METRIC_UNDEFINED_MULTICLASS = [
+     "brier_score_loss",
++    "balanced_accuracy_score",
+ 
+     "roc_auc_score",
+     "micro_roc_auc",
+@@ -352,6 +356,7 @@
+ # Asymmetric with respect to their input arguments y_true and y_pred
+ # metric(y_true, y_pred) != metric(y_pred, y_true).
+ NOT_SYMMETRIC_METRICS = [
++    "balanced_accuracy_score",
+     "explained_variance_score",
+     "r2_score",
+     "confusion_matrix",
+@@ -594,8 +599,7 @@ def test_invariance_string_vs_numbers_labels():
+                                        "invariance test".format(name))
+ 
+     for name, metric in THRESHOLDED_METRICS.items():
+-        if name in ("log_loss", "hinge_loss", "unnormalized_log_loss",
+-                    "brier_score_loss"):
++        if name not in METRIC_UNDEFINED_BINARY:
+             # Ugly, but handle case with a pos_label and label
+             metric_str = metric
+             if name in METRICS_WITH_POS_LABEL:
+@@ -1005,10 +1009,15 @@ def check_sample_weight_invariance(name, metric, y1, y2):
+                 err_msg="%s sample_weight is not invariant "
+                         "under scaling" % name)
+ 
+-    # Check that if sample_weight.shape[0] != y_true.shape[0], it raised an
+-    # error
+-    assert_raises(Exception, metric, y1, y2,
+-                  sample_weight=np.hstack([sample_weight, sample_weight]))
++    # Check that if number of samples in y_true and sample_weight are not
++    # equal, meaningful error is raised.
++    error_message = ("Found input variables with inconsistent numbers of "
++                     "samples: [{}, {}, {}]".format(
++                         _num_samples(y1), _num_samples(y2),
++                         _num_samples(sample_weight) * 2))
++    assert_raise_message(ValueError, error_message, metric, y1, y2,
++                         sample_weight=np.hstack([sample_weight,
++                                                  sample_weight]))
+ 
+ 
+ def test_sample_weight_invariance(n_samples=50):
+diff --git a/sklearn/metrics/tests/test_ranking.py b/sklearn/metrics/tests/test_ranking.py
+index 70514b425c3d..acdec8932211 100644
+--- a/sklearn/metrics/tests/test_ranking.py
++++ b/sklearn/metrics/tests/test_ranking.py
+@@ -20,6 +20,7 @@
+ from sklearn.utils.testing import assert_array_equal
+ from sklearn.utils.testing import assert_array_almost_equal
+ from sklearn.utils.testing import assert_warns
++from sklearn.utils.testing import assert_warns_message
+ 
+ from sklearn.metrics import auc
+ from sklearn.metrics import average_precision_score
+@@ -29,7 +30,6 @@
+ from sklearn.metrics import label_ranking_loss
+ from sklearn.metrics import roc_auc_score
+ from sklearn.metrics import roc_curve
+-from sklearn.metrics import ndcg_score
+ 
+ from sklearn.exceptions import UndefinedMetricWarning
+ 
+@@ -426,7 +426,20 @@ def test_auc_errors():
+     assert_raises(ValueError, auc, [0.0], [0.1])
+ 
+     # x is not in order
+-    assert_raises(ValueError, auc, [1.0, 0.0, 0.5], [0.0, 0.0, 0.0])
++    x = [2, 1, 3, 4]
++    y = [5, 6, 7, 8]
++    error_message = ("x is neither increasing nor decreasing : "
++                     "{}".format(np.array(x)))
++    assert_raise_message(ValueError, error_message, auc, x, y)
++
++
++def test_deprecated_auc_reorder():
++    depr_message = ("The 'reorder' parameter has been deprecated in version "
++                    "0.20 and will be removed in 0.22. It is recommended not "
++                    "to set 'reorder' and ensure that x is monotonic "
++                    "increasing or monotonic decreasing.")
++    assert_warns_message(DeprecationWarning, depr_message, auc,
++                         [1, 2], [2, 3], reorder=True)
+ 
+ 
+ def test_auc_score_non_binary_class():
+@@ -758,38 +771,6 @@ def check_zero_or_all_relevant_labels(lrap_score):
+                                    [[0.5], [0.5], [0.5], [0.5]]), 1.)
+ 
+ 
+-def test_ndcg_score():
+-    # Check perfect ranking
+-    y_true = [1, 0, 2]
+-    y_score = [
+-        [0.15, 0.55, 0.2],
+-        [0.7, 0.2, 0.1],
+-        [0.06, 0.04, 0.9]
+-    ]
+-    perfect = ndcg_score(y_true, y_score)
+-    assert_equal(perfect, 1.0)
+-
+-    # Check bad ranking with a small K
+-    y_true = [0, 2, 1]
+-    y_score = [
+-        [0.15, 0.55, 0.2],
+-        [0.7, 0.2, 0.1],
+-        [0.06, 0.04, 0.9]
+-    ]
+-    short_k = ndcg_score(y_true, y_score, k=1)
+-    assert_equal(short_k, 0.0)
+-
+-    # Check a random scoring
+-    y_true = [2, 1, 0]
+-    y_score = [
+-        [0.15, 0.55, 0.2],
+-        [0.7, 0.2, 0.1],
+-        [0.06, 0.04, 0.9]
+-    ]
+-    average_ranking = ndcg_score(y_true, y_score, k=2)
+-    assert_almost_equal(average_ranking, 0.63092975)
+-
+-
+ def check_lrap_error_raised(lrap_score):
+     # Raise value error if not appropriate format
+     assert_raises(ValueError, lrap_score,
+diff --git a/sklearn/metrics/tests/test_score_objects.py b/sklearn/metrics/tests/test_score_objects.py
+index 552c0afac5f5..6af6418635d5 100644
+--- a/sklearn/metrics/tests/test_score_objects.py
++++ b/sklearn/metrics/tests/test_score_objects.py
+@@ -47,7 +47,8 @@
+                       'neg_median_absolute_error', 'mean_absolute_error',
+                       'mean_squared_error', 'median_absolute_error']
+ 
+-CLF_SCORERS = ['accuracy', 'f1', 'f1_weighted', 'f1_macro', 'f1_micro',
++CLF_SCORERS = ['accuracy', 'balanced_accuracy',
++               'f1', 'f1_weighted', 'f1_macro', 'f1_micro',
+                'roc_auc', 'average_precision', 'precision',
+                'precision_weighted', 'precision_macro', 'precision_micro',
+                'recall', 'recall_weighted', 'recall_macro', 'recall_micro',
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index ebfa1e9bd3e1..f574b39e890a 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -36,6 +36,7 @@
+ from ..utils.random import sample_without_replacement
+ from ..utils.validation import indexable, check_is_fitted
+ from ..utils.metaestimators import if_delegate_has_method
++from ..utils.deprecation import DeprecationDict
+ from ..metrics.scorer import _check_multimetric_scoring
+ from ..metrics.scorer import check_scoring
+ 
+@@ -651,7 +652,9 @@ def fit(self, X, y=None, groups=None, **fit_params):
+         if self.return_train_score:
+             train_scores = _aggregate_score_dicts(train_score_dicts)
+ 
+-        results = dict()
++        # TODO: replace by a dict in 0.21
++        results = (DeprecationDict() if self.return_train_score == 'warn'
++                   else {})
+ 
+         def _store(key_name, array, weights=None, splits=False, rank=False):
+             """A small helper to store the scores/times to the cv_results_"""
+@@ -706,9 +709,20 @@ def _store(key_name, array, weights=None, splits=False, rank=False):
+                    splits=True, rank=True,
+                    weights=test_sample_counts if self.iid else None)
+             if self.return_train_score:
++                prev_keys = set(results.keys())
+                 _store('train_%s' % scorer_name, train_scores[scorer_name],
+                        splits=True)
+ 
++                if self.return_train_score == 'warn':
++                    for key in set(results.keys()) - prev_keys:
++                        message = (
++                            'You are accessing a training score ({!r}), '
++                            'which will not be available by default '
++                            'any more in 0.21. If you need training scores, '
++                            'please set return_train_score=True').format(key)
++                        # warn on key access
++                        results.add_warning(key, message, FutureWarning)
++
+         # For multi-metric evaluation, store the best_index_, best_params_ and
+         # best_score_ iff refit is one of the scorer names
+         # In single metric evaluation, refit_metric is "score"
+@@ -882,10 +896,19 @@ class GridSearchCV(BaseSearchCV):
+         FitFailedWarning is raised. This parameter does not affect the refit
+         step, which will always raise the error.
+ 
+-    return_train_score : boolean, default=True
+-        If ``'False'``, the ``cv_results_`` attribute will not include training
++    return_train_score : boolean, optional
++        If ``False``, the ``cv_results_`` attribute will not include training
+         scores.
+ 
++        Current default is ``'warn'``, which behaves as ``True`` in addition
++        to raising a warning when a training score is looked up.
++        That default will be changed to ``False`` in 0.21.
++        Computing training scores is used to get insights on how different
++        parameter settings impact the overfitting/underfitting trade-off.
++        However computing the scores on the training set can be computationally
++        expensive and is not strictly required to select the parameters that
++        yield the best generalization performance.
++
+ 
+     Examples
+     --------
+@@ -1044,7 +1067,7 @@ class GridSearchCV(BaseSearchCV):
+     def __init__(self, estimator, param_grid, scoring=None, fit_params=None,
+                  n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                  pre_dispatch='2*n_jobs', error_score='raise',
+-                 return_train_score=True):
++                 return_train_score="warn"):
+         super(GridSearchCV, self).__init__(
+             estimator=estimator, scoring=scoring, fit_params=fit_params,
+             n_jobs=n_jobs, iid=iid, refit=refit, cv=cv, verbose=verbose,
+@@ -1200,10 +1223,19 @@ class RandomizedSearchCV(BaseSearchCV):
+         FitFailedWarning is raised. This parameter does not affect the refit
+         step, which will always raise the error.
+ 
+-    return_train_score : boolean, default=True
+-        If ``'False'``, the ``cv_results_`` attribute will not include training
++    return_train_score : boolean, optional
++        If ``False``, the ``cv_results_`` attribute will not include training
+         scores.
+ 
++        Current default is ``'warn'``, which behaves as ``True`` in addition
++        to raising a warning when a training score is looked up.
++        That default will be changed to ``False`` in 0.21.
++        Computing training scores is used to get insights on how different
++        parameter settings impact the overfitting/underfitting trade-off.
++        However computing the scores on the training set can be computationally
++        expensive and is not strictly required to select the parameters that
++        yield the best generalization performance.
++
+     Attributes
+     ----------
+     cv_results_ : dict of numpy (masked) ndarrays
+@@ -1327,7 +1359,7 @@ class RandomizedSearchCV(BaseSearchCV):
+     def __init__(self, estimator, param_distributions, n_iter=10, scoring=None,
+                  fit_params=None, n_jobs=1, iid=True, refit=True, cv=None,
+                  verbose=0, pre_dispatch='2*n_jobs', random_state=None,
+-                 error_score='raise', return_train_score=True):
++                 error_score='raise', return_train_score="warn"):
+         self.param_distributions = param_distributions
+         self.n_iter = n_iter
+         self.random_state = random_state
+diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py
+index bc35bf2b0a2a..24d9423b2227 100644
+--- a/sklearn/model_selection/_split.py
++++ b/sklearn/model_selection/_split.py
+@@ -1534,8 +1534,9 @@ def _iter_indices(self, X, y, groups=None):
+                                                   self.train_size)
+ 
+         if y.ndim == 2:
+-            # for multi-label y, map each distinct row to its string repr:
+-            y = np.array([str(row) for row in y])
++            # for multi-label y, map each distinct row to a string repr
++            # using join because str(row) uses an ellipsis if len(row) > 1000
++            y = np.array([' '.join(row.astype('str')) for row in y])
+ 
+         classes, y_indices = np.unique(y, return_inverse=True)
+         n_classes = classes.shape[0]
+diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
+index 798f77153457..fdf6fa691254 100644
+--- a/sklearn/model_selection/_validation.py
++++ b/sklearn/model_selection/_validation.py
+@@ -21,6 +21,7 @@
+ 
+ from ..base import is_classifier, clone
+ from ..utils import indexable, check_random_state, safe_indexing
++from ..utils.deprecation import DeprecationDict
+ from ..utils.validation import _is_arraylike, _num_samples
+ from ..utils.metaestimators import _safe_split
+ from ..externals.joblib import Parallel, delayed, logger
+@@ -37,7 +38,7 @@
+ 
+ def cross_validate(estimator, X, y=None, groups=None, scoring=None, cv=None,
+                    n_jobs=1, verbose=0, fit_params=None,
+-                   pre_dispatch='2*n_jobs', return_train_score=True):
++                   pre_dispatch='2*n_jobs', return_train_score="warn"):
+     """Evaluate metric(s) by cross-validation and also record fit/score times.
+ 
+     Read more in the :ref:`User Guide <multimetric_cross_validation>`.
+@@ -115,9 +116,17 @@ def cross_validate(estimator, X, y=None, groups=None, scoring=None, cv=None,
+             - A string, giving an expression as a function of n_jobs,
+               as in '2*n_jobs'
+ 
+-    return_train_score : boolean, default True
+-        Whether to include train scores in the return dict if ``scoring`` is
+-        of multimetric type.
++    return_train_score : boolean, optional
++        Whether to include train scores.
++
++        Current default is ``'warn'``, which behaves as ``True`` in addition
++        to raising a warning when a training score is looked up.
++        That default will be changed to ``False`` in 0.21.
++        Computing training scores is used to get insights on how different
++        parameter settings impact the overfitting/underfitting trade-off.
++        However computing the scores on the training set can be computationally
++        expensive and is not strictly required to select the parameters that
++        yield the best generalization performance.
+ 
+     Returns
+     -------
+@@ -203,14 +212,24 @@ def cross_validate(estimator, X, y=None, groups=None, scoring=None, cv=None,
+         test_scores, fit_times, score_times = zip(*scores)
+     test_scores = _aggregate_score_dicts(test_scores)
+ 
+-    ret = dict()
++    # TODO: replace by a dict in 0.21
++    ret = DeprecationDict() if return_train_score == 'warn' else {}
+     ret['fit_time'] = np.array(fit_times)
+     ret['score_time'] = np.array(score_times)
+ 
+     for name in scorers:
+         ret['test_%s' % name] = np.array(test_scores[name])
+         if return_train_score:
+-            ret['train_%s' % name] = np.array(train_scores[name])
++            key = 'train_%s' % name
++            ret[key] = np.array(train_scores[name])
++            if return_train_score == 'warn':
++                message = (
++                    'You are accessing a training score ({!r}), '
++                    'which will not be available by default '
++                    'any more in 0.21. If you need training scores, '
++                    'please set return_train_score=True').format(key)
++                # warn on key access
++                ret.add_warning(key, message, FutureWarning)
+ 
+     return ret
+ 
+@@ -625,6 +644,15 @@ def cross_val_predict(estimator, X, y=None, groups=None, cv=None, n_jobs=1,
+     predictions : ndarray
+         This is the result of calling ``method``
+ 
++    Notes
++    -----
++    In the case that one or more classes are absent in a training portion, a
++    default score needs to be assigned to all instances for that class if
++    ``method`` produces columns per class, as in {'decision_function',
++    'predict_proba', 'predict_log_proba'}.  For ``predict_proba`` this value is
++    0.  In order to ensure finite output, we approximate negative infinity by
++    the minimum finite float value for the dtype in other cases.
++
+     Examples
+     --------
+     >>> from sklearn import datasets, linear_model
+@@ -727,12 +755,49 @@ def _fit_and_predict(estimator, X, y, train, test, verbose, fit_params,
+     predictions = func(X_test)
+     if method in ['decision_function', 'predict_proba', 'predict_log_proba']:
+         n_classes = len(set(y))
+-        predictions_ = np.zeros((_num_samples(X_test), n_classes))
+-        if method == 'decision_function' and len(estimator.classes_) == 2:
+-            predictions_[:, estimator.classes_[-1]] = predictions
+-        else:
+-            predictions_[:, estimator.classes_] = predictions
+-        predictions = predictions_
++        if n_classes != len(estimator.classes_):
++            recommendation = (
++                'To fix this, use a cross-validation '
++                'technique resulting in properly '
++                'stratified folds')
++            warnings.warn('Number of classes in training fold ({}) does '
++                          'not match total number of classes ({}). '
++                          'Results may not be appropriate for your use case. '
++                          '{}'.format(len(estimator.classes_),
++                                      n_classes, recommendation),
++                          RuntimeWarning)
++            if method == 'decision_function':
++                if (predictions.ndim == 2 and
++                        predictions.shape[1] != len(estimator.classes_)):
++                    # This handles the case when the shape of predictions
++                    # does not match the number of classes used to train
++                    # it with. This case is found when sklearn.svm.SVC is
++                    # set to `decision_function_shape='ovo'`.
++                    raise ValueError('Output shape {} of {} does not match '
++                                     'number of classes ({}) in fold. '
++                                     'Irregular decision_function outputs '
++                                     'are not currently supported by '
++                                     'cross_val_predict'.format(
++                                        predictions.shape, method,
++                                        len(estimator.classes_),
++                                        recommendation))
++                if len(estimator.classes_) <= 2:
++                    # In this special case, `predictions` contains a 1D array.
++                    raise ValueError('Only {} class/es in training fold, this '
++                                     'is not supported for decision_function '
++                                     'with imbalanced folds. {}'.format(
++                                        len(estimator.classes_),
++                                        recommendation))
++
++            float_min = np.finfo(predictions.dtype).min
++            default_values = {'decision_function': float_min,
++                              'predict_log_proba': float_min,
++                              'predict_proba': 0}
++            predictions_for_all_classes = np.full((_num_samples(predictions),
++                                                   n_classes),
++                                                  default_values[method])
++            predictions_for_all_classes[:, estimator.classes_] = predictions
++            predictions = predictions_for_all_classes
+     return predictions, test
+ 
+ 
+@@ -998,7 +1063,7 @@ def learning_curve(estimator, X, y, groups=None,
+         If int, random_state is the seed used by the random number generator;
+         If RandomState instance, random_state is the random number generator;
+         If None, the random number generator is the RandomState instance used
+-        by `np.random`. Used when ``shuffle`` == 'True'.
++        by `np.random`. Used when ``shuffle`` is True.
+ 
+     Returns
+     -------
+diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
+index ee3fe26eedd8..151f9a21749e 100644
+--- a/sklearn/model_selection/tests/test_search.py
++++ b/sklearn/model_selection/tests/test_search.py
+@@ -19,6 +19,7 @@
+ from sklearn.utils.testing import assert_raises
+ from sklearn.utils.testing import assert_warns
+ from sklearn.utils.testing import assert_warns_message
++from sklearn.utils.testing import assert_no_warnings
+ from sklearn.utils.testing import assert_raise_message
+ from sklearn.utils.testing import assert_false, assert_true
+ from sklearn.utils.testing import assert_array_equal
+@@ -332,6 +333,41 @@ def test_grid_search_groups():
+         gs.fit(X, y)
+ 
+ 
++def test_return_train_score_warn():
++    # Test that warnings are raised. Will be removed in 0.21
++
++    X = np.arange(100).reshape(10, 10)
++    y = np.array([0] * 5 + [1] * 5)
++    grid = {'C': [1, 2]}
++
++    estimators = [GridSearchCV(LinearSVC(random_state=0), grid),
++                  RandomizedSearchCV(LinearSVC(random_state=0), grid,
++                                     n_iter=2)]
++
++    result = {}
++    for estimator in estimators:
++        for val in [True, False, 'warn']:
++            estimator.set_params(return_train_score=val)
++            result[val] = assert_no_warnings(estimator.fit, X, y).cv_results_
++
++    train_keys = ['split0_train_score', 'split1_train_score',
++                  'split2_train_score', 'mean_train_score', 'std_train_score']
++    for key in train_keys:
++        msg = (
++            'You are accessing a training score ({!r}), '
++            'which will not be available by default '
++            'any more in 0.21. If you need training scores, '
++            'please set return_train_score=True').format(key)
++        train_score = assert_warns_message(FutureWarning, msg,
++                                           result['warn'].get, key)
++        assert np.allclose(train_score, result[True][key])
++        assert key not in result[False]
++
++    for key in result['warn']:
++        if key not in train_keys:
++            assert_no_warnings(result['warn'].get, key)
++
++
+ def test_classes__property():
+     # Test that classes_ property matches best_estimator_.classes_
+     X = np.arange(100).reshape(10, 10)
+diff --git a/sklearn/model_selection/tests/test_split.py b/sklearn/model_selection/tests/test_split.py
+index 34d2ee7854fc..3f54aaf3c66f 100644
+--- a/sklearn/model_selection/tests/test_split.py
++++ b/sklearn/model_selection/tests/test_split.py
+@@ -726,6 +726,29 @@ def test_stratified_shuffle_split_multilabel():
+         assert_equal(expected_ratio, np.mean(y_test[:, 0]))
+ 
+ 
++def test_stratified_shuffle_split_multilabel_many_labels():
++    # fix in PR #9922: for multilabel data with > 1000 labels, str(row)
++    # truncates with an ellipsis for elements in positions 4 through
++    # len(row) - 4, so labels were not being correctly split using the powerset
++    # method for transforming a multilabel problem to a multiclass one; this
++    # test checks that this problem is fixed.
++    row_with_many_zeros = [1, 0, 1] + [0] * 1000 + [1, 0, 1]
++    row_with_many_ones = [1, 0, 1] + [1] * 1000 + [1, 0, 1]
++    y = np.array([row_with_many_zeros] * 10 + [row_with_many_ones] * 100)
++    X = np.ones_like(y)
++
++    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=0)
++    train, test = next(sss.split(X=X, y=y))
++    y_train = y[train]
++    y_test = y[test]
++
++    # correct stratification of entire rows
++    # (by design, here y[:, 4] uniquely determines the entire row of y)
++    expected_ratio = np.mean(y[:, 4])
++    assert_equal(expected_ratio, np.mean(y_train[:, 4]))
++    assert_equal(expected_ratio, np.mean(y_test[:, 4]))
++
++
+ def test_predefinedsplit_with_kfold_split():
+     # Check that PredefinedSplit can reproduce a split generated by Kfold.
+     folds = -1 * np.ones(10)
+diff --git a/sklearn/model_selection/tests/test_validation.py b/sklearn/model_selection/tests/test_validation.py
+index baff76257447..ad4938510049 100644
+--- a/sklearn/model_selection/tests/test_validation.py
++++ b/sklearn/model_selection/tests/test_validation.py
+@@ -16,12 +16,14 @@
+ from sklearn.utils.testing import assert_almost_equal
+ from sklearn.utils.testing import assert_raises
+ from sklearn.utils.testing import assert_raise_message
++from sklearn.utils.testing import assert_warns
++from sklearn.utils.testing import assert_warns_message
++from sklearn.utils.testing import assert_no_warnings
+ from sklearn.utils.testing import assert_raises_regex
+ from sklearn.utils.testing import assert_greater
+ from sklearn.utils.testing import assert_less
+ from sklearn.utils.testing import assert_array_almost_equal
+ from sklearn.utils.testing import assert_array_equal
+-from sklearn.utils.testing import assert_warns
+ from sklearn.utils.mocking import CheckingClassifier, MockDataFrame
+ 
+ from sklearn.model_selection import cross_val_score
+@@ -42,6 +44,7 @@
+ from sklearn.datasets import make_regression
+ from sklearn.datasets import load_boston
+ from sklearn.datasets import load_iris
++from sklearn.datasets import load_digits
+ from sklearn.metrics import explained_variance_score
+ from sklearn.metrics import make_scorer
+ from sklearn.metrics import accuracy_score
+@@ -52,7 +55,7 @@
+ from sklearn.metrics.scorer import check_scoring
+ 
+ from sklearn.linear_model import Ridge, LogisticRegression, SGDClassifier
+-from sklearn.linear_model import PassiveAggressiveClassifier
++from sklearn.linear_model import PassiveAggressiveClassifier, RidgeClassifier
+ from sklearn.neighbors import KNeighborsClassifier
+ from sklearn.svm import SVC
+ from sklearn.cluster import KMeans
+@@ -379,6 +382,28 @@ def test_cross_validate():
+         yield check_cross_validate_multi_metric, est, X, y, scores
+ 
+ 
++def test_cross_validate_return_train_score_warn():
++    # Test that warnings are raised. Will be removed in 0.21
++
++    X, y = make_classification(random_state=0)
++    estimator = MockClassifier()
++
++    result = {}
++    for val in [False, True, 'warn']:
++        result[val] = assert_no_warnings(cross_validate, estimator, X, y,
++                                         return_train_score=val)
++
++    msg = (
++        'You are accessing a training score ({!r}), '
++        'which will not be available by default '
++        'any more in 0.21. If you need training scores, '
++        'please set return_train_score=True').format('train_score')
++    train_score = assert_warns_message(FutureWarning, msg,
++                                       result['warn'].get, 'train_score')
++    assert np.allclose(train_score, result[True]['train_score'])
++    assert 'train_score' not in result[False]
++
++
+ def check_cross_validate_single_metric(clf, X, y, scores):
+     (train_mse_scores, test_mse_scores, train_r2_scores,
+      test_r2_scores) = scores
+@@ -776,6 +801,89 @@ def split(self, X, y=None, groups=None):
+ 
+     assert_raises(ValueError, cross_val_predict, est, X, y, cv=BadCV())
+ 
++    X, y = load_iris(return_X_y=True)
++
++    warning_message = ('Number of classes in training fold (2) does '
++                       'not match total number of classes (3). '
++                       'Results may not be appropriate for your use case.')
++    assert_warns_message(RuntimeWarning, warning_message,
++                         cross_val_predict, LogisticRegression(),
++                         X, y, method='predict_proba', cv=KFold(2))
++
++
++def test_cross_val_predict_decision_function_shape():
++    X, y = make_classification(n_classes=2, n_samples=50, random_state=0)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='decision_function')
++    assert_equal(preds.shape, (50,))
++
++    X, y = load_iris(return_X_y=True)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='decision_function')
++    assert_equal(preds.shape, (150, 3))
++
++    # This specifically tests imbalanced splits for binary
++    # classification with decision_function. This is only
++    # applicable to classifiers that can be fit on a single
++    # class.
++    X = X[:100]
++    y = y[:100]
++    assert_raise_message(ValueError,
++                         'Only 1 class/es in training fold, this'
++                         ' is not supported for decision_function'
++                         ' with imbalanced folds. To fix '
++                         'this, use a cross-validation technique '
++                         'resulting in properly stratified folds',
++                         cross_val_predict, RidgeClassifier(), X, y,
++                         method='decision_function', cv=KFold(2))
++
++    X, y = load_digits(return_X_y=True)
++    est = SVC(kernel='linear', decision_function_shape='ovo')
++
++    preds = cross_val_predict(est,
++                              X, y,
++                              method='decision_function')
++    assert_equal(preds.shape, (1797, 45))
++
++    ind = np.argsort(y)
++    X, y = X[ind], y[ind]
++    assert_raises_regex(ValueError,
++                        'Output shape \(599L?, 21L?\) of decision_function '
++                        'does not match number of classes \(7\) in fold. '
++                        'Irregular decision_function .*',
++                        cross_val_predict, est, X, y,
++                        cv=KFold(n_splits=3), method='decision_function')
++
++
++def test_cross_val_predict_predict_proba_shape():
++    X, y = make_classification(n_classes=2, n_samples=50, random_state=0)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='predict_proba')
++    assert_equal(preds.shape, (50, 2))
++
++    X, y = load_iris(return_X_y=True)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='predict_proba')
++    assert_equal(preds.shape, (150, 3))
++
++
++def test_cross_val_predict_predict_log_proba_shape():
++    X, y = make_classification(n_classes=2, n_samples=50, random_state=0)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='predict_log_proba')
++    assert_equal(preds.shape, (50, 2))
++
++    X, y = load_iris(return_X_y=True)
++
++    preds = cross_val_predict(LogisticRegression(), X, y,
++                              method='predict_log_proba')
++    assert_equal(preds.shape, (150, 3))
++
+ 
+ def test_cross_val_predict_input_types():
+     iris = load_iris()
+@@ -1217,11 +1325,12 @@ def get_expected_predictions(X, y, cv, classes, est, method):
+         est.fit(X[train], y[train])
+         expected_predictions_ = func(X[test])
+         # To avoid 2 dimensional indexing
+-        exp_pred_test = np.zeros((len(test), classes))
+-        if method is 'decision_function' and len(est.classes_) == 2:
+-            exp_pred_test[:, est.classes_[-1]] = expected_predictions_
++        if method is 'predict_proba':
++            exp_pred_test = np.zeros((len(test), classes))
+         else:
+-            exp_pred_test[:, est.classes_] = expected_predictions_
++            exp_pred_test = np.full((len(test), classes),
++                                    np.finfo(expected_predictions.dtype).min)
++        exp_pred_test[:, est.classes_] = expected_predictions_
+         expected_predictions[test] = exp_pred_test
+ 
+     return expected_predictions
+@@ -1229,9 +1338,9 @@ def get_expected_predictions(X, y, cv, classes, est, method):
+ 
+ def test_cross_val_predict_class_subset():
+ 
+-    X = np.arange(8).reshape(4, 2)
+-    y = np.array([0, 0, 1, 2])
+-    classes = 3
++    X = np.arange(200).reshape(100, 2)
++    y = np.array([x//10 for x in range(100)])
++    classes = 10
+ 
+     kfold3 = KFold(n_splits=3)
+     kfold4 = KFold(n_splits=4)
+@@ -1259,7 +1368,7 @@ def test_cross_val_predict_class_subset():
+         assert_array_almost_equal(expected_predictions, predictions)
+ 
+         # Testing unordered labels
+-        y = [1, 1, -4, 6]
++        y = shuffle(np.repeat(range(10), 10), random_state=0)
+         predictions = cross_val_predict(est, X, y, method=method,
+                                         cv=kfold3)
+         y = le.fit_transform(y)
+diff --git a/sklearn/multioutput.py b/sklearn/multioutput.py
+index 6c9fbc55f786..5b4389fd0f31 100644
+--- a/sklearn/multioutput.py
++++ b/sklearn/multioutput.py
+@@ -543,11 +543,6 @@ def predict(self, X):
+     def predict_proba(self, X):
+         """Predict probability estimates.
+ 
+-        By default the inputs to later models in a chain is the binary class
+-        predictions not the class probabilities. To use class probabilities
+-        as features in subsequent models set the cv property to be one of
+-        the allowed values other than None.
+-
+         Parameters
+         ----------
+         X : {array-like, sparse matrix}, shape (n_samples, n_features)
+diff --git a/sklearn/naive_bayes.py b/sklearn/naive_bayes.py
+index f76df1c3b93a..6aec725bd980 100644
+--- a/sklearn/naive_bayes.py
++++ b/sklearn/naive_bayes.py
+@@ -753,6 +753,12 @@ class ComplementNB(BaseDiscreteNB):
+     class_prior : array-like, size (n_classes,), optional (default=None)
+         Prior probabilities of the classes. Not used.
+ 
++    norm : boolean, optional (default=False)
++        Whether or not a second normalization of the weights is performed. The
++        default behavior mirrors the implementations found in Mahout and Weka,
++        which do not follow the full algorithm described in Table 9 of the
++        paper.
++
+     Attributes
+     ----------
+     class_log_prior_ : array, shape (n_classes, )
+@@ -782,7 +788,7 @@ class ComplementNB(BaseDiscreteNB):
+     >>> from sklearn.naive_bayes import ComplementNB
+     >>> clf = ComplementNB()
+     >>> clf.fit(X, y)
+-    ComplementNB(alpha=1.0, class_prior=None, fit_prior=True)
++    ComplementNB(alpha=1.0, class_prior=None, fit_prior=True, norm=False)
+     >>> print(clf.predict(X[2:3]))
+     [3]
+ 
+@@ -794,10 +800,12 @@ class ComplementNB(BaseDiscreteNB):
+     http://people.csail.mit.edu/jrennie/papers/icml03-nb.pdf
+     """
+ 
+-    def __init__(self, alpha=1.0, fit_prior=True, class_prior=None):
++    def __init__(self, alpha=1.0, fit_prior=True, class_prior=None,
++                 norm=False):
+         self.alpha = alpha
+         self.fit_prior = fit_prior
+         self.class_prior = class_prior
++        self.norm = norm
+ 
+     def _count(self, X, Y):
+         """Count feature occurrences."""
+@@ -811,7 +819,12 @@ def _update_feature_log_prob(self, alpha):
+         """Apply smoothing to raw counts and compute the weights."""
+         comp_count = self.feature_all_ + alpha - self.feature_count_
+         logged = np.log(comp_count / comp_count.sum(axis=1, keepdims=True))
+-        self.feature_log_prob_ = logged / logged.sum(axis=1, keepdims=True)
++        # BaseNB.predict uses argmax, but ComplementNB operates with argmin.
++        feature_log_prob = -logged
++        if self.norm:
++            summed = logged.sum(axis=1, keepdims=True)
++            feature_log_prob = -feature_log_prob / summed
++        self.feature_log_prob_ = feature_log_prob
+ 
+     def _joint_log_likelihood(self, X):
+         """Calculate the class scores for the samples in X."""
+diff --git a/sklearn/tests/test_base.py b/sklearn/tests/test_base.py
+index 7ad0f2038265..580a4e2ecac9 100644
+--- a/sklearn/tests/test_base.py
++++ b/sklearn/tests/test_base.py
+@@ -228,6 +228,24 @@ def test_set_params():
+     #               bad__stupid_param=True)
+ 
+ 
++def test_set_params_passes_all_parameters():
++    # Make sure all parameters are passed together to set_params
++    # of nested estimator. Regression test for #9944
++
++    class TestDecisionTree(DecisionTreeClassifier):
++        def set_params(self, **kwargs):
++            super(TestDecisionTree, self).set_params(**kwargs)
++            # expected_kwargs is in test scope
++            assert kwargs == expected_kwargs
++            return self
++
++    expected_kwargs = {'max_depth': 5, 'min_samples_leaf': 2}
++    for est in [Pipeline([('estimator', TestDecisionTree())]),
++                GridSearchCV(TestDecisionTree(), {})]:
++        est.set_params(estimator__max_depth=5,
++                       estimator__min_samples_leaf=2)
++
++
+ def test_score_sample_weight():
+ 
+     rng = np.random.RandomState(0)
+diff --git a/sklearn/tests/test_naive_bayes.py b/sklearn/tests/test_naive_bayes.py
+index 8f352ff426a4..97a119dca6ba 100644
+--- a/sklearn/tests/test_naive_bayes.py
++++ b/sklearn/tests/test_naive_bayes.py
+@@ -556,20 +556,6 @@ def test_cnb():
+     # Classes are China (0), Japan (1).
+     Y = np.array([0, 0, 0, 1])
+ 
+-    # Verify inputs are nonnegative.
+-    clf = ComplementNB(alpha=1.0)
+-    assert_raises(ValueError, clf.fit, -X, Y)
+-
+-    clf.fit(X, Y)
+-
+-    # Check that counts are correct.
+-    feature_count = np.array([[1, 3, 0, 1, 1, 0], [0, 1, 1, 0, 0, 1]])
+-    assert_array_equal(clf.feature_count_, feature_count)
+-    class_count = np.array([3, 1])
+-    assert_array_equal(clf.class_count_, class_count)
+-    feature_all = np.array([1, 4, 1, 1, 1, 1])
+-    assert_array_equal(clf.feature_all_, feature_all)
+-
+     # Check that weights are correct. See steps 4-6 in Table 4 of
+     # Rennie et al. (2003).
+     theta = np.array([
+@@ -591,12 +577,30 @@ def test_cnb():
+         ]])
+ 
+     weights = np.zeros(theta.shape)
++    normed_weights = np.zeros(theta.shape)
+     for i in range(2):
+-        weights[i] = np.log(theta[i])
+-        weights[i] /= weights[i].sum()
++        weights[i] = -np.log(theta[i])
++        normed_weights[i] = weights[i] / weights[i].sum()
+ 
++    # Verify inputs are nonnegative.
++    clf = ComplementNB(alpha=1.0)
++    assert_raises(ValueError, clf.fit, -X, Y)
++
++    clf.fit(X, Y)
++
++    # Check that counts/weights are correct.
++    feature_count = np.array([[1, 3, 0, 1, 1, 0], [0, 1, 1, 0, 0, 1]])
++    assert_array_equal(clf.feature_count_, feature_count)
++    class_count = np.array([3, 1])
++    assert_array_equal(clf.class_count_, class_count)
++    feature_all = np.array([1, 4, 1, 1, 1, 1])
++    assert_array_equal(clf.feature_all_, feature_all)
+     assert_array_almost_equal(clf.feature_log_prob_, weights)
+ 
++    clf = ComplementNB(alpha=1.0, norm=True)
++    clf.fit(X, Y)
++    assert_array_almost_equal(clf.feature_log_prob_, normed_weights)
++
+ 
+ def test_naive_bayes_scale_invariance():
+     # Scaling the data should not change the prediction results
+diff --git a/sklearn/tests/test_pipeline.py b/sklearn/tests/test_pipeline.py
+index d1d62f80e51a..ab2108ed690f 100644
+--- a/sklearn/tests/test_pipeline.py
++++ b/sklearn/tests/test_pipeline.py
+@@ -24,10 +24,11 @@
+ from sklearn.base import clone, BaseEstimator
+ from sklearn.pipeline import Pipeline, FeatureUnion, make_pipeline, make_union
+ from sklearn.svm import SVC
+-from sklearn.linear_model import LogisticRegression
++from sklearn.linear_model import LogisticRegression, Lasso
+ from sklearn.linear_model import LinearRegression
+ from sklearn.cluster import KMeans
+ from sklearn.feature_selection import SelectKBest, f_classif
++from sklearn.dummy import DummyRegressor
+ from sklearn.decomposition import PCA, TruncatedSVD
+ from sklearn.datasets import load_iris
+ from sklearn.preprocessing import StandardScaler
+@@ -289,7 +290,7 @@ def test_pipeline_raise_set_params_error():
+                  'with `estimator.get_params().keys()`.')
+ 
+     assert_raise_message(ValueError,
+-                         error_msg % ('fake', 'Pipeline'),
++                         error_msg % ('fake', pipe),
+                          pipe.set_params,
+                          fake='nope')
+ 
+@@ -863,6 +864,16 @@ def test_step_name_validation():
+                                  [[1]], [1])
+ 
+ 
++def test_set_params_nested_pipeline():
++    estimator = Pipeline([
++        ('a', Pipeline([
++            ('b', DummyRegressor())
++        ]))
++    ])
++    estimator.set_params(a__b__alpha=0.001, a__b=Lasso())
++    estimator.set_params(a__steps=[('b', LogisticRegression())], a__b__C=5)
++
++
+ def test_pipeline_wrong_memory():
+     # Test that an error is raised when memory is not a string or a Memory
+     # instance
+diff --git a/sklearn/utils/deprecation.py b/sklearn/utils/deprecation.py
+index 08530be26400..5621f436d9ba 100644
+--- a/sklearn/utils/deprecation.py
++++ b/sklearn/utils/deprecation.py
+@@ -2,7 +2,7 @@
+ import warnings
+ import functools
+ 
+-__all__ = ["deprecated", ]
++__all__ = ["deprecated", "DeprecationDict"]
+ 
+ 
+ class deprecated(object):
+@@ -102,3 +102,33 @@ def _is_deprecated(func):
+                                               for c in closures
+                      if isinstance(c.cell_contents, str)]))
+     return is_deprecated
++
++
++class DeprecationDict(dict):
++    """A dict which raises a warning when some keys are looked up
++
++    Note, this does not raise a warning for __contains__ and iteration.
++
++    It also will raise a warning even after the key has been manually set by
++    the user.
++    """
++    def __init__(self, *args, **kwargs):
++        self._deprecations = {}
++        super(DeprecationDict, self).__init__(*args, **kwargs)
++
++    def __getitem__(self, key):
++        if key in self._deprecations:
++            warn_args, warn_kwargs = self._deprecations[key]
++            warnings.warn(*warn_args, **warn_kwargs)
++        return super(DeprecationDict, self).__getitem__(key)
++
++    def get(self, key, default=None):
++        # dict does not implement it like this, hence it needs to be overridden
++        try:
++            return self[key]
++        except KeyError:
++            return default
++
++    def add_warning(self, key, *args, **kwargs):
++        """Add a warning to be triggered when the specified key is read"""
++        self._deprecations[key] = (args, kwargs)
+diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
+index cfb615824d6f..f2166ac91621 100644
+--- a/sklearn/utils/estimator_checks.py
++++ b/sklearn/utils/estimator_checks.py
+@@ -1035,8 +1035,8 @@ def check_clustering(name, clusterer_orig):
+     # with lists
+     clusterer.fit(X.tolist())
+ 
+-    assert_equal(clusterer.labels_.shape, (n_samples,))
+     pred = clusterer.labels_
++    assert_equal(pred.shape, (n_samples,))
+     assert_greater(adjusted_rand_score(pred, y), 0.4)
+     # fit another time with ``fit_predict`` and compare results
+     if name == 'SpectralClustering':
+@@ -1047,6 +1047,25 @@ def check_clustering(name, clusterer_orig):
+         pred2 = clusterer.fit_predict(X)
+     assert_array_equal(pred, pred2)
+ 
++    # fit_predict(X) and labels_ should be of type int
++    assert_in(pred.dtype, [np.dtype('int32'), np.dtype('int64')])
++    assert_in(pred2.dtype, [np.dtype('int32'), np.dtype('int64')])
++
++    # There should be at least one sample in every cluster. Equivalently
++    # labels_ should contain all the consecutive values between its
++    # min and its max.
++    pred_sorted = np.unique(pred)
++    assert_array_equal(pred_sorted, np.arange(pred_sorted[0],
++                                              pred_sorted[-1] + 1))
++
++    # labels_ should be greater than -1
++    assert_greater_equal(pred_sorted[0], -1)
++    # labels_ should be less than n_clusters - 1
++    if hasattr(clusterer, 'n_clusters'):
++        n_clusters = getattr(clusterer, 'n_clusters')
++        assert_greater_equal(n_clusters - 1, pred_sorted[-1])
++    # else labels_ should be less than max(labels_) which is necessarily true
++
+ 
+ @ignore_warnings(category=DeprecationWarning)
+ def check_clusterer_compute_labels_predict(name, clusterer_orig):
+@@ -1281,7 +1300,7 @@ def check_classifiers_classes(name, classifier_orig):
+ 
+         classes = np.unique(y_)
+         classifier = clone(classifier_orig)
+-        if name in ['BernoulliNB', 'ComplementNB']:
++        if name == 'BernoulliNB':
+             X = X > X.mean()
+         set_random_state(classifier)
+         # fit
+@@ -1289,7 +1308,9 @@ def check_classifiers_classes(name, classifier_orig):
+ 
+         y_pred = classifier.predict(X)
+         # training set performance
+-        assert_array_equal(np.unique(y_), np.unique(y_pred))
++        if name != "ComplementNB":
++            # This is a pathological data set for ComplementNB.
++            assert_array_equal(np.unique(y_), np.unique(y_pred))
+         if np.any(classifier.classes_ != classes):
+             print("Unexpected classes_ attribute for %r: "
+                   "expected %s, got %s" %
+diff --git a/sklearn/utils/tests/test_deprecation.py b/sklearn/utils/tests/test_deprecation.py
+index e5a1f021cda7..d7b3f48c183c 100644
+--- a/sklearn/utils/tests/test_deprecation.py
++++ b/sklearn/utils/tests/test_deprecation.py
+@@ -8,7 +8,9 @@
+ from sklearn.utils.deprecation import _is_deprecated
+ from sklearn.utils.deprecation import deprecated
+ from sklearn.utils.testing import assert_warns_message
++from sklearn.utils.testing import assert_no_warnings
+ from sklearn.utils.testing import SkipTest
++from sklearn.utils.deprecation import DeprecationDict
+ 
+ 
+ @deprecated('qwerty')
+@@ -60,3 +62,17 @@ def test_is_deprecated():
+ 
+ def test_pickle():
+     pickle.loads(pickle.dumps(mock_function))
++
++
++def test_deprecationdict():
++    dd = DeprecationDict()
++    dd.add_warning('a', 'hello')
++    dd.add_warning('b', 'world', DeprecationWarning)
++    assert 1 == assert_warns_message(UserWarning, 'hello', dd.get, 'a', 1)
++    dd['a'] = 5
++    dd['b'] = 6
++    dd['c'] = 7
++    assert 5 == assert_warns_message(UserWarning, 'hello', dd.__getitem__, 'a')
++    assert 6 == assert_warns_message(DeprecationWarning, 'world',
++                                     dd.__getitem__, 'b')
++    assert 7 == assert_no_warnings(dd.get, 'c')

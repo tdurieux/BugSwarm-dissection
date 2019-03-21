@@ -1,0 +1,319 @@
+diff --git a/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java b/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
+index abc31e2d6..f23205936 100644
+--- a/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
++++ b/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
+@@ -194,7 +194,7 @@ public boolean equals(Object o) {
+     @Override
+     public int hashCode() {
+         if (ctxAnnotations == null || ctxAnnotations.length == 0) {
+-            return Objects.hash(type);
++            return Objects.hash(type, "fixed");
+         }
+         List<Annotation> meaningfulAnnotations = new ArrayList<>();
+ 
+@@ -206,9 +206,13 @@ public int hashCode() {
+                 hasDifference = true;
+             }
+         }
++        int result = 1;
++        result = 31 * result + (type == null ? 0 : Objects.hash(type, "fixed"));
+         if (hasDifference) {
+-            return Objects.hash(type, meaningfulAnnotations);
++            result = 31 * result + (meaningfulAnnotations == null ? 0 : Arrays.hashCode(meaningfulAnnotations.toArray(new Annotation[meaningfulAnnotations.size()])));
++        } else {
++            result = 31 * result + (ctxAnnotations == null ? 0 : Arrays.hashCode(ctxAnnotations));
+         }
+-        return Objects.hash(type, ctxAnnotations);
++        return result;
+     }
+ }
+diff --git a/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java b/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
+index c050ed528..d4db72253 100644
+--- a/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
++++ b/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
+@@ -141,7 +141,13 @@ public Schema resolve(AnnotatedType annotatedType, ModelConverterContext context
+         // if we have a ref we don't consider anything else
+         if (resolvedSchemaAnnotation != null &&
+                 StringUtils.isNotEmpty(resolvedSchemaAnnotation.ref())) {
+-            return new Schema().$ref(resolvedSchemaAnnotation.ref()).name(name);
++            if (resolvedArrayAnnotation == null) {
++                return new Schema().$ref(resolvedSchemaAnnotation.ref()).name(name);
++            } else {
++                ArraySchema schema = new ArraySchema();
++                resolveArraySchema(annotatedType, schema, resolvedArrayAnnotation);
++                return schema.items(new Schema().$ref(resolvedSchemaAnnotation.ref()).name(name));
++            }
+         }
+ 
+         if (!annotatedType.isSkipOverride() && resolvedSchemaAnnotation != null && !Void.class.equals(resolvedSchemaAnnotation.implementation())) {
+@@ -173,6 +179,7 @@ public Schema resolve(AnnotatedType annotatedType, ModelConverterContext context
+                     .skipOverride(true);
+             if (resolvedArrayAnnotation != null) {
+                 ArraySchema schema = new ArraySchema();
++                resolveArraySchema(annotatedType, schema, resolvedArrayAnnotation);
+                 Schema innerSchema = null;
+ 
+                 Schema primitive = PrimitiveType.createProperty(cls);
+@@ -273,6 +280,13 @@ public Schema resolve(AnnotatedType annotatedType, ModelConverterContext context
+                 model.xml(xml);
+             }
+             resolveSchemaMembers(model, annotatedType);
++
++            if (resolvedArrayAnnotation != null) {
++                ArraySchema schema = new ArraySchema();
++                resolveArraySchema(annotatedType, schema, resolvedArrayAnnotation);
++                schema.setItems(model);
++                return schema;
++            }
+             return model;
+         }
+ 
+@@ -745,22 +759,7 @@ public Schema resolve(AnnotatedType annotatedType, ModelConverterContext context
+         if (model != null && !"array".equals(model.getType()) && resolvedArrayAnnotation != null) {
+             ArraySchema schema = new ArraySchema();
+             schema.setItems(model);
+-            Integer minItems = resolveMinItems(annotatedType, resolvedArrayAnnotation);
+-            if (minItems != null) {
+-                schema.minItems(minItems);
+-            }
+-            Integer maxItems = resolveMaxItems(annotatedType, resolvedArrayAnnotation);
+-            if (maxItems != null) {
+-                schema.maxItems(maxItems);
+-            }
+-            Boolean uniqueItems = resolveUniqueItems(annotatedType, resolvedArrayAnnotation);
+-            if (uniqueItems != null) {
+-                schema.uniqueItems(uniqueItems);
+-            }
+-            Map<String, Object> extensions = resolveExtensions(annotatedType, resolvedArrayAnnotation);
+-            if (extensions != null) {
+-                schema.extensions(extensions);
+-            }
++            resolveArraySchema(annotatedType, schema, resolvedArrayAnnotation);
+             return schema;
+         }
+ 
+@@ -1811,4 +1810,23 @@ private boolean hiddenByJsonView(Annotation[] annotations,
+         }
+         return containsJsonViewAnnotation;
+     }
++
++    private void resolveArraySchema(AnnotatedType annotatedType, ArraySchema schema, io.swagger.v3.oas.annotations.media.ArraySchema resolvedArrayAnnotation) {
++        Integer minItems = resolveMinItems(annotatedType, resolvedArrayAnnotation);
++        if (minItems != null) {
++            schema.minItems(minItems);
++        }
++        Integer maxItems = resolveMaxItems(annotatedType, resolvedArrayAnnotation);
++        if (maxItems != null) {
++            schema.maxItems(maxItems);
++        }
++        Boolean uniqueItems = resolveUniqueItems(annotatedType, resolvedArrayAnnotation);
++        if (uniqueItems != null) {
++            schema.uniqueItems(uniqueItems);
++        }
++        Map<String, Object> extensions = resolveExtensions(annotatedType, resolvedArrayAnnotation);
++        if (extensions != null) {
++            schema.extensions(extensions);
++        }
++    }
+ }
+diff --git a/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java
+new file mode 100644
+index 000000000..eaf685602
+--- /dev/null
++++ b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java
+@@ -0,0 +1,32 @@
++package io.swagger.v3.core.resolving;
++
++import io.swagger.v3.core.converter.AnnotatedType;
++import io.swagger.v3.core.converter.ModelConverterContextImpl;
++import io.swagger.v3.core.jackson.ModelResolver;
++import io.swagger.v3.core.matchers.SerializationMatchers;
++import io.swagger.v3.core.resolving.resources.MyThing;
++import io.swagger.v3.oas.models.media.Schema;
++import org.testng.annotations.Test;
++
++public class Ticket2740CyclicTest extends SwaggerTestBase {
++    @Test
++    public void testCyclicBean() throws Exception {
++        final ModelResolver modelResolver = new ModelResolver(mapper());
++
++        final ModelConverterContextImpl context = new ModelConverterContextImpl(modelResolver);
++
++        final Schema model = context
++                .resolve(new AnnotatedType(MyThing.class));
++
++        SerializationMatchers.assertEqualsToYaml(model, "type: object\n" +
++                "properties:\n" +
++                "  otherThings:\n" +
++                "    uniqueItems: true\n" +
++                "    type: array\n" +
++                "    description: Other related things\n" +
++                "    items:\n" +
++                "      $ref: '#/components/schemas/MyThing'\n" +
++                "description: Thing");
++    }
++
++}
+diff --git a/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java
+new file mode 100644
+index 000000000..61b3913c7
+--- /dev/null
++++ b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java
+@@ -0,0 +1,21 @@
++package io.swagger.v3.core.resolving.resources;
++
++import io.swagger.v3.oas.annotations.media.Schema;
++
++import java.util.HashSet;
++import java.util.Set;
++
++@Schema(description = "Thing")
++public class MyThing {
++    private final Set<MyThing> otherThings;
++
++    public MyThing() {
++        otherThings = new HashSet<>();
++    }
++
++    @Schema(description = "Other related things")
++    public Set<MyThing> getOtherThings() {
++        return otherThings;
++    }
++}
++
+diff --git a/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java b/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
+index 73a06abdf..36a135971 100644
+--- a/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
++++ b/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
+@@ -21,6 +21,7 @@
+ import javax.ws.rs.HeaderParam;
+ import javax.ws.rs.PathParam;
+ import javax.ws.rs.QueryParam;
++import javax.ws.rs.MatrixParam;
+ import java.lang.annotation.Annotation;
+ import java.lang.reflect.Type;
+ import java.util.ArrayList;
+@@ -67,6 +68,13 @@ public ResolvedParameter extractParameters(List<Annotation> annotations,
+                 pp.setIn(PATH_PARAM);
+                 pp.setName(param.value());
+                 parameter = pp;
++            } else if (annotation instanceof MatrixParam) {
++                MatrixParam param = (MatrixParam) annotation;
++                Parameter pp = new Parameter();
++                pp.setIn(PATH_PARAM);
++                pp.setStyle(Parameter.StyleEnum.MATRIX);
++                pp.setName(param.value());
++                parameter = pp;
+             } else if (annotation instanceof HeaderParam) {
+                 HeaderParam param = (HeaderParam) annotation;
+                 Parameter pp = new Parameter();
+diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
+index dffafb0a9..c18e44dbd 100644
+--- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
++++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
+@@ -411,6 +411,36 @@ public void testCompletePetResource() throws IOException {
+                 "                $ref: '#/components/schemas/Pet'\n" +
+                 "        400:\n" +
+                 "          description: Invalid tag value\n" +
++                "  /pet/findByCategory/{category}:\n" +
++                "    get:\n" +
++                "      summary: Finds Pets by category\n" +
++                "      operationId: findPetsByCategory\n" +
++                "      parameters:\n" +
++                "      - name: category\n" +
++                "        in: path\n" +
++                "        description: Category value that need to be considered for filter\n" +
++                "        required: true\n" +
++                "        style: matrix\n" +
++                "        schema:\n" +
++                "          $ref: '#/components/schemas/Category'\n" +
++                "      - name: skip\n" +
++                "        in: query\n" +
++                "        schema:\n" +
++                "          type: integer\n" +
++                "          format: int32\n" +
++                "      - name: limit\n" +
++                "        in: query\n" +
++                "        schema:\n" +
++                "          type: integer\n" +
++                "          format: int32\n" +
++                "      responses:\n" +
++                "        default:\n" +
++                "          content:\n" +
++                "            application/json:\n" +
++                "              schema:\n" +
++                "                $ref: '#/components/schemas/Pet'\n" +
++                "        400:\n" +
++                "          description: Invalid category value\n" +
+                 "  /pet/{petId}:\n" +
+                 "    get:\n" +
+                 "      summary: Find pet by ID\n" +
+diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
+index cff9c7ac7..0f93f66a1 100644
+--- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
++++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
+@@ -18,6 +18,7 @@
+ 
+ import io.swagger.v3.jaxrs2.resources.data.PetData;
+ import io.swagger.v3.jaxrs2.resources.exception.NotFoundException;
++import io.swagger.v3.jaxrs2.resources.model.Category;
+ import io.swagger.v3.jaxrs2.resources.model.Pet;
+ import io.swagger.v3.oas.annotations.Operation;
+ import io.swagger.v3.oas.annotations.Parameter;
+@@ -28,6 +29,7 @@
+ import javax.ws.rs.BeanParam;
+ import javax.ws.rs.Consumes;
+ import javax.ws.rs.GET;
++import javax.ws.rs.MatrixParam;
+ import javax.ws.rs.POST;
+ import javax.ws.rs.PUT;
+ import javax.ws.rs.Path;
+@@ -145,6 +147,25 @@ public Response findPetsByStatus(
+         return Response.ok(petData.findPetByStatus(status)).build();
+     }
+ 
++    @GET
++    @Path("/findByCategory/{category}")
++    @Produces("application/xml")
++    @Operation(summary = "Finds Pets by category",
++            responses = {
++                    @ApiResponse(
++                            content = @Content(mediaType = "application/json",
++                                    schema = @Schema(implementation = Pet.class))),
++                    @ApiResponse(
++                            responseCode = "400", description = "Invalid category value"
++                    )}
++    )
++    public Response findPetsByCategory(
++            @Parameter(description = "Category value that need to be considered for filter", required = true) @MatrixParam("category") Category category,
++            @BeanParam QueryResultBean qr
++    ) {
++        return Response.ok(petData.findPetByCategory(category)).build();
++    }
++
+     @GET
+     @Path("/findByTags")
+     @Produces("application/json")
+diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
+index 4cf558389..03d76dfdb 100644
+--- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
++++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
+@@ -22,6 +22,7 @@
+ 
+ import java.util.ArrayList;
+ import java.util.List;
++import java.util.stream.Collectors;
+ 
+ public class PetData {
+     static List<Pet> pets = new ArrayList<Pet>();
+@@ -80,6 +81,10 @@ public Pet getPetById(long petId) {
+         return result;
+     }
+ 
++    public List<Pet> findPetByCategory(Category category) {
++        return pets.stream().filter(pet -> category.equals(pet.getCategory())).collect(Collectors.toList());
++    }
++
+     public List<Pet> findPetByTags(String tags) {
+         String[] tagList = tags.split(",");
+         List<Pet> result = new ArrayList<Pet>();

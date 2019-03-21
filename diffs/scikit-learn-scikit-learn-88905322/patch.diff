@@ -1,0 +1,1023 @@
+diff --git a/doc/datasets/index.rst b/doc/datasets/index.rst
+index e18cfdd152ae..e7925f3e9496 100644
+--- a/doc/datasets/index.rst
++++ b/doc/datasets/index.rst
+@@ -267,26 +267,26 @@ features::
+ 
+ .. include:: rcv1.rst
+ 
+-.. _boston_house_prices
++.. _boston_house_prices:
+ 
+ .. include:: ../../sklearn/datasets/descr/boston_house_prices.rst
+ 
+-.. _breast_cancer
++.. _breast_cancer:
+ 
+ .. include:: ../../sklearn/datasets/descr/breast_cancer.rst
+ 
+-.. _diabetes
++.. _diabetes:
+ 
+ .. include:: ../../sklearn/datasets/descr/diabetes.rst
+ 
+-.. _digits
++.. _digits:
+ 
+ .. include:: ../../sklearn/datasets/descr/digits.rst
+ 
+-.. _iris
++.. _iris:
+ 
+ .. include:: ../../sklearn/datasets/descr/iris.rst
+ 
+-.. _linnerud
++.. _linnerud:
+ 
+ .. include:: ../../sklearn/datasets/descr/linnerud.rst
+diff --git a/doc/datasets/rcv1.rst b/doc/datasets/rcv1.rst
+index 486eeee90557..ded38584ceda 100644
+--- a/doc/datasets/rcv1.rst
++++ b/doc/datasets/rcv1.rst
+@@ -41,10 +41,10 @@ There are 103 topics, each represented by a string. Their corpus frequencies spa
+     >>> rcv1.target_names[:3].tolist()  # doctest: +SKIP
+     ['E11', 'ECAT', 'M11']
+ 
+-The dataset will be downloaded from the `dataset's homepage`_ if necessary.
++The dataset will be downloaded from the `rcv1 homepage`_ if necessary.
+ The compressed size is about 656 MB.
+ 
+-.. _dataset's homepage: http://jmlr.csail.mit.edu/papers/volume5/lewis04a/
++.. _rcv1 homepage: http://jmlr.csail.mit.edu/papers/volume5/lewis04a/
+ 
+ 
+ .. topic:: References
+diff --git a/doc/modules/decomposition.rst b/doc/modules/decomposition.rst
+index 91d003ce7005..f10e105664c8 100644
+--- a/doc/modules/decomposition.rst
++++ b/doc/modules/decomposition.rst
+@@ -776,6 +776,7 @@ a corpus with :math:`D` documents and :math:`K` topics:
+   2. For each document :math:`d`, draw :math:`\theta_d \sim Dirichlet(\alpha), \: d=1...D`
+ 
+   3. For each word :math:`i` in document :math:`d`:
++
+     a. Draw a topic index :math:`z_{di} \sim Multinomial(\theta_d)`
+     b. Draw the observed word :math:`w_{ij} \sim Multinomial(beta_{z_{di}}.)`
+ 
+diff --git a/doc/modules/feature_selection.rst b/doc/modules/feature_selection.rst
+index 88ff7d56d686..60e4d0a38f7c 100644
+--- a/doc/modules/feature_selection.rst
++++ b/doc/modules/feature_selection.rst
+@@ -153,6 +153,8 @@ For examples on how it is to be used refer to the sections below.
+       most important features from the Boston dataset without knowing the
+       threshold beforehand.
+ 
++.. _l1_feature_selection:
++
+ L1-based feature selection
+ --------------------------
+ 
+diff --git a/doc/modules/gaussian_process.rst b/doc/modules/gaussian_process.rst
+index 52049efc1615..b710564dbb75 100644
+--- a/doc/modules/gaussian_process.rst
++++ b/doc/modules/gaussian_process.rst
+@@ -67,12 +67,15 @@ level from the data (see example below).
+ 
+ The implementation is based on Algorithm 2.1 of [RW2006]_. In addition to
+ the API of standard sklearn estimators, GaussianProcessRegressor:
+-     * allows prediction without prior fitting (based on the GP prior)
+-     * provides an additional method ``sample_y(X)``, which evaluates samples
+-       drawn from the GPR (prior or posterior) at given inputs
+-     * exposes a method ``log_marginal_likelihood(theta)``, which can be used
+-       externally for other ways of selecting hyperparameters, e.g., via
+-       Markov chain Monte Carlo.
++
++* allows prediction without prior fitting (based on the GP prior)
++
++* provides an additional method ``sample_y(X)``, which evaluates samples
++  drawn from the GPR (prior or posterior) at given inputs
++
++* exposes a method ``log_marginal_likelihood(theta)``, which can be used
++  externally for other ways of selecting hyperparameters, e.g., via
++  Markov chain Monte Carlo.
+ 
+ 
+ GPR examples
+@@ -171,26 +174,30 @@ model the CO2 concentration as a function of the time t.
+ 
+ The kernel is composed of several terms that are responsible for explaining
+ different properties of the signal:
+- - a long term, smooth rising trend is to be explained by an RBF kernel. The
+-   RBF kernel with a large length-scale enforces this component to be smooth;
+-   it is not enforced that the trend is rising which leaves this choice to the
+-   GP. The specific length-scale and the amplitude are free hyperparameters.
+- - a seasonal component, which is to be explained by the periodic
+-   ExpSineSquared kernel with a fixed periodicity of 1 year. The length-scale
+-   of this periodic component, controlling its smoothness, is a free parameter.
+-   In order to allow decaying away from exact periodicity, the product with an
+-   RBF kernel is taken. The length-scale of this RBF component controls the
+-   decay time and is a further free parameter.
+- - smaller, medium term irregularities are to be explained by a
+-   RationalQuadratic kernel component, whose length-scale and alpha parameter,
+-   which determines the diffuseness of the length-scales, are to be determined.
+-   According to [RW2006]_, these irregularities can better be explained by
+-   a RationalQuadratic than an RBF kernel component, probably because it can
+-   accommodate several length-scales.
+- - a "noise" term, consisting of an RBF kernel contribution, which shall
+-   explain the correlated noise components such as local weather phenomena,
+-   and a WhiteKernel contribution for the white noise. The relative amplitudes
+-   and the RBF's length scale are further free parameters.
++
++- a long term, smooth rising trend is to be explained by an RBF kernel. The
++  RBF kernel with a large length-scale enforces this component to be smooth;
++  it is not enforced that the trend is rising which leaves this choice to the
++  GP. The specific length-scale and the amplitude are free hyperparameters.
++
++- a seasonal component, which is to be explained by the periodic
++  ExpSineSquared kernel with a fixed periodicity of 1 year. The length-scale
++  of this periodic component, controlling its smoothness, is a free parameter.
++  In order to allow decaying away from exact periodicity, the product with an
++  RBF kernel is taken. The length-scale of this RBF component controls the
++  decay time and is a further free parameter.
++
++- smaller, medium term irregularities are to be explained by a
++  RationalQuadratic kernel component, whose length-scale and alpha parameter,
++  which determines the diffuseness of the length-scales, are to be determined.
++  According to [RW2006]_, these irregularities can better be explained by
++  a RationalQuadratic than an RBF kernel component, probably because it can
++  accommodate several length-scales.
++
++- a "noise" term, consisting of an RBF kernel contribution, which shall
++  explain the correlated noise components such as local weather phenomena,
++  and a WhiteKernel contribution for the white noise. The relative amplitudes
++  and the RBF's length scale are further free parameters.
+ 
+ Maximizing the log-marginal-likelihood after subtracting the target's mean
+ yields the following kernel with an LML of -83.214:
+diff --git a/doc/modules/multiclass.rst b/doc/modules/multiclass.rst
+index c212daae73c5..4b444c25a3cc 100644
+--- a/doc/modules/multiclass.rst
++++ b/doc/modules/multiclass.rst
+@@ -214,7 +214,7 @@ code book. The code size is the dimensionality of the aforementioned space.
+ Intuitively, each class should be represented by a code as unique as
+ possible and a good code book should be designed to optimize classification
+ accuracy. In this implementation, we simply use a randomly-generated code
+-book as advocated in [2]_ although more elaborate methods may be added in the
++book as advocated in [3]_ although more elaborate methods may be added in the
+ future.
+ 
+ At fitting time, one binary classifier per bit in the code book is fitted.
+@@ -261,16 +261,16 @@ Below is an example of multiclass learning using Output-Codes::
+ 
+ .. topic:: References:
+ 
+-    .. [1] "Solving multiclass learning problems via error-correcting output codes",
++    .. [2] "Solving multiclass learning problems via error-correcting output codes",
+         Dietterich T., Bakiri G.,
+         Journal of Artificial Intelligence Research 2,
+         1995.
+ 
+-    .. [2] "The error coding method and PICTs",
++    .. [3] "The error coding method and PICTs",
+         James G., Hastie T.,
+         Journal of Computational and Graphical statistics 7,
+         1998.
+ 
+-    .. [3] "The Elements of Statistical Learning",
++    .. [4] "The Elements of Statistical Learning",
+         Hastie T., Tibshirani R., Friedman J., page 606 (second-edition)
+         2008.
+diff --git a/doc/modules/neural_networks_supervised.rst b/doc/modules/neural_networks_supervised.rst
+index a921c2d975ee..cc17be204ce5 100644
+--- a/doc/modules/neural_networks_supervised.rst
++++ b/doc/modules/neural_networks_supervised.rst
+@@ -153,7 +153,7 @@ See the examples below and the doc string of
+ 
+ .. topic:: Examples:
+ 
+- * :ref:`example_plot_mlp_alpha.py`
++ * :ref:`example_neural_networks_plot_mlp_alpha.py`
+ 
+ 
+ Regression
+@@ -175,7 +175,7 @@ Algorithms
+ MLP trains using `Stochastic Gradient Descent
+ <http://en.wikipedia.org/wiki/Stochastic_gradient_descent>`_,
+ `Adam <http://arxiv.org/abs/1412.6980>`_, or
+-`L-BFGS <http://en.wikipedia.org/wiki/Limited-memory_BFGS>`_.
++`L-BFGS <http://en.wikipedia.org/wiki/Limited-memory_BFGS>`__.
+ Stochastic Gradient Descent (SGD) updates parameters using the gradient of the
+ loss function with respect to a parameter that needs adaptation, i.e.
+ 
+@@ -201,7 +201,7 @@ L-BFGS is a fast learning algorithm that approximates the Hessian matrix which
+ represents the second-order partial derivative of a function. Further it
+ approximates the inverse of the Hessian matrix to perform parameter updates.
+ The implementation uses the Scipy version of
+-`L-BFGS <http://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin_l_bfgs_b.html>`_..
++`L-BFGS <http://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin_l_bfgs_b.html>`__..
+ 
+ If the selected algorithm is 'L-BFGS', training does not support online nor
+ mini-batch learning.
+diff --git a/doc/modules/outlier_detection.rst b/doc/modules/outlier_detection.rst
+index ff24e0122520..93de5ad490f5 100644
+--- a/doc/modules/outlier_detection.rst
++++ b/doc/modules/outlier_detection.rst
+@@ -169,6 +169,7 @@ This strategy is illustrated below.
+      :class:`covariance.MinCovDet`.
+ 
+ .. topic:: References:
++
+     .. [LTZ2008] Liu, Fei Tony, Ting, Kai Ming and Zhou, Zhi-Hua. "Isolation forest."
+            Data Mining, 2008. ICDM'08. Eighth IEEE International Conference on.
+ 
+diff --git a/doc/whats_new.rst b/doc/whats_new.rst
+index 8587580795b6..6acd6b80211e 100644
+--- a/doc/whats_new.rst
++++ b/doc/whats_new.rst
+@@ -33,7 +33,7 @@ Enhancements
+      that takes in the data and yields a generator for the different splits.
+      This change makes it possible to do nested cross-validation with ease,
+      facilitated by :class:`model_selection.GridSearchCV` and similar
+-     utilities.  (`#4294 https://github.com/scikit-learn/scikit-learn/pull/4294>`_) by `Raghav R V`_.
++     utilities.  (`#4294 <https://github.com/scikit-learn/scikit-learn/pull/4294>`_) by `Raghav R V`_.
+ 
+    - The random forest, extra trees and decision tree estimators now has a
+      method ``decision_path`` which returns the decision path of samples in
+@@ -56,16 +56,16 @@ Bug fixes
+ .........
+ 
+     - :class:`RandomizedPCA` default number of `iterated_power` is 2 instead of 3.
+-      This is a speed up with a minor precision decrease. (`#5141 https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
++      This is a speed up with a minor precision decrease. (`#5141 <https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
+ 
+     - :func:`randomized_svd` performs 2 power iterations by default, instead or 0.
+       In practice this is often enough for obtaining a good approximation of the
+-      true eigenvalues/vectors in the presence of noise. (`#5141 https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
++      true eigenvalues/vectors in the presence of noise. (`#5141 <https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
+ 
+     - :func:`randomized_range_finder` is more numerically stable when many
+       power iterations are requested, since it applies LU normalization by default.
+       If `n_iter<2` numerical issues are unlikely, thus no normalization is applied.
+-      Other normalization options are available: 'none', 'LU' and 'QR'. (`#5141 https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
++      Other normalization options are available: 'none', 'LU' and 'QR'. (`#5141 <https://github.com/scikit-learn/scikit-learn/pull/5141>`_) by `Giorgio Patrini`_.
+ 
+     - Fixed bug in :func:`manifold.spectral_embedding` where diagonal of unnormalized
+       Laplacian matrix was incorrectly set to 1. By `Peter Fischer`_.
+@@ -85,7 +85,7 @@ API changes summary
+    - The :mod:`cross_validation`, :mod:`grid_search` and :mod:`learning_curve`
+      have been deprecated and the classes and functions have been reorganized into
+      the :mod:`model_selection` module.
+-     (`#4294 https://github.com/scikit-learn/scikit-learn/pull/4294>`_) by `Raghav R V`_.
++     (`#4294 <https://github.com/scikit-learn/scikit-learn/pull/4294>`_) by `Raghav R V`_.
+ 
+ 
+ .. _changes_0_17:
+@@ -366,7 +366,7 @@ Bug fixes
+ 
+     - Fixed bug in :class:`cross_decomposition.PLS` that yielded unstable and
+       platform dependent output, and failed on `fit_transform`.
+-       By `Arthur Mensch`_.
++      By `Arthur Mensch`_.
+ 
+     - Fixed a bug in :class:`linear_model.LogisticRegression` and
+       :class:`linear_model.LogisticRegressionCV` when using
+@@ -3403,8 +3403,8 @@ Changelog
+ 
+   - New :ref:`gaussian_process` module by Vincent Dubourg. This module
+     also has great documentation and some very neat examples. See
+-    :ref:`example_gaussian_process_plot_gp_regression.py` or
+-    :ref:`example_gaussian_process_plot_gp_probabilistic_classification_after_regression.py`
++    example_gaussian_process_plot_gp_regression.py or
++    example_gaussian_process_plot_gp_probabilistic_classification_after_regression.py
+     for a taste of what can be done.
+ 
+   - It is now possible to use liblinear’s Multi-class SVC (option
+@@ -3866,4 +3866,4 @@ David Huard, Dave Morrill, Ed Schofield, Travis Oliphant, Pearu Peterson.
+ .. _Graham Clenaghan: https://github.com/gclenaghan
+ .. _Giorgio Patrini: https://github.com/giorgiop
+ .. _Elvis Dohmatob: https://github.com/dohmatob
+-.. _yelite https://github.com/yelite
++.. _yelite: https://github.com/yelite
+diff --git a/examples/applications/face_recognition.py b/examples/applications/face_recognition.py
+index b79599ecb3a0..b23dda4749fe 100644
+--- a/examples/applications/face_recognition.py
++++ b/examples/applications/face_recognition.py
+@@ -12,8 +12,9 @@
+ 
+ Expected results for the top 5 most represented people in the dataset::
+ 
++================== ============ ======= ========== =======
+                    precision    recall  f1-score   support
+-
++================== ============ ======= ========== =======
+      Ariel Sharon       0.67      0.92      0.77        13
+      Colin Powell       0.75      0.78      0.76        60
+   Donald Rumsfeld       0.78      0.67      0.72        27
+@@ -23,6 +24,7 @@
+        Tony Blair       0.81      0.69      0.75        36
+ 
+       avg / total       0.80      0.80      0.80       322
++================== ============ ======= ========== =======
+ 
+ """
+ from __future__ import print_function
+diff --git a/examples/gaussian_process/plot_gpr_co2.py b/examples/gaussian_process/plot_gpr_co2.py
+index 07f1d8214df9..b0b271a3644a 100644
+--- a/examples/gaussian_process/plot_gpr_co2.py
++++ b/examples/gaussian_process/plot_gpr_co2.py
+@@ -13,34 +13,40 @@
+ 
+ The kernel is composed of several terms that are responsible for explaining
+ different properties of the signal:
+- - a long term, smooth rising trend is to be explained by an RBF kernel. The
+-   RBF kernel with a large length-scale enforces this component to be smooth;
+-   it is not enforced that the trend is rising which leaves this choice to the
+-   GP. The specific length-scale and the amplitude are free hyperparameters.
+- - a seasonal component, which is to be explained by the periodic
+-   ExpSineSquared kernel with a fixed periodicity of 1 year. The length-scale
+-   of this periodic component, controlling its smoothness, is a free parameter.
+-   In order to allow decaying away from exact periodicity, the product with an
+-   RBF kernel is taken. The length-scale of this RBF component controls the
+-   decay time and is a further free parameter.
+- - smaller, medium term irregularities are to be explained by a
+-   RationalQuadratic kernel component, whose length-scale and alpha parameter,
+-   which determines the diffuseness of the length-scales, are to be determined.
+-   According to [RW2006], these irregularities can better be explained by
+-   a RationalQuadratic than an RBF kernel component, probably because it can
+-   accommodate several length-scales.
+- - a "noise" term, consisting of an RBF kernel contribution, which shall
+-   explain the correlated noise components such as local weather phenomena,
+-   and a WhiteKernel contribution for the white noise. The relative amplitudes
+-   and the RBF's length scale are further free parameters.
++
++- a long term, smooth rising trend is to be explained by an RBF kernel. The
++  RBF kernel with a large length-scale enforces this component to be smooth;
++  it is not enforced that the trend is rising which leaves this choice to the
++  GP. The specific length-scale and the amplitude are free hyperparameters.
++
++- a seasonal component, which is to be explained by the periodic
++  ExpSineSquared kernel with a fixed periodicity of 1 year. The length-scale
++  of this periodic component, controlling its smoothness, is a free parameter.
++  In order to allow decaying away from exact periodicity, the product with an
++  RBF kernel is taken. The length-scale of this RBF component controls the
++  decay time and is a further free parameter.
++
++- smaller, medium term irregularities are to be explained by a
++  RationalQuadratic kernel component, whose length-scale and alpha parameter,
++  which determines the diffuseness of the length-scales, are to be determined.
++  According to [RW2006], these irregularities can better be explained by
++  a RationalQuadratic than an RBF kernel component, probably because it can
++  accommodate several length-scales.
++
++- a "noise" term, consisting of an RBF kernel contribution, which shall
++  explain the correlated noise components such as local weather phenomena,
++  and a WhiteKernel contribution for the white noise. The relative amplitudes
++  and the RBF's length scale are further free parameters.
+ 
+ Maximizing the log-marginal-likelihood after subtracting the target's mean
+-yields the following kernel with an LML of -83.214:
++yields the following kernel with an LML of -83.214::
++
+    34.4**2 * RBF(length_scale=41.8)
+    + 3.27**2 * RBF(length_scale=180) * ExpSineSquared(length_scale=1.44,
+                                                       periodicity=1)
+    + 0.446**2 * RationalQuadratic(alpha=17.7, length_scale=0.957)
+    + 0.197**2 * RBF(length_scale=0.138) + WhiteKernel(noise_level=0.0336)
++
+ Thus, most of the target signal (34.4ppm) is explained by a long-term rising
+ trend (length-scale 41.8 years). The periodic component has an amplitude of
+ 3.27ppm, a decay time of 180 years and a length-scale of 1.44. The long decay
+diff --git a/sklearn/cross_decomposition/pls_.py b/sklearn/cross_decomposition/pls_.py
+index fa481bb4f576..4d77bc2b3249 100644
+--- a/sklearn/cross_decomposition/pls_.py
++++ b/sklearn/cross_decomposition/pls_.py
+@@ -521,7 +521,8 @@ class PLSRegression(_PLS):
+ 
+     Notes
+     -----
+-    Matrices :
++    Matrices::
++
+         T: x_scores_
+         U: y_scores_
+         W: x_weights_
+@@ -529,16 +530,17 @@ class PLSRegression(_PLS):
+         P: x_loadings_
+         Q: y_loadings__
+ 
+-    Are computed such that:
++    Are computed such that::
++
+         X = T P.T + Err and Y = U Q.T + Err
+         T[:, k] = Xk W[:, k] for k in range(n_components)
+         U[:, k] = Yk C[:, k] for k in range(n_components)
+         x_rotations_ = W (P.T W)^(-1)
+         y_rotations_ = C (Q.T C)^(-1)
++
+     where Xk and Yk are residual matrices at iteration k.
+ 
+-    Slides explaining PLS
+-    :ref:http://www.eigenvector.com/Docs/Wise_pls_properties.pdf
++    `Slides explaining PLS <http://www.eigenvector.com/Docs/Wise_pls_properties.pdf>`
+ 
+     For each component k, find weights u, v that optimizes:
+     ``max corr(Xk u, Yk v) * std(Xk u) std(Yk u)``, such that ``|u| = 1``
+@@ -656,7 +658,8 @@ class PLSCanonical(_PLS):
+ 
+     Notes
+     -----
+-    Matrices :
++    Matrices::
++
+         T: x_scores_
+         U: y_scores_
+         W: x_weights_
+@@ -664,19 +667,21 @@ class PLSCanonical(_PLS):
+         P: x_loadings_
+         Q: y_loadings__
+ 
+-    Are computed such that:
++    Are computed such that::
++
+         X = T P.T + Err and Y = U Q.T + Err
+         T[:, k] = Xk W[:, k] for k in range(n_components)
+         U[:, k] = Yk C[:, k] for k in range(n_components)
+         x_rotations_ = W (P.T W)^(-1)
+         y_rotations_ = C (Q.T C)^(-1)
++
+     where Xk and Yk are residual matrices at iteration k.
+ 
+-    Slides explaining PLS
+-    :ref:http://www.eigenvector.com/Docs/Wise_pls_properties.pdf
++    `Slides explaining PLS <http://www.eigenvector.com/Docs/Wise_pls_properties.pdf>`
+ 
+     For each component k, find weights u, v that optimize::
+-    max corr(Xk u, Yk v) * std(Xk u) std(Yk u), such that ``|u| = |v| = 1``
++
++        max corr(Xk u, Yk v) * std(Xk u) std(Yk u), such that ``|u| = |v| = 1``
+ 
+     Note that it maximizes both the correlations between the scores and the
+     intra-block variances.
+diff --git a/sklearn/datasets/descr/breast_cancer.rst b/sklearn/datasets/descr/breast_cancer.rst
+index 642484f5e3d7..6e3dfc708f64 100644
+--- a/sklearn/datasets/descr/breast_cancer.rst
++++ b/sklearn/datasets/descr/breast_cancer.rst
+@@ -19,51 +19,52 @@ Data Set Characteristics:
+         - concave points (number of concave portions of the contour)
+         - symmetry 
+         - fractal dimension ("coastline approximation" - 1)
+-		
+-		The mean, standard error, and "worst" or largest (mean of the three
+-		largest values) of these features were computed for each image,
+-		resulting in 30 features.  For instance, field 3 is Mean Radius, field
+-		13 is Radius SE, field 23 is Worst Radius.
+-		
++        
++        The mean, standard error, and "worst" or largest (mean of the three
++        largest values) of these features were computed for each image,
++        resulting in 30 features.  For instance, field 3 is Mean Radius, field
++        13 is Radius SE, field 23 is Worst Radius.
++        
+         - class:
+                 - WDBC-Malignant
+                 - WDBC-Benign
+ 
+     :Summary Statistics:
+-    ===================================== ====== ======
+-										   Min    Max
+-    ===================================== ====== ====== 
+-    radius (mean):   					  6.981  28.11
+-    texture (mean):    					  9.71   39.28
+-    perimeter (mean):   				  43.79  188.5
+-    area (mean):    					  143.5  2501.0
+-	smoothness (mean):					  0.053  0.163
+-	compactness (mean):					  0.019  0.345
+-	concavity (mean):					  0.0    0.427
+-	concave points (mean):				  0.0	 0.201
+-	symmetry (mean): 					  0.106  0.304
+-	fractal dimension (mean):			  0.05	 0.097
+-    radius (standard error):   			  0.112  2.873
+-    texture (standard error):    		  0.36	 4.885
+-    perimeter (standard error):   		  0.757  21.98
+-    area (standard error):				  6.802  542.2
+-	smoothness (standard error):		  0.002	 0.031
+-	compactness (standard error):		  0.002  0.135
+-	concavity (standard error):			  0.0    0.396
+-	concave points (standard error):	  0.0	 0.053
+-	symmetry (standard error):			  0.008  0.079
+-	fractal dimension (standard error):   0.001  0.03
+-    radius (worst):   					  7.93	 36.04
+-    texture (worst):    				  12.02  49.54
+-    perimeter (worst):   				  50.41  251.2
+-    area (worst):    					  185.2  4254.0
+-	smoothness (worst):					  0.071  0.223
+-	compactness (worst):				  0.027  1.058
+-	concavity (worst):					  0.0    1.252
+-	concave points (worst):				  0.0    0.291
+-	symmetry (worst): 					  0.156  0.664
+-	fractal dimension (worst):			  0.055	 0.208
+-    ===================================== ====== ======
++
++    ===================================== ======= ========
++                                           Min     Max
++    ===================================== ======= ========
++    radius (mean):                         6.981   28.11
++    texture (mean):                        9.71    39.28
++    perimeter (mean):                      43.79   188.5
++    area (mean):                           143.5   2501.0
++    smoothness (mean):                     0.053   0.163
++    compactness (mean):                    0.019   0.345
++    concavity (mean):                      0.0     0.427
++    concave points (mean):                 0.0     0.201
++    symmetry (mean):                       0.106   0.304
++    fractal dimension (mean):              0.05    0.097
++    radius (standard error):               0.112   2.873
++    texture (standard error):              0.36    4.885
++    perimeter (standard error):            0.757   21.98
++    area (standard error):                 6.802   542.2
++    smoothness (standard error):           0.002   0.031
++    compactness (standard error):          0.002   0.135
++    concavity (standard error):            0.0     0.396
++    concave points (standard error):       0.0     0.053
++    symmetry (standard error):             0.008   0.079
++    fractal dimension (standard error):    0.001   0.03
++    radius (worst):                        7.93    36.04
++    texture (worst):                       12.02   49.54
++    perimeter (worst):                     50.41   251.2
++    area (worst):                          185.2   4254.0
++    smoothness (worst):                    0.071   0.223
++    compactness (worst):                   0.027   1.058
++    concavity (worst):                     0.0     1.252
++    concave points (worst):                0.0     0.291
++    symmetry (worst):                      0.156   0.664
++    fractal dimension (worst):             0.055   0.208
++    ===================================== ======= ========
+ 
+     :Missing Attribute Values: None
+ 
+@@ -108,11 +109,11 @@ References
+ ----------
+    - W.N. Street, W.H. Wolberg and O.L. Mangasarian. Nuclear feature extraction 
+      for breast tumor diagnosis. IS&T/SPIE 1993 International Symposium on 
+-	 Electronic Imaging: Science and Technology, volume 1905, pages 861-870, 
+-	 San Jose, CA, 1993. 
++     Electronic Imaging: Science and Technology, volume 1905, pages 861-870, 
++     San Jose, CA, 1993. 
+    - O.L. Mangasarian, W.N. Street and W.H. Wolberg. Breast cancer diagnosis and 
+      prognosis via linear programming. Operations Research, 43(4), pages 570-577, 
+-	 July-August 1995.
++     July-August 1995.
+    - W.H. Wolberg, W.N. Street, and O.L. Mangasarian. Machine learning techniques
+      to diagnose breast cancer from fine-needle aspirates. Cancer Letters 77 (1994) 
+-	 163-171.
+\ No newline at end of file
++     163-171.
+diff --git a/sklearn/datasets/descr/diabetes.rst b/sklearn/datasets/descr/diabetes.rst
+index 192d6c055ec8..df102a1bec1f 100644
+--- a/sklearn/datasets/descr/diabetes.rst
++++ b/sklearn/datasets/descr/diabetes.rst
+@@ -29,7 +29,7 @@ Data Set Characteristics:
+     :S5:
+     :S6:
+ 
+-*Note: Each of these 10 feature variables have been mean centered and scaled by the standard deviation times `n_samples` (i.e. the sum of squares of each column totals 1).
++Note: Each of these 10 feature variables have been mean centered and scaled by the standard deviation times `n_samples` (i.e. the sum of squares of each column totals 1).
+ 
+ Source URL:
+ http://www4.stat.ncsu.edu/~boos/var.select/diabetes.html
+diff --git a/sklearn/datasets/descr/digits.rst b/sklearn/datasets/descr/digits.rst
+index 32aaa4de3570..a30514474f52 100644
+--- a/sklearn/datasets/descr/digits.rst
++++ b/sklearn/datasets/descr/digits.rst
+@@ -1,4 +1,4 @@
+- Optical Recognition of Handwritten Digits Data Set
++Optical Recognition of Handwritten Digits Data Set
+ ===================================================
+ 
+ Notes
+diff --git a/sklearn/datasets/descr/iris.rst b/sklearn/datasets/descr/iris.rst
+index aa44f6e5efbc..6e7aba2ec5c1 100644
+--- a/sklearn/datasets/descr/iris.rst
++++ b/sklearn/datasets/descr/iris.rst
+@@ -16,6 +16,7 @@ Data Set Characteristics:
+                 - Iris-Versicolour
+                 - Iris-Virginica
+     :Summary Statistics:
++
+     ============== ==== ==== ======= ===== ====================
+                     Min  Max   Mean    SD   Class Correlation
+     ============== ==== ==== ======= ===== ====================
+@@ -24,6 +25,7 @@ Data Set Characteristics:
+     petal length:   1.0  6.9   3.76   1.76    0.9490  (high!)
+     petal width:    0.1  2.5   1.20  0.76     0.9565  (high!)
+     ============== ==== ==== ======= ===== ====================
++
+     :Missing Attribute Values: None
+     :Class Distribution: 33.3% for each of 3 classes.
+     :Creator: R.A. Fisher
+diff --git a/sklearn/datasets/kddcup99.py b/sklearn/datasets/kddcup99.py
+index 9e7696f68c28..589749851ea6 100644
+--- a/sklearn/datasets/kddcup99.py
++++ b/sklearn/datasets/kddcup99.py
+@@ -81,6 +81,7 @@ def fetch_kddcup99(subset=None, shuffle=False, random_state=None,
+     ================      ==========================================
+ 
+     SA structure :
++
+     ================      ==========================================
+     Samples total         976158
+     Dimensionality        41
+@@ -89,6 +90,7 @@ def fetch_kddcup99(subset=None, shuffle=False, random_state=None,
+     ================      ==========================================
+ 
+     SF structure :
++
+     ================      ==========================================
+     Samples total         699691
+     Dimensionality        40
+@@ -97,6 +99,7 @@ def fetch_kddcup99(subset=None, shuffle=False, random_state=None,
+     ================      ==========================================
+ 
+     http structure :
++
+     ================      ==========================================
+     Samples total         619052
+     Dimensionality        39
+@@ -105,6 +108,7 @@ def fetch_kddcup99(subset=None, shuffle=False, random_state=None,
+     ================      ==========================================
+ 
+     smtp structure :
++
+     ================      ==========================================
+     Samples total         95373
+     Dimensionality        39
+diff --git a/sklearn/gaussian_process/gpc.py b/sklearn/gaussian_process/gpc.py
+index f9c00a98be20..745fab94a19d 100644
+--- a/sklearn/gaussian_process/gpc.py
++++ b/sklearn/gaussian_process/gpc.py
+@@ -137,7 +137,7 @@ def optimizer(obj_func, initial_theta, bounds):
+         of sqrt(W) is stored.
+ 
+     log_marginal_likelihood_value_: float
+-        The log-marginal-likelihood of self.kernel_.theta
++        The log-marginal-likelihood of ``self.kernel_.theta``
+     """
+     def __init__(self, kernel=None, optimizer="fmin_l_bfgs_b",
+                  n_restarts_optimizer=0, max_iter_predict=100,
+@@ -246,7 +246,7 @@ def predict(self, X):
+         Returns
+         -------
+         C : array, shape = (n_samples,)
+-            Predicted target values for X, values are from classes_
++            Predicted target values for X, values are from ``classes_``
+         """
+         check_is_fitted(self, ["X_train_", "y_train_", "pi_", "W_sr_", "L_"])
+ 
+@@ -270,7 +270,7 @@ def predict_proba(self, X):
+         C : array-like, shape = (n_samples, n_classes)
+             Returns the probability of the samples for each class in
+             the model. The columns correspond to the classes in sorted
+-            order, as they appear in the attribute `classes_`.
++            order, as they appear in the attribute ``classes_``.
+         """
+         check_is_fitted(self, ["X_train_", "y_train_", "pi_", "W_sr_", "L_"])
+ 
+@@ -305,7 +305,7 @@ def log_marginal_likelihood(self, theta=None, eval_gradient=False):
+         theta : array-like, shape = (n_kernel_params,) or None
+             Kernel hyperparameters for which the log-marginal likelihood is
+             evaluated. If None, the precomputed log_marginal_likelihood
+-            of self.kernel_.theta is returned.
++            of ``self.kernel_.theta`` is returned.
+ 
+         eval_gradient : bool, default: False
+             If True, the gradient of the log-marginal likelihood with respect
+@@ -437,7 +437,7 @@ class GaussianProcessClassifier(BaseEstimator, ClassifierMixin):
+     """Gaussian process classification (GPC) based on Laplace approximation.
+ 
+     The implementation is based on Algorithm 3.1, 3.2, and 5.1 of
+-    ``Gaussian Processes for Machine Learning'' (GPML) by Rasmussen and
++    Gaussian Processes for Machine Learning (GPML) by Rasmussen and
+     Williams.
+ 
+     Internally, the Laplace approximation is used for approximating the
+@@ -539,7 +539,7 @@ def optimizer(obj_func, initial_theta, bounds):
+         different kernels used in the one-versus-rest classifiers.
+ 
+     log_marginal_likelihood_value_: float
+-        The log-marginal-likelihood of self.kernel_.theta
++        The log-marginal-likelihood of ``self.kernel_.theta``
+ 
+     classes_ : array-like, shape = (n_classes,)
+         Unique class labels.
+@@ -624,7 +624,7 @@ def predict(self, X):
+         Returns
+         -------
+         C : array, shape = (n_samples,)
+-            Predicted target values for X, values are from classes_
++            Predicted target values for X, values are from ``classes_``
+         """
+         check_is_fitted(self, ["classes_", "n_classes_"])
+         X = check_array(X)
+@@ -675,7 +675,7 @@ def log_marginal_likelihood(self, theta=None, eval_gradient=False):
+             be the  hyperparameters of the compound kernel or of an individual
+             kernel. In the latter case, all individual kernel get assigned the
+             same theta values. If None, the precomputed log_marginal_likelihood
+-            of self.kernel_.theta is returned.
++            of ``self.kernel_.theta`` is returned.
+ 
+         eval_gradient : bool, default: False
+             If True, the gradient of the log-marginal likelihood with respect
+@@ -720,7 +720,7 @@ def log_marginal_likelihood(self, theta=None, eval_gradient=False):
+                 # theta for compound kernel
+                 return np.mean(
+                     [estimator.log_marginal_likelihood(
+-                        theta[n_dims*i:n_dims*(i+1)])
++                        theta[n_dims * i:n_dims * (i + 1)])
+                      for i, estimator in enumerate(estimators)])
+             else:
+                 raise ValueError("Shape of theta must be either %d or %d. "
+diff --git a/sklearn/gaussian_process/gpr.py b/sklearn/gaussian_process/gpr.py
+index 85ff65b8a84b..3a461536803d 100644
+--- a/sklearn/gaussian_process/gpr.py
++++ b/sklearn/gaussian_process/gpr.py
+@@ -20,8 +20,8 @@
+ class GaussianProcessRegressor(BaseEstimator, RegressorMixin):
+     """Gaussian process regression (GPR).
+ 
+-    The implementation is based on Algorithm 2.1 of ``Gaussian Processes
+-    for Machine Learning'' (GPML) by Rasmussen and Williams.
++    The implementation is based on Algorithm 2.1 of Gaussian Processes
++    for Machine Learning (GPML) by Rasmussen and Williams.
+ 
+     In addition to standard sklearn estimator API, GaussianProcessRegressor:
+ 
+@@ -115,13 +115,13 @@ def optimizer(obj_func, initial_theta, bounds):
+         same as the one passed as parameter but with optimized hyperparameters
+ 
+     L_: array-like, shape = (n_samples, n_samples)
+-        Lower-triangular Cholesky decomposition of the kernel in X_train_
++        Lower-triangular Cholesky decomposition of the kernel in ``X_train_``
+ 
+     alpha_: array-like, shape = (n_samples,)
+         Dual coefficients of training data points in kernel space
+ 
+     log_marginal_likelihood_value_: float
+-        The log-marginal-likelihood of self.kernel_.theta
++        The log-marginal-likelihood of ``self.kernel_.theta``
+     """
+     def __init__(self, kernel=None, alpha=1e-10,
+                  optimizer="fmin_l_bfgs_b", n_restarts_optimizer=0,
+@@ -347,7 +347,7 @@ def log_marginal_likelihood(self, theta=None, eval_gradient=False):
+         theta : array-like, shape = (n_kernel_params,) or None
+             Kernel hyperparameters for which the log-marginal likelihood is
+             evaluated. If None, the precomputed log_marginal_likelihood
+-            of self.kernel_.theta is returned.
++            of ``self.kernel_.theta`` is returned.
+ 
+         eval_gradient : bool, default: False
+             If True, the gradient of the log-marginal likelihood with respect
+diff --git a/sklearn/gaussian_process/kernels.py b/sklearn/gaussian_process/kernels.py
+index a34286e358ed..6c36d19712d9 100644
+--- a/sklearn/gaussian_process/kernels.py
++++ b/sklearn/gaussian_process/kernels.py
+@@ -21,7 +21,6 @@
+ 
+ from abc import ABCMeta, abstractmethod
+ from collections import namedtuple
+-import inspect
+ import math
+ 
+ import numpy as np
+@@ -33,13 +32,14 @@
+ from ..base import clone
+ from sklearn.externals.funcsigs import signature
+ 
++
+ class Hyperparameter(namedtuple('Hyperparameter',
+                                 ('name', 'value_type', 'bounds',
+                                  'n_elements', 'fixed'))):
+     """A kernel hyperparameter's specification in form of a namedtuple.
+ 
+-    Entries
+-    -------
++    Attributes
++    ----------
+     name : string
+         The name of the hyperparameter. Note that a kernel using a
+         hyperparameter with name "x" must have the attributes self.x and
+@@ -405,7 +405,7 @@ def theta(self, theta):
+         """
+         k_dims = self.k1.n_dims
+         for i, kernel in enumerate(self.kernels):
+-            kernel.theta = theta[i*k_dims:(i+1)*k_dims]
++            kernel.theta = theta[i * k_dims:(i + 1) * k_dims]
+ 
+     @property
+     def bounds(self):
+@@ -1316,7 +1316,7 @@ def __call__(self, X, Y=None, eval_gradient=False):
+                     3 * D * np.exp(-np.sqrt(3 * D.sum(-1)))[..., np.newaxis]
+             elif self.nu == 2.5:
+                 tmp = np.sqrt(5 * D.sum(-1))[..., np.newaxis]
+-                K_gradient = 5.0/3.0 * D * (tmp + 1) * np.exp(-tmp)
++                K_gradient = 5.0 / 3.0 * D * (tmp + 1) * np.exp(-tmp)
+             else:
+                 # approximate gradient numerically
+                 def f(theta):  # helper function
+diff --git a/sklearn/linear_model/base.py b/sklearn/linear_model/base.py
+index fa8678d913ca..4055a00027a2 100644
+--- a/sklearn/linear_model/base.py
++++ b/sklearn/linear_model/base.py
+@@ -403,7 +403,7 @@ def __init__(self, fit_intercept=True, normalize=False, copy_X=True,
+         self.n_jobs = n_jobs
+ 
+     @property
+-    @deprecated("residues_ is deprecated and will be removed in 0.19")
++    @deprecated("``residues_`` is deprecated and will be removed in 0.19")
+     def residues_(self):
+         """Get the residues of the fitted model."""
+         return self._residues
+diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
+index 05673b954e8a..190ec8c3a948 100644
+--- a/sklearn/model_selection/_validation.py
++++ b/sklearn/model_selection/_validation.py
+@@ -66,7 +66,7 @@ def cross_val_score(estimator, X, y=None, labels=None, scoring=None, cv=None,
+                     pre_dispatch='2*n_jobs'):
+     """Evaluate a score by cross-validation
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <cross_validation>`.
+ 
+     Parameters
+     ----------
+@@ -295,7 +295,7 @@ def cross_val_predict(estimator, X, y=None, labels=None, cv=None, n_jobs=1,
+                       verbose=0, fit_params=None, pre_dispatch='2*n_jobs'):
+     """Generate cross-validated estimates for each input data point
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <cross_validation>`.
+ 
+     Parameters
+     ----------
+@@ -394,7 +394,7 @@ def cross_val_predict(estimator, X, y=None, labels=None, cv=None, n_jobs=1,
+ def _fit_and_predict(estimator, X, y, train, test, verbose, fit_params):
+     """Fit estimator and predict values for a given dataset split.
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <cross_validation>`.
+ 
+     Parameters
+     ----------
+@@ -483,7 +483,7 @@ def permutation_test_score(estimator, X, y, labels=None, cv=None,
+                            verbose=0, scoring=None):
+     """Evaluate the significance of a cross-validated score with permutations
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <cross_validation>`.
+ 
+     Parameters
+     ----------
+@@ -520,7 +520,7 @@ def permutation_test_score(estimator, X, y, labels=None, cv=None,
+         See the :mod:`sklearn.model_selection` module for the list of
+         cross-validation strategies that can be used here.
+ 
+-        Also refer :ref:`cross-validation documentation <_cross_validation>`
++        Also refer :ref:`cross-validation documentation <cross_validation>`
+ 
+     n_permutations : integer, optional
+         Number of times to permute ``y``.
+@@ -618,7 +618,7 @@ def learning_curve(estimator, X, y, labels=None,
+     test set will be computed. Afterwards, the scores will be averaged over
+     all k runs for each training subset size.
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <learning_curve>`.
+ 
+     Parameters
+     ----------
+@@ -836,7 +836,7 @@ def validation_curve(estimator, X, y, param_name, param_range, labels=None,
+     will also compute training scores and is merely a utility for plotting the
+     results.
+ 
+-    Read more in the :ref:`User Guide <validate>`.
++    Read more in the :ref:`User Guide <learning_curve>`.
+ 
+     Parameters
+     ----------
+diff --git a/sklearn/neural_network/multilayer_perceptron.py b/sklearn/neural_network/multilayer_perceptron.py
+index 3912f1f67391..c5c6b13e4037 100644
+--- a/sklearn/neural_network/multilayer_perceptron.py
++++ b/sklearn/neural_network/multilayer_perceptron.py
+@@ -724,7 +724,7 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
+         -'constant', is a constant learning rate given by
+          'learning_rate_init'.
+ 
+-        -'invscaling' gradually decreases the learning rate 'learning_rate_' at
++        -'invscaling' gradually decreases the learning rate ``learning_rate_`` at
+           each time step 't' using an inverse scaling exponent of 'power_t'.
+           effective_learning_rate = learning_rate_init / pow(t, power_t)
+ 
+@@ -1077,7 +1077,7 @@ class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
+         -'constant', is a constant learnign rate given by
+          'learning_rate_init'.
+ 
+-        -'invscaling' gradually decreases the learning rate 'learning_rate_' at
++        -'invscaling' gradually decreases the learning rate ``learning_rate_`` at
+           each time step 't' using an inverse scaling exponent of 'power_t'.
+           effective_learning_rate = learning_rate_init / pow(t, power_t)
+ 
+diff --git a/sklearn/preprocessing/data.py b/sklearn/preprocessing/data.py
+index 98c8b4acf99c..3ee4cf91f1e2 100644
+--- a/sklearn/preprocessing/data.py
++++ b/sklearn/preprocessing/data.py
+@@ -233,7 +233,7 @@ class MinMaxScaler(BaseEstimator, TransformerMixin):
+         Per feature maximum seen in the data
+ 
+     data_range_ : ndarray, shape (n_features,)
+-        Per feature range (data_max_ - data_min_) seen in the data
++        Per feature range ``(data_max_ - data_min_)`` seen in the data
+     """
+ 
+     def __init__(self, feature_range=(0, 1), copy=True):
+@@ -242,13 +242,13 @@ def __init__(self, feature_range=(0, 1), copy=True):
+ 
+     @property
+     @deprecated("Attribute data_range will be removed in "
+-                "0.19. Use data_range_ instead")
++                "0.19. Use ``data_range_`` instead")
+     def data_range(self):
+         return self.data_range_
+ 
+     @property
+     @deprecated("Attribute data_min will be removed in "
+-                "0.19. Use data_min_ instead")
++                "0.19. Use ``data_min_`` instead")
+     def data_min(self):
+         return self.data_min_
+ 
+@@ -290,7 +290,7 @@ def partial_fit(self, X, y=None):
+ 
+         Parameters
+         ----------
+-        X : array-like, shape [n_samples_, n_features]
++        X : array-like, shape [n_samples, n_features]
+             The data used to compute the mean and standard deviation
+             used for later scaling along the features axis.
+ 
+@@ -504,7 +504,7 @@ def __init__(self, copy=True, with_mean=True, with_std=True):
+         self.copy = copy
+ 
+     @property
+-    @deprecated("Attribute std_ will be removed in 0.19. Use scale_ instead")
++    @deprecated("Attribute ``std_`` will be removed in 0.19. Use ``scale_`` instead")
+     def std_(self):
+         return self.scale_
+ 
+@@ -551,7 +551,7 @@ def partial_fit(self, X, y=None):
+ 
+         Parameters
+         ----------
+-        X : {array-like, sparse matrix}, shape [n_samples_, n_features]
++        X : {array-like, sparse matrix}, shape [n_samples, n_features]
+             The data used to compute the mean and standard deviation
+             used for later scaling along the features axis.
+ 
+@@ -742,7 +742,7 @@ def partial_fit(self, X, y=None):
+ 
+         Parameters
+         ----------
+-        X : {array-like, sparse matrix}, shape [n_samples_, n_features]
++        X : {array-like, sparse matrix}, shape [n_samples, n_features]
+             The data used to compute the mean and standard deviation
+             used for later scaling along the features axis.
+ 
+diff --git a/sklearn/preprocessing/tests/test_data.py b/sklearn/preprocessing/tests/test_data.py
+index d87f92d10ca0..30a85c8ee729 100644
+--- a/sklearn/preprocessing/tests/test_data.py
++++ b/sklearn/preprocessing/tests/test_data.py
+@@ -956,13 +956,13 @@ def test_deprecation_minmax_scaler():
+     scaler = MinMaxScaler().fit(X)
+ 
+     depr_message = ("Attribute data_range will be removed in "
+-                    "0.19. Use data_range_ instead")
++                    "0.19. Use ``data_range_`` instead")
+     data_range = assert_warns_message(DeprecationWarning, depr_message,
+                                       getattr, scaler, "data_range")
+     assert_array_equal(data_range, scaler.data_range)
+ 
+     depr_message = ("Attribute data_min will be removed in "
+-                    "0.19. Use data_min_ instead")
++                    "0.19. Use ``data_min_`` instead")
+     data_min = assert_warns_message(DeprecationWarning, depr_message,
+                                     getattr, scaler, "data_min")
+     assert_array_equal(data_min, scaler.data_min)
+@@ -1322,8 +1322,8 @@ def test_deprecation_standard_scaler():
+     rng = np.random.RandomState(0)
+     X = rng.random_sample((5, 4))
+     scaler = StandardScaler().fit(X)
+-    depr_message = ("Function std_ is deprecated; Attribute std_ will be "
+-                    "removed in 0.19. Use scale_ instead")
++    depr_message = ("Function std_ is deprecated; Attribute ``std_`` will be "
++                    "removed in 0.19. Use ``scale_`` instead")
+     std_ = assert_warns_message(DeprecationWarning, depr_message, getattr,
+                                 scaler, "std_")
+     assert_array_equal(std_, scaler.scale_)

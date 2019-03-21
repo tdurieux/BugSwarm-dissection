@@ -1,0 +1,1451 @@
+diff --git a/.ci/idea_inspection.bat b/.ci/idea_inspection.bat
+index e9cd6ba42c..8f09753997 100644
+--- a/.ci/idea_inspection.bat
++++ b/.ci/idea_inspection.bat
+@@ -13,7 +13,7 @@ SET INSPECTIONS_PATH=%CD%\config\intellij-idea-inspections.xml
+ SET RESULTS_DIR=%CD%\target\inspection-results
+ SET NOISE_LVL=v1
+ SET IDEA_LOCATION=
+-SET IDEA_PROPERTIES=%CD%\config\idea.properties
++SET IDEA_PROPERTIES=%CD%\config\intellij-idea-inspections.properties
+ 
+ ::Check IDEA_PATH env variable
+ IF EXIST %IDEA_PATH% SET (
+@@ -26,14 +26,21 @@ IF EXIST %IDEA_PATH% SET (
+ ::Try to search in path
+ FOR /f "delims=" %%i IN ('"where idea.bat"') DO SET IDEA_LOCATION="%%i"
+ if [%IDEA_LOCATION%] NEQ [] (
+-    goto run 
++    goto run
+ ) ELSE (
+     echo IntelliJ IDEA was not found in path.
+     exit /b
+ )
+ 
+ :run
++mkdir %RESULTS_DIR%
++del %RESULTS_DIR%\*.* /s /q
++
+ mkdir .idea\scopes
+ copy config\intellij-idea-inspection-scope.xml .idea\scopes
+ 
++::Execute compilation of Checkstyle to generate all source files
++mvn compile
++
++::Launch inspections
+ "%IDEA_LOCATION%" inspect %PROJECT_DIR% %INSPECTIONS_PATH% %RESULTS_DIR% -%NOISE_LVL%
+diff --git a/.ci/idea_inspection.sh b/.ci/idea_inspection.sh
+index 545c58aedc..018e5022f8 100755
+--- a/.ci/idea_inspection.sh
++++ b/.ci/idea_inspection.sh
+@@ -4,49 +4,45 @@
+ # IntelliJ IDEA inspections for checkstyle.
+ #
+ # Example Mac OS:
+-# export IDEA_PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS/idea"
+-# bash ./.ci/idea_inspection.sh
++# IDEA_PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS/idea" ./.ci/idea_inspection.sh
+ #
+ # Example Linux:
+-# export IDEA_PATH=/opt/idea-IC-171.4694.70/bin/idea.sh
+-# export IDEA_PROPERTIES=$PWD/config/idea.properties
+-# ./.ci/idea_inspection.sh
++# IDEA_PATH=/opt/idea-IC-171.4694.70/bin/idea.sh ./.ci/idea_inspection.sh
+ #################################################
+ 
+ PROJECT_DIR=$PWD/
+ INSPECTIONS_PATH=$PWD/config/intellij-idea-inspections.xml
+ RESULTS_DIR=$PWD/target/inspection-results
+ NOISE_LVL=v1
+-IDEA_LOCATION=
+-export IDEA_PROPERTIES=$PWD/config/idea.properties
++# we need to export this variable as it is required for idea.sh script
++export IDEA_PROPERTIES=$PWD/config/intellij-idea-inspections.properties
+ 
+ # Check IDEA_PATH env variable
+-
+-if [[ ! -z $IDEA_PATH ]]; then
+-    IDEA_LOCATION=$IDEA_PATH
+-else
++if [[ -z $IDEA_PATH ]]; then
+     echo "IDEA_PATH variable not found."
+     # Try to search in path
+-    IDEA_LOCATION="$(which idea)"
+-    if [ -z $IDEA_LOCATION ]; then
++    IDEA_PATH="$(which idea)"
++    if [ -z $IDEA_PATH ]; then
+         echo "IntelliJ IDEA was not found in path."
+         exit -1
+     fi
+ fi
+ 
++#Execute compilation of Checkstyle to generate all source files
++mvn compile
++
+ mkdir -p $RESULTS_DIR
+ rm -rf $RESULTS_DIR/*
+-mkdir -p $PWD/.idea/scopes
+-cp $PWD/config/intellij-idea-inspection-scope.xml $PWD/.idea/scopes
+ 
+-echo "Validation is about to start ... progress output will be flushed at end. Validation is in progress ..."
+-IDEA_OUTPUT=`exec "$IDEA_LOCATION" inspect $PROJECT_DIR $INSPECTIONS_PATH $RESULTS_DIR -$NOISE_LVL`
++echo "Intellij Idea validation is about to start"
++echo "Progress output will be flushed at end. Validation is in progress ..."
++IDEA_OUTPUT=`exec "$IDEA_PATH" inspect $PROJECT_DIR $INSPECTIONS_PATH $RESULTS_DIR -$NOISE_LVL`
+ echo $IDEA_OUTPUT
+ 
+ echo "Checking results ..."
+-if [[ $(grep "problems" $RESULTS_DIR/* --exclude="UnusedProperty.xml" --exclude="RedundantSuppression.xml" | cat | wc -l ) > 0 ]]; then
++if [[ $(grep -R "<problems" $RESULTS_DIR/ | cat | wc -l ) > 0 ]]; then
+     echo "There are inspection problems. Review results at $RESULTS_DIR folder. Files:"
+-    grep -l "problems" $RESULTS_DIR/* --exclude="UnusedProperty.xml" --exclude="RedundantSuppression.xml"
++    grep -Rl "<problems" $RESULTS_DIR/
+     exit 1;
+ else
+     echo "Inpection did not found any problems"
+diff --git a/config/checkstyle_checks.xml b/config/checkstyle_checks.xml
+index 927c858a06..690e230403 100644
+--- a/config/checkstyle_checks.xml
++++ b/config/checkstyle_checks.xml
+@@ -299,6 +299,9 @@
+     <module name="VariableDeclarationUsageDistance"/>
+ 
+     <!-- Filters-->
++    <module name="SuppressionXpathFilter">
++      <property name="file" value="${checkstyle.suppressions.file}"/>
++    </module>
+     <module name="SuppressionCommentFilter">
+       <!--
+         Use suppressions.xml for suppressions, this is only example.
+diff --git a/config/idea.properties b/config/idea.properties
+deleted file mode 100644
+index b44eac4d52..0000000000
+--- a/config/idea.properties
++++ /dev/null
+@@ -1 +0,0 @@
+-idea.exclude.patterns=src/test/resources/**;src/site/resources/js/google-analytics.js;src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/ParseTreeBuilder.java;src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/ParseTreeBuilder.java;
+diff --git a/config/intellij-idea-inspection-scope.xml b/config/intellij-idea-inspection-scope.xml
+index ae5f878f8e..32cfcbfa91 100644
+--- a/config/intellij-idea-inspection-scope.xml
++++ b/config/intellij-idea-inspection-scope.xml
+@@ -1,4 +1,4 @@
+ <!-- ATTENTION: this file is not used by TeamCity, all excludes should be specified in build configuration -->
+ <component name="DependencyValidationManager">
+-    <scope name="Checkstyle Inspection Scope" pattern="!file:target//*&amp;&amp;!file:src/test/resources*//**&amp;&amp;!file:src/it/resources*//**&amp;&amp;!file:src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/ParseTreeBuilder.java&amp;&amp;!file:src/site/resources/js/google-analytics.js"/>
++    <scope name="Checkstyle Inspection Scope" pattern="!file:target//*&amp;&amp;!file:src/test/resources*//**&amp;&amp;!file:src/it/resources*//**&amp;&amp;!file:src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/ParseTreeBuilder.java&amp;&amp;!file:src/site/resources/js/google-analytics.js&amp;&amp;!file:config/intellij-idea-inspections.properties"/>
+ </component>
+diff --git a/config/intellij-idea-inspections.properties b/config/intellij-idea-inspections.properties
+new file mode 100644
+index 0000000000..482b6cf796
+--- /dev/null
++++ b/config/intellij-idea-inspections.properties
+@@ -0,0 +1,2 @@
++# this file is used by .ci/idea_inspection.sh and .ci/idea_inspection.bat
++idea.exclude.patterns=.idea/**;src/test/resources/**;src/site/resources/js/google-analytics.js;src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/ParseTreeBuilder.java;src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/ParseTreeBuilder.java;config/intellij-idea-inspections.properties
+diff --git a/config/pmd-test.xml b/config/pmd-test.xml
+index 4c9dc37537..3586f08431 100644
+--- a/config/pmd-test.xml
++++ b/config/pmd-test.xml
+@@ -69,8 +69,9 @@
+         <!-- pmd cannot find assert if it is located in private method of this class called from the test
+         method or method of another class -->
+         <properties>
+-            <!-- in SuppressionCommentFilterTest, SuppressWithNearbyCommentFilterTest, SuppressionFilterTest, XpathFilterTest
+-            pmd does not accept nl.jqno.equalsverifier.EqualsVerifier#.verify() as correctness check method -->
++            <!-- in SuppressionCommentFilterTest, SuppressWithNearbyCommentFilterTest, SuppressionFilterTest,
++            SuppressionXpathFilterTest, XpathFilterTest pmd does not accept nl.jqno.equalsverifier.EqualsVerifier#.verify()
++            as correctness check method -->
+             <!-- in AbstractJavadocCheckTest pmd does not find asserts in another class methods called from the test method -->
+             <!-- in ImportControlCheckTest, DetailASTTest
+                  pmd does not find asserts in private methods of the test class called from the test method -->
+@@ -80,6 +81,8 @@
+             <property name="violationSuppressXPath" value="//ClassOrInterfaceDeclaration[@Image='SuppressionFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCode']
+             | //ClassOrInterfaceDeclaration[@Image='SuppressionCommentFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCodeOfTagClass']
+             | //ClassOrInterfaceDeclaration[@Image='SuppressWithNearbyCommentFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCodeOfTagClass']
++            | //ClassOrInterfaceDeclaration[@Image='SuppressionXpathFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCode']
++            | //ClassOrInterfaceDeclaration[@Image='XpathFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCode']
+             | //ClassOrInterfaceDeclaration[@Image='AbstractJavadocCheckTest']//MethodDeclarator[@Image='testBlockCommentPositionHasPrivateConstr']
+             | //ClassOrInterfaceDeclaration[@Image='ImportControlCheckTest']//MethodDeclarator[@Image='testPkgRegExpInChild']
+             | //ClassOrInterfaceDeclaration[@Image='ImportControlCheckTest']//MethodDeclarator[@Image='testPkgRegExpInParent']
+@@ -88,7 +91,6 @@
+             | //ClassOrInterfaceDeclaration[@Image='AstRegressionTest']//MethodDeclarator[@Image='testImpossibleValid']
+             | //ClassOrInterfaceDeclaration[@Image='AllChecksTest']//MethodDeclarator[@Image='testAllModulesAreReferencedInConfigFile']
+             | //ClassOrInterfaceDeclaration[@Image='DetailASTTest']//MethodDeclarator[@Image='testTreeStructure']
+-            | //ClassOrInterfaceDeclaration[@Image='XpathFilterTest']//MethodDeclarator[@Image='testEqualsAndHashCode']
+             "/>
+         </properties>
+     </rule>
+diff --git a/pom.xml b/pom.xml
+index ec6a271667..f804b5ae8c 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1030,7 +1030,7 @@
+                 <exclude>java.header</exclude>
+                 <exclude>java_regexp.header</exclude>
+                 <exclude>org.eclipse.jdt.core.prefs</exclude>
+-                <exclude>idea.properties</exclude>
++                <exclude>intellij-idea-inspections.properties</exclude>
+               </excludes>
+             </validationSet>
+             <validationSet>
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java b/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
+index 60d81a7730..cf9b0fab65 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
+@@ -754,6 +754,8 @@ private static void fillModulesFromFiltersPackage() {
+                 BASE_PACKAGE + ".filters.SuppressionCommentFilter");
+         NAME_TO_FULL_MODULE_NAME.put("SuppressionFilter",
+                 BASE_PACKAGE + ".filters.SuppressionFilter");
++        NAME_TO_FULL_MODULE_NAME.put("SuppressionXpathFilter",
++                BASE_PACKAGE + ".filters.SuppressionXpathFilter");
+         NAME_TO_FULL_MODULE_NAME.put("SuppressWarningsFilter",
+                 BASE_PACKAGE + ".filters.SuppressWarningsFilter");
+         NAME_TO_FULL_MODULE_NAME.put("SuppressWithNearbyCommentFilter",
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java b/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
+index c2f9fe17a8..346c6579f9 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
+@@ -523,21 +523,43 @@ public void destroy() {
+ 
+     @Override
+     public Set<String> getExternalResourceLocations() {
+-        final Set<String> ordinaryChecksResources = getExternalResourceLocations(ordinaryChecks);
+-        final Set<String> commentChecksResources = getExternalResourceLocations(commentChecks);
+-        final int resultListSize = commentChecksResources.size() + ordinaryChecksResources.size();
++        final Set<String> ordinaryChecksResources =
++                getExternalResourceLocationsOfChecks(ordinaryChecks);
++        final Set<String> commentChecksResources =
++                getExternalResourceLocationsOfChecks(commentChecks);
++        final Set<String> filtersResources =
++                getExternalResourceLocationsOfFilters();
++        final int resultListSize = commentChecksResources.size()
++                + ordinaryChecksResources.size()
++                + filtersResources.size();
+         final Set<String> resourceLocations = new HashSet<>(resultListSize);
+         resourceLocations.addAll(ordinaryChecksResources);
+         resourceLocations.addAll(commentChecksResources);
++        resourceLocations.addAll(filtersResources);
+         return resourceLocations;
+     }
+ 
++    /**
++     * Returns a set of external configuation resource locations which are used by the filters set.
++     * @return a set of external configration resource locations which are used by the filters set.
++     */
++    private Set<String> getExternalResourceLocationsOfFilters() {
++        final Set<String> externalConfigurationResources = new HashSet<>();
++        filters.stream().filter(filter -> filter instanceof ExternalResourceHolder)
++                .forEach(filter -> {
++                    final Set<String> checkExternalResources =
++                        ((ExternalResourceHolder) filter).getExternalResourceLocations();
++                    externalConfigurationResources.addAll(checkExternalResources);
++                });
++        return externalConfigurationResources;
++    }
++
+     /**
+      * Returns a set of external configuration resource locations which are used by the checks set.
+      * @param checks a set of checks.
+      * @return a set of external configuration resource locations which are used by the checks set.
+      */
+-    private static Set<String> getExternalResourceLocations(Set<AbstractCheck> checks) {
++    private static Set<String> getExternalResourceLocationsOfChecks(Set<AbstractCheck> checks) {
+         final Set<String> externalConfigurationResources = new HashSet<>();
+         checks.stream().filter(check -> check instanceof ExternalResourceHolder).forEach(check -> {
+             final Set<String> checkExternalResources =
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
+index 556cc6f943..814ea3173c 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilter.java
+@@ -19,10 +19,6 @@
+ 
+ package com.puppycrawl.tools.checkstyle.filters;
+ 
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.net.URI;
+-import java.net.URL;
+ import java.util.Collections;
+ import java.util.Objects;
+ import java.util.Set;
+@@ -33,7 +29,7 @@
+ import com.puppycrawl.tools.checkstyle.api.ExternalResourceHolder;
+ import com.puppycrawl.tools.checkstyle.api.Filter;
+ import com.puppycrawl.tools.checkstyle.api.FilterSet;
+-import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
++import com.puppycrawl.tools.checkstyle.utils.FilterUtils;
+ 
+ /**
+  * <p>
+@@ -95,7 +91,7 @@ public int hashCode() {
+     protected void finishLocalSetup() throws CheckstyleException {
+         if (file != null) {
+             if (optional) {
+-                if (suppressionSourceExists(file)) {
++                if (FilterUtils.isFileExists(file)) {
+                     filters = SuppressionsLoader.loadSuppressions(file);
+                 }
+                 else {
+@@ -112,33 +108,4 @@ protected void finishLocalSetup() throws CheckstyleException {
+     public Set<String> getExternalResourceLocations() {
+         return Collections.singleton(file);
+     }
+-
+-    /**
+-     * Checks if suppression source with given fileName exists.
+-     * @param fileName name of the suppressions file.
+-     * @return true if suppression file exists, otherwise false
+-     */
+-    private static boolean suppressionSourceExists(String fileName) {
+-        boolean suppressionSourceExists = true;
+-        InputStream sourceInput = null;
+-        try {
+-            final URI uriByFilename = CommonUtils.getUriByFilename(fileName);
+-            final URL url = uriByFilename.toURL();
+-            sourceInput = url.openStream();
+-        }
+-        catch (CheckstyleException | IOException ignored) {
+-            suppressionSourceExists = false;
+-        }
+-        finally {
+-            if (sourceInput != null) {
+-                try {
+-                    sourceInput.close();
+-                }
+-                catch (IOException ignored) {
+-                    suppressionSourceExists = false;
+-                }
+-            }
+-        }
+-        return suppressionSourceExists;
+-    }
+ }
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilter.java
+new file mode 100644
+index 0000000000..f4b2540749
+--- /dev/null
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilter.java
+@@ -0,0 +1,117 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2017 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.puppycrawl.tools.checkstyle.filters;
++
++import java.util.Collections;
++import java.util.HashSet;
++import java.util.Objects;
++import java.util.Set;
++
++import com.puppycrawl.tools.checkstyle.TreeWalkerAuditEvent;
++import com.puppycrawl.tools.checkstyle.TreeWalkerFilter;
++import com.puppycrawl.tools.checkstyle.api.AutomaticBean;
++import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
++import com.puppycrawl.tools.checkstyle.api.ExternalResourceHolder;
++import com.puppycrawl.tools.checkstyle.utils.FilterUtils;
++
++/**
++ * This filter accepts TreeWalkerAuditEvents according to file, check and xpath query,
++ * as specified in a suppression file.
++ *
++ * @author Timur Tibeyev.
++ * @noinspection NonFinalFieldReferenceInEquals, NonFinalFieldReferencedInHashCode
++ */
++public class SuppressionXpathFilter extends AutomaticBean implements
++        TreeWalkerFilter, ExternalResourceHolder {
++
++    /** Filename of supression file. */
++    private String file;
++    /** Tells whether config file existence is optional. */
++    private boolean optional;
++    /** Set of individual xpath suppresses. */
++    private Set<TreeWalkerFilter> filters = new HashSet<>();
++
++    /**
++     * Sets name of the supression file.
++     * @param fileName name of the suppressions file.
++     */
++    public void setFile(String fileName) {
++        file = fileName;
++    }
++
++    /**
++     * Sets whether config file existence is optional.
++     * @param optional tells if config file existence is optional.
++     */
++    public void setOptional(boolean optional) {
++        this.optional = optional;
++    }
++
++    @Override
++    public boolean equals(Object obj) {
++        if (this == obj) {
++            return true;
++        }
++        if (obj == null || getClass() != obj.getClass()) {
++            return false;
++        }
++        final SuppressionXpathFilter suppressionXpathFilter = (SuppressionXpathFilter) obj;
++        return Objects.equals(filters, suppressionXpathFilter.filters);
++    }
++
++    @Override
++    public int hashCode() {
++        return Objects.hash(filters);
++    }
++
++    @Override
++    public boolean accept(TreeWalkerAuditEvent treeWalkerAuditEvent) {
++        boolean result = true;
++        for (TreeWalkerFilter filter : filters) {
++            if (!filter.accept(treeWalkerAuditEvent)) {
++                result = false;
++                break;
++            }
++        }
++        return result;
++    }
++
++    @Override
++    public Set<String> getExternalResourceLocations() {
++        return Collections.singleton(file);
++    }
++
++    @Override
++    protected void finishLocalSetup() throws CheckstyleException {
++        if (file != null) {
++            if (optional) {
++                if (FilterUtils.isFileExists(file)) {
++                    filters = SuppressionsLoader.loadXpathSuppressions(file);
++                }
++                else {
++                    filters = new HashSet<>();
++                }
++            }
++            else {
++                filters = SuppressionsLoader.loadXpathSuppressions(file);
++            }
++        }
++    }
++}
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoader.java
+index 3d98adfe22..ee3c66ed84 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoader.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoader.java
+@@ -23,8 +23,10 @@
+ import java.io.IOException;
+ import java.net.URI;
+ import java.util.HashMap;
++import java.util.HashSet;
+ import java.util.Locale;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.PatternSyntaxException;
+ 
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -33,6 +35,7 @@
+ import org.xml.sax.InputSource;
+ import org.xml.sax.SAXException;
+ 
++import com.puppycrawl.tools.checkstyle.TreeWalkerFilter;
+ import com.puppycrawl.tools.checkstyle.api.AbstractLoader;
+ import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
+ import com.puppycrawl.tools.checkstyle.api.FilterSet;
+@@ -56,8 +59,26 @@
+     /** The resource for the configuration dtd. */
+     private static final String DTD_RESOURCE_NAME_1_1 =
+         "com/puppycrawl/tools/checkstyle/suppressions_1_1.dtd";
++    /** The public ID for the configuration dtd. */
++    private static final String DTD_PUBLIC_ID_1_1_XPATH =
++            "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN";
++    /** The resource for the configuration dtd. */
++    private static final String DTD_RESOURCE_NAME_1_1_XPATH =
++            "com/puppycrawl/tools/checkstyle/suppressions_1_1_xpath_experimental.dtd";
+     /** File search error message. **/
+     private static final String UNABLE_TO_FIND_ERROR_MESSAGE = "Unable to find: ";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_FILES = "files";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_CHECKS = "checks";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_ID = "id";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_QUERY = "query";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_LINES = "lines";
++    /** String literal for attribute name. **/
++    private static final String ATTRIBUTE_NAME_COLUMNS = "columns";
+ 
+     /**
+      * The filter chain to return in getAFilterChain(),
+@@ -65,6 +86,11 @@
+      */
+     private final FilterSet filterChain = new FilterSet();
+ 
++    /**
++     * The set of the {@code TreeWalkerFilter} filters. Being filled during parsing.
++     */
++    private final Set<TreeWalkerFilter> treeWalkerFilters = new HashSet<>();
++
+     /**
+      * Creates a new {@code SuppressionsLoader} instance.
+      * @throws ParserConfigurationException if an error occurs
+@@ -83,25 +109,68 @@ public void startElement(String namespaceUri,
+             throws SAXException {
+         if ("suppress".equals(qName)) {
+             //add SuppressElement filter to the filter chain
+-            final String checks = attributes.getValue("checks");
+-            final String modId = attributes.getValue("id");
+-            if (checks == null && modId == null) {
+-                // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
+-                throw new SAXException("missing checks and id attribute");
+-            }
+-            final SuppressElement suppress;
+-            try {
+-                final String files = attributes.getValue("files");
+-                final String lines = attributes.getValue("lines");
+-                final String columns = attributes.getValue("columns");
+-                suppress = new SuppressElement(files, checks, modId, lines, columns);
+-            }
+-            catch (final PatternSyntaxException ex) {
+-                // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
+-                throw new SAXException("invalid files or checks format", ex);
+-            }
++            final SuppressElement suppress = getSuppressElement(attributes);
+             filterChain.addFilter(suppress);
+         }
++        else if ("suppress-xpath".equals(qName)) {
++            final XpathFilter filter = getXpathFilter(attributes);
++            treeWalkerFilters.add(filter);
++        }
++    }
++
++    /**
++     * Returns the suppress element, initialized from given attributes.
++     * @param attributes the attributes of xml-tag "<suppress></suppress>", specified inside
++     *                   suppression file.
++     * @return the suppress element
++     * @throws SAXException if an error occurs.
++     */
++    private static SuppressElement getSuppressElement(Attributes attributes) throws SAXException {
++        final String checks = attributes.getValue(ATTRIBUTE_NAME_CHECKS);
++        final String modId = attributes.getValue(ATTRIBUTE_NAME_ID);
++        if (checks == null && modId == null) {
++            // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
++            throw new SAXException("missing checks and id attribute");
++        }
++        final SuppressElement suppress;
++        try {
++            final String files = attributes.getValue(ATTRIBUTE_NAME_FILES);
++            final String lines = attributes.getValue(ATTRIBUTE_NAME_LINES);
++            final String columns = attributes.getValue(ATTRIBUTE_NAME_COLUMNS);
++            suppress = new SuppressElement(files, checks, modId, lines, columns);
++        }
++        catch (final PatternSyntaxException ex) {
++            // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
++            throw new SAXException("invalid files or checks format", ex);
++        }
++        return suppress;
++    }
++
++    /**
++     * Returns the xpath filter, initialized from given attributes.
++     * @param attributes the attributes of xml-tag "<suppress-xpath></suppress-xpath>",
++     *                   specified inside suppression file.
++     * @return the xpath filter
++     * @throws SAXException if an error occurs.
++     */
++    private static XpathFilter getXpathFilter(Attributes attributes) throws SAXException {
++        final String checks = attributes.getValue(ATTRIBUTE_NAME_CHECKS);
++        final String modId = attributes.getValue(ATTRIBUTE_NAME_ID);
++        if (checks == null && modId == null) {
++            // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
++            throw new SAXException("missing checks and id attribute for suppress-xpath");
++        }
++        final XpathFilter filter;
++        try {
++            final String files = attributes.getValue(ATTRIBUTE_NAME_FILES);
++            final String xpathQuery = attributes.getValue(ATTRIBUTE_NAME_QUERY);
++            filter = new XpathFilter(files, checks, modId, xpathQuery);
++        }
++        catch (final PatternSyntaxException ex) {
++            // -@cs[IllegalInstantiation] SAXException is in the overridden method signature
++            throw new SAXException("invalid files or checks format for suppress-xpath", ex);
++        }
++        return filter;
+     }
+ 
+     /**
+@@ -128,11 +197,50 @@ public static FilterSet loadSuppressions(String filename)
+     private static FilterSet loadSuppressions(
+             InputSource source, String sourceName)
+             throws CheckstyleException {
++        return getSuppressionLoader(source, sourceName).filterChain;
++    }
++
++    /**
++     * Returns the suppression {@code TreeWalker} filters in a specified file.
++     * @param filename name of the suppressions file.
++     * @return the set of xpath suppression elements specified in the file.
++     * @throws CheckstyleException if an error occurs.
++     */
++    public static Set<TreeWalkerFilter> loadXpathSuppressions(String filename)
++            throws CheckstyleException {
++        // figure out if this is a File or a URL
++        final URI uri = CommonUtils.getUriByFilename(filename);
++        final InputSource source = new InputSource(uri.toString());
++        return loadXpathSuppressions(source, filename);
++    }
++
++    /**
++     * Returns the suppression {@code TreeWalker} filters in a specified source.
++     * @param source the source for the suppressions.
++     * @param sourceName the name of the source.
++     * @return the set of xpath suppression elements specified in source.
++     * @throws CheckstyleException if an error occurs.
++     */
++    private static Set<TreeWalkerFilter> loadXpathSuppressions(
++            InputSource source, String sourceName)
++            throws CheckstyleException {
++        return getSuppressionLoader(source, sourceName).treeWalkerFilters;
++    }
++
++    /**
++     * Parses specified source and returns the suppression loader.
++     * @param source the source for the suppressions.
++     * @param sourceName the name of the source.
++     * @return the suppression loader
++     * @throws CheckstyleException if an error occurs.
++     */
++    private static SuppressionsLoader getSuppressionLoader(InputSource source, String sourceName)
++            throws CheckstyleException {
+         try {
+             final SuppressionsLoader suppressionsLoader =
+                 new SuppressionsLoader();
+             suppressionsLoader.parseInputSource(source);
+-            return suppressionsLoader.filterChain;
++            return suppressionsLoader;
+         }
+         catch (final FileNotFoundException ex) {
+             throw new CheckstyleException(UNABLE_TO_FIND_ERROR_MESSAGE + sourceName, ex);
+@@ -160,6 +268,7 @@ private static FilterSet loadSuppressions(
+         final Map<String, String> map = new HashMap<>();
+         map.put(DTD_PUBLIC_ID_1_0, DTD_RESOURCE_NAME_1_0);
+         map.put(DTD_PUBLIC_ID_1_1, DTD_RESOURCE_NAME_1_1);
++        map.put(DTD_PUBLIC_ID_1_1_XPATH, DTD_RESOURCE_NAME_1_1_XPATH);
+         return map;
+     }
+ }
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/utils/FilterUtils.java b/src/main/java/com/puppycrawl/tools/checkstyle/utils/FilterUtils.java
+new file mode 100644
+index 0000000000..6ef785d661
+--- /dev/null
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/utils/FilterUtils.java
+@@ -0,0 +1,69 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2017 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.puppycrawl.tools.checkstyle.utils;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.URI;
++import java.net.URL;
++
++import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
++
++/**
++ * Utility methods for suppression filters.
++ *
++ * @author Timur Tibeyev.
++ */
++public final class FilterUtils {
++
++    /** Stop instances being created. **/
++    private FilterUtils() {
++
++    }
++
++    /**
++     * Checks if suppression source with given fileName exists.
++     * @param fileName name of the suppressions file.
++     * @return true if suppression file exists, otherwise false
++     */
++    public static boolean isFileExists(String fileName) {
++        boolean suppressionSourceExists = true;
++        InputStream sourceInput = null;
++        try {
++            final URI uriByFilename = CommonUtils.getUriByFilename(fileName);
++            final URL url = uriByFilename.toURL();
++            sourceInput = url.openStream();
++        }
++        catch (CheckstyleException | IOException ignored) {
++            suppressionSourceExists = false;
++        }
++        finally {
++            if (sourceInput != null) {
++                try {
++                    sourceInput.close();
++                }
++                catch (IOException ignored) {
++                    suppressionSourceExists = false;
++                }
++            }
++        }
++        return suppressionSourceExists;
++    }
++}
+diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/sizes/messages_de.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/sizes/messages_de.properties
+index 3e1d84f457..8ca7fc513c 100644
+--- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/sizes/messages_de.properties
++++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/sizes/messages_de.properties
+@@ -4,7 +4,7 @@ maxLen.file=Datei ist {0,number,integer} Zeilen lang (Obergrenze ist {1,number,i
+ maxLen.method=Methode ist {0,number,integer} Zeilen lang (Obergrenze ist {1,number,integer}).
+ maxLineLen=Zeile ist {1,number,integer} Zeichen lang (Obergrenze ist {0,number,integer}).
+ maxOuterTypes=Anzahl äußerer Typen beträgt {0,number,integer} (Obergrenze ist {1,number,integer}).
+-maxParam=Konstruktor/Methode hat {0,number,integer} Parameter (Obergrenze ist {1,number,integer}).
++maxParam=Konstruktor/Methode hat {1,number,integer} Parameter (Obergrenze ist {0,number,integer}).
+ too.many.methods=Klasse hat insgesamt {0,number,integer} Methoden (Obergrenze ist {1,number,integer}).
+ too.many.packageMethods=Klasse hat {0,number,integer} Methoden mit Sichtbarkeit ''package'' (Obergrenze ist {1,number,integer}).
+ too.many.privateMethods=Klasse hat {0,number,integer} Methoden mit Sichtbarkeit ''private'' (Obergrenze ist {1,number,integer}).
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
+index 531c4fb23f..3ddf4ed4ba 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionFilterTest.java
+@@ -26,18 +26,11 @@
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.net.HttpURLConnection;
+-import java.net.URI;
+ import java.net.URL;
+ 
+ import org.junit.Rule;
+ import org.junit.Test;
+ import org.junit.rules.TemporaryFolder;
+-import org.junit.runner.RunWith;
+-import org.mockito.BDDMockito;
+-import org.mockito.Mockito;
+-import org.powermock.api.mockito.PowerMockito;
+-import org.powermock.core.classloader.annotations.PrepareForTest;
+-import org.powermock.modules.junit4.PowerMockRunner;
+ 
+ import com.google.common.io.Closeables;
+ import com.puppycrawl.tools.checkstyle.AbstractModuleTestSupport;
+@@ -49,8 +42,6 @@
+ import nl.jqno.equalsverifier.EqualsVerifier;
+ import nl.jqno.equalsverifier.Warning;
+ 
+-@RunWith(PowerMockRunner.class)
+-@PrepareForTest({SuppressionFilter.class, CommonUtils.class})
+ public class SuppressionFilterTest extends AbstractModuleTestSupport {
+ 
+     @Rule
+@@ -134,31 +125,6 @@ public void testExistingSuppressionFileWithTrueOptional() throws Exception {
+             filter.accept(ev));
+     }
+ 
+-    @Test
+-    public void testExistingConfigWithTrueOptionalThrowsIoErrorWhileClosing()
+-            throws Exception {
+-        final InputStream inputStream = PowerMockito.mock(InputStream.class);
+-        Mockito.doThrow(IOException.class).when(inputStream).close();
+-
+-        final URL url = PowerMockito.mock(URL.class);
+-        BDDMockito.given(url.openStream()).willReturn(inputStream);
+-
+-        final URI uri = PowerMockito.mock(URI.class);
+-        BDDMockito.given(uri.toURL()).willReturn(url);
+-
+-        PowerMockito.mockStatic(CommonUtils.class);
+-
+-        final String fileName = getPath("InputSuppressionFilterNone.xml");
+-        BDDMockito.given(CommonUtils.getUriByFilename(fileName)).willReturn(uri);
+-
+-        final boolean optional = true;
+-        final SuppressionFilter filter = createSuppressionFilter(fileName, optional);
+-        final AuditEvent ev = new AuditEvent(this, "AnyFile.java", null);
+-        assertTrue(
+-            "Event was not excepted when IOException is thrown while reading suppression file",
+-            filter.accept(ev));
+-    }
+-
+     @Test
+     public void testNonExistingSuppressionFileWithTrueOptional() throws Exception {
+         final String fileName = "non_existing_suppression_file.xml";
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilterTest.java
+new file mode 100644
+index 0000000000..ae529cd3ef
+--- /dev/null
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionXpathFilterTest.java
+@@ -0,0 +1,204 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2017 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.puppycrawl.tools.checkstyle.filters;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.fail;
++
++import java.io.File;
++
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TemporaryFolder;
++
++import com.puppycrawl.tools.checkstyle.AbstractModuleTestSupport;
++import com.puppycrawl.tools.checkstyle.Checker;
++import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
++import com.puppycrawl.tools.checkstyle.TreeWalker;
++import com.puppycrawl.tools.checkstyle.TreeWalkerAuditEvent;
++import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
++import com.puppycrawl.tools.checkstyle.api.LocalizedMessage;
++import com.puppycrawl.tools.checkstyle.api.TokenTypes;
++import com.puppycrawl.tools.checkstyle.internal.TestUtils;
++import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
++import nl.jqno.equalsverifier.EqualsVerifier;
++import nl.jqno.equalsverifier.Warning;
++
++public class SuppressionXpathFilterTest extends AbstractModuleTestSupport {
++
++    @Rule
++    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
++
++    @Override
++    protected String getPackageLocation() {
++        return "com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter";
++    }
++
++    @Test
++    public void testAcceptOne() throws Exception {
++        final boolean optional = false;
++        final SuppressionXpathFilter filter =
++                createSuppressionXpathFilter(getPath("suppressions_xpath_none.xml"), optional);
++
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "ATest.java", null, null);
++
++        assertTrue("TreeWalker audit event should be accepted when there are no suppressions",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testAcceptTwo() throws Exception {
++        final boolean optional = false;
++        final SuppressionXpathFilter filter = createSuppressionXpathFilter(
++                getPath("suppressions_xpath_id_and_query.xml"), optional);
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "file1.java", null, null);
++
++        assertTrue("TreeWalker audit event should be accepted",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testAcceptOnNullFile() throws Exception {
++        final String fileName = null;
++        final boolean optional = false;
++        final SuppressionXpathFilter filter = createSuppressionXpathFilter(fileName, optional);
++
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "AnyJava.java", null, null);
++        assertTrue("TreeWalker audit event on null file should be accepted, but was not",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testNonExistingSuppressionFileWithFalseOptional() throws Exception {
++        final String fileName = getPath("non_existing_suppression_file.xml");
++        try {
++            final boolean optional = false;
++            createSuppressionXpathFilter(fileName, optional);
++            fail("Exception is expected");
++        }
++        catch (CheckstyleException ex) {
++            assertEquals("Invalid error message",
++                    "Unable to find: " + fileName, ex.getMessage());
++        }
++    }
++
++    @Test
++    public void testExistingInvalidSuppressionFileWithTrueOptional() throws Exception {
++        final String fileName = getPath("suppressions_xpath_invalid_file.xml");
++        try {
++            final boolean optional = true;
++            createSuppressionXpathFilter(fileName, optional);
++            fail("Exception is expected");
++        }
++        catch (CheckstyleException ex) {
++            assertEquals("Invalid error message",
++                    "Unable to parse " + fileName + " - invalid files or checks format for "
++                            + "suppress-xpath",
++                    ex.getMessage());
++        }
++    }
++
++    @Test
++    public void testExistingSuppressionFileWithTrueOptional() throws Exception {
++        final boolean optional = true;
++        final SuppressionXpathFilter filter =
++                createSuppressionXpathFilter(getPath("suppressions_none.xml"), optional);
++
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "AnyJava.java", null, null);
++
++        assertTrue("Suppression file with true optional was not accepted",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testNonExistingSuppressionFileWithTrueOptional() throws Exception {
++        final String fileName = "src/test/resources/com/puppycrawl/tools/checkstyle/filters/"
++                + "non_existing_suppression_file.xml";
++        final boolean optional = true;
++        final SuppressionXpathFilter filter = createSuppressionXpathFilter(fileName, optional);
++
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "AnyFile.java", null, null);
++
++        assertTrue("Should except event when suppression file does not exist",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testLocalFileExternalResourceContentDoesNotChange() throws Exception {
++        final DefaultConfiguration filterConfig = createModuleConfig(SuppressionXpathFilter.class);
++        filterConfig.addAttribute("file", getPath("suppressions_xpath_none.xml"));
++        final DefaultConfiguration treeWalkerConfig = createModuleConfig(TreeWalker.class);
++        treeWalkerConfig.addChild(filterConfig);
++
++        final DefaultConfiguration checkerConfig = new DefaultConfiguration("checkstyle_checks");
++        checkerConfig.addChild(treeWalkerConfig);
++        final String cacheFile = temporaryFolder.newFile().getPath();
++        checkerConfig.addAttribute("cacheFile", cacheFile);
++
++        final Checker checker = new Checker();
++        checker.setModuleClassLoader(Thread.currentThread().getContextClassLoader());
++        checker.addListener(getBriefUtLogger());
++        checker.configure(checkerConfig);
++
++        final String filePath = temporaryFolder.newFile("file.java").getPath();
++        final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
++
++        verify(checker, filePath, expected);
++        // One more time to use cache.
++        verify(checker, filePath, expected);
++    }
++
++    @Test
++    public void testReject() throws Exception {
++        final boolean optional = false;
++        final SuppressionXpathFilter filter = createSuppressionXpathFilter(
++                        getPath("suppressions_xpath_id_and_query.xml"), optional);
++        final File file = new File(getPath("InputSuppressionXpathFilter.java"));
++        final LocalizedMessage message = new LocalizedMessage(3, 0, TokenTypes.CLASS_DEF, "", "",
++                null, null, "777", getClass(), null);
++        final TreeWalkerAuditEvent ev = new TreeWalkerAuditEvent(null, "file1.java",
++                message, TestUtils.parseFile(file));
++
++        assertFalse("TreeWalker audit event should be rejected",
++                filter.accept(ev));
++    }
++
++    @Test
++    public void testEqualsAndHashCode() {
++        EqualsVerifier
++                .forClass(SuppressionXpathFilter.class)
++                .usingGetClass()
++                .withIgnoredFields("file", "optional", "configuration")
++                .suppress(Warning.NONFINAL_FIELDS)
++                .verify();
++    }
++
++    private static SuppressionXpathFilter createSuppressionXpathFilter(String fileName,
++                                                                       boolean optional)
++            throws CheckstyleException {
++        final SuppressionXpathFilter suppressionXpathFilter = new SuppressionXpathFilter();
++        suppressionXpathFilter.setFile(fileName);
++        suppressionXpathFilter.setOptional(optional);
++        suppressionXpathFilter.finishLocalSetup();
++        return suppressionXpathFilter;
++    }
++}
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoaderTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoaderTest.java
+index 7174c1a467..562f1db3f9 100644
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoaderTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionsLoaderTest.java
+@@ -27,6 +27,7 @@
+ import java.lang.reflect.Method;
+ import java.net.HttpURLConnection;
+ import java.net.URL;
++import java.util.Set;
+ 
+ import org.junit.Rule;
+ import org.junit.Test;
+@@ -38,6 +39,7 @@
+ import org.xml.sax.InputSource;
+ 
+ import com.puppycrawl.tools.checkstyle.AbstractPathTestSupport;
++import com.puppycrawl.tools.checkstyle.TreeWalkerFilter;
+ import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
+ import com.puppycrawl.tools.checkstyle.api.FilterSet;
+ 
+@@ -305,4 +307,51 @@ public void testSettingModuleId() throws Exception {
+         final String id = Whitebox.getInternalState(suppressElement, "moduleId");
+         assertEquals("Id has to be defined", "someId", id);
+     }
++
++    @Test
++    public void testXpathSuppressions() throws Exception {
++        final String fn = getPath("InputSuppressionsLoaderXpathCorrect.xml");
++        final Set<TreeWalkerFilter> filterSet = SuppressionsLoader.loadXpathSuppressions(fn);
++
++        assertEquals("Invalid number of filters", 1, filterSet.size());
++    }
++
++    @Test
++    public void testXpathInvalidFileFormat() throws IOException {
++        final String fn = getPath("InputSuppressionsLoaderXpathInvalidFile.xml");
++        try {
++            SuppressionsLoader.loadXpathSuppressions(fn);
++            fail("Exception should be thrown");
++        }
++        catch (CheckstyleException ex) {
++            assertEquals("Invalid error message",
++                    "Unable to parse " + fn + " - invalid files or checks format for "
++                            + "suppress-xpath",
++                    ex.getMessage());
++        }
++    }
++
++    @Test
++    public void testXpathNoCheckNoId() throws IOException {
++        final String fn =
++                getPath("InputSuppressionsLoaderXpathNoCheckAndId.xml");
++        try {
++            SuppressionsLoader.loadXpathSuppressions(fn);
++            fail("Exception should be thrown");
++        }
++        catch (CheckstyleException ex) {
++            assertEquals("Invalid error message",
++                    "Unable to parse " + fn + " - missing checks and id attribute for "
++                            + "suppress-xpath",
++                    ex.getMessage());
++        }
++    }
++
++    @Test
++    public void testXpathNoCheckYesId() throws Exception {
++        final String fn = getPath("InputSuppressionsLoaderXpathId.xml");
++        final Set<TreeWalkerFilter> filterSet = SuppressionsLoader.loadXpathSuppressions(fn);
++
++        assertEquals("Invalid number of filters", 1, filterSet.size());
++    }
+ }
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/utils/FilterUtilsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/utils/FilterUtilsTest.java
+new file mode 100644
+index 0000000000..3cc41a6eab
+--- /dev/null
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/utils/FilterUtilsTest.java
+@@ -0,0 +1,85 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2017 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.puppycrawl.tools.checkstyle.utils;
++
++import static com.puppycrawl.tools.checkstyle.internal.TestUtils.assertUtilsClassHasPrivateConstructor;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++import java.io.File;
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.URI;
++import java.net.URL;
++
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.rules.TemporaryFolder;
++import org.junit.runner.RunWith;
++import org.mockito.BDDMockito;
++import org.mockito.Mockito;
++import org.powermock.api.mockito.PowerMockito;
++import org.powermock.core.classloader.annotations.PrepareForTest;
++import org.powermock.modules.junit4.PowerMockRunner;
++
++@RunWith(PowerMockRunner.class)
++public class FilterUtilsTest {
++    @Rule
++    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
++
++    @Test
++    public void testIsProperUtilsClass() throws ReflectiveOperationException {
++        assertUtilsClassHasPrivateConstructor(FilterUtils.class, true);
++    }
++
++    @Test
++    public void testExistingFile() throws Exception {
++        final File file = temporaryFolder.newFile();
++        assertTrue("Suppression file exists",
++                FilterUtils.isFileExists(file.getPath()));
++    }
++
++    @Test
++    public void testNonExistingFile() throws Exception {
++        assertFalse("Suppression file does not exist",
++                FilterUtils.isFileExists("non-existing.xml"));
++    }
++
++    @Test
++    @PrepareForTest({FilterUtils.class, CommonUtils.class})
++    public void testExceptionOnClosing() throws Exception {
++        final File file = temporaryFolder.newFile("existing.xml");
++        final InputStream inputStream = PowerMockito.mock(InputStream.class);
++        Mockito.doThrow(IOException.class).when(inputStream).close();
++
++        final URL url = PowerMockito.mock(URL.class);
++        BDDMockito.given(url.openStream()).willReturn(inputStream);
++
++        final URI uri = PowerMockito.mock(URI.class);
++        BDDMockito.given(uri.toURL()).willReturn(url);
++
++        PowerMockito.mockStatic(CommonUtils.class);
++
++        final String fileName = file.getPath();
++        BDDMockito.given(CommonUtils.getUriByFilename(fileName)).willReturn(uri);
++        assertFalse("Should be false, because error on close",
++                FilterUtils.isFileExists(fileName));
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathCorrect.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathCorrect.xml
+new file mode 100644
+index 0000000000..d1e284a4ec
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathCorrect.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="file1" id="id1" checks="test" query="/CLASS_DEF"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathId.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathId.xml
+new file mode 100644
+index 0000000000..3970331326
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathId.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="file1" id="777"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathInvalidFile.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathInvalidFile.xml
+new file mode 100644
+index 0000000000..447d1b7389
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathInvalidFile.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="a[l" checks="abc"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathNoCheckAndId.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathNoCheckAndId.xml
+new file mode 100644
+index 0000000000..0510e7c94b
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionsloader/InputSuppressionsLoaderXpathNoCheckAndId.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="file1"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/InputSuppressionXpathFilter.java b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/InputSuppressionXpathFilter.java
+new file mode 100644
+index 0000000000..c68757a268
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/InputSuppressionXpathFilter.java
+@@ -0,0 +1,4 @@
++package com.puppycrawl.tools.checkstyle.filters.suppressionxpathfilter;
++
++public class InputSuppressionXpathFilter {
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_id_and_query.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_id_and_query.xml
+new file mode 100644
+index 0000000000..58f07d187d
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_id_and_query.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="file1" id="777" query="/CLASS_DEF"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_invalid_file.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_invalid_file.xml
+new file mode 100644
+index 0000000000..447d1b7389
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_invalid_file.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions Xpath Experimental 1.1//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_1_xpath_experimental.dtd">
++<suppressions>
++  <suppress-xpath files="a[l" checks="abc"/>
++</suppressions>
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_none.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_none.xml
+new file mode 100644
+index 0000000000..21712522d5
+--- /dev/null
++++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/suppressionxpathfilter/suppressions_xpath_none.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suppressions PUBLIC
++    "-//Puppy Crawl//DTD Suppressions 1.0//EN"
++    "http://checkstyle.sourceforge.net/dtds/suppressions_1_0.dtd">
++<suppressions>
++</suppressions>
+diff --git a/src/xdocs/config_filters.xml b/src/xdocs/config_filters.xml
+index ad42cf0d0c..78483ccd66 100644
+--- a/src/xdocs/config_filters.xml
++++ b/src/xdocs/config_filters.xml
+@@ -410,6 +410,7 @@ public class UserService {
+             document</em></a> in a file. If there is no configured
+             suppressions file or the optional is set to true and
+             suppressions file was not found the Filter accepts all audit events.
++            <code>&lt;suppress&gt;</code>.
+           </p>
+       </subsection>
+       <subsection name="Properties">
+@@ -632,6 +633,160 @@ public class UserService {
+         <p> <a href="config.html#Checker">Checker</a> </p>
+       </subsection>
+     </section>
++    <section name="SuppressionXpathFilter">
++      <subsection name="Description">
++        <p>Since Checkstyle 8.2</p>
++        <p>
++            Filter <code>SuppressionXpathFilter</code> rejects
++            TreeWalker audit events for Check errors according to
++            a <a href="config.html#XML_Structure"><em>suppressions XML
++            document</em></a> in a file. If there is no configured
++            suppressions file or the optional is set to true and
++            suppressions file was not found the Filter accepts all audit events.
++            Filter processes only xpath suppressions from suppressions file, with tag
++            <code>&lt;suppress-xpath&gt;</code>.
++        </p>
++      </subsection>
++      <subsection name="Properties">
++        <table>
++          <tr>
++            <th>name</th>
++            <th>description</th>
++            <th>type</th>
++            <th>default value</th>
++            <th>since</th>
++          </tr>
++          <tr>
++            <td>file</td>
++            <td>
++              the location of the <em>suppressions XML document</em> file.
++              The order the location is checked is:
++              <ol>
++                <li>as a filesystem location</li>
++                <li>
++                  if no file found, and the location starts with either
++                  <code>http://</code> or <code>https://</code>, then it
++                  is interpreted as a URL
++                </li>
++                <li>
++                  if no file found, then passed to the
++                  <code>ClassLoader.getResource()</code> method.
++                </li>
++              </ol>
++            </td>
++            <td><a href="property_types.html#string">string</a></td>
++            <td><code>none</code></td>
++            <td>3.2</td>
++          </tr>
++          <tr>
++            <td>optional</td>
++            <td>
++              Tells what to do when the file is not existing. If
++              optional is set to false the file must exist, or else
++              it ends with error. On the other hand if optional is
++              true and file is not found, the filter accept all
++              audit events.
++            </td>
++            <td><a href="property_types.html#boolean">Boolean</a></td>
++            <td><code>false</code></td>
++            <td>6.15</td>
++          </tr>
++        </table>
++      </subsection>
++      <subsection name="Examples">
++        <p>
++          For example, the following configuration fragment directs the
++          Checker to use a <code>SuppressionXpathFilter</code>
++          with suppressions
++          file <code>config/suppressions.xml</code>:
++        </p>
++        <source>
++&lt;module name=&quot;SuppressionFilter&quot;&gt;
++    &lt;property name=&quot;file&quot; value=&quot;config/suppressions.xml&quot;/&gt;
++    &lt;property name=&quot;optional&quot; value=&quot;false&quot;/&gt;
++&lt;/module&gt;
++        </source>
++        <p>
++          A <a href="config.html#XML_Structure"><em>suppressions XML
++          document</em></a> contains a set
++          of <code>suppress-xpath</code> elements, where
++          each <code>suppress-xpath</code> element can have the
++          following attributes:
++        </p>
++        <ul>
++          <li>
++            <code>files</code> -
++            a <a href="property_types.html#regexp">Regular Expression</a>
++            matched against the file name associated with an audit
++            event. It is mandatory.
++          </li>
++          <li>
++            <code>checks</code> -
++            a <a href="property_types.html#regexp">Regular Expression</a>
++            matched against the name of the check associated with an audit
++            event. Optional if <code>id</code> is specified.
++          </li>
++          <li>
++            <code>id</code> -
++            a <a href="property_types.html#string">string</a>
++            matched against the ID of the check associated with an audit
++            event. Optional if <code>checks</code> is specified.
++          </li>
++          <li>
++            <code>query</code> -
++            a <a href="property_types.html#string">string</a>
++            represents xpath expression.
++          </li>
++        </ul>
++        <p>
++          Each audit event is checked against
++          each <code>suppress-xpath</code> element. It is
++          suppressed if all specified attributes match against the TreeWalker
++          audit event.
++        </p>
++
++        <p>
++          The following suppressions XML document directs
++          a <code>SuppressionXpathFilter</code> to
++          reject <code>JavadocStyleCheck</code> errors for
++          all methods of
++          file <code>AbstractComplexityCheck.java</code>,
++          and <code>MagicNumberCheck</code> errors for
++          whole class of file <code>JavadocStyleCheck.java</code>:
++        </p>
++        <source>
++&lt;?xml version=&quot;1.0&quot;?&gt;
++
++&lt;!DOCTYPE suppressions PUBLIC
++&quot;-//Puppy Crawl//DTD Suppressions 1.1//EN&quot;
++&quot;http://checkstyle.sourceforge.net/dtds/suppressions_1_1.dtd&quot;&gt;
++
++&lt;suppressions&gt;
++    &lt;suppress-xpath checks=&quot;JavadocStyleCheck&quot;
++    files=&quot;AbstractComplexityCheck.java&quot;
++    query=&quot;/CLASS_DEF&quot;/&gt;
++    &lt;suppress-xpath checks=&quot;MagicNumberCheck&quot;
++    files=&quot;JavadocStyleCheck.java&quot;
++    query=&quot;//METHOD_DEF&quot;/&gt;
++&lt;/suppressions&gt;
++        </source>
++      </subsection>
++      <subsection name="Example of Usage">
++        <ul>
++          <li>
++            <a href="https://github.com/search?q=path%3Aconfig+filename%3Acheckstyle_checks.xml+repo%3Acheckstyle%2Fcheckstyle+SuppressionXpathFilter">
++              Checkstyle Style</a>
++          </li>
++        </ul>
++      </subsection>
++      <subsection name="Package">
++        <p> com.puppycrawl.tools.checkstyle.filters </p>
++      </subsection>
++
++      <subsection name="Parent Module">
++        <p> <a href="config.html#Checker">TreeWalker</a> </p>
++      </subsection>
++    </section>
+ 
+     <section name="SuppressWarningsFilter">
+       <subsection name="Description">

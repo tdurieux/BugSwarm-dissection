@@ -1,0 +1,138 @@
+diff --git a/okcurl/src/test/java/com/squareup/okhttp/curl/MainTest.java b/okcurl/src/test/java/com/squareup/okhttp/curl/MainTest.java
+index 0cc065c6c..80b866517 100644
+--- a/okcurl/src/test/java/com/squareup/okhttp/curl/MainTest.java
++++ b/okcurl/src/test/java/com/squareup/okhttp/curl/MainTest.java
+@@ -34,10 +34,10 @@
+   }
+ 
+   @Test public void put() throws IOException {
+-    Request request = fromArgs("-X", "PUT", "http://example.com").createRequest();
++    Request request = fromArgs("-X", "PUT", "-d", "foo", "http://example.com").createRequest();
+     assertEquals("PUT", request.method());
+     assertEquals("http://example.com", request.urlString());
+-    assertEquals(0, request.body().contentLength());
++    assertEquals(3, request.body().contentLength());
+   }
+ 
+   @Test public void dataPost() {
+diff --git a/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java b/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
+index 06d44d203..0e128cdf8 100644
+--- a/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
++++ b/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
+@@ -19,10 +19,12 @@
+ import com.squareup.okhttp.Headers;
+ import com.squareup.okhttp.MediaType;
+ import com.squareup.okhttp.Request;
++import com.squareup.okhttp.RequestBody;
+ import com.squareup.okhttp.Response;
+ import com.squareup.okhttp.ResponseBody;
+ import com.squareup.okhttp.internal.Util;
+ import com.squareup.okhttp.internal.http.CacheRequest;
++import com.squareup.okhttp.internal.http.HttpMethod;
+ import com.squareup.okhttp.internal.http.OkHeaders;
+ import com.squareup.okhttp.internal.http.StatusLine;
+ import java.io.IOException;
+@@ -51,6 +53,7 @@
+  * Helper methods that convert between Java and OkHttp representations.
+  */
+ public final class JavaApiConverter {
++  private static final RequestBody EMPTY_REQUEST_BODY = RequestBody.create(null, new byte[0]);
+ 
+   private JavaApiConverter() {
+   }
+@@ -163,10 +166,14 @@ static Response createOkResponse(Request request, CacheResponse javaResponse)
+    */
+   public static Request createOkRequest(
+       URI uri, String requestMethod, Map<String, List<String>> requestHeaders) {
++    // OkHttp's Call API requires a placeholder body; the real body will be streamed separately.
++    RequestBody placeholderBody = HttpMethod.requiresRequestBody(requestMethod)
++        ? EMPTY_REQUEST_BODY
++        : null;
+ 
+     Request.Builder builder = new Request.Builder()
+         .url(uri.toString())
+-        .method(requestMethod, null);
++        .method(requestMethod, placeholderBody);
+ 
+     if (requestHeaders != null) {
+       Headers headers = extractOkHeaders(requestHeaders);
+diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+index e8b99f808..efe32ffc8 100644
+--- a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
++++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
+@@ -258,7 +258,7 @@
+ 
+     Request request = new Request.Builder()
+         .url(server.getUrl("/"))
+-        .method("POST", null)
++        .method("POST", RequestBody.create(null, new byte[0]))
+         .build();
+ 
+     executeSynchronously(request)
+diff --git a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
+index 66f86a8e1..d09e97105 100644
+--- a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
++++ b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
+@@ -23,6 +23,7 @@
+ import com.squareup.okhttp.OkHttpClient;
+ import com.squareup.okhttp.Protocol;
+ import com.squareup.okhttp.Request;
++import com.squareup.okhttp.RequestBody;
+ import com.squareup.okhttp.Response;
+ import com.squareup.okhttp.Route;
+ import com.squareup.okhttp.internal.Internal;
+@@ -75,6 +76,7 @@
+ public class HttpURLConnectionImpl extends HttpURLConnection {
+   private static final Set<String> METHODS = new LinkedHashSet<>(
+       Arrays.asList("OPTIONS", "GET", "HEAD", "POST", "PUT", "DELETE", "TRACE", "PATCH"));
++  private static final RequestBody EMPTY_REQUEST_BODY = RequestBody.create(null, new byte[0]);
+ 
+   final OkHttpClient client;
+ 
+@@ -316,9 +318,13 @@ private void initHttpEngine() throws IOException {
+ 
+   private HttpEngine newHttpEngine(String method, Connection connection,
+       RetryableSink requestBody, Response priorResponse) {
++    // OkHttp's Call API requires a placeholder body; the real body will be streamed separately.
++    RequestBody placeholderBody = HttpMethod.requiresRequestBody(method)
++        ? EMPTY_REQUEST_BODY
++        : null;
+     Request.Builder builder = new Request.Builder()
+         .url(getURL())
+-        .method(method, null /* No body; that's passed separately. */);
++        .method(method, placeholderBody);
+     Headers headers = requestHeaders.build();
+     for (int i = 0, size = headers.size(); i < size; i++) {
+       builder.addHeader(headers.name(i), headers.value(i));
+diff --git a/okhttp/src/main/java/com/squareup/okhttp/Request.java b/okhttp/src/main/java/com/squareup/okhttp/Request.java
+index 098ee9b91..84fd0454b 100644
+--- a/okhttp/src/main/java/com/squareup/okhttp/Request.java
++++ b/okhttp/src/main/java/com/squareup/okhttp/Request.java
+@@ -16,7 +16,6 @@
+ package com.squareup.okhttp;
+ 
+ import com.squareup.okhttp.internal.Platform;
+-import com.squareup.okhttp.internal.Util;
+ import com.squareup.okhttp.internal.http.HttpMethod;
+ import java.io.IOException;
+ import java.net.MalformedURLException;
+@@ -215,7 +214,7 @@ public Builder delete(RequestBody body) {
+     }
+ 
+     public Builder delete() {
+-      return method("DELETE", null);
++      return delete(RequestBody.create(null, new byte[0]));
+     }
+ 
+     public Builder put(RequestBody body) {
+@@ -233,8 +232,8 @@ public Builder method(String method, RequestBody body) {
+       if (body != null && !HttpMethod.permitsRequestBody(method)) {
+         throw new IllegalArgumentException("method " + method + " must not have a request body.");
+       }
+-      if (body == null && HttpMethod.permitsRequestBody(method)) {
+-        body = RequestBody.create(null, Util.EMPTY_BYTE_ARRAY);
++      if (body == null && HttpMethod.requiresRequestBody(method)) {
++        throw new IllegalArgumentException("method " + method + " must have a request body.");
+       }
+       this.method = method;
+       this.body = body;

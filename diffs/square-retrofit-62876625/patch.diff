@@ -1,0 +1,375 @@
+diff --git a/pom.xml b/pom.xml
+index 603dd82e7..08ed33ef0 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -50,7 +50,7 @@
+     <android.version>4.1.1.4</android.version>
+     <android.platform>16</android.platform>
+     <gson.version>2.3.1</gson.version>
+-    <okhttp.version>2.3.0</okhttp.version>
++    <okhttp.version>2.4.0-RC1</okhttp.version>
+     <rxjava.version>1.0.0</rxjava.version>
+ 
+     <!-- Converter Dependencies -->
+diff --git a/retrofit-mock/src/test/java/retrofit/MockRestAdapterTest.java b/retrofit-mock/src/test/java/retrofit/MockRestAdapterTest.java
+index 4a554e11d..6f55e405b 100644
+--- a/retrofit-mock/src/test/java/retrofit/MockRestAdapterTest.java
++++ b/retrofit-mock/src/test/java/retrofit/MockRestAdapterTest.java
+@@ -59,7 +59,7 @@
+ 
+     RestAdapter restAdapter = new RestAdapter.Builder() //
+         .callbackExecutor(callbackExecutor)
+-        .endpoint("none")
++        .endpoint("http://example.com")
+         .errorHandler(new ErrorHandler() {
+           @Override public Throwable handleError(RetrofitError cause) {
+             if (nextError != null) {
+diff --git a/retrofit/src/main/java/retrofit/FormEncodingBuilder.java b/retrofit/src/main/java/retrofit/FormEncodingBuilder.java
+deleted file mode 100644
+index 52451fe37..000000000
+--- a/retrofit/src/main/java/retrofit/FormEncodingBuilder.java
++++ /dev/null
+@@ -1,79 +0,0 @@
+-/*
+- * Copyright (C) 2014 Square, Inc.
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package retrofit;
+-
+-import com.squareup.okhttp.MediaType;
+-import com.squareup.okhttp.RequestBody;
+-import java.io.IOException;
+-import java.io.UnsupportedEncodingException;
+-import java.net.URLEncoder;
+-import okio.Buffer;
+-import okio.BufferedSink;
+-import okio.ByteString;
+-
+-final class FormEncodingBuilder {
+-  private final Buffer content = new Buffer();
+-
+-  FormEncodingBuilder add(String name, boolean encodeName, String value, boolean encodeValue) {
+-    if (content.size() > 0) {
+-      content.writeByte('&');
+-    }
+-    try {
+-      if (encodeName) {
+-        name = URLEncoder.encode(name, "UTF-8");
+-      }
+-      if (encodeValue) {
+-        value = URLEncoder.encode(value, "UTF-8");
+-      }
+-    } catch (UnsupportedEncodingException e) {
+-      throw new AssertionError(e);
+-    }
+-    content.writeUtf8(name);
+-    content.writeByte('=');
+-    content.writeUtf8(value);
+-    return this;
+-  }
+-
+-  RequestBody build() {
+-    if (content.size() == 0) {
+-      throw new IllegalStateException("Form encoded body must have at least one part.");
+-    }
+-    return new FormEncodingRequestBody(content.snapshot());
+-  }
+-
+-  private static final class FormEncodingRequestBody extends RequestBody {
+-    private static final MediaType CONTENT_TYPE =
+-        MediaType.parse("application/x-www-form-urlencoded");
+-
+-    private final ByteString snapshot;
+-
+-    public FormEncodingRequestBody(ByteString snapshot) {
+-      this.snapshot = snapshot;
+-    }
+-
+-    @Override public MediaType contentType() {
+-      return CONTENT_TYPE;
+-    }
+-
+-    @Override public long contentLength() throws IOException {
+-      return snapshot.size();
+-    }
+-
+-    @Override public void writeTo(BufferedSink sink) throws IOException {
+-      sink.write(snapshot);
+-    }
+-  }
+-}
+diff --git a/retrofit/src/main/java/retrofit/RequestBuilder.java b/retrofit/src/main/java/retrofit/RequestBuilder.java
+index 2f92f17c0..e6b2c80c0 100644
+--- a/retrofit/src/main/java/retrofit/RequestBuilder.java
++++ b/retrofit/src/main/java/retrofit/RequestBuilder.java
+@@ -15,6 +15,7 @@
+  */
+ package retrofit;
+ 
++import com.squareup.okhttp.FormEncodingBuilder;
+ import com.squareup.okhttp.Headers;
+ import com.squareup.okhttp.MediaType;
+ import com.squareup.okhttp.MultipartBuilder;
+@@ -196,6 +197,14 @@ private void addQueryParamMap(int parameterNumber, Map<?, ?> map, boolean encode
+     }
+   }
+ 
++  private void addFormField(String name, String value, boolean encode) {
++    if (encode) {
++      formEncodingBuilder.add(name, value);
++    } else {
++      formEncodingBuilder.addEncoded(name, value);
++    }
++  }
++
+   void setArguments(Object[] args) {
+     if (args == null) {
+       return;
+@@ -251,30 +260,28 @@ void setArguments(Object[] args) {
+         if (value != null) { // Skip null values.
+           Field field = (Field) annotation;
+           String name = field.value();
+-          boolean encodeName = field.encodeName();
+-          boolean encodeValue = field.encodeValue();
++          boolean encode = field.encode();
+           if (value instanceof Iterable) {
+             for (Object iterableValue : (Iterable<?>) value) {
+               if (iterableValue != null) { // Skip null values.
+-                formEncodingBuilder.add(name, encodeName, iterableValue.toString(), encodeValue);
++                addFormField(name, iterableValue.toString(), encode);
+               }
+             }
+           } else if (value.getClass().isArray()) {
+             for (int x = 0, arrayLength = Array.getLength(value); x < arrayLength; x++) {
+               Object arrayValue = Array.get(value, x);
+               if (arrayValue != null) { // Skip null values.
+-                formEncodingBuilder.add(name, encodeName, arrayValue.toString(), encodeValue);
++                addFormField(name, arrayValue.toString(), encode);
+               }
+             }
+           } else {
+-            formEncodingBuilder.add(name, encodeName, value.toString(), encodeValue);
++            addFormField(name, value.toString(), encode);
+           }
+         }
+       } else if (annotationType == FieldMap.class) {
+         if (value != null) { // Skip null values.
+           FieldMap fieldMap = (FieldMap) annotation;
+-          boolean encodeNames = fieldMap.encodeNames();
+-          boolean encodeValues = fieldMap.encodeValues();
++          boolean encode = fieldMap.encode();
+           for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+             Object entryKey = entry.getKey();
+             if (entryKey == null) {
+@@ -283,8 +290,7 @@ void setArguments(Object[] args) {
+             }
+             Object entryValue = entry.getValue();
+             if (entryValue != null) { // Skip null values.
+-              formEncodingBuilder.add(entryKey.toString(), encodeNames, entryValue.toString(),
+-                  encodeValues);
++              addFormField(entryKey.toString(), entryValue.toString(), encode);
+             }
+           }
+         }
+diff --git a/retrofit/src/main/java/retrofit/http/Field.java b/retrofit/src/main/java/retrofit/http/Field.java
+index fce09d9c0..c5582e257 100644
+--- a/retrofit/src/main/java/retrofit/http/Field.java
++++ b/retrofit/src/main/java/retrofit/http/Field.java
+@@ -57,9 +57,6 @@
+ public @interface Field {
+   String value();
+ 
+-  /** Specifies whether {@link #value()} is URL encoded. */
+-  boolean encodeName() default true;
+-
+-  /** Specifies whether the argument value to the annotated method parameter is URL encoded. */
+-  boolean encodeValue() default true;
++  /** Specifies whether the {@linkplain #value() name} and value are URL encoded. */
++  boolean encode() default true;
+ }
+diff --git a/retrofit/src/main/java/retrofit/http/FieldMap.java b/retrofit/src/main/java/retrofit/http/FieldMap.java
+index 09b6f4c0d..b4a4e7024 100644
+--- a/retrofit/src/main/java/retrofit/http/FieldMap.java
++++ b/retrofit/src/main/java/retrofit/http/FieldMap.java
+@@ -44,9 +44,6 @@
+ @Target(PARAMETER)
+ @Retention(RUNTIME)
+ public @interface FieldMap {
+-  /** Specifies whether parameter names (keys in the map) are URL encoded. */
+-  boolean encodeNames() default true;
+-
+-  /** Specifies whether parameter values (values in the map) are URL encoded. */
+-  boolean encodeValues() default true;
++  /** Specifies whether the names and values are URL encoded. */
++  boolean encode() default true;
+ }
+diff --git a/retrofit/src/test/java/retrofit/RequestBuilderTest.java b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
+index 4827449f4..7da4e50d1 100644
+--- a/retrofit/src/test/java/retrofit/RequestBuilderTest.java
++++ b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
+@@ -42,6 +42,7 @@
+ import rx.Observable;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
++import static org.junit.Assert.assertNull;
+ import static org.junit.Assert.fail;
+ 
+ @SuppressWarnings("UnusedParameters") // Parameters inspected reflectively.
+@@ -610,7 +611,7 @@ Response method() {
+     assertThat(request.method()).isEqualTo("DELETE");
+     assertThat(request.headers().size()).isZero();
+     assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/");
+-    assertBody(request.body(), "");
++    assertNull(request.body());
+   }
+ 
+   @Test public void head() {
+@@ -736,10 +737,10 @@ Response method(@Query(value = "ping", encodeValue = false) String ping) {
+         return null;
+       }
+     }
+-    Request request = buildRequest(Example.class, "p+o+n+g");
++    Request request = buildRequest(Example.class, "p%20o%20n%20g");
+     assertThat(request.method()).isEqualTo("GET");
+     assertThat(request.headers().size()).isZero();
+-    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?ping=p+o+n+g");
++    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?ping=p%20o%20n%20g");
+     assertThat(request.body()).isNull();
+   }
+ 
+@@ -753,7 +754,7 @@ Response method(@Query(value = "pi ng", encodeName = true) String ping) {
+     Request request = buildRequest(Example.class, "pong");
+     assertThat(request.method()).isEqualTo("GET");
+     assertThat(request.headers().size()).isZero();
+-    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?pi+ng=pong");
++    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?pi%20ng=pong");
+     assertThat(request.body()).isNull();
+   }
+ 
+@@ -764,10 +765,10 @@ Response method(@Query(value = "pi ng", encodeName = true, encodeValue = false)
+         return null;
+       }
+     }
+-    Request request = buildRequest(Example.class, "po+ng");
++    Request request = buildRequest(Example.class, "po%20ng");
+     assertThat(request.method()).isEqualTo("GET");
+     assertThat(request.headers().size()).isZero();
+-    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?pi+ng=po+ng");
++    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?pi%20ng=po%20ng");
+     assertThat(request.body()).isNull();
+   }
+ 
+@@ -987,7 +988,7 @@ Response method(@QueryMap(encodeNames = true) Map<String, Object> query) {
+     Request request = buildRequest(Example.class, params);
+     assertThat(request.method()).isEqualTo("GET");
+     assertThat(request.headers().size()).isZero();
+-    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?k+it=k+t&pi+ng=p+g");
++    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?k%20it=k%20t&pi%20ng=p%20g");
+     assertThat(request.body()).isNull();
+   }
+ 
+@@ -1008,22 +1009,22 @@ Response method(
+     Request request = buildRequest(Example.class, params);
+     assertThat(request.method()).isEqualTo("GET");
+     assertThat(request.headers().size()).isZero();
+-    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?k+it=k%20t&pi+ng=p%20g");
++    assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/?k%20it=k%20t&pi%20ng=p%20g");
+     assertThat(request.body()).isNull();
+   }
+ 
+   @Test public void normalPostWithPathParam() {
+     class Example {
+       @POST("/foo/bar/{ping}/") //
+-      Response method(@Path("ping") String ping) {
++      Response method(@Path("ping") String ping, @Body Object body) {
+         return null;
+       }
+     }
+-    Request request = buildRequest(Example.class, "pong");
++    Request request = buildRequest(Example.class, "pong", new Object());
+     assertThat(request.method()).isEqualTo("POST");
+     assertThat(request.headers().size()).isZero();
+     assertThat(request.urlString()).isEqualTo("http://example.com/foo/bar/pong/");
+-    assertBody(request.body(), "");
++    assertBody(request.body(), "{}");
+   }
+ 
+   @Test public void bodyGson() {
+@@ -1284,24 +1285,12 @@ Response method(@Field("foo") String foo, @Field("ping") String ping) {
+     class Example {
+       @FormUrlEncoded //
+       @POST("/foo") //
+-      Response method(@Field(value = "na+me", encodeName = false) String foo) {
+-        return null;
+-      }
+-    }
+-    Request request = buildRequest(Example.class, "ba r");
+-    assertBody(request.body(), "na+me=ba+r");
+-  }
+-
+-  @Test public void formEncodedWithEncodedValueFieldParam() {
+-    class Example {
+-      @FormUrlEncoded //
+-      @POST("/foo") //
+-      Response method(@Field(value = "na me", encodeValue = false) String foo) {
++      Response method(@Field(value = "na%20me", encode = false) String foo) {
+         return null;
+       }
+     }
+-    Request request = buildRequest(Example.class, "ba+r");
+-    assertBody(request.body(), "na+me=ba+r");
++    Request request = buildRequest(Example.class, "ba%20r");
++    assertBody(request.body(), "na%20me=ba%20r");
+   }
+ 
+   @Test public void formEncodedFieldOptional() {
+@@ -1363,34 +1352,17 @@ Response method(@Field("foo") int[] fields, @Field("kit") String kit) {
+     class Example {
+       @FormUrlEncoded //
+       @POST("/foo") //
+-      Response method(@FieldMap(encodeNames = false) Map<String, Object> fieldMap) {
+-        return null;
+-      }
+-    }
+-
+-    Map<String, Object> fieldMap = new LinkedHashMap<String, Object>();
+-    fieldMap.put("k+it", "k at");
+-    fieldMap.put("pin+g", "po ng");
+-
+-    Request request = buildRequest(Example.class, fieldMap);
+-    assertBody(request.body(), "k+it=k+at&pin+g=po+ng");
+-  }
+-
+-  @Test public void formEncodedWithEncodedValueFieldParamMap() {
+-    class Example {
+-      @FormUrlEncoded //
+-      @POST("/foo") //
+-      Response method(@FieldMap(encodeValues = false) Map<String, Object> fieldMap) {
++      Response method(@FieldMap(encode = false) Map<String, Object> fieldMap) {
+         return null;
+       }
+     }
+ 
+     Map<String, Object> fieldMap = new LinkedHashMap<String, Object>();
+-    fieldMap.put("k it", "k+at");
+-    fieldMap.put("pin g", "po+ng");
++    fieldMap.put("k%20it", "k%20at");
++    fieldMap.put("pin%20g", "po%20ng");
+ 
+     Request request = buildRequest(Example.class, fieldMap);
+-    assertBody(request.body(), "k+it=k+at&pin+g=po+ng");
++    assertBody(request.body(), "k%20it=k%20at&pin%20g=po%20ng");
+   }
+ 
+   @Test public void formEncodedFieldMap() {

@@ -1,0 +1,67 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
+index d3b4dc591c..62783df3be 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterDescription.java
+@@ -185,6 +185,8 @@ public String toString() {
+ 
+     /**
+      * Description of a loaded parameter with support for the information exposed by {@code java.lang.reflect.Parameter}.
++     *
++     * @param <T> The type of the {@code java.lang.reflect.Executable} that this list represents.
+      */
+     abstract class ForLoadedParameter<T> extends InDefinedShape.AbstractBase {
+ 
+@@ -366,6 +368,13 @@ public String getName(Object executable, int index) {
+                     }
+                 }
+ 
++                /**
++                 * Returns the {@code java.lang.reflect.Parameter} of an executable at a given index.
++                 *
++                 * @param executable The executable for which a parameter should be read.
++                 * @param index      The index of the parameter.
++                 * @return The parameter for the given index.
++                 */
+                 private Object getParameter(Object executable, int index) {
+                     try {
+                         return Array.get(getParameters.invoke(executable), index);
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterList.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterList.java
+index 4998e5c57a..41a083f57a 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterList.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/method/ParameterList.java
+@@ -116,8 +116,9 @@ public GenericTypeList asTypeList() {
+     }
+ 
+     /**
+-     * Represents a list of parameters for an executable, i.e. a {@link java.lang.reflect.Method} or
+-     * {@link java.lang.reflect.Constructor}.
++     * Represents a list of parameters for an executable, i.e. a {@link java.lang.reflect.Method} or {@link java.lang.reflect.Constructor}.
++     *
++     * @param <T> The type of the {@code java.lang.reflect.Executable} that this list represents.
+      */
+     abstract class ForLoadedExecutable<T> extends AbstractBase<ParameterDescription.InDefinedShape> {
+ 
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/generic/GenericTypeDescription.java b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/generic/GenericTypeDescription.java
+index 652881ea6a..614ab01064 100644
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/generic/GenericTypeDescription.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/description/type/generic/GenericTypeDescription.java
+@@ -2418,6 +2418,9 @@ public TypeDescription asErasure() {
+             }
+         }
+ 
++        /**
++         * A lazy projection of the parameter type of a {@link Constructor}.
++         */
+         public static class OfConstructorParameter extends LazyProjection {
+ 
+             /**
+@@ -2462,6 +2465,9 @@ public TypeDescription asErasure() {
+             }
+         }
+ 
++        /**
++         * A lazy projection of the parameter type of a {@link Method}.
++         */
+         public static class OfMethodParameter extends LazyProjection {
+ 
+             /**
