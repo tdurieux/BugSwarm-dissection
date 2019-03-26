@@ -41,7 +41,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 					}
 					if (diff != null && diff != '') {
 						regex_origin = /--- ([^ ]+).*/.exec(diff)
-						if (regex_origin.length > 0) { 
+						if (regex_origin) { 
 							origin = regex_origin[1]
 							dest = /\+\+\+ ([^ ]+).*/.exec(diff)[1]
 							if (dest.indexOf(origin) > 0) {
