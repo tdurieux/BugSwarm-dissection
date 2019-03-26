@@ -40,12 +40,15 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 						diff = patch.PATCH_DIFF_ORIG;
 					}
 					if (diff != null && diff != '') {
-						origin = /--- ([^ ]+).*/.exec(diff)[1]
-						dest = /\+\+\+ ([^ ]+).*/.exec(diff)[1]
-						if (dest.indexOf(origin) > 0) {
-							diff = diff.replace(dest, origin)
+						regex_origin = /--- ([^ ]+).*/.exec(diff)
+						if (regex_origin.length > 0) { 
+							origin = regex_origin[1]
+							dest = /\+\+\+ ([^ ]+).*/.exec(diff)[1]
+							if (dest.indexOf(origin) > 0) {
+								diff = diff.replace(dest, origin)
+							}
+							diff = diff.replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\t/g, "\t")
 						}
-						diff = diff.replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\t/g, "\t")
 						var diff2htmlUi = new Diff2HtmlUI({ diff: diff });
 						diff2htmlUi.draw($(elem), {inputFormat: 'java', showFiles: false, matching: 'none'});
 						diff2htmlUi.highlightCode($(elem));
@@ -210,7 +213,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 
 		function downloadPatches() {
 			for (var bench of $scope.benchmarks) {
-				$http.get("https://static.durieux.me/"+bench.toLowerCase() + ".json").then(function (response) {
+				$http.get("https://static.durieux.me/"+bench.toLowerCase() + ".json?callback=foo").then(function (response) {
 					var bugs = response.data
 		
 					for (var key in bugs){
