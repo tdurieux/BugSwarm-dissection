@@ -40,7 +40,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 						diff = patch.PATCH_DIFF_ORIG;
 					}
 					if (diff != null && diff != '') {
-						regex_origin = /--- ([^ ]+).*/.exec(diff)
+						var regex_origin = /--- ([^ ]+).*/.exec(diff)
 						if (regex_origin) { 
 							origin = regex_origin[1]
 							dest = /\+\+\+ ([^ ]+).*/.exec(diff)[1]
@@ -50,6 +50,10 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 							diff = diff.replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\t/g, "\t")
 						}
 						var diff2htmlUi = new Diff2HtmlUI({ diff: diff });
+						diff2htmlUi.draw($(elem), {inputFormat: 'java', showFiles: false, matching: 'none'});
+						diff2htmlUi.highlightCode($(elem));
+					} else {
+						var diff2htmlUi = new Diff2HtmlUI({ diff: '' });
 						diff2htmlUi.draw($(elem), {inputFormat: 'java', showFiles: false, matching: 'none'});
 						diff2htmlUi.highlightCode($(elem));
 					}
