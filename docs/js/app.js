@@ -32,6 +32,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			},
 			link: function (scope, elem, attrs) {
 				function printDiff(patch) {
+					$(elem).text('')
 					var diff = patch.diff;
 					if (diff == null) {
 						diff = patch.patch;
@@ -50,11 +51,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 							diff = diff.replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\t/g, "\t")
 						}
 						var diff2htmlUi = new Diff2HtmlUI({ diff: diff });
-						diff2htmlUi.draw($(elem), {inputFormat: 'java', showFiles: false, matching: 'none'});
-						diff2htmlUi.highlightCode($(elem));
-					} else {
-						var diff2htmlUi = new Diff2HtmlUI({ diff: '' });
-						diff2htmlUi.draw($(elem), {inputFormat: 'java', showFiles: false, matching: 'none'});
+						diff2htmlUi.draw($(elem), {showFiles: false, matching: 'none'});
 						diff2htmlUi.highlightCode($(elem));
 					}
 				}
@@ -217,7 +214,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 
 		function downloadPatches() {
 			for (var bench of $scope.benchmarks) {
-				$http.get("https://static.durieux.me/"+bench.toLowerCase() + ".json?callback=foo").then(function (response) {
+				$http.get("data/"+bench.toLowerCase() + ".json").then(function (response) {
 					var bugs = response.data
 		
 					for (var key in bugs){
