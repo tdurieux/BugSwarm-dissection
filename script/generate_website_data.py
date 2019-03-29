@@ -5,7 +5,7 @@ import requests
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 
 data = None
-with open(os.path.join(ROOT, 'bugswarm.json')) as fd:
+with open(os.path.join(ROOT, 'final_bugswarm.json')) as fd:
     data = json.load(fd)
 
 travis_jobs = {}
