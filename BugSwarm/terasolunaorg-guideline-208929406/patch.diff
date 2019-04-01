@@ -1,0 +1,2395 @@
+diff --git a/source_en/Appendix/Nexus.rst b/source_en/Appendix/Nexus.rst
+index f3c6958..ee1fab7 100755
+--- a/source_en/Appendix/Nexus.rst
++++ b/source_en/Appendix/Nexus.rst
+@@ -30,10 +30,7 @@ Install and Start-up
+ The machine on which NEXUS is to be installed should satisfy the following conditions.
+ 
+ * JRE6 or later should be installed
+-* Http access to the following URLs
+-
+- * URL starting with http://repo1.maven.org/ (Central repository)
+- * URL starting with http://repo.terasoluna.org/ (Terasoluna repository)
++* Http access to the Central repository (URL starting with http://repo1.maven.org/) is enabled
+ 
+ The installation procedure is as follows:
+ 
+@@ -53,16 +50,6 @@ Repository list is displayed on clicking Repositories on the menu on the left si
+ * **Snapshots** = This repository stores the work products of SNAPSHOT version of the applications developed internally.
+ * **Public Repositories** This group repository is used for enabling access to the above repositories through a single URL.
+ 
+-Add TERASOLUNA Server Framework for Java (5.x) repository
+---------------------------------------------------------------------------------
+-
+-When an application is to be developed using TERASOLUNA Server Framework for Java (5.x), TERASOLUNA Server Framework for Java (5.x) repository needs to be added in addition to the above repositories.
+-
+-.. todo::
+-
+-    Add proxy repository to http://repo.terasoluna.org/nexus/content/repositories/terasoluna-gfw-releases/ and http://repo.terasoluna.org/nexus/content/repositories/terasoluna-gfw-3rdparty/ .
+-    Then write the method to add it to public repository group and provide a screen capture along with it.
+-
+ settings.xml
+ --------------------------------------------------------------------------------
+ 
+diff --git a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessCommon.rst b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessCommon.rst
+index b264fc4..1448736 100755
+--- a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessCommon.rst
++++ b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessCommon.rst
+@@ -69,23 +69,29 @@ JDBC datasource provided by Application Server
+       - Application Server
+       - Reference page
+     * - 1.
+-      - Apache Tomcat 8
+-      - | Refer to \ `Apache Tomcat 8 User Guide(The Tomcat JDBC Connection Pool) <http://tomcat.apache.org/tomcat-8.0-doc/jdbc-pool.html>`_\ .
+-        | Refer to \ `Apache Tomcat 8 User Guide(JNDI Datasource HOW-TO) <http://tomcat.apache.org/tomcat-8.0-doc/jndi-datasource-examples-howto.html>`_\  (Apache Commons DBCP 2).
++      - Apache Tomcat 8.5
++      - | Refer to \ `Apache Tomcat 8.5 User Guide(The Tomcat JDBC Connection Pool) <http://tomcat.apache.org/tomcat-8.5-doc/jdbc-pool.html>`_\ .
++        | Refer to \ `Apache Tomcat 8.5 User Guide(JNDI Datasource HOW-TO) <http://tomcat.apache.org/tomcat-8.5-doc/jndi-datasource-examples-howto.html>`_\  (Apache Commons DBCP 2).
+     * - 2.
++      - Apache Tomcat 8.0
++      - | Refer to \ `Apache Tomcat 8.0 User Guide(The Tomcat JDBC Connection Pool) <http://tomcat.apache.org/tomcat-8.0-doc/jdbc-pool.html>`_\ .
++        | Refer to \ `Apache Tomcat 8.0 User Guide(JNDI Datasource HOW-TO) <http://tomcat.apache.org/tomcat-8.0-doc/jndi-datasource-examples-howto.html>`_\ (Apache Commons DBCP 2).
++    * - 3.
+       - Apache Tomcat 7
+       - | Refer to \ `Apache Tomcat 7 User Guide (The Tomcat JDBC Connection Pool) <http://tomcat.apache.org/tomcat-7.0-doc/jdbc-pool.html>`_\ .
+         | Refer to \ `Apache Tomcat 7 User Guide (JNDI Datasource HOW-TO) <http://tomcat.apache.org/tomcat-7.0-doc/jndi-datasource-examples-howto.html>`_\  (Apache Commons DBCP).
+-    * - 3.
++    * - 4.
+       - Oracle WebLogic Server 12c
+       - Refer to \ `Oracle WebLogic Server Product Documentation <http://docs.oracle.com/middleware/1221/wls/INTRO/jdbc.htm>`_\ .
+-    * - 4.
++    * - 5.
+       - IBM WebSphere Application Server Version 9.0
+       - Refer to \ `WebSphere Application Server Online information center <http://www.ibm.com/support/knowledgecenter/SSEQTP_9.0.0/com.ibm.websphere.wlp.doc/ae/twlp_dep_configuring_ds.html?lang=en>`_\ .
+-    * - 5.
++    * - 6.
+       - JBoss Enterprise Application Platform 7.0
+-      - Refer to \ `JBoss Enterprise Application Platform Product Documentation <https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/datasource_management>`_\ .
+-
++      - Refer \ `JBoss Enterprise Application Platform 7.0 Product Documentation <https://access.redhat.com/documentation/en/red-hat-jboss-enterprise-application-platform/7.0/paged/configuration-guide/chapter-13-datasource-management>`_\.
++    * - 7.
++      - JBoss Enterprise Application Platform 6.4
++      - Refer \ `JBoss Enterprise Application Platform 6.4 Product Documentation <https://access.redhat.com/documentation/en-US/JBoss_Enterprise_Application_Platform/6.4/html/Administration_and_Configuration_Guide/chap-Datasource_Management.html>`_\.
+ 
+ .. _datasource_oss_thirdparty-label:
+ 
+diff --git a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessJpa.rst b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessJpa.rst
+index ffd5588..32f73db 100755
+--- a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessJpa.rst
++++ b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessJpa.rst
+@@ -1264,7 +1264,7 @@ specify QueryHint ( ``@javax.persistence.QueryHint`` ) in value attribute.
+     * - | (1)
+       - | Specify hint name in name attribute of ``@QueryHint`` annotation and hint value in value attribute.
+         | In addition to the hint stipulated in JPA specifications, provider specific hint can be specified.
+-        | In the above example, lock timeout is set to ``0`` (DB used is PostgreSQL). "FOR UPDATE NOWAIT" clause is added to SQL.
++        | In the above example, lock timeout is set to ``0`` (DB used is Oracle). "FOR UPDATE NOWAIT" clause is added to SQL.
+ 
+  .. note:: **QueryHints that can be specified in Hibernate**
+ 
+diff --git a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessMyBatis3.rst b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessMyBatis3.rst
+index 9571185..ade09b8 100755
+--- a/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessMyBatis3.rst
++++ b/source_en/ArchitectureInDetail/DataAccessDetail/DataAccessMyBatis3.rst
+@@ -522,7 +522,7 @@ Configuration example is as given below.
+ - :file:`projectName-env/src/main/resources/META-INF/spring/projectName-env.xml`
+ 
+  .. code-block:: xml
+-    :emphasize-lines: 15-20
++    :emphasize-lines: 15-22
+ 
+     <?xml version="1.0" encoding="UTF-8"?>
+     <beans xmlns="http://www.springframework.org/schema/beans"
+@@ -543,6 +543,8 @@ Configuration example is as given below.
+             class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+             <!-- (2) -->
+             <property name="dataSource" ref="dataSource" />
++            <!-- (3) -->
++            <property name="rollbackOnCommitFailure" value="true" />
+         </bean>
+ 
+         <!-- omitted -->
+@@ -563,6 +565,11 @@ Configuration example is as given below.
+       - Specify configured datasource bean in \ ``dataSource`` \  property.
+ 
+         When SQL is executed in the transaction, connection is fetched from datasource specified here.
++    * - (3)
++      - \ Rollback process is called when an error occurs during commit.
++
++        By adding this setting, risk of "Unintentional commit which occurs when a connection with undefined operation returns to connection pool (commit while reusing a connection, implicit commit at the time of closing a connection etc)" can be reduced.
++        However, since an error is likely to occur at the time of rollback, it should be noted that a risk of occurrence of unintentional commit is still a possibility.
+ 
+  .. note:: **bean ID of PlatformTransactionManager**
+  
+@@ -1030,55 +1037,18 @@ Basically, it is used when
+ A \ ``TypeHandler`` \  is provided by MyBatis3 for general Java classes like primitive type and primitive wrapper type class.
+ Specific settings are not required.
+ 
+-**Configuration while using JSR-310 Date and Time API**
++ .. note:: **Regarding implementation for BLOB and CLOB**
+ 
+-When a class which represents date and time offered by JSR-310 Date and Time API in MyBatis3 is used, \ ``TypeHandler`` \  offered by a library different from  that of MyBatis (\ ``mybatis-typehandlers-jsr310`` \) is used.
+-While using, configuration to recognise \ ``TypeHandler`` \  is added to \ ``mybatis-config.xml`` \, in MyBatis.
+-    
++    \ ``TypeHandler`` \  added by MyBatis 3.4 implements conversion of BLOB and \ ``java.io.InputStream`` \ , and CLOB and \ ``java.io.Reader`` \  by using API added by JDBC 4.0 (Java 1.6).
++    In case of a JDBC driver with JDBC 4.0 support, it is not necessary to implement a new \ ``TypeHandler`` \  since type handler for conversion of
++    BLOB⇔\ ``InputStream`` \  and CLOB⇔\ ``Reader`` \  is enabled by default.
+ 
+- .. code-block:: xml
+- 
+-      <typeHandlers>
+-          <typeHandler handler="org.apache.ibatis.type.InstantTypeHandler" />         <!-- (1) -->
+-          <typeHandler handler="org.apache.ibatis.type.LocalDateTimeTypeHandler" />   <!-- (2) -->
+-          <typeHandler handler="org.apache.ibatis.type.LocalDateTypeHandler" />       <!-- (3) -->
+-          <typeHandler handler="org.apache.ibatis.type.LocalTimeTypeHandler" />       <!-- (4) -->
+-          <typeHandler handler="org.apache.ibatis.type.OffsetDateTimeTypeHandler" />  <!-- (5) -->
+-          <typeHandler handler="org.apache.ibatis.type.OffsetTimeTypeHandler" />      <!-- (6) -->
+-          <typeHandler handler="org.apache.ibatis.type.ZonedDateTimeTypeHandler" />   <!-- (7) -->
+-          <typeHandler handler="org.apache.ibatis.type.YearTypeHandler" />            <!-- (8) -->
+-          <typeHandler handler="org.apache.ibatis.type.MonthTypeHandler" />           <!-- (9) -->
+-      </typeHandlers>
+-
+- .. tabularcolumns:: |p{0.10\linewidth}|p{0.80\linewidth}|
+- .. list-table::
+-   :header-rows: 1
+-   :widths: 10 80
+-
+-   * - Sr. No.
+-     - Description
+-   * - (1)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.Instant`` \  in \ ``java.sql.Timestamp`` \.
+-   * - (2)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.LocalDateTime`` \  in \ ``java.sql.Timestamp`` \.
+-   * - (3)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.LocalDate`` \  in \ ``java.sql.Date`` \
+-   * - (4)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.LocalTime`` \  in \ ``java.sql.Time`` \
+-   * - (5)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.OffsetDateTime`` \  in \ ``java.sql.Timestamp`` \
+-   * - (6)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.OffsetTime`` \  in \ ``java.sql.Time`` \
+-   * - (7)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.ZonedDateTime`` \  in \ ``java.sql.Timestamp`` \
+-   * - (8)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.Year`` \  in primitive type int
+-   * - (9)
+-     - A \ ``TypeHandler`` \  to map \ ``java.time.Month`` \  in primitive type int
++**Configuration while using JSR-310 Date and Time API**
+ 
+- .. tip::
++When a class which represents date and time offered by JSR-310 Date and Time API in MyBatis3 is used, \ ``TypeHandler`` \  offered by a library different from  that of MyBatis (\ ``mybatis-typehandlers-jsr310`` \) is used.
++Note that, \ ``mybatis-typehandlers-jsr310`` \  can be used by default in the `blank project for MyBatis3 <https://github.com/terasolunaorg/terasoluna-gfw-web-multi-blank#multi-blank-project-with-mybatis3>`_ \.
+ 
+-        Since \ ``TypeHandler`` \  is auto-detected in MyBatis 3.4, above configuration is not required.
++Further, since \ ``TypeHandler`` \  is auto-detected in MyBatis3.4 used by TERASOLUNA Server Framework for Java (5.3.x), it is not necessary to add \ ``TypeHandler``\  to configuration file of MyBatis.
+ 
+ .. tip::
+ 
+@@ -1107,19 +1077,12 @@ While using, configuration to recognise \ ``TypeHandler`` \  is added to \ ``myb
+ 
+ |
+ 
+-Creating a \ ``TypeHandler`` \  is required while mapping a Java class and JDBC type not supported by MyBatis3.
++Creating a \ ``TypeHandler`` \  is required while mapping a Joda-Time class and JDBC type not supported by MyBatis3.
+ 
+-Basically, it is necessary to create a \ ``TypeHandler`` \  in the following cases
+-
+-* A file data with large capacity (binary data) is retained in \ ``java.io.InputStream`` \  type and mapped in \ ``BLOB`` \  type of JDBC type.
+-* A large capacity text data is retained as \ ``java.io.Reader`` \  type and mapped in \ ``CLOB`` \  type of JDBC type.
+-* \ ``org.joda.time.DateTime`` \  type of ":doc:`../GeneralFuncDetail/JodaTime`" that is recommended to be used in this guideline is mapped with \ ``TIMESTAMP`` \  type of JDBC type.
+-* etc ...
+-
+-
+-
+-Refer to ":ref:`DataAccessMyBatis3HowToExtendTypeHandler`" for creating the three types of \ ``TypeHandler`` \  described above.
++Basically, creating a \ ``TypeHandler`` \  is required while mapping \ ``org.joda.time.DateTime`` \  type of ":doc:`../GeneralFuncDetail/JodaTime`" recommended by this guideline and \ ``TIMESTAMP`` \  type  of JDBC type.
+ 
++For creation of \ ``TypeHandler`` \  which maps Joda-Time class and JDBC type,
++refer ":ref:`DataAccessMyBatis3HowToExtendTypeHandler`".
+ 
+ |
+ 
+@@ -4890,117 +4853,23 @@ Implementation example of mapping file is as given below.
+ Implementation of TypeHandler
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-When it is necessary to perform mapping with the Java class not supported by MyBatis3 standard
+-and when it is necessary to change the standard behavior of MyBatis3, a unique \ ``TypeHandler`` \  should be created.
+-
+-How to implement the \ ``TypeHandler`` \  is explained using the examples given below.
+-
+-* :ref:`DataAccessMyBatis3HowToExtendTypeHandlerBlob`
+-* :ref:`DataAccessMyBatis3HowToExtendTypeHandlerClob`
+-* :ref:`DataAccessMyBatis3HowToExtendTypeHandlerJoda`
+-
++Creation of a unique \ ``TypeHandler`` \  is required when mapping
++with Joda-Time class not supported by MyBatis3 standards, is necessary.
+ 
++This guideline explains how to implement \ ``TypeHandler`` \  using ":ref:`DataAccessMyBatis3HowToExtendTypeHandlerJoda`" as an example.
+ 
+ Refer to ":ref:`DataAccessMyBatis3HowToUseSettingsTypeHandler`" for how to apply a created \ ``TypeHandler`` \  in an application.
+ 
+ 
+- .. note:: **Preconditions for implementation of BLOB and CLOB**
++ .. note:: **Regarding implementation for BLOB and CLOB**
+ 
+-    A method added from JDBC 4.0 is used for the implementation of BLOB and CLOB.
++    \ ``TypeHandler`` \  added by MyBatis 3.4 implements conversion of BLOB and \ ``java.io.InputStream`` \, and CLOBと\ ``java.io.Reader`` \  by using API added by JDBC 4.0 (Java 1.6).
++    In case of a JDBC driver of JDBC 4.0 support, it is not necessary to implement a new \ ``TypeHandler`` \  since type handler for the conversion of BLOB⇔\ ``InputStream`` \  and CLOB⇔\ ``Reader`` \
++    is enabled by default.
+ 
+-    When using a JDBC driver that is not compatible with JDBC 4.0 or a 3rd party wrapper class,
+-    it must be noted that the operation may not work in the implementation example explained below.
+-    When the operation is to be performed in an environment wherein the driver is not compatible with JDBC 4.0,
+-    the implementation must be changed to suit the compatible version of JDBC driver to be used.
++    If a JDBC driver incompatible with JDBC 4.0 is used, a \ ``TypeHandler`` \  should be created considering compatibility version of JDBC driver to be used.
+ 
+-    For example, a lot of methods added by JDBC 4.0 are not implemented in JDBC driver for PostgreSQL9.3 (\ ``postgresql-9.3-1102-jdbc41.jar``\ ).
+-    
+-
+-|
+-
+-.. _DataAccessMyBatis3HowToExtendTypeHandlerBlob:
+-
+-Implementing the TypeHandler for BLOB
+-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-
+-MyBatis3 provides a \ ``TypeHandler`` \  for mapping BLOB in \ ``byte[]``\ .
+-However, when the data to be handled is very large, it is necessary to map in \ ``java.io.InputStream``\ .
+-
+-How to implement a \ ``TypeHandler`` \  for mapping BLOB in \ ``java.io.InputStream``\  is given below.
+-
+- .. code-block:: java
+-
+-    package com.example.infra.mybatis.typehandler;
+-
+-    import org.apache.ibatis.type.BaseTypeHandler;
+-    import org.apache.ibatis.type.JdbcType;
+-    import org.apache.ibatis.type.MappedTypes;
+-
+-    import java.io.InputStream;
+-    import java.sql.*;
+-
+-    // (1)
+-    public class BlobInputStreamTypeHandler extends BaseTypeHandler<InputStream> {
+-
+-        // (2)
+-        @Override
+-        public void setNonNullParameter(PreparedStatement ps, int i, InputStream parameter,
+-                                        JdbcType jdbcType) throws SQLException {
+-            ps.setBlob(i, parameter);
+-        }
+-
+-        // (3)
+-        @Override
+-        public InputStream getNullableResult(ResultSet rs, String columnName)
+-                throws SQLException {
+-            return toInputStream(rs.getBlob(columnName));
+-        }
+-
+-        // (3)
+-        @Override
+-        public InputStream getNullableResult(ResultSet rs, int columnIndex)
+-                throws SQLException {
+-            return toInputStream(rs.getBlob(columnIndex));
+-        }
+-
+-        // (3)
+-        @Override
+-        public InputStream getNullableResult(CallableStatement cs, int columnIndex)
+-                throws SQLException {
+-            return toInputStream(cs.getBlob(columnIndex));
+-        }
+-
+-        private InputStream toInputStream(Blob blob) throws SQLException {
+-            // (4)
+-            if (blob == null) {
+-                return null;
+-            } else {
+-                return blob.getBinaryStream();
+-            }
+-        }
+-
+-    }
+-
+- .. tabularcolumns:: |p{0.10\linewidth}|p{0.80\linewidth}|
+- .. list-table::
+-    :header-rows: 1
+-    :widths: 10 80
+-
+-    * - Sr. No.
+-      - Description
+-    * - (1)
+-      - Specify \ ``BaseTypeHandler``\  provided by MyBatis3 in parent class.
+-
+-        In such cases, specify \ ``InputStream``\  in the generic type of \ ``BaseTypeHandler``\.
+-    * - (2)
+-      - Implement the process that configures \ ``InputStream``\  in \ ``PreparedStatement``\.
+-    * - (3)
+-      - Fetch \ ``InputStream``\  from \ ``Blob``\  that is fetched from \ ``ResultSet``\  or \ ``CallableStatement``\  and return as a return value.
+-    * - (4)
+-      - Since the fetched \ ``Blob``\  can become \ ``null``\  in case of the column which allows \ ``null``\ , \ ``InputStream``\  must be fetched only after performing \ ``null``\  check.
+-        
+-
+-        In the implementation example described above, a private method is created since same process is required for all three methods.
++    For example, some methods added from JDBC 4.0 are not yet implemented in JDBC driver (\ ``postgresql-9.4-1212.jar``\ ) for PostgreSQL9.4.
+ 
+ |
+ 
+@@ -8188,48 +8057,21 @@ In MyBatis3, availability of "Lazy Load" can be specified in the 2 locations giv
+ Settings for controlling execution timing of Lazy Load
+ ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+ 
+-MyBatis3 provides an option to control the timing in which "Lazy Load" is executed.
+-
+-The settings to control the timing in which "Lazy Load" is executed is 
+-specified in MyBatis configuration file (:file:`projectName-domain/src/main/resources/META-INF/mybatis/mybatis-config.xml`).
+-
+- .. code-block:: xml
+-
+-    <?xml version="1.0" encoding="UTF-8" ?>
+-    <!DOCTYPE configuration
+-            PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+-            "http://mybatis.org/dtd/mybatis-3-config.dtd">
+-    <configuration>
+-        <settings>
+-            <!-- (1) -->
+-            <setting name="aggressiveLazyLoading" value="false"/>
+-        </settings>
+-    </configuration>
+-
+- .. tabularcolumns:: |p{0.10\linewidth}|p{0.80\linewidth}|
+- .. list-table::
+-    :header-rows: 1
+-    :widths: 10 80
+-
+-    * - Sr. No.
+-      - Description
+-    * - (1)
+-      - Specify the timing in which "Lazy Load" is executed in \ ``aggressiveLazyLoading``\ .
+-
+-        * \ ``true``\ : Executed when getter method of the object that stores the property for which "Lazy Load" is to be performed, is called (default)
+-        * \ ``false``\ : Executed when getter method of the property for which "Lazy Load" is to be performed, is called
++MyBatis3 provides an option to control the timings to execute "Lazy Load" (\ ``aggressiveLazyLoading``\) [#fDataAccessMyBatis31]_.
+ 
++The default value of this option is \ ``false``\  in Mybatis 3.4.2 and subsequent versions and it is executed within the timing when a getter method of "Lazy Load" property is called.
+ 
+  .. warning::
+ 
+-    In case of "\ ``true``\" (default), exercise caution since SQL is likely to be executed for fetching the unused data.
++    When \ ``aggressiveLazyLoading``\  is "\ ``true``\", "Lazy Load" is executed within the timing when the getter method of the object which retains "Lazy Load" property is called.
++    Therefore, it should be noted that SQL is likely to be executed regardless of the fact that data fetching is not actually required.
+ 
+     Basically, there is a case wherein the following mapping is carried out 
+     and only the property for which "Lazy load" is not to be performed, is accessed.
+-    In case of "\ ``true``\" (default), "Lazy Load" is executed even without directly 
++    In case of "\ ``true``\", "Lazy Load" is executed even without directly 
+     accessing the property for which "Lazy Load" is to be performed.    
+ 
+-    It is recommended to set \ ``aggressiveLazyLoading``\  to "\ ``false``\  unless there is a specific reason.
++    It is recommended to keep \ ``aggressiveLazyLoading``\  to "\ ``false``\" (default)  unless there is a specific reason to change otherwise.
+ 
+     * Entity
+ 
+@@ -8262,7 +8104,7 @@ specified in MyBatis configuration file (:file:`projectName-domain/src/main/reso
+         :emphasize-lines: 2-3
+ 
+             Item item = itemRepository.findOne(itemCode);
+-            // (2)
++            // (1)
+             String code = item.getCode();
+             String name = item.getName();
+             String price = item.getPrice();
+@@ -8276,12 +8118,13 @@ specified in MyBatis configuration file (:file:`projectName-domain/src/main/reso
+ 
+         * - Sr. No.
+           - Description
+-        * - (2)
++        * - (1)
+           - In the above example, \ ``categories``\  property targeted for "Lazy Load" is not accessed.
+             However, "Lazy Load" is executed while accessing \ ``Item#code``\  property.
+ 
+             In case of "\ ``false``\" (default), "Lazy Load" is not executed in the cases described above.
+ 
++.. [#fDataAccessMyBatis31] For how to set, refer `MyBatis reference <http://www.mybatis.org/mybatis-3/ja/configuration.html#settings>`_.
+ 
+ .. raw:: latex
+ 
+diff --git a/source_en/ArchitectureInDetail/DataAccessDetail/ExclusionControl.rst b/source_en/ArchitectureInDetail/DataAccessDetail/ExclusionControl.rst
+index 698ce0d..e45d7d6 100755
+--- a/source_en/ArchitectureInDetail/DataAccessDetail/ExclusionControl.rst
++++ b/source_en/ArchitectureInDetail/DataAccessDetail/ExclusionControl.rst
+@@ -1604,6 +1604,15 @@ Method wherein it is specified for the entire process is as follows:
+ 
+     When \ ``0``\  is specified for Oracle and PostgreSQL, \ ``nowait``\ is added, and when locked by another transaction, an exclusive error occurs without waiting for release of lock.
+ 
++     .. warning:: **Regarding the issue that "nowait" clause is not added while using PostgreSQL**
++
++        Due to an issue in Hibernate 5.0.X which is a dependent library of TERASOLUNA Server Framework for Java 5.3.0 RELEASE version (`HHH-10797 <https://hibernate.atlassian.net/browse/HHH-10797>`_\), "nowait" clause is not added to SQL when PostgreSQL is used even when timeout period is set to "0".
++
++        Hence, it is necessary to review following countermeasures.
++        
++        * Apply a patch to \ ``Dialect``\  class offered by Hibernate.
++        * Upgrade to higher version of Hibernate 5.2.1.
++
+  .. warning:: **Restrictions of PostgreSQL**
+ 
+     Although nowait can be specified in PostgreSQL, it is not possible to specify waiting time.
+diff --git a/source_en/ArchitectureInDetail/MessagingDetail/Email.rst b/source_en/ArchitectureInDetail/MessagingDetail/Email.rst
+index 4476d31..68b8aa0 100755
+--- a/source_en/ArchitectureInDetail/MessagingDetail/Email.rst
++++ b/source_en/ArchitectureInDetail/MessagingDetail/Email.rst
+@@ -199,17 +199,23 @@ A configuration example while using a mail session offered by application server
+       - Application server
+       - Refer page
+     * - 1.
+-      - Apache Tomcat 8
+-      - | Refer \ `Apache Tomcat 8 User Guide(JNDI Resources HOW-TO) <http://tomcat.apache.org/tomcat-8.0-doc/jndi-resources-howto.html#JavaMail_Sessions>`_\  (JavaMail Sessions).
++      - Apache Tomcat 8.5
++      - | Refer \ `Apache Tomcat 8.5 User Guide(JNDI Resources HOW-TO) <http://tomcat.apache.org/tomcat-8.5-doc/jndi-resources-howto.html#JavaMail_Sessions>`_\  (JavaMail Sessions).
+     * - 2.
++      - Apache Tomcat 8.0
++      - | Refer \ `Apache Tomcat 8.0 User Guide(JNDI Resources HOW-TO) <http://tomcat.apache.org/tomcat-8.0-doc/jndi-resources-howto.html#JavaMail_Sessions>`_\ (JavaMail Sessions).
++    * - 3.
+       - Oracle WebLogic Server 12c
+       - Refer \ `Oracle WebLogic Server 12.2.1.0 Documentation <http://docs.oracle.com/middleware/1221/wls/WLACH/taskhelp/mail/CreateMailSessions.html>`_\ .
+-    * - 3.
++    * - 4.
+       - IBM WebSphere Application Server Version 9.0
+       - Refer \ `WebSphere Application Server Version 9.0.0 documentation <https://www.ibm.com/support/knowledgecenter/en/SSD28V_9.0.0/com.ibm.websphere.wlp.core.doc/ae/twlp_admin_javamail.html>`_\ .
+-    * - 4.
++    * - 5.
++      - Red Hat JBoss Enterprise Application Platform Version 7.0
++      - Refer \ `JBoss Enterprise Application Platform 7.0 Product Documentation <https://access.redhat.com/documentation/en/red-hat-jboss-enterprise-application-platform/7.0/paged/configuration-guide/chapter-10-mail-subsystem>`_\.
++    * - 6.
+       - Red Hat JBoss Enterprise Application Platform Version 6.4
+-      - Refer \ `Product Documentation <https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/mail_subsystem>`_\ .
++      - Refer \ `JBoss Enterprise Application Platform 6.4 Product Documentation <https://access.redhat.com/documentation/en-US/JBoss_Enterprise_Application_Platform/6.4/html/Administration_and_Configuration_Guide/chap-Mail_subsystem.html>`_\.
+ 
+ 
+ Carry out setup for registering a mail session fetched through JNDI, as a Bean.
+diff --git a/source_en/ArchitectureInDetail/MessagingDetail/JMS.rst b/source_en/ArchitectureInDetail/MessagingDetail/JMS.rst
+index 2203cc1..d969338 100755
+--- a/source_en/ArchitectureInDetail/MessagingDetail/JMS.rst
++++ b/source_en/ArchitectureInDetail/MessagingDetail/JMS.rst
+@@ -2322,7 +2322,7 @@ Configuration while using Apache ActiveMQ is explained.
+   | JMS provider requires specific configuration.
+   | In Apache ActiveMQ, environment variable must be added to starting variable of application server to ensure that it consists of objects wherein payload of received messages is permissible.
+   | For details, refer \ `ObjectMessage <http://activemq.apache.org/objectmessage.html>`_\ .
+-  | Configuration example while using Apache Tomcat is shown below. Refer \ `Service Configuration <https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/installation_guide/configuring_jboss_eap_to_run_as_a_service>`_\  for JBoss and \ `Starting Managed Servers with a Startup Script <http://docs.oracle.com/middleware/1221/wls/START/overview.htm#START120>`_\  for Weblogic.
++  | An example of adding environment variable to startup argument of Apache Tomcat is shown below. Refer \ `Configuring JBoss EAP to Run as a Service <https://access.redhat.com/documentation/en/red-hat-jboss-enterprise-application-platform/7.0/paged/installation-guide/chapter-4-configuring-jboss-eap-to-run-as-a-service>`_\  in case of JBoss Enterprise Application Platform 7.0, \ `Service Configuration <https://access.redhat.com/documentation/en-US/JBoss_Enterprise_Application_Platform/6.4/html/Installation_Guide/sect-Service_Configuration.html>`_\  in case of JBoss Enterprise Application Platform 6.4 and \ `Starting Managed Servers with a Startup Script <http://docs.oracle.com/middleware/1221/wls/START/overview.htm#START120>`_\  in case of Weblogic.
+ 
+   - :file:`$CATALINA_HOME/bin/setenv.sh`
+ 
+diff --git a/source_en/ArchitectureInDetail/WebApplicationDetail/ExceptionHandling.rst b/source_en/ArchitectureInDetail/WebApplicationDetail/ExceptionHandling.rst
+index a4f2353..fb998b6 100755
+--- a/source_en/ArchitectureInDetail/WebApplicationDetail/ExceptionHandling.rst
++++ b/source_en/ArchitectureInDetail/WebApplicationDetail/ExceptionHandling.rst
+@@ -514,6 +514,21 @@ When a fatal error has been detected, catch the exception using servlet containe
+   **Figure - Handling method when a fatal error has been detected**
+ 
+ 
++.. _exception-handling-class-fatalerror-warning:
++
++.. warning:: **Regarding handling fatal errors using @ExceptionHandler and SystemExceptionResolver**
++
++    Fatal error (\ ``java.lang.Error``\  and its subclass) and the \ ``org.springframework.web.util.NestedServletException``\  wrapped by \ ``java.lang.Throwable``\  can be captured from Spring Framework 4.3
++    by using exception handler (\ ``HandlerExceptionResolver``\) of Spring MVC.
++    As a result of this change, the fatal error and \ ``Throwable``\  are likely to get accidentally captured by \ ``SystemExceptionResolver``\  offered by common library (inherit \ ``HandlerExceptionResolver``\) and the method which assigns \ ``@ExceptionHandler``\ (run on \ ``HandlerExceptionResolver``\ system).
++
++    In order to capture the fatal errors by servlet containers, it is necessary to notify servlet container without using the methods which assign \ ``SystemExceptionResolver``\  and \ ``@ExceptionHandler``\  for handling \ ``NestedServletException``\.
++    "How to use" explains the method for not handling \ ``NestedServletException``\.
++
++    - For \ ``SystemExceptionResolver``\ , refer to \ :ref:`exception-handling-how-to-use-application-configuration-app-label`\.
++    - For \ ``@ExceptionHandler``\ , refer to \ :ref:`exception-handling-how-to-use-codingpoint-controller-usecase-label`\.
++
++
+ .. _exception-handling-class-viewerror-label:
+ 
+ When notifying that an exception has occurred in the presentation layer (JSP etc.)
+@@ -904,7 +919,7 @@ Add to bean definition, the class (\ ``SystemExceptionResolver``\ )  used for ha
+ - **spring-mvc.xml**
+ 
+  .. code-block:: xml
+-    :emphasize-lines: 3-4,6-7,15,23-24,29
++    :emphasize-lines: 3-4,6-7,15,23,28-29,34
+ 
+     <!-- Setting Exception Handling. -->
+     <!-- Exception Resolver. -->
+@@ -928,13 +943,18 @@ Add to bean definition, the class (\ ``SystemExceptionResolver``\ )  used for ha
+                 <entry key="common/error/dataAccessError" value="500" />
+             </map>
+         </property>
+-        <property name="defaultErrorView" value="common/error/systemError" /> <!-- (6) -->
+-        <property name="defaultStatusCode" value="500" /> <!-- (7) -->
++        <property name="excludedExceptions"> <!-- (6) -->
++            <array>
++                <value>org.springframework.web.util.NestedServletException</value>
++            </array>
++        </property>
++        <property name="defaultErrorView" value="common/error/systemError" /> <!-- (7) -->
++        <property name="defaultStatusCode" value="500" /> <!-- (8) -->
+     </bean>
+ 
+     <!-- Settings View Resolver. -->
+     <mvc:view-resolvers>
+-        <mvc:jsp prefix="/WEB-INF/views/" /> <!-- (8) -->
++        <mvc:jsp prefix="/WEB-INF/views/" /> <!-- (9) -->
+     </mvc:view-resolvers>
+ 
+ 
+@@ -969,17 +989,21 @@ Add to bean definition, the class (\ ``SystemExceptionResolver``\ )  used for ha
+         | In the above settings, when View name is "common/error/resourceNotFoundError", "404(Not Found)" becomes HTTP status code.
+         | **[Location to be customized for each project]**
+     * - | (6)
++      - | Specify exception class to be excluded from handling.
++        | \ ``org.springframework.web.util.NestedServletException``\  is excluded from the handling in order to notify to servlet container without handling the fatal error by \ ``SystemExceptionResolver``\.
++        | For reasons of exclusion from handling, refer to \ :ref:`"Regarding handling of fatal errors using @ExceptionHandler and SystemExceptionResolver"<exception-handling-class-fatalerror-warning>`\.
++    * - | (7)
+       - | Specify the default View name.
+         | In the above settings, if exception class does not include "ResourceNotFoundException", "BusinessException" and "InvalidTransactionTokenException", and if exception class (or parent class) name does not include ".DataAccessException", "common/error/systemError" becomes the destination View name.
+         | **[Location to be customized for each project]**
+-    * - | (7)
++    * - | (8)
+       - | Specify default value of HTTP status code to be set in response header. It is recommended that you set **"500"(Internal Server Error)**.
+ 
+         .. warning:: **Behavior when nothing is specified**
+ 
+             Please note that it will be handled as \ **"200"(OK)**\ .
+ 
+-    * - | (8)
++    * - | (9)
+       - Actual \ ``View``\  depends on \ ``ViewResolver``\  settings.
+ 
+         In above settings, destination pages will be as given below.
+@@ -1602,6 +1626,41 @@ Method to handle exception at use case level
+     * - | (6)
+       - | Generate ModelAndView wherein View name and Model acquired in steps (3)-(5) are stored and then return the same.
+ 
++ .. warning::
++
++    When \ ``java.lang.Exception``\  and \ ``javax.servlet.ServletException``\  are to be handled by a method which assigns \ ``@ExceptionHandler``\, the fatal errors cannot be notified to
++    servlet container since \ ``NestedServletException``\ which wraps the fatal error get handled unintentionally.
++    For details, refer to \ :ref:`"Regarding handling of fatal errors using @ExceptionHandler and SystemExceptionResolver"<exception-handling-class-fatalerror-warning>`\.
++
++    In such a case, in order to notify fatal error to the servlet container, \ :ref: NestedServletException is excluded from handling by SystemExceptionResolver<exception-handling-how-to-use-application-configuration-app-label>
++    and \  NestedServletException \  is handled by the method which assigns \ @ExceptionHandler \  and then is thrown again.
++    Implementation example is as below.
++
++     .. code-block:: java
++
++        @ExceptionHandler(NestedServletException.class) // (1)
++        public void handleNestedServletException(NestedServletException e) throws NestedServletException {
++            throw e; // (2)
++        }
++
++     .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++     .. list-table::
++        :header-rows: 1
++        :widths: 10 90
++        :class: longtable
++
++        * - Sr. No.
++          - Description
++        * - | (1)
++          - | Assign \ ``@ExceptionHandler``\  annotation and specify \ ``NestedServletException.class``\.
++        * - | (2)
++          - | Throw \ ``NestedServletException``\  thus handled again.
++
++    **Regarding capturing Exception and ServletException by multiple controllers**
++
++    When it is necessary to describe \ ``@ExceptionHandler``\  which throws \ ``NestedServletException``\  again by multiple controllers, use of \ ``@ControllerAdvice``\  should be considered.
++    For details of \ ``@ControllerAdvice``\ , refer to \ :ref:`application_layer_controller_advice`\.
++
+ 
+ .. _exception-handling-how-to-use-codingpoint-jsp-label:
+ 
+diff --git a/source_en/ArchitectureInDetail/WebApplicationDetail/FileUpload.rst b/source_en/ArchitectureInDetail/WebApplicationDetail/FileUpload.rst
+index 63cb89a..09e69ed 100755
+--- a/source_en/ArchitectureInDetail/WebApplicationDetail/FileUpload.rst
++++ b/source_en/ArchitectureInDetail/WebApplicationDetail/FileUpload.rst
+@@ -7,6 +7,8 @@
+     :depth: 3
+     :local:
+ 
++.. _FileUploadOverview:
++
+ Overview
+ --------------------------------------------------------------------------------
+ 
+@@ -22,14 +24,18 @@ Overview
+ 
+     File Upload functionality of Servlet 3.0 may likely result into garbling of multi byte characters of file names or request parameters on some application server.
+ 
+-    When the Application Server wherein problems are likely to occur is to be used, using Commons FileUpload can help in avoiding such problems.
+-    For settings to use Commons FileUpload, refer to ":ref:`file-upload_usage_commons_fileupload`". 
+-
+-    Application server for which a occurrence of problem is confirmed at the time of version 5.0.1.RELEASE is as given below.
++    Application servers wherein occurrence of issues is confirmed at the version 5.3.0.RELEASE are as shown below.
+ 
+     * WebLogic 12.1.3
++    * JBoss EAP 7.0
+     * JBoss EAP 6.4.0.GA
+ 
++    Among these, the issues can be avoided by adding application server specific settings in JBoss EAP 7.0.
++    For details, refer \ `Precautions for using JBoss EAP 7.0 <https://github.com/terasolunaorg/terasoluna-gfw/wiki/JBoss7_en>`_\.
++
++    When the application server wherein other problems occur are used, the issues can be avoided by using Commons FileUpload.
++    For setup methods for using Commons FileUpload, refer ":ref:`file-upload_usage_commons_fileupload`".
++
+  .. warning::
+  
+     If implementation of file upload of an application server to be used depends on implementation of Apache Commons FileUpload, security vulnerabilities reported in \ `CVE-2014-0050 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-0050>`_\  and `CVE-2016-3092 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-3092>`_\  may occur.
+diff --git a/source_en/ArchitectureInDetail/WebApplicationDetail/Internationalization.rst b/source_en/ArchitectureInDetail/WebApplicationDetail/Internationalization.rst
+index 9c8fa7c..2e5961f 100755
+--- a/source_en/ArchitectureInDetail/WebApplicationDetail/Internationalization.rst
++++ b/source_en/ArchitectureInDetail/WebApplicationDetail/Internationalization.rst
+@@ -42,6 +42,8 @@ The image of switching locale is as follows:
+     When the error screen is to be internationalised, transition to error screen is performed by using MVC Controller of Spring.
+     If a direct transition to error screen is performed without Spring MVC, it may happen that the message is not output in intended language.
+ 
++    For details, refer \ :ref:`case_Internationalization_can_not_be_done`\.
++
+ .. tip::
+ 
+     The most commonly known abbreviation of internationalization is i18n.
+@@ -456,6 +458,111 @@ See the example of implementation of JSP below.
+      * Spring tag library should be defined in common jsp files to be included.
+      * For details on common jsp files to be included, refer to :ref:`view_jsp_include-label`.
+ 
++|
++
++.. _case_Internationalization_can_not_be_done:
++
++Measures when Internationalization is not applied
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++Since \ ``LocaleChangeInterceptor``\  is an interceptor which is called while executing \ ``Controller``\  process of Spring MVC, it should be noted that internationalization is not applied when the transition is not done via \ ``Controller``\.
++
++For example, when a JSP file is to be specified directly in the settings for transition to error screen, \ ``Controller``\  is not used in the transition to error screen.
++In such a case, in order to internationalize error screen, a Controller must be created for transition to error screen and it must be set so as to enable use of \ ``LocaleChangeInterceptor``\ , by using it in transition to error screen.
++
++.. note::
++
++    Similarly, when a transition is to be performed by specifying JSP directly, Tiles is not applied since it does not pass through \ ``ViewResolver``\  used by \ :doc:`../WebApplicationDetail/TilesLayout`\.
++
++
++|
++
++Implementation of \ :ref:`SpringSecurityAuthorization`\  is shown below with an example, for the setting method.
++
++|
++
++**Example for transition to error screen wherein LocaleChangeInterceptor is not applied**
++
++* spring-security.xml
++
++.. code-block:: xml
++
++    <sec:http>
++        <!-- omitted -->
++        <sec:access-denied-handler
++            error-page="/WEB-INF/views/common/error/accessDeniedError.jsp" /> <!-- (1) -->
++        <!-- omitted -->
++    </sec:http>
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++.. list-table::
++    :header-rows: 1
++    :widths: 10 90
++
++    * - Sr. No.
++      - Description
++    * - | (1)
++      - | Specify error screen for authorization error in \ ``error-page``\  attribute of \ ``<sec:access-denied-handler>``\  tag, by JSP.
++
++|
++
++**Example for transition to error screen wherein LocaleChangeInterceptor is applied**
++
++* spring-security.xml
++
++.. code-block:: xml
++
++    <sec:http>
++        <!-- omitted -->
++        <sec:access-denied-handler
++            error-page="/common/error/accessDeniedError" /> <!-- (1) -->
++        <!-- omitted -->
++    </sec:http>
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++.. list-table::
++    :header-rows: 1
++    :widths: 10 90
++
++    * - Sr. No.
++      - Description
++    * - | (1)
++      - | Specify a path for transition to error screen for authorization error, in \ ``error-page``\  attribute of \ ``<sec:access-denied-handler>``\  tag.
++
++* Controller class
++
++.. code-block:: java
++
++    @Controller
++    @RequestMapping("/common/error") // (1)
++    public class ErrorController {
++
++        @RequestMapping("accessDeniedError") // (1)
++        public String accessDeniedError() {
++            return "common/error/accessDeniedError"; // (2)
++        }
++
++    }
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++.. list-table::
++    :header-rows: 1
++    :widths: 10 90
++
++    * - Sr. No.
++      - Description
++    * - | (1)
++      - | Define request mapping for transition to error screen.
++    * - | (2)
++      - | Return View name of error screen for transition.
++
++
++.. warning::
++
++    Generally, it is recommended not to use \ ``<mvc:view-controller>``\  since transition to error screen is likely to occur by GET request as well as POST request.
++
++    For notes while using \ ``<mvc:view-controller>``\ , refer  :ref:`controller_method_return-html-label`\.
++
++
+ .. raw:: latex
+ 
+    \newpage
+diff --git a/source_en/ArchitectureInDetail/WebApplicationDetail/Validation.rst b/source_en/ArchitectureInDetail/WebApplicationDetail/Validation.rst
+index 0b1aefc..62c6992 100755
+--- a/source_en/ArchitectureInDetail/WebApplicationDetail/Validation.rst
++++ b/source_en/ArchitectureInDetail/WebApplicationDetail/Validation.rst
+@@ -2392,6 +2392,33 @@ Error messages are changed as follows.
+             For handling of EL expressions in Bean Validation refer to:
+             \ `Hibernate Validator Reference Guide(Interpolation with message expressions) <http://docs.jboss.org/hibernate/validator/5.2/reference/en-US/html/ch04.html#section-interpolation-with-message-expressions>`_\ .
+ 
++    Further, the value to be checked can be included in the error message by using \ ``${validatedValue}``\  in the message which is specified in :file:`ValidationMessages.properties`.
++
++    How to use \ ``${validatedValue}``\  is shown below.
++
++     .. code-block:: properties
++
++        # ...
++        # (1)
++        javax.validation.constraints.Pattern.message = The value entered "${validatedValue}" is invalid.
++        # ...
++
++
++     .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++     .. list-table::
++        :header-rows: 1
++        :widths: 10 90
++        :class: longtable
++
++        * - Sr. No.
++          - Description
++        * - | (1)
++
++          - Messages that are actually generated from the message definition above are embedded with the values input in the form, in \ ``${validatedValue}``\  part.
++            If confidential information is included in the input value, care must be taken not to use \ ``${validatedValue}``\  so that confidential information is not displayed.
++
++            For details, refer \ `Hibernate Validator Reference Guide(Interpolation with message expressions) <http://docs.jboss.org/hibernate/validator/5.2/reference/en-US/html/ch04.html#section-interpolation-with-message-expressions>`_\.
++
+ 
+ .. _Validation_message_in_application_messages:
+ 
+@@ -3894,7 +3921,8 @@ Refer to \ `Hibernate Validator specifications <http://docs.jboss.org/hibernate/
+ 
+    * - \ ``@URL``\
+      - It is applicable to any implementation class of \ ``CharSequence``\  interface
+-     - Validate whether it is compliant with RFC2396.
++     - Verify that it is valid as URL. Character string is validated by using \ ``java.net.URL``\  constructor
++       and the protocol that is validated as a URL is dependent on the protocols supported by JVM (\ ``http``\ ,\ ``https``\ ,\ ``file``\ ,\ ``jar``\  etc).
+      - .. code-block:: java
+ 
+             @URL
+@@ -3917,26 +3945,20 @@ Refer to \ `Hibernate Validator specifications <http://docs.jboss.org/hibernate/
+             @NotEmpty
+             private String password;
+ 
+-.. warning::
+-
+-    When following annotations provided by Hibernate Validator are used,
+-    if a default message is used, a bug that the message is not generated correctly \ `HV-881 <https://hibernate.atlassian.net/browse/HV-881>`_\ , \ `HV-949 <https://hibernate.atlassian.net/browse/HV-949>`_\ ) occurs.
++.. tip::
+ 
+-    * \ ``@CreditCardNumber``\ (message is displayed, but WARN log is output)
+-    * \ ``@LuhnCheck``\
+-    * \ ``@Mod10Check``\
+-    * \ ``@Mod11Check``\
+-    * \ ``@ModCheck``\ (deprecated API from 5.1.0.Final)
++     In \ ``@URL``\ , when the verification is to be performed for validating the protocol not supported by JVM, \ ``org.hibernate.validator.constraintvalidators.RegexpURLValidator``\  provided by Hibernate is used.
++     This class is a Validator class corresponding to \ ``@URL``\  annotation and it can be checked whether it is a URL format by a regular expression. It can also verify the validation for the protocols not supported by JVM.
+ 
+-    This bug occurs because of the flaws in message definitions provided by default,
+-    and it is possible to avoid them by overwriting the default messages by an appropriate message.
++     * If the check rules of \ ``@URL``\  of overall application can be changed, Validator class is changed to \ ``RegexpURLValidator``\  in XML,
++       as described in \ `JavaDoc <https://docs.jboss.org/hibernate/validator/5.2/api/org/hibernate/validator/constraints/URL.html>`_\ .
++     * When only some of the items are to be validated by using regular expressions and default rules are to be used for \ ``@URL``\ , a new annotation and an implementation class \ ``javax.validation.ConstraintValidator``\  that performs validation similar to \ ``RegexpURLValidator``\  are created
++       and the validation by the annotation thus created is applied to the required items.
+ 
+-    In case of overwriting the default messages,
+-    it is advisable to define an appropriate message 
+-    by creating :file:`ValidationMessages.properties` directly under the class path (normal src/main/resources).
++     These can be applied as per the intended use.
+ 
+-    For appropriate message definition, refer to:
+-    \ `Modifications for Hibernate Validator 5.2 version (next minor version upgrade) <https://github.com/hibernate/hibernate-validator/commit/5a9d7bae26bccb15229ae5612d67506a7a775b48#diff-762e02c90cfb2f00b0b2788486e3fd5e>`_\ .
++     For details of check rule change by XML, refer to \ `Hibernate reference <https://docs.jboss.org/hibernate/validator/5.2/reference/en-US/html/ch07.html#section-configuration-validation-xml>`_\ 
++     and for how to create a new annotation, refer to \ :ref:`Validation_implement_new_constraint`\  respectively..
+ 
+ .. _Validation_default_message_in_hibernate_validator:
+ 
+diff --git a/source_en/ArchitectureInDetail/WebServiceDetail/REST.rst b/source_en/ArchitectureInDetail/WebServiceDetail/REST.rst
+index 98c80b9..4bbfcf0 100755
+--- a/source_en/ArchitectureInDetail/WebServiceDetail/REST.rst
++++ b/source_en/ArchitectureInDetail/WebServiceDetail/REST.rst
+@@ -773,7 +773,7 @@ Using the appropriate HTTP status code
+ 
+  .. tip:: **HTTP Specifications**
+  
+-    Refer to `RFC 2616 (Hypertext Transfer Protocol -- HTTP/1.1) - 6.1.1 Status Code and Reason Phrase <http://tools.ietf.org/search/rfc2616#section-6.1.1>`_.
++    Refer to `RFC 7230 (Hypertext Transfer Protocol -- HTTP/1.1) - 3.1.2 Status Line <https://tools.ietf.org/html/rfc7230#section-3.1.2>`_.
+ 
+ |
+ 
+@@ -797,6 +797,15 @@ Using the appropriate HTTP status code
+ 
+ |
+ 
++ .. note::
++
++    In RFC 7230 which specifies HTTP message syntax, output of description clauses of HTTP status code (\ ``reason-phrase``\) is not mandatory and it is prescribed that the client should be ignored.
++    For example, description clauses are not output in Tomcat 8.5 of implementation which is in conformance with RFC 7230.
++    
++    Refer to `RFC 7230(Hypertext Transfer Protocol -- HTTP/1.1) - 3.1.2 Status Line <https://tools.ietf.org/html/rfc7230#section-3.1.2>`_.
++
++|
++
+ .. _RESTOverviewClientServerCommunicateOnStateless:
+ 
+ Stateless communication between client and server
+@@ -1537,12 +1546,7 @@ When the cause of request failure lies at server side, HTTP status codes given b
+ 
+ Authentication and Authorization
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-
+-.. todo:: **TBD**
+-
+-    The guidelines for authentication and authorization control are explained here.
+-    
+-    Performing authentication and authorization using OAuth2 protocol will be described in subsequent versions.
++Please refer to \: ref: `OAuth <OAuth>` \ for the mechanism of authentication and authorization using the OAuth 2 mechanism.
+ 
+ |
+ 
+@@ -4632,9 +4636,7 @@ Security measures
+ Authentication and Authorization
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-.. todo:: **TBD**
+-
+-    How to implement authentication and authorization using OAuth2 (Spring Security OAuth2), will be explained in subsequent versions.
++Please refer to \: ref: `OAuth <OAuth>` \ for how to achieve authentication and authorization using OAuth 2 (Spring Security OAuth 2).
+ 
+ |
+ 
+diff --git a/source_en/ArchitectureInDetail/WebServiceDetail/RestClient.rst b/source_en/ArchitectureInDetail/WebServiceDetail/RestClient.rst
+index a1db8c1..7934330 100755
+--- a/source_en/ArchitectureInDetail/WebServiceDetail/RestClient.rst
++++ b/source_en/ArchitectureInDetail/WebServiceDetail/RestClient.rst
+@@ -1812,12 +1812,6 @@ Define a bean for ``AsyncRestTemplate``\ .
+         | In case of default configuration, \ ``SimpleClientHttpRequestFactory``\  which has set \ ``org.springframework.core.task.SimpleAsyncTaskExecutor``\  is set as \ ``org.springframework.core.task.AsyncListenableTaskExecutor``\  in \ ``org.springframework.http.client.AsyncClientHttpRequestFactory``\  of \ ``AsyncRestTemplate``\ .
+ 
+ 
+-.. note:: **Applying ClientHttpRequestInterceptor to AsyncRestTemplate**
+-
+-    \ ``ClientHttpRequestInterceptor``\  cannot be applied in \ ``AsyncRestTemplate``\ .
+-    Hence, a common process must be executed independently.
+-
+-
+ .. note:: **How to customise AsyncRestTemplate**
+ 
+     \ ``SimpleAsyncTaskExecutor``\  set as default generates threads without using a thread pool
+@@ -1916,6 +1910,133 @@ Internal method
+         | Implement the process in \ ``onSuccess``\  method when a successful response has returned and implement a process in \ ``onFailure``\ when an error has occurred.
+ 
+ 
++Implementation of common processing for asynchronous request
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++Any arbitrary process can be executed before and after communicating with the server by using \ ``org.springframework.http.client.AsyncClientHttpRequestInterceptor``\.
++
++An example of login process is introduced here.
++
++**Implementation example of communication log output**
++
++.. code-block:: java
++
++    package com.example.restclient;
++
++    import java.io.IOException;
++    import java.nio.charset.StandardCharsets;
++
++    import org.slf4j.Logger;
++    import org.slf4j.LoggerFactory;
++    import org.springframework.http.HttpRequest;
++    import org.springframework.http.client.AsyncClientHttpRequestExecution;
++    import org.springframework.http.client.AsyncClientHttpRequestInterceptor;
++    import org.springframework.http.client.ClientHttpResponse;
++    import org.springframework.util.concurrent.ListenableFuture;
++    import org.springframework.util.concurrent.ListenableFutureCallback;
++
++    public class AsyncLoggingInterceptor implements
++                                         AsyncClientHttpRequestInterceptor { // (1)
++        private static final Logger log = LoggerFactory.getLogger(
++                AsyncLoggingInterceptor.class);
++
++        @Override
++        public ListenableFuture<ClientHttpResponse> intercept(HttpRequest request,
++                byte[] body,
++                AsyncClientHttpRequestExecution execution) throws IOException {
++            // (2)
++            if (log.isInfoEnabled()) {
++                String requestBody = new String(body, StandardCharsets.UTF_8);
++
++                log.info("Request Header {}", request.getHeaders());
++                log.info("Request Body {}", requestBody);
++            }
++
++            // (3)
++            ListenableFuture<ClientHttpResponse> future = execution.executeAsync(
++                    request, body);
++            if (log.isInfoEnabled()) {
++                // (4)
++                future.addCallback(new ListenableFutureCallback<ClientHttpResponse>() {
++
++                    @Override
++                    public void onSuccess(ClientHttpResponse response) {
++                        try {
++                            log.info("Response Header {}", response
++                                    .getHeaders());
++                            log.info("Response Status Code {}", response
++                                    .getStatusCode());
++                        } catch (IOException e) {
++                            log.warn("I/O Error", e);
++                        }
++                    }
++
++                    @Override
++                    public void onFailure(Throwable e) {
++                        log.info("Communication Error", e);
++                    }
++                });
++            }
++
++            return future; // (5)
++        }
++    }
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++.. list-table::
++    :header-rows: 1
++    :widths: 10 90
++
++    * - Sr. No.
++      - Description
++    * - | (1)
++      - | Implement \ ``AsyncClientHttpRequestInterceptor``\  interface.
++    * - | (2)
++      - | Implement a process which is  executed prior to sending an asynchronous request.
++        | In the implementation example above, contents of request header and request body are output in the log.
++    * - | (3)
++      - | Send an asynchronous request by using \ ``executeAsync``\  method of \ ``AsyncClientHttpRequestExecution``\  which is received as an argument of \ ``intercept``\  method.
++    * - | (4)
++      - | Register \ ``org.springframework.util.concurrent.ListenableFutureCallback``\  in \ ``ListenableFuture``\  which is received in (3) and implement the process once the response is received.
++        | When the response is received, \ ``onSuccess``\  method is called.
++        | Also, when an exception occurs at the time of asynchronous request, \ ``onFailure``\  method is called. A specific example is shown below.
++
++        * Unable to connect a specified host （\ ``ConnectException``\ ）
++        * Timeout occurred for reading of response data （\ ``SocketTimeoutException``\ ）
++
++    * - | (5)
++      - | Return \ ``ListenableFuture``\  returned in (3).
++
++
++**Definition example of a bean definition file (applicationContext.xml)**
++
++.. code-block:: xml
++
++    <!-- (1) -->
++    <bean id="asyncLoggingInterceptor" class="com.example.restclient.AsyncLoggingInterceptor" />
++
++    <bean id="asyncRestTemplate" class="org.springframework.web.client.AsyncRestTemplate">
++        <property name="interceptors"><!-- (2) -->
++            <list>
++                <ref bean="asyncLoggingInterceptor" />
++            </list>
++        </property>
++    </bean>
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++.. list-table::
++    :header-rows: 1
++    :widths: 10 90
++
++    * - Sr. No.
++      - Description
++    * - | (1)
++      - | Define a bean for implementation class of \ ``AsyncClientHttpRequestInterceptor``\.
++    * - | (2)
++      - | Inject a bean of \ ``AsyncClientHttpRequestInterceptor``\  in \ ``interceptors``\  property.
++        | When multiple beans are injected, they are executed in the sequence starting from top of the list, similar to \ ``RestTemplate``\.
++
++
++
+ .. _RestClientAppendix:
+ 
+ Appendix
+diff --git a/source_en/ArchitectureInDetail/WebServiceDetail/SOAP.rst b/source_en/ArchitectureInDetail/WebServiceDetail/SOAP.rst
+index 577ef5f..e4f2022 100755
+--- a/source_en/ArchitectureInDetail/WebServiceDetail/SOAP.rst
++++ b/source_en/ArchitectureInDetail/WebServiceDetail/SOAP.rst
+@@ -340,6 +340,8 @@ Application configuration
+      
+     Oracle WebLogic Server 12.2.1: \ `Oracle(R) Fusion Middleware Understanding WebLogic Web Services for Oracle WebLogic Server  Features and Standards Supported by WebLogic Web Services <https://docs.oracle.com/middleware/1221/wls/WSOVR/weblogic-web-service-stand.htm#WSOVR137>`_\
+      
++    JBoss Enterprise Application Platform 7.0: \ `DEVELOPING JAX-WS WEB SERVICES <https://access.redhat.com/documentation/en/red-hat-jboss-enterprise-application-platform/7.0/paged/developing-web-services-applications/chapter-3-developing-jax-ws-web-services>`_\
++
+     JBoss Enterprise Application Platform 7.0: \ `DEVELOPMENT GUIDE JAX-WS WEB SERVICES <https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/developing_web_services_applications/developing_jax_ws_web_services>`_\
+ 
+ |
+diff --git a/source_en/ImplementationAtEachLayer/ApplicationLayer.rst b/source_en/ImplementationAtEachLayer/ApplicationLayer.rst
+index ac4a4a4..998994f 100755
+--- a/source_en/ImplementationAtEachLayer/ApplicationLayer.rst
++++ b/source_en/ImplementationAtEachLayer/ApplicationLayer.rst
+@@ -1656,7 +1656,7 @@ Writing values in Cookie
+     @RequestMapping("writeCookie")
+     public String writeCookie(Model model,
+             HttpServletResponse response) { // (1)
+-        Cookie cookie = new Cookie("foo", "hello world!");
++        Cookie cookie = new Cookie("foo", "Helloworld!");
+         response.addCookie(cookie); // (2)
+         // do something
+         return "sample/writeCookie";
+@@ -1673,13 +1673,19 @@ Writing values in Cookie
+      - Specify \ ``HttpServletResponse``\  object as argument to write to cookie. 
+    * - | (2)
+      - | Generate \ ``Cookie``\  object and add to \ ``HttpServletResponse``\  object. 
+-       | For example, ``"hello world!"``  value is assigned to Cookie name ``"foo"``. 
++       | For example, ``"Helloworld!"``  value is assigned to Cookie name ``"foo"``. 
+ 
+ .. tip::
+ 
+     No difference compared to use of \ ``HttpServletResponse``\  which fetched as an argument of handler method, however,  \ ``org.springframework.web.util.CookieGenerator``\  class is provided by Spring
+     as a class to write values in cookie. It should be used if required. 
+ 
++.. note::
++    Please note that some of the characters that cannot be used for Cookie name and value exist in In RFC 6265 which prescribes HTTP Cookie process.
++    For example, space character cannot be used in Cookie value in Tomcat 8.5 of implementation which is in conformance with RFC 6265.
++    
++    Refer to `RFC 6265(HTTP State Management Mechanism) 4.1 SetCookie <https://tools.ietf.org/html/rfc6265#section-4.1>`_ Syntax.
++
+ |
+ 
+ .. _controller_method_argument-pagination-label:
+@@ -1814,10 +1820,31 @@ Example of definition when \ ``<bean>``\  element is to be used
+    * - | (6)
+      - When View name ``"sample/hello"`` is the return value of handler method, ``"/WEB-INF/views/sample/hello.jsp"`` is called and HTML is sent as response.
+ 
++
+ .. note::
+     HTML output is generated using JSP in the above example, however, even if HTML is generated using other template engine such as Velocity, FreeMarker, return value of handler method will be ``"sample/hello"``. 
+     ``ViewResolver`` takes care of task to determine which template engine is to be used.
+ 
++
++.. note::
++
++   When simply a method to return view name is to be implemented, implementation of Controller class can be substituted by using \ ``<mvc:view-controller>`` \.
++    
++    * Implementation example of Controller which uses \ ``<mvc:view-controller>``\.
++    
++      .. code-block:: xml
++      
++        <mvc:view-controller path="/hello" view-name="sample/hello" />
++      
++
++
++.. warning:: **Considerations for using <mvc:view-controller>**
++
++    Since HTTP methods authorized by \ ``<mvc:view-controller>``\  are restricted only to GET and HEAD due to version-up of Spring Framework 4.3 (`SPR-13130 <https://jira.spring.io/browse/SPR-13130>`_),
++    \ ``<mvc:view-controller>``\  cannot used for the pages which are to be accessed by HTTP methods other than GET and HEAD (POST etc).
++    This also happens when pages are forwarded by methods other than GET and HEAD (POST etc). Hence, when HTTP methods for forwarding operations such as transition to error page etc cannot be restricted, adequate care must be taken to avoid the use of \ ``<mvc:view-controller>``\.
++
++
+ |
+ 
+ .. _controller_method_return-download-label:
+@@ -2381,12 +2408,6 @@ Attributes of \ ``@DateTimeFormat``\  annotation are given below.
+        | M- : Dec 9, 2013
+        | -M : 3:41:45 AM
+ 
+-.. warning::
+-    @DateTimeFormat's formatter is not strict in case of pattern attribute specified with \ ``java.time.LocalDate`` \ on JSR-310 Date and Time API
+-    (\ ``"20150229"`` \ is invalid , but it will be regarded as 28st February, 2015).
+-    Specifications are improved in Spring Framework 4.3 , but are affected because they use Spring Framework 4.2 in TERASOLUNA Server Framework for JAVA (5.x).
+-    For details reference to '`@DateTimeFormat's JSR-310 formatter is not strict in case of pattern <https://jira.spring.io/browse/SPR-13567>`_\'
+-
+ |
+ 
+ DataType conversion in controller
+@@ -2672,6 +2693,8 @@ View plays the following role.
+ 
+ |
+ 
++.. _ApplicationLayerImplementOfJsp:
++
+ Implementing JSP
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | Implement View using JSP to generate response(HTML) as per the requirement of the client.
+diff --git a/source_en/ImplementationAtEachLayer/CreateProject.rst b/source_en/ImplementationAtEachLayer/CreateProject.rst
+index 87764a5..542ed3b 100755
+--- a/source_en/ImplementationAtEachLayer/CreateProject.rst
++++ b/source_en/ImplementationAtEachLayer/CreateProject.rst
+@@ -232,7 +232,7 @@ Deployment method (procedure) when Tomcat is used as an application server is gi
+ 	 
+  * In addition, VirtualWebappLoader can also be used in the Tomcat 6.
+ 
+-5. If Tomcat 8 is used, add /etc/foo/bar/\*.jar into class path using Resource function of the Tomcat.
++5. If Tomcat 8.x is used, add /etc/foo/bar/\*.jar into class path using Resource function of the Tomcat.
+ 
+  * The following definition should be added in [CATALINA_HOME]/conf/[contextPath].xml file.
+  * For details, refer to https://tomcat.apache.org/migration-8.html#Web_application_resources and `configs folder of terasoluna-tourreservation-env <https://github.com/terasolunaorg/terasoluna-tourreservation/tree/5.3.0.RELEASE/terasoluna-tourreservation-env/configs>`_\ .
+diff --git a/source_en/ImplementationAtEachLayer/DomainLayer.rst b/source_en/ImplementationAtEachLayer/DomainLayer.rst
+index d888526..caf3eaa 100755
+--- a/source_en/ImplementationAtEachLayer/DomainLayer.rst
++++ b/source_en/ImplementationAtEachLayer/DomainLayer.rst
+@@ -824,40 +824,6 @@ Regarding interface and base classes to limit signature of method
+             | In the above example, it is defined as generic type of input (I) and output (O) information having one method (execute) for executing business logic.
+             | In this guideline, the above interface is called BLogic interface.
+ 
+-    - Controller
+-
+-     .. code-block:: java
+-
+-        // (2)
+-        @Inject
+-        XxxBLogic<XxxInput, XxxOutput> xxxBLogic;
+-
+-        public String reserve(XxxForm form, RedirectAttributes redirectAttributes) {
+-
+-            XxxInput input = new XxxInput();
+-            // omitted
+-
+-            // (3)
+-            XxxOutput output = xxxBlogic.execute(input);
+-
+-            // omitted
+-
+-            redirectAttributes.addFlashAttribute(output.getTourReservation());
+-            return "redirect:/xxx?complete";
+-        }
+-
+-     .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
+-     .. list-table::
+-        :header-rows: 1
+-        :widths: 10 90
+-
+-        * - Sr. No.
+-          - Description
+-        * - | (2)
+-          - | Controller injects calling BLogic interface.
+-        * - | (3)
+-          - | Controller calls execute method of BLogic interface and executes business logic.
+-
+     To standardize process flow of business logic when a fixed common process is included in Service, base classes are created to limit signature of method.
+ 
+     - Base classes to limit signature
+@@ -865,6 +831,9 @@ Regarding interface and base classes to limit signature of method
+      .. code-block:: java
+ 
+ 
++        // (2)
++        @Service
++        @Transactional
+         public abstract class AbstractBLogic<I, O> implements BLogic<I, O> {
+ 
+             public O execute(I input){
+@@ -872,10 +841,10 @@ Regarding interface and base classes to limit signature of method
+ 
+                   // omitted
+ 
+-                  // (4)
++                  // (3)
+                   preExecute(input);
+ 
+-                  // (5)
++                  // (4)
+                   O output = doExecute(input);
+ 
+                   // omitted
+@@ -901,10 +870,13 @@ Regarding interface and base classes to limit signature of method
+ 
+         * - Sr. No.
+           - Description
+-        * - | (4)
++        * - | (2)
++          - | While creating a base class, since the method executed externally and the class which implements the method are targets of AOP in the specification of \ `@Transactional`\ , they are assigned to base class when the transaction control is necessary.
++            | Similar to \ `@Servicve`\ , it must be assigned to the base class when Service is considered as an target using AOP, as for \ `ResultMessagesLoggingInterceptor`\.
++        * - | (3)
+           - | Call the method to perform pre-processing before executing business logic from base classes.
+             | In the preExecute method, business rules are checked.
+-        * - | (5)
++        * - | (4)
+           - | Call the method executing business logic from the base classes.
+ 
+ 
+@@ -915,9 +887,31 @@ Regarding interface and base classes to limit signature of method
+ 
+      .. code-block:: java
+ 
+-        public class XxxBLogic extends AbstractBLogic<XxxInput, XxxOutput> {
++        // (5)
++        public interface XxxBLogic extends BLogic<XxxInput, XxxOutput> {
++
++        }
++
++
++     .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++     .. list-table::
++        :header-rows: 1
++        :widths: 10 90
++
++        * - Sr. No.
++          - Description
++        * - | (5)
++          - | Create an interface that inherits BLogic interface in order to enable type-safe injection.
++            | Implement a sub-interface which inherits BLogic in order to enable calling via a method of new interface.
++
++
++     .. code-block:: java
++
++        @Service
++        public class XxxBLogicImpl extends AbstractBLogic<XxxInput, XxxOutput> implements XxxBLogic {
+ 
+             // (6)
++            @Override
+             protected void preExecute(XxxInput input) {
+ 
+                 // omitted
+@@ -930,6 +924,7 @@ Regarding interface and base classes to limit signature of method
+             }
+ 
+             // (7)
++            @Override
+             protected XxxOutput doExecute(XxxInput input) {
+                 TourReservation tourReservation = new TourReservation();
+ 
+@@ -960,6 +955,40 @@ Regarding interface and base classes to limit signature of method
+           - | Implement business logic.
+             | Logic is implemented to satisfy business rules.
+ 
++    - Controller
++
++     .. code-block:: java
++
++        // (8)
++        @Inject
++        XxxBLogic xxxBLogic;
++
++        public String reserve(XxxForm form, RedirectAttributes redirectAttributes) {
++
++            XxxInput input = new XxxInput();
++            // omitted
++
++            // (9)
++            XxxOutput output = xxxBlogic.execute(input);
++
++            // omitted
++
++            redirectAttributes.addFlashAttribute(output.getTourReservation());
++            return "redirect:/xxx?complete";
++        }
++
++     .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++     .. list-table::
++        :header-rows: 1
++        :widths: 10 90
++
++        * - Sr. No.
++          - Description
++        * - | (8)
++          - | Controller injects BLogic interface to be called.
++        * - | (9)
++          - | Controller calls execute method of BLogic interface and executes business logic.
++
+ 
+ .. _service-creation-unit-label:
+ 
+@@ -2013,6 +2042,7 @@ PlatformTransactionManager settings
+      <bean id="transactionManager"
+            class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+          <property name="dataSource" ref="dataSource" />
++         <property name="rollbackOnCommitFailure" value="true" />
+      </bean>
+ 
+  .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
+diff --git a/source_en/Introduction/ChangeLog.rst b/source_en/Introduction/ChangeLog.rst
+index 5a07c07..d84f4a2 100755
+--- a/source_en/Introduction/ChangeLog.rst
++++ b/source_en/Introduction/ChangeLog.rst
+@@ -1,6 +1,5 @@
+ Change Log
+ ================================================================================
+-
+ .. tabularcolumns:: |p{0.15\linewidth}|p{0.25\linewidth}|p{ 0.60\linewidth}|
+ .. list-table::
+     :header-rows: 1
+@@ -25,6 +24,78 @@ Change Log
+         * :doc:`../Tutorial/TutorialSecurity`  
+         * :doc:`../Tutorial/TutorialTodo`  
+ 
++    * - 
++      - :doc:`../Introduction/CriteriaBasedMapping`
++      - Description details added
++      
++        * A table listing a point of view by CVE is added in Mapping based on security measures (\ `guideline#2439 <https://github.com/terasolunaorg/guideline/issues/2439>`_\ )
++      
++    * -
++      - :doc:`../Overview/FrameworkStack`
++      - Version of OSS to be used updated
++
++        * Spring IO Platform version updated to Athens-SR2 (\ `guideline#2441 <https://github.com/terasolunaorg/guideline/issues/2441>`_\ )
++        * MyBatis version updated to 3.4.2 (\ `guideline#2441 <https://github.com/terasolunaorg/guideline/issues/2441>`_\ )
++        * MyBatis-Spring version updated to 1.3.1 (\ `guideline#2441 <https://github.com/terasolunaorg/guideline/issues/2441>`_\ )
++        * mybatis-typehandlers-jsr310 updated to 1.0.2 (\ `guideline#2441 <https://github.com/terasolunaorg/guideline/issues/2441>`_\ )
++
++        OSS version to be used in accordance with version update of Spring IO Platform is updated
++
++        Description details modified
++
++        * Description of method for including input check target in the message added (\ `guideline#2002 <https://github.com/terasolunaorg/guideline/issues/2002>`_\ )
++
++        * Description for use of SecureRandom modified (\ `guideline#2177 <https://github.com/terasolunaorg/guideline/issues/2177>`_\ )
++
++    * - 
++      - :doc:`../ArchitectureInDetail/WebApplicationDetail/Internationalization`
++      - Description details added
++
++        * Example when internationalization is not applied and its countermeasures added (\ `guideline#2427 <https://github.com/terasolunaorg/guideline/issues/2427>`_\ )
++
++        * Description for how to use path variable and precautions for use added (\ `guideline#2406 <https://github.com/terasolunaorg/guideline/issues/2406>`_\ )
++
++    * -
++      - :doc:`../ArchitectureInDetail/WebApplicationDetail/ExceptionHandling`
++      - Modifications associated with Spring Framework 4.3 support
++
++        * Added description of how to handle a fatal error (\ `guideline#2368 <https://github.com/terasolunaorg/guideline/issues/2368>`_\ )
++        
++    * -
++      - :doc:`../ImplementationAtEachLayer/ApplicationLayer`
++      - Description details added
++
++        * Added "\ ``<mvc:view-controller>`` \  is used when a simple view controller is to be created" (\ `guideline#2371 <https://github.com/terasolunaorg/guideline/issues/2371>`_\ )
++
++        * Precautions while using \ ``<mvc:view-controller>`` \  added (\ `guideline#2371 <https://github.com/terasolunaorg/guideline/issues/2371>`_\ )
++        
++        Modifications related to Spring Framework 4.3
++        
++        * Precautions while using \ ``@DateTimeFormat`` \  for JSR-310 Date and Time API class deleted (\ `guideline#2505 <https://github.com/terasolunaorg/guideline/issues/2505>`_\ )
++        
++    * -
++      - | :doc:`../ArchitectureInDetail/DataAccessDetail/DataAccessJpa`
++        | :doc:`../ArchitectureInDetail/DataAccessDetail/ExclusionControl`
++      - Description details added
++      
++    * -
++      - :doc:`../Security/LinkageWithBrowser`
++      - Modifications associated with Spring Security 4.1.4 support
++      
++        * Description added for HTTP Public Key Pinning (HPKP) (\ `guideline#2401 <https://github.com/terasolunaorg/guideline/issues/2401>`_\ )
++        
++	* -  
++	  - :doc:`../Security/OAuth`  
++ 	  - New addition  
++ 	    
++ 		* Added OAuth(\ `guideline#2145 <https://github.com/terasolunaorg/guideline/issues/2145>`_\ )  
++
++    * -
++      - :doc:`../Security/Authorization`
++      - Description details added
++
++        * Warning related to access control for specific URL added (\ `guideline#2399 <https://github.com/terasolunaorg/guideline/issues/2399>`_\ )
++        
+         * Precautions for changing specifications of path matching of \ ``AntPathRequestMatcher``\  added (\ `guideline#2428 <https://github.com/terasolunaorg/guideline/issues/2428>`_\ )
+ 
+     * -
+@@ -33,6 +104,29 @@ Change Log
+ 
+         * Code example of entity when using JPA modified (\ `guideline#2476 <https://github.com/terasolunaorg/guideline/issues/2476>`_\ )
+ 
++    * -
++      - :doc:`../Appendix/Nexus`
++      - Modification to migration into Maven Central
++
++        * Delete the description about TERASOLUNA Server Framework for Java (5.x) repository (\ `guideline#2496 <https://github.com/terasolunaorg/guideline/issues/2496>`_\ )
++
++    * -
++      - :doc:`../ArchitectureInDetail/DataAccessDetail/DataAccessMyBatis3`
++      - Description details changed, added
++
++        * Description related to configuration method while using JSR-310 Date and Time API changed (\ `guideline#2365 <https://github.com/terasolunaorg/guideline/issues/2365>`_\ )
++
++        * Added TypeHandler of JSR310 can be used by default in `blank project for MyBatis3 <https://github.com/terasolunaorg/terasoluna-gfw-web-multi-blank#multi-blank-project-with-mybatis3>`_ \ (\ `guideline#2365 <https://github.com/terasolunaorg/guideline/issues/2365>`_\ )
++
++        Description details added
++
++        * Description added for settings for calling a rollback process when an error occurs at the time of commit (\ `guideline#2375 <https://github.com/terasolunaorg/guideline/issues/2375>`_\ )
++        
++        Description details modified
++        
++        * Description of the option which controls the timing to execute ”Lazy Load”modified (\ `guideline#2364 <https://github.com/terasolunaorg/guideline/issues/2364>`_\ )
++
++
+     * - 2016-08-31
+       - \-
+       - 5.2.0 RELEASE version published
+@@ -208,7 +302,7 @@ Change Log
+       - :doc:`../Security/Authentication`
+       - Modifications for Spring Security 4.0.4
+ 
+-        * Code example modified to include modification of specifications of authentication-failure-url in Spring 4.0.4 and Note deleted (\ `guideline#1963 <https://github.com/terasolunaorg/guideline/issues/1963>`_\ )
++        * Code example modified to include modification of specifications of authentication-failure-url in Spring Security 4.0.4 and Note deleted (\ `guideline#1963 <https://github.com/terasolunaorg/guideline/issues/1963>`_\ )
+ 
+     * -
+       - :doc:`../Security/Authorization`
+diff --git a/source_en/Introduction/CriteriaBasedMapping.rst b/source_en/Introduction/CriteriaBasedMapping.rst
+index b73154f..782cc4c 100755
+--- a/source_en/Introduction/CriteriaBasedMapping.rst
++++ b/source_en/Introduction/CriteriaBasedMapping.rst
+@@ -7,6 +7,9 @@ part of guideline contains which type of content.
+ Mapping based on security measures
+ --------------------------------------------------------------------------------
+ 
++A point of view by OWASP(Open Web Application Security Project)
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
+ Using \ `OWASP Top 10 for 2013 <https://www.owasp.org/index.php/Category:OWASP_Top_Ten_Project>`_\  as an axis, 
+ links to explanation of functionalities related to security have been given
+ 
+@@ -73,6 +76,38 @@ links to explanation of functionalities related to security have been given
+      - `Unvalidated Redirects and Forwards <https://www.owasp.org/index.php/Top_10_2013-A10-Unvalidated_Redirects_and_Forwards>`_
+      - No mention in particular
+ 
++A point of view by CVE(Common Vulnerabilities and Exposures)
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++Explain the CVE mentioned in this guideline and show the link.
++About the CVE not mentioned in this guideline, refer to\ `Pivotal Product Vulnerability Reports <https://pivotal.io/security>`_\
++
++.. tabularcolumns:: |p{0.10\linewidth}|p{0.40\linewidth}|p{0.50\linewidth}|
++.. list-table::
++  :header-rows: 1
++  :widths: 10 40 50
++
++  * - CVE
++    - Outline
++    - The mentioned point in this guideline
++  * - \ `CVE-2014-0050 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-0050>`_\
++
++      \ `CVE-2016-3092 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-3092>`_\
++    - Apache Commons FileUpload allows remote attackers to cause a denial of service via a malicious request.
++
++    - * :ref:`FileUploadOverview`
++
++      * :ref:`file-upload_usage_commons_fileupload`
++  * - \ `CVE-2014-1904 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-1904>`_\
++    - When \ ``action``\ parameter of \ ``<form:form>``\ tag is omitted, an attacker can use XSS attack.
++    - * :ref:`ApplicationLayerImplementOfJsp`
++  * - \ `CVE-2015-3192 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-3192>`_\
++    - Using DTD allows DoS attack.
++    - * :ref:`ajax_how_to_use`
++
++      * :ref:`RESTHowToUseApplicationSettings`
++  * - \ `CVE-2016-5007 <https://pivotal.io/jp/security/cve-2016-5007>`_\
++    - Differences in the strictness of the pattern matching mechanisms between Spring MVC and Spring Security cause security bypass vulnerability.
++    - * :ref:`access_policy_designate_web_resource`
+ 
+ .. raw:: latex
+ 
+diff --git a/source_en/Overview/FrameworkStack.rst b/source_en/Overview/FrameworkStack.rst
+index 8567bfe..1272a5a 100755
+--- a/source_en/Overview/FrameworkStack.rst
++++ b/source_en/Overview/FrameworkStack.rst
+@@ -29,26 +29,26 @@ DI Container
+ Spring Framework is used as DI Container.
+ 
+ 
+-* `Spring Framework 4.2 <http://docs.spring.io/spring/docs/4.2.7.RELEASE/spring-framework-reference/html/beans.html>`_
++* `Spring Framework 4.3 <http://docs.spring.io/spring/docs/4.3.5.RELEASE/spring-framework-reference/html/beans.html>`_
+ 
+ MVC Framework
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ Spring MVC is used as Web MVC Framework.
+ 
+-* `Spring MVC 4.2 <http://docs.spring.io/spring/docs/4.2.7.RELEASE/spring-framework-reference/html/mvc.html>`_
++* `Spring MVC 4.3 <http://docs.spring.io/spring/docs/4.3.5.RELEASE/spring-framework-reference/html/mvc.html>`_
+ 
+ O/R Mapper
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+ This guideline assumes the use of **any one of the below**.
+ 
+-* `MyBatis 3.3 <http://mybatis.github.io/mybatis-3/>`_
++* `MyBatis 3.4 <http://mybatis.github.io/mybatis-3/>`_
+ 
+   * \ `MyBatis-Spring <http://mybatis.github.io/spring/>`_  is used as library for coordinating with Spring Framework.
+ 
+ * `JPA2.1 <http://download.oracle.com/otn-pub/jcp/persistence-2_1-fr-eval-spec/JavaPersistence.pdf>`_
+ 
+-  * \ `Hibernate 4.3 <http://docs.jboss.org/hibernate/orm/4.3/manual/en-US/html_single/>`_  is used as provider.
++  * \ `Hibernate 5.0 <http://docs.jboss.org/hibernate/orm/5.0/manual/en-US/html_single/>`_  is used as provider.
+ 
+ .. note::
+ 
+@@ -74,7 +74,7 @@ Security
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ Spring Security is used as the framework for Authentication and Authorization.
+ 
+-* `Spring Security 4.0 <http://projects.spring.io/spring-security/>`_
++* `Spring Security 4.1 <http://projects.spring.io/spring-security/>`_
+ 
+ .. tip::
+ 
+@@ -119,7 +119,7 @@ Common Library
+ OSS Versions
+ --------------------------------------------------------------------------------
+ 
+-List of OSS being used in version 5.2.0.RELEASE.
++List of OSS being used in version 5.3.0.RELEASE.
+ 
+ .. tip::
+ 
+@@ -135,7 +135,7 @@ List of OSS being used in version 5.2.0.RELEASE.
+     dependencies resolved and 
+     OSS version to be used in the TERASOLUNA Server Framework for Java (5.x) is following the rule of Spring IO platform definition.
+ 
+-    Furthermore, Spring IO platform version is `2.0.6.RELEASE <http://docs.spring.io/platform/docs/2.0.6.RELEASE/reference/htmlsingle/>`_  specified in version 5.2.0.RELEASE.
++    Furthermore, Spring IO platform version is `Athens-SR2 <http://docs.spring.io/platform/docs/Athens-SR2/reference/htmlsingle/>`_  specified in version 5.3.0.RELEASE.
+ 
+ .. tabularcolumns:: |p{0.15\linewidth}|p{0.27\linewidth}|p{0.25\linewidth}|p{0.15\linewidth}|p{0.05\linewidth}|p{0.08\linewidth}|
+ .. list-table::
+@@ -152,139 +152,145 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Spring
+       - org.springframework
+       - spring-aop
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-aspects
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-beans
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-context
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-context-support
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-core
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-expression
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-jdbc
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-orm
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-tx
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-web
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-webmvc
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-jms
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework
+       - spring-messaging
+-      - 4.2.7.RELEASE
++      - 4.3.5.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.data
+       - spring-data-commons
+-      - 1.11.4.RELEASE
++      - 1.12.6.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.security
+       - spring-security-acl
+-      - 4.0.4.RELEASE
++      - 4.1.4.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.security
+       - spring-security-config
+-      - 4.0.4.RELEASE
++      - 4.1.4.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.security
+       - spring-security-core
+-      - 4.0.4.RELEASE
++      - 4.1.4.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.security
+       - spring-security-taglibs
+-      - 4.0.4.RELEASE
++      - 4.1.4.RELEASE
+       - \*
+       -
+     * - Spring
+       - org.springframework.security
+       - spring-security-web
+-      - 4.0.4.RELEASE
++      - 4.1.4.RELEASE
+       - \*
+       -
++    * - Spring  
++      - org.springframework.security.oauth  
++      - spring-security-oauth2  
++      - 2.0.12.RELEASE  
++      - \*  
++      -
+     * - MyBatis3
+       - org.mybatis
+       - mybatis
+-      - 3.3.1
++      - 3.4.2
+       -
+       - \*1
+     * - MyBatis3
+       - org.mybatis
+       - mybatis-spring
+-      - 1.2.5
++      - 1.3.1
+       -
+       - \*1
+     * - MyBatis3
+       - org.mybatis
+       - mybatis-typehandlers-jsr310
+-      - 1.0.1
++      - 1.0.2
+       -
+       - \*1*6
+     * - JPA(Hibernate)
+@@ -302,19 +308,19 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - JPA(Hibernate)
+       - org.hibernate
+       - hibernate-core
+-      - 4.3.11.Final
++      - 5.0.11.Final
+       - \*
+       - \*2
+     * - JPA(Hibernate)
+       - org.hibernate
+       - hibernate-entitymanager
+-      - 4.3.11.Final
++      - 5.0.11.Final
+       - \*
+       - \*2
+     * - JPA(Hibernate)
+       - org.hibernate.common
+       - hibernate-commons-annotations
+-      - 4.0.5.Final
++      - 5.0.1.Final
+       - \*
+       - \*2 \*4
+     * - JPA(Hibernate)
+@@ -326,31 +332,25 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - JPA(Hibernate)
+       - org.javassist
+       - javassist
+-      - 3.18.1-GA
++      - 3.20.0-GA
+       - \*
+       - \*2
+     * - JPA(Hibernate)
+       - org.jboss
+       - jandex
+-      - 1.1.0.Final
+-      - \*
+-      - \*2 \*4
+-    * - JPA(Hibernate)
+-      - org.jboss.logging
+-      - jboss-logging-annotations
+-      - 1.2.0.Final
+-      - \*
+-      - \*2 \*4 \*5
+-    * - JPA(Hibernate)
+-      - org.jboss.spec.javax.transaction
+-      - jboss-transaction-api_1.2_spec
+-      - 1.0.0.Final
++      - 2.0.0.Final
+       - \*
+       - \*2 \*4
+     * - JPA(Hibernate)
+       - org.springframework.data
+       - spring-data-jpa
+-      - 1.9.4.RELEASE
++      - 1.10.6.RELEASE
++      - \*
++      - \*2
++    * - JPA(Hibernate)
++      - org.apache.geronimo.specs
++      - geronimo-jta_1.1_spec
++      - 1.1.1
+       - \*
+       - \*2
+     * - DI
+@@ -380,13 +380,13 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Log output
+       - ch.qos.logback
+       - logback-classic
+-      - 1.1.7
++      - 1.1.8
+       - \*
+       -
+     * - Log output
+       - ch.qos.logback
+       - logback-core
+-      - 1.1.7
++      - 1.1.8
+       - \*
+       - \*4
+     * - Log output
+@@ -398,43 +398,43 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Log output
+       - org.slf4j
+       - jcl-over-slf4j
+-      - 1.7.21
++      - 1.7.22
+       - \*
+       -
+     * - Log output
+       - org.slf4j
+       - slf4j-api
+-      - 1.7.21
++      - 1.7.22
+       - \*
+       -
+     * - JSON
+       - com.fasterxml.jackson.core
+       - jackson-annotations
+-      - 2.6.7
++      - 2.8.5
+       - \*
+       -
+     * - JSON
+       - com.fasterxml.jackson.core
+       - jackson-core
+-      - 2.6.7
++      - 2.8.5
+       - \*
+       -
+     * - JSON
+       - com.fasterxml.jackson.core
+       - jackson-databind
+-      - 2.6.7
++      - 2.8.5
+       - \*
+       -
+     * - JSON
+       - com.fasterxml.jackson.datatype
+       - jackson-datatype-joda
+-      - 2.6.7
++      - 2.8.5
+       - \*
+       -
+     * - JSON
+       - com.fasterxml.jackson.datatype
+       - jackson-datatype-jsr310
+-      - 2.6.7
++      - 2.8.5
+       - \*
+       - \*6
+     * - Input check
+@@ -458,13 +458,13 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Input check
+       - com.fasterxml
+       - classmate
+-      - 1.1.0
++      - 1.3.3
+       - \*
+       - \*4
+     * - Bean conversion
+       - commons-beanutils
+       - commons-beanutils
+-      - 1.9.2
++      - 1.9.3
+       - \*
+       - \*3
+     * - Bean conversion
+@@ -482,13 +482,13 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Bean conversion
+       - org.apache.commons
+       - commons-lang3
+-      - 3.3.2
++      - 3.4
+       - \*
+       - \*3
+     * - Date operation
+       - joda-time
+       - joda-time
+-      - 2.8.2
++      - 2.9.6
+       - \*
+       -
+     * - Date operation
+@@ -500,13 +500,13 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Date operation
+       - org.jadira.usertype
+       - usertype.core
+-      - 3.2.0.GA
++      - 5.0.0.GA
+       -
+       - \*2
+     * - Date operation
+       - org.jadira.usertype
+       - usertype.spi
+-      - 3.2.0.GA
++      - 5.0.0.GA
+       -
+       - \*2
+     * - Connection pool
+@@ -530,37 +530,37 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Tiles
+       - org.apache.tiles
+       - tiles-api
+-      - 3.0.5
++      - 3.0.7
+       - \*
+       - \*3
+     * - Tiles
+       - org.apache.tiles
+       - tiles-core
+-      - 3.0.5
++      - 3.0.7
+       - \*
+       - \*3
+     * - Tiles
+       - org.apache.tiles
+       - tiles-jsp
+-      - 3.0.5
++      - 3.0.7
+       - \*
+       - \*3
+     * - Tiles
+       - org.apache.tiles
+       - tiles-servlet
+-      - 3.0.5
++      - 3.0.7
+       - \*
+       - \*3
+     * - Tiles
+       - org.apache.tiles
+       - tiles-template
+-      - 3.0.5
++      - 3.0.7
+       - \*
+       - \*3 \*4
+     * - Tiles
+       - org.apache.tiles
+       - tiles-autotag-core-runtime
+-      - 1.1.0
++      - 1.2
+       - \*
+       - \*3 \*4
+     * - Tiles
+@@ -596,7 +596,7 @@ List of OSS being used in version 5.2.0.RELEASE.
+     * - Utility
+       - commons-io
+       - commons-io
+-      - 2.4
++      - 2.5
+       - \*
+       - \*3
+     * - Servlet
+diff --git a/source_en/Security/Authentication.rst b/source_en/Security/Authentication.rst
+index c60eb3d..98fa453 100755
+--- a/source_en/Security/Authentication.rst
++++ b/source_en/Security/Authentication.rst
+@@ -918,17 +918,17 @@ BCryptPasswordEncoder
+ .. warning:: **How to use SecureRandom**
+   
+     When \ ``SecureRandom``\  is to be used in Linux environment, a delay or timeout in the processing is likely to occur.
+-    This event depends on the random number generator to be used and description is given in the Java Bug Database given below.
++    This event depends on the random number generator to be used and description is given in the document given below.
+   
+-    * http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6202721
++    * https://docs.oracle.com/javase/8/docs/api/java/security/SecureRandom.html 
+   
+-    It has been fixed in the subsequent versions of b20 of JDK 7.
++    When this event occurs, it can be avoided by adding one of the following settings.
+   
+-    * http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6521844
++    * Specify ``-Djava.security.egd=file:/dev/urandom`` while executing Java command.
+   
+-    If this event occurs, it can be avoided by adding following configuration to system property of JVM.
++    * Change ``securerandom.source=/dev/random` in ``${JAVA_HOME}/jre/lib/security/java.security`` to ``securerandom.source=/dev/urandom``.
+   
+-    * ``-Djava.security.egd=file:/dev/./urandom``
++    If this event occurs in the version prior to b19 of Java SE 7 (prior to official release), ``/dev/./urandom`` must be specified instead of ``/dev/urandom``. However, algorithm used by \ ``SecureRandom``\  cannot be avoided in case of \ ``NativePRNG``\.
+ 
+ |
+ 
+@@ -1356,6 +1356,28 @@ An audit log which records information like "When", "Who", "Which data" and "Typ
+     How to coordinate with Spring MVC is explained in ":ref:`SpringSecurityAuthenticationIntegrationWithSpringMVC`".
+     **This guideline recommends fetching authentication information by using coordination with Spring MVC.**
+ 
++.. note::
++
++    When a filter (FORM_LOGIN_FILTER) for authentication is to be customized,
++    it is necessary to disable the following 2 \ ``SessionAuthenticationStrategy``\  classes, apart from specifying \ ``<sec:concurrency-control>``\  element.
++
++    * | ``org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy``
++      | A class to check number of sessions for each logged in user after successful authentication.
++
++    * | ``org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy``
++      | A class to register a session with successful authentication, in session management area.
++
++    In version 1.0.x.RELEASE dependent Spring Security 3.1, \ ``org.springframework.security.web.authentication.session.ConcurrentSessionControlStrategy``\  class is provided; however,
++    it is deprecated API from Spring Security 3.2 and it is abolished API from Spring Security 4.0.
++    When upgrading version from Spring Security 3.1 to Spring Security 3.2 or later versions, changes need to be made so that it can be used with combination of following classes.
++
++    * ``ConcurrentSessionControlAuthenticationStrategy`` (added in Spring Security 3.2)
++    * ``RegisterSessionAuthenticationStrategy`` (added in Spring Security 3.2)
++    * ``org.springframework.security.web.authentication.session.SessionFixationProtectionStrategy``
++
++    For specific methods of definition,
++    refer to sample code of `Spring Security Reference -Web Application Security (Concurrency Control)- <http://docs.spring.io/spring-security/site/docs/4.1.4.RELEASE/reference/htmlsingle/#concurrent-sessions>`_.
++
+ |
+ 
+ Access from JSP
+@@ -2724,11 +2746,7 @@ Definition example of Controller which displays login form.
+ 
+ As per this example, it is also possible to substitute by using \ ``<mvc:view-controller>``\  in case of a controller with only one method which simply returns only the view name.
+ 
+-* Definition example of Controller using \ ``<mvc:view-controller>``\ .
+-
+-.. code-block:: xml
+-
+-    <mvc:view-controller path="/login" view-name="login" /><!-- (1) -->
++For details, refer \ :ref:`controller_method_return-html-label`\.
+ 
+ |
+ 
+diff --git a/source_en/Security/Authorization.rst b/source_en/Security/Authorization.rst
+index 95846d8..c672a5a 100755
+--- a/source_en/Security/Authorization.rst
++++ b/source_en/Security/Authorization.rst
+@@ -212,6 +212,8 @@ Common Expressions provided by Spring Security are as given below.
+ 
+ |
+ 
++.. _built-incommon-expressions: 
++
+ Built-In Web Expressions
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+@@ -380,6 +382,54 @@ Therefore, definition order must be taken into consideration even while specifyi
+          </sec:http>
+ 
+ .. warning::
++    In Spring MVC and Spring Security, the mechanism of matching with the request is strictly different, and there is a vulnerability that breaks through the authorization function of Spring Security and can access the handler method using this difference.
++    For details of this vulnerability, refer to "\ `CVE-2016-5007 Spring Security / MVC Path Matching Inconsistency <https://pivotal.io/security/cve-2016-5007>`_\".
++
++    In Spring Framework 4.3.1 and later, Spring Security 4.1.1 and later, this problem is solved by using \ `MvcRequestMatcher` \ ,
++    but  in the Spring Framework 4.2.x used by TERASOLUNA Server Framework for Java (5.x), \ `org.springframework.util.AntPathMatcher` \  has to be used which set Spring MVC \ `trimTokens` \ property \ `false` \ .
++
++      .. code-block:: xml
++
++          <mvc:annotation-driven>
++              <mvc:path-matching path-matcher="pathMatcher" />
++          </mvc:annotation-driven>
++
++          <bean id="pathMatcher" class="org.springframework.util.AntPathMatcher">
++              <property name="trimTokens" value="false" />
++          </bean>
++    
++    Although the above measures are set in blank projects that are provided by TERASOLUNA Server Framework for Java,
++    it is necessary to be aware of it because it will be exposed to vulnerability if you remove the setting.
++
++    Further, if an access policy for a specific URL is to be specified (wild cards like \ ``*``\ , \ ``**``\  etc are not included in \ ``pattern``\  attribute),
++    an access policy with a pattern with an extension and a pattern with \ ``/``\  appended at the end of request path must be added.
++
++    In the following configuration example, only the users with "ROLE_ADMIN" role are allowed to access by \ ``/restrict``\.
++
++      .. code-block:: xml
++
++          <sec:http>
++              <sec:intercept-url pattern="/restrict.*" access="hasRole('ADMIN')" /> <!-- (1) --> 
++              <sec:intercept-url pattern="/restrict/" access="hasRole('ADMIN')" /> <!-- (2) --> 
++              <sec:intercept-url pattern="/restrict" access="hasRole('ADMIN')" /> <!-- (3) -->
++              <!-- omitted -->
++          </sec:http> 
++          
++      .. tabularcolumns:: |p{0.20\linewidth}|p{0.80\linewidth}|
++      .. list-table::
++         :header-rows: 1
++         :widths: 20 80
++         :class: longtable
++
++         * - Sr. No.
++           - Description
++         * - | (1)
++           - | Define an access policy of the pattern with an extension (\ ``/restrict.json``\  etc) in \ ``/restrict``\.
++         * - | (2)
++           - | Define an access policy of the pattern wherein \ ``/``\  appended at the end of the request path (\ ``/restrict/``\  etc) in \ ``/restrict``\.
++         * - | (3)
++           - | Define an access policy for \ ``/restrict``\.
++
+ Specifying an access policy
+ ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+ 
+@@ -472,6 +522,60 @@ For main Expression that can be used, refer :ref:`SpringSecurityAuthorizationPol
+ 
+ |
+ 
++Reference of path variables
++''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
++
++In Spring Security 4.1 and subsequent versions, a path variable \[#fPathVariableDescription]_\  can be used while specifying a resource which applies the access policy
++and can be referred by specifying \ ``#path variable name``\  in the definition of access policy.
++
++In the example below, the access policy is defined so that the login users can access only their own user information.
++
++* Definition example of spring-security.xml
++
++  .. code-block:: xml
++
++    <sec:http>
++        <sec:intercept-url pattern="/users/{userName}" access="isAuthenticated() and #userName == principal.username"/>
++        <!-- omitted -->
++    </sec:http>
++
++.. warning:: **Precautions while defining an access policy which uses the path variable**
++
++   When an access policy which uses a path variable for the path that can be accessed with an extension, is defined, it is necessary to define it in such a way that the extension part is not stored in the path variable value.
++
++   For example, when \ ``/users/{userName}``\  is defined in the patten and a request path \ ``/users/personName.json``\  is sent,
++   \ ``personName.json``\  gets stored in the path variable \ ``#userName``\  referred in the definition of access policy, instead of \ ``personName``\
++   and unintended authorization control is performed.
++
++   In order to prevent this event, "Access policy for the path without extension" must be defined after defining "Access policy for the path with extension" as shown in the example below.
++
++   * Definition example of spring-security.xml
++
++    .. code-block:: xml
++
++      <sec:http>
++       <sec:intercept-url pattern="/users/{userName}.*" access="isAuthenticated() and #userName == principal.username"/> <!-- (1) -->
++       <sec:intercept-url pattern="/users/{userName}" access="isAuthenticated() and #userName == principal.username"/> <!-- (2) -->
++       <!-- omitted -->
++      </sec:http>
++
++    .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
++    .. list-table::
++        :header-rows: 1
++        :widths: 10 90
++        :class: longtable
++    
++        * - Sr. No.
++          - Description
++        * - | (1)
++          - | Define "Access policy for the path with extension".
++        * - | (2)
++          - | Define "Access policy for the path without extension".
++
++.. For description of path variable [#fPathVariableDescription], refer \ :ref:`controller_method_argument-pathvariable-label`\  of :doc:`../ImplementationAtEachLayer/ApplicationLayer`.
++
++|
++
+ Authorization for the method
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ Spring Security performs authorization process for calling a method of Bean which is managed in DI container by using Spring AOP system.
+diff --git a/source_en/Security/LinkageWithBrowser.rst b/source_en/Security/LinkageWithBrowser.rst
+index 89bd22e..d75c7c7 100755
+--- a/source_en/Security/LinkageWithBrowser.rst
++++ b/source_en/Security/LinkageWithBrowser.rst
+@@ -32,13 +32,15 @@ Spring Security provides a system to enhance security of Web application by offe
+ Security headers supported by default
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-The following 5 response headers are supported by Spring Security by default.
++The following 7 response headers are supported by Spring Security by default.
+ 
+ * Cache-Control (Pragma, Expires)
+ * X-Frame-Options
+ * X-Content-Type-Options
+ * X-XSS-Protection
+ * Strict-Transport-Security
++* Content-Security-Policy(Content-Security-Policy-Report-Only)
++* Public-Key-Pins(Public-Key-Pins-Report-Only)
+ 
+ .. tip:: **Support status of browser**
+ 
+@@ -46,7 +48,7 @@ The following 5 response headers are supported by Spring Security by default.
+ 
+     * https://www.owasp.org/index.php/HTTP_Strict_Transport_Security (Strict-Transport-Security)
+     * https://www.owasp.org/index.php/Clickjacking_Defense_Cheat_Sheet (X-Frame-Options)
+-    * https://www.owasp.org/index.php/List_of_useful_HTTP_headers (X-Content-Type-Options, X-XSS-Protection)
++    * https://www.owasp.org/index.php/List_of_useful_HTTP_headers (X-Content-Type-Options, X-XSS-Protection, Content-Security-Policy, Public-Key-Pins)
+ 
+ 
+ Cache-Control
+@@ -141,7 +143,72 @@ Following header is output to disable the use of HTTP after accessing browser us
+ 
+     Strict-Transport-Security header is output only when the application server is accessed using HTTPS in the default implementation of Spring Security.
+     Note that, Strict-Transport-Security header value can be changed by specifying the option.
++    
++Content-Security-Policy
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++
++The Content-Security-Policy header is a header to instruct the content to be allowed to be read by the browser.
++Since the browser reads only the contents of the whitelist specified in the Content - Security - Policy header, it can reduce the risk of receiving attacks (such as crosssite scripting attacks) executed by loading malicious content.
++
++If you do not send the Content-Security-Policy header, the browser applies the same standard origin policy.
++
++In order to restrict the source of content to only the same origin, the following header is output.
++
++* Output example of response header
++
++.. code-block:: text
++
++    Content-Security-Policy: default-src 'self'
++
++.. note:: **About sending reports when a policy violation occurs**
+ 
++    If a report is to be send at policy violation, specify the reporting URI in the report-uri directive.
++
++    In order to block the content if there is a violation of the same origin policy and send the report to \ ``/csp_report``\, output the following header.
++
++    * Output example of response header
++
++     .. code-block:: text
++
++        Content-Security-Policy: default-src 'self'; report-uri /csp_report;
++
++    In addition, if there is a policy violation, if a report is to be send without blocking content, use the Content-Security-Policy-Report-Only header.
++    By collecting reports using the Content-Security-Policy-Report-Only header and gradually modifying the policy and content,can reduce the risk of not being able to work correctly if the policy is applied to sites that already provide service.
++
++    In order to send a report if there is a violation of the same origin policy to \ ``/csp_report``\ without blocking the content , output the following header.
++
++    * Output example of response header	
++
++     .. code-block:: text
++
++        Content-Security-Policy-Report-Only: default-src 'self'; report-uri /csp_report;
++
++Public-Key-Pins
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++
++Public-Key-Pins header presents the public key of the certificate associated with the site, to the browser in order to ensure authenticity of the certificate of the site.
++Even when the user visits the site again and is directed to a malicious site by using an attack technique called "man-in-the-middle" attack,
++a mismatch between public key of authentic site certificate retained by browser and public key of certificate presented by malicious site is detected
++and the access to the site can be blocked.
++
++Following header is output in order to block access to a site when a certificate which does not match the information retained by browser, is detected.
++
++* Output example of response header
++
++.. code-block:: text
++
++    Public-Key-Pins: max-age=5184000 ; pin-sha256="d6qzRu9zOECb90Uez27xWltNsj0e1Md7GkYYkVoZWmM=" ; pin-sha256="E9CZ9INDbd+2eRQozYqqbQ2yXLVKB9+xcprMF+44U1g="
++
++.. note:: **Regarding sending a violation report**
++
++    A report-uri directive is specified similar to Content-Security-Policy in order to send a violation report to browser when the access is blocked.
++
++    Further, a Public-Key-Pins-Report-Only header is used instead of Public-Key-Pins header to send a violation report to the browser without blocking the access.
++
++.. note:: **Regarding settings of Public-Key-Pins header**
++
++    If an error occurs in settings of Public-Key-Pins header, it is likely that user will not be able to access the site for a long period of time.
++    Hence, it is recommended to switch to Public-Key-Pins header after conducting a thorough testing by using Public-Key-Pins-Report-Only header.
+ 
+ How to use
+ --------------------------------------------------------------------------------
+@@ -149,9 +216,13 @@ How to use
+ Applying security header output function
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-A method is executed to apply the security header output function described earlier.
++A method to apply the above mentioned security header output function is decribed.
++
++The security header output function is added from Spring 3.2 and is applied by default except for the following security header	.
++
++* Content-Security-Policy
++* Public-Key-Pins
+ 
+-Security header output function is added by Spring 3.2 and applied by default from Spring Security 4.0.
+ Therefore, a specific definition is not required to enable the security header output function.
+ Further, when the security header output function is not to be applied, it must be disabled explicitly.
+ 
+@@ -184,6 +255,13 @@ Here, the example denotes output of all security headers provided by Spring Secu
+         <sec:content-type-options/> <!-- (4) -->
+         <sec:xss-protection/> <!-- (5) -->
+         <sec:hsts/> <!-- (6) -->
++        <sec:content-security-policy policy-directives="default-src 'self'" /> <!-- (7) -->
++        <sec:hpkp report-uri="https://www.example.net/hpkp-report"> <!-- (8) -->
++            <sec:pins>
++                <sec:pin algorithm="sha256">d6qzRu9zOECb90Uez27xWltNsj0e1Md7GkYYkVoZWmM=</sec:pin>
++                <sec:pin algorithm="sha256">E9CZ9INDbd+2eRQozYqqbQ2yXLVKB9+xcprMF+44U1g=</sec:pin>
++            </sec:pins>
++        </sec:hpkp>
+     </sec:headers>
+ 
+ .. tabularcolumns:: |p{0.10\linewidth}|p{0.90\linewidth}|
+@@ -205,6 +283,20 @@ Here, the example denotes output of all security headers provided by Spring Secu
+       - | Register the component which outputs X-XSS-Protection header.
+     * - | (6)
+       - | Register the component which outputs Strict-Transport-Security header.
++    * - | (7)
++      - | Register the component which outputs Content-Security-Policy header and Content-Security-Policy-Report-Only header.
++    * - | (8)
++      - | Register the component which outputs Public-Key-Pins header and Public-Key-Pins-Report-Only header.
++
++        * When the public key of the certificate presented by the site does not match, a violation report is sent to \ ``https://www.example.net/hpkp-report``\  without blocking the access.
++        * Public key information for the backup is set to prevent inconsistencies of public key when the certificate is updated for the reasons such as compromise in the certificate and expiry of the certificate etc
++
++
++.. note:: **Regarding output of Public-Key-Pins header**
++
++    Default setting of Spring Security outputs Public-Key-Pins-Report-Only header rather than Public-Key-Pins header.
++
++    Further, in the default setting of Spring Security, Public-Key-Pins header is output only when the application server is accessed using HTTPS.
+ 
+ 
+ Further, a method is also provided which disables security headers which are not required.
+@@ -230,6 +322,8 @@ Contents which are output by Spring Security by default, can be changed in the f
+ * X-Frame-Options
+ * X-XSS-Protection
+ * Strict-Transport-Security
++* Content-Security-Policy(Content-Security-Policy-Report-Only)
++* Public-Key-Pins(Public-Key-Pins-Report-Only)
+ 
+ An option \ [#fSpringSecurityLinkageWithBrowser2]_\  can be specified in the attribute of each element by changing the bean definition of Spring Security.
+ 
+diff --git a/source_en/Security/index.rst b/source_en/Security/index.rst
+index cde9b4d..ed1743e 100755
+--- a/source_en/Security/index.rst
++++ b/source_en/Security/index.rst
+@@ -13,6 +13,7 @@ Security countermeasures
+    XSS
+    Encryption
+    SecureLoginDemo
++   OAuth
+ 
+ .. raw:: latex
+ 
+diff --git a/source_en/Tutorial/TutorialSecurity.rst b/source_en/Tutorial/TutorialSecurity.rst
+index b49bbdd..eb8e7ba 100755
+--- a/source_en/Tutorial/TutorialSecurity.rst
++++ b/source_en/Tutorial/TutorialSecurity.rst
+@@ -514,6 +514,7 @@ As a result, database initialization is necessary by executing SQL at the time o
+         <bean id="transactionManager"
+             class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+             <property name="dataSource" ref="dataSource" />
++            <property name="rollbackOnCommitFailure" value="true" />
+         </bean>
+               REMOVE THIS LINE IF YOU USE MyBatis3  -->
+     </beans>
+diff --git a/source_en/Tutorial/TutorialTodo.rst b/source_en/Tutorial/TutorialTodo.rst
+index 0ff70a5..7522e39 100755
+--- a/source_en/Tutorial/TutorialTodo.rst
++++ b/source_en/Tutorial/TutorialTodo.rst
+@@ -3781,7 +3781,6 @@ The following settings are done in created MyBatis3 project.
+             <settings>
+                 <setting name="mapUnderscoreToCamelCase" value="true" />
+                 <setting name="lazyLoadingEnabled" value="true" />
+-                <setting name="aggressiveLazyLoading" value="false" />
+                 <setting name="defaultFetchSize" value="100" />
+         <!--
+                 <setting name="defaultExecutorType" value="REUSE" />
+@@ -3993,6 +3992,7 @@ Furthermore, the \ :file:`todo-env.xml` \ is not created while creating blank pr
+         <bean id="transactionManager"
+             class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+             <property name="dataSource" ref="dataSource" />
++            <property name="rollbackOnCommitFailure" value="true" />
+         </bean>
+     </beans>
+ 

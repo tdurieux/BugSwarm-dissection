@@ -1,0 +1,839 @@
+diff --git a/conf/html/conf.py b/conf/html/conf.py
+index b83909c..4774a58 100755
+--- a/conf/html/conf.py
++++ b/conf/html/conf.py
+@@ -41,7 +41,7 @@ master_doc = 'index'
+ 
+ # General information about the project.
+ project = u'TERASOLUNA Server Framework for Java (5.x) Development Guideline'
+-copyright = u'2013-2015, NTT DATA'
++copyright = u'2013-2016, NTT DATA'
+ 
+ # The version info for the project you're documenting, acts as replacement for
+ # |version| and |release|, also used in various other places throughout the
+diff --git a/conf/html_for_githubpages/conf.py b/conf/html_for_githubpages/conf.py
+index 42f7b41..31a4a0a 100755
+--- a/conf/html_for_githubpages/conf.py
++++ b/conf/html_for_githubpages/conf.py
+@@ -41,7 +41,7 @@ master_doc = 'index'
+ 
+ # General information about the project.
+ project = u'TERASOLUNA Server Framework for Java (5.x) Development Guideline'
+-copyright = u'2013-2015, NTT DATA'
++copyright = u'2013-2016, NTT DATA'
+ 
+ # The version info for the project you're documenting, acts as replacement for
+ # |version| and |release|, also used in various other places throughout the
+diff --git a/conf/latexpdfen/conf.py b/conf/latexpdfen/conf.py
+index be78e98..4679d24 100755
+--- a/conf/latexpdfen/conf.py
++++ b/conf/latexpdfen/conf.py
+@@ -41,7 +41,7 @@ master_doc = 'index'
+ 
+ # General information about the project.
+ project = u'TERASOLUNA Server Framework for Java (5.x) Development Guideline'
+-copyright = u'2013-2015, NTT DATA'
++copyright = u'2013-2016, NTT DATA'
+ 
+ # The version info for the project you're documenting, acts as replacement for
+ # |version| and |release|, also used in various other places throughout the
+diff --git a/conf/latexpdfja/conf.py b/conf/latexpdfja/conf.py
+index 165fb03..e4762e9 100755
+--- a/conf/latexpdfja/conf.py
++++ b/conf/latexpdfja/conf.py
+@@ -41,7 +41,7 @@ master_doc = 'index'
+ 
+ # General information about the project.
+ project = u'TERASOLUNA Server Framework for Java (5.x) Development Guideline'
+-copyright = u'2013-2015, NTT DATA'
++copyright = u'2013-2016, NTT DATA'
+ 
+ # The version info for the project you're documenting, acts as replacement for
+ # |version| and |release|, also used in various other places throughout the
+diff --git a/source/ArchitectureInDetail/DataAccessJpa.rst b/source/ArchitectureInDetail/DataAccessJpa.rst
+index 4b20129..50969e0 100755
+--- a/source/ArchitectureInDetail/DataAccessJpa.rst
++++ b/source/ArchitectureInDetail/DataAccessJpa.rst
+@@ -1810,11 +1810,11 @@ Entityの検索方法について、目的別に説明する。
+ 
+     @RequestMapping("list")
+     public String list(@RequestParam("targetDate") Date targetDate,
+-                       @PageableDefaults(
+-                           pageNumber = 0,
++                       @PageableDefault(
++                           page = 0,
+                            value = 5,
+                            sort = { "createdDate" },
+-                           sortDir = Direction.DESC)
++                           direction = Direction.DESC)
+                            Pageable pageable, // (2)
+                        Model model) {
+         Page<Order> accountPage = accountService.getAccounts(targetDate, pageable);
+@@ -1979,7 +1979,7 @@ Entityの動的条件による検索処理の実装
+                 joinConditions.add("o.orderItems oi");
+                 joinConditions.add("oi.item i");
+                 andConditions.add("i.name LIKE :itemName ESCAPE '~'");
+-                bindParameters.put("itemName", SqlUtils
++                bindParameters.put("itemName", QueryEscapeUtils
+                         .toLikeCondition(criteria.getItemName()));
+             }
+ 
+@@ -2331,7 +2331,7 @@ Entityの動的条件による検索処理の実装
+                 joinConditions.add("o.orderItems oi");
+                 joinConditions.add("oi.item i");
+                 andConditions.add("i.name LIKE :itemName ESCAPE '~'");
+-                bindParameters.put("itemName", SqlUtils.toLikeCondition(criteria
++                bindParameters.put("itemName", QueryEscapeUtils.toLikeCondition(criteria
+                         .getItemName()));
+             }
+ 
+@@ -4235,7 +4235,7 @@ Repositoryインタフェースのメソッド呼び出し時に実行されるJ
+     * - | (2)
+       - | ``@Where`` アノテーションで指定した条件が追加されている。
+ 
+-- 標準的なキーワード``true``、``false``、``unknown``などを登録するためのDialectを拡張する
++- 標準的なキーワード ``true`` 、``false`` 、``unknown`` などを登録するためのDialectを拡張する
+ 
+  .. code-block:: java
+ 
+@@ -4258,10 +4258,10 @@ Repositoryインタフェースのメソッド呼び出し時に実行されるJ
+     * - Sr. No.
+       - Description
+     * - | (1)
+-      - | Hibernateは標準的なSQLキーワード``true``、``false``、``unknown``などを登録することができません。これらは、データベース特定のDialectを拡張することによって登録することができます。
++      - | Hibernateは標準的なSQLキーワード ``true`` 、``false`` 、``unknown`` などを登録することができません。これらは、データベース特定のDialectを拡張することによって登録することができます。
+         | 例、postgresqlデータベースのデーフォルトDialectは``org.hibernate.dialect.PostgreSQL9Dialect``となります。
+     * - | (2)
+-      - | 標準的なSQLキーワード``true``、``false``、``unknown``などを登録する。
++      - | 標準的なSQLキーワード ``true`` 、``false`` 、``unknown`` などを登録する。
+ 
+ - 拡張したDialectを設定する
+ 
+diff --git a/source/ArchitectureInDetail/FileDownload.rst b/source/ArchitectureInDetail/FileDownload.rst
+index ed62b49..540c604 100755
+--- a/source/ArchitectureInDetail/FileDownload.rst
++++ b/source/ArchitectureInDetail/FileDownload.rst
+@@ -38,7 +38,7 @@ Overview
+ | クラスは、modelの情報を用いてPDFファイルをレンダリングするときに、サブクラスとして利用するクラスである。
+ |
+ | **Excelファイルの場合**
+-| Springから提供されている\ ``org.springframework.web.servlet.view.document.AbstractExcelView``\
++| Springから提供されている\ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\
+ | クラスは、modelの情報を用いてExcelファイルをレンダリングするときに、サブクラスとして利用するクラスである。
+ |
+ | Spring では上記以外にも、いろいろなViewの実装を提供している。
+@@ -91,11 +91,11 @@ PDFファイルのダウンロード
+      - | 本例では、\ ``@Component``\ アノテーションを使用して、component-scanの対象としている。
+        | 後述する、\ ``org.springframework.web.servlet.view.BeanNameViewResolver``\ の対象とすることができる。
+    * - | (2)
+-     - | AbstractPdfViewを継承する。
++     - | \ ``AbstractPdfView``\ を継承する。
+    * - | (3)
+-     - | buildPdfDocumentメソッドを実装する。
++     - | \ ``buildPdfDocument``\ メソッドを実装する。
+ 
+-| AbstractPdfViewは、PDFのレンダリングに、\ `iText <http://itextpdf.com/>`_\ を利用している。
++| \ ``AbstractPdfView``\ は、PDFのレンダリングに、\ `iText <http://itextpdf.com/>`_\ を利用している。
+ | そのため、Mavenのpom.xmlに itextの定義を追加する必要がある。
+ 
+ .. code-block:: xml
+@@ -150,7 +150,7 @@ PDFファイルのダウンロード
+ ViewResolverの定義
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\ とは、
+-Springのコンテキストで管理されたbean名を用いて実行する\ ``View``\ を選択するクラスである。
++Springのコンテキストで管理されたbean名を用いて実行するViewを選択するクラスである。
+ 
+ \ ``BeanNameViewResolver``\ を使用する際は、通常使用する、
+ 
+@@ -162,7 +162,7 @@ Springのコンテキストで管理されたbean名を用いて実行する\ ``
+ .. note::
+ 
+     Spring Frameworkはさまざまな\ ``ViewResolver``\ を提供しており、複数の\ ``ViewResolver``\をチェーンすることができる。
+-    そのため、特定の状況では、意図しない\ ``View``\ が選択されてしまうことがある。
++    そのため、特定の状況では、意図しないViewが選択されてしまうことがある。
+ 
+     この動作は、\ ``ViewResolver``\に適切な優先順位を設定する事で防ぐことができる。
+     優先順位の設定方法は、\ ``ViewResolver``\ の定義方法によって異なる。
+@@ -224,7 +224,7 @@ Springのコンテキストで管理されたbean名を用いて実行する\ ``
+ コントローラでのViewの指定
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| BeanNameViewResolverにより、コントローラで"samplePdfView"を返却することで、
++| \ ``BeanNameViewResolver``\ により、コントローラで"samplePdfView"を返却することで、
+ | Springのコンテキストで管理されたBeanIDにより、"samplePdfView"であるViewが使用される。
+ 
+ **Javaソースコード**
+@@ -246,7 +246,7 @@ Springのコンテキストで管理されたbean名を用いて実行する\ ``
+      - 説明
+    * - | (1)
+      - | "samplePdfView" をメソッドの戻り値として返却することで、
+-       | Springのコンテキストで管理された、SamplePdfViewクラスが実行される。
++       | Springのコンテキストで管理された、\ ``SamplePdfView``\ クラスが実行される。
+ 
+ | 上記の手順を実行した後、以下に示すようなPDFを開くことができる。
+ 
+@@ -262,26 +262,26 @@ Springのコンテキストで管理されたbean名を用いて実行する\ ``
+ Excelファイルのダウンロード
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | EXCELファイルのレンダリングには、Springから提供されている、
+-| \ ``org.springframework.web.servlet.view.document.AbstractExcelView``\ を継承したクラスを作成する必要がある。
++| \ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\ を継承したクラスを作成する必要がある。
+ | コントローラでEXCELファイルをダウンロードを実装するための手順は、以下で説明する。
+ 
+ カスタムViewの実装
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-**AbstractExcelViewを継承したクラスの実装例**
++**AbstractXlsxViewを継承したクラスの実装例**
+ 
+ .. code-block:: java
+ 
+         @Component  // (1)
+-        public class SampleExcelView extends AbstractExcelView {  // (2)
++        public class SampleExcelView extends AbstractXlsxView {  // (2)
+ 
+             @Override
+             protected void buildExcelDocument(Map<String, Object> model,
+-                    HSSFWorkbook workbook, HttpServletRequest request,
++                    Workbook workbook, HttpServletRequest request,
+                     HttpServletResponse response) throws Exception {  // (3)
+-                HSSFSheet sheet;
+-                HSSFCell cell;
+-
++                Sheet sheet;
++                Cell cell;
++ 
+                 sheet = workbook.createSheet("Spring");
+                 sheet.setDefaultColumnWidth(12);
+ 
+@@ -305,11 +305,11 @@ Excelファイルのダウンロード
+      - | 本例では、\ ``@Component``\ アノテーションを使用して、component-scanの対象としている。
+        | 前述した、\ ``org.springframework.web.servlet.view.BeanNameViewResolver``\ の対象とすることができる。
+    * - | (2)
+-     - | AbstractExcelViewを継承する。
++     - | \ ``AbstractXlsxView``\ を継承する。
+    * - | (3)
+-     - | buildExcelDocumentメソッドを実装する。
++     - | \ ``buildExcelDocument``\ メソッドを実装する。
+ 
+-| AbstractExcelViewは、EXCELのレンダリングに、\ `Apache POI <http://poi.apache.org/>`_\ を利用している。
++| \ ``AbstractXlsxView``\ は、EXCELのレンダリングに、\ `Apache POI <http://poi.apache.org/>`_\ を利用している。
+ | そのため、Mavenのpom.xmlに POIの定義を追加する必要がある。
+ 
+ .. code-block:: xml
+@@ -318,16 +318,18 @@ Excelファイルのダウンロード
+       <!-- omitted -->
+       <dependency>
+           <groupId>org.apache.poi</groupId>
+-          <artifactId>poi</artifactId>
+-          <version>${org.apache.poi.poi.version}</version>
++          <artifactId>poi-ooxml</artifactId>
+       </dependency>
+   </dependencies>
+-  
+-  <properties>
+-      <!-- omitted -->
+-      <org.apache.poi.poi.version>3.9</org.apache.poi.poi.version>
+-  </properties>
++
+         
++\
++    .. note::
++        poi-ooxmlのバージョンはSpring IO Platformにて定義されているものを利用するため、設定例では <version> を省略している。
++
++        また、\ ``AbstractExcelView``\ はSpring Framework 4.2から@Deprecatedとなった。そのため、xlsファイルを使用したい場合も同様に\ ``AbstractXlsxView``\ の使用を推奨する。
++        詳細は、\ `AbstractExcelViewのJavaDoc <https://docs.spring.io/spring/docs/4.2.4.RELEASE/javadoc-api/org/springframework/web/servlet/view/document/AbstractExcelView.html>`_\ を参照されたい。
++          
+ 
+ ViewResolverの定義
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+@@ -337,7 +339,7 @@ ViewResolverの定義
+ コントローラでのViewの指定
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| BeanNameViewResolverにより、コントローラで"sampleExcelView"を返却することで、
++| \ ``BeanNameViewResolver``\ により、コントローラで"sampleExcelView"を返却することで、
+ | Springのコンテキストで管理されたBeanIDにより、”sampleExcelView”であるViewが使用される。
+ 
+ **Javaソース**
+@@ -359,7 +361,7 @@ ViewResolverの定義
+      - 説明
+    * - | (1)
+      - | "sampleExcelView" をメソッドの戻り値として返却することで、
+-       | Springのコンテキストで管理された、SampleExcelViewクラスが実行される。
++       | Springのコンテキストで管理された、\ ``SampleExcelView``\ クラスが実行される。
+ 
+ | 上記の手順を実行した後、以下に示すようなEXCELを開くことができる。
+ 
+@@ -374,7 +376,7 @@ ViewResolverの定義
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | 前述した、PDFやEXCELファイル以外のファイルのダウンロードを行う場合、
+ | 共通ライブラリが提供している、\ ``org.terasoluna.gfw.web.download.AbstractFileDownloadView``\ を継承したクラスを実装すればよい。
+-| 他の形式にファイルレンダリングするために、AbstractFileDownloadViewでは、以下を実装する必要がある。
++| 他の形式にファイルレンダリングするために、\ ``AbstractFileDownloadView``\では、以下を実装する必要がある。
+ 
+ 1. レスポンスボディへの書き込むためのInputStreamを取得する。
+ 2. HTTPヘッダに情報を設定する。
+@@ -420,12 +422,12 @@ ViewResolverの定義
+      - | 本例では、\ ``@Component``\ アノテーションを使用して、component-scanの対象としている。
+        | 前述した、\ ``org.springframework.web.servlet.view.BeanNameViewResolver``\ の対象とすることができる。
+    * - | (2)
+-     - | AbstractFileDownloadViewを継承する。
++     - | \ ``AbstractFileDownloadView``\ を継承する。
+    * - | (3)
+-     - | getInputStreamメソッドを実装する。
+-       | ダウンロード対象の、InputStreameを返却すること。
++     - | \ ``getInputStream``\ メソッドを実装する。
++       | ダウンロード対象の、\ ``InputStream``\ を返却すること。
+    * - | (4)
+-     - | addResponseHeaderメソッドを実装する。
++     - | \ ``addResponseHeaderメソッド``\ を実装する。
+        | ダウンロードするファイルに合わせた、 Content-Dispositionや、ContentTypeを設定する。
+ 
+ ViewResolverの定義
+@@ -435,7 +437,7 @@ ViewResolverの定義
+ 
+ コントローラでのViewの指定
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-| BeanNameViewResolverにより、コントローラで"textFileDownloadView"を返却することで、
++| \ ``BeanNameViewResolver``\ により、コントローラで"textFileDownloadView"を返却することで、
+ | Springのコンテキストで管理されたBeanIDにより、”textFileDownloadView”であるViewが使用される。
+ 
+ **Javaソース**
+@@ -456,7 +458,7 @@ ViewResolverの定義
+      - 説明
+    * - | (1)
+      - | "textFileDownloadView" をメソッドの戻り値として返却することで、
+-       | Springのコンテキストで管理された、TextFileDownloadViewクラスが実行される。
++       | Springのコンテキストで管理された、\ ``TextFileDownloadView``\ クラスが実行される。
+ 
+ \
+ 
+diff --git a/source/ArchitectureInDetail/Internationalization.rst b/source/ArchitectureInDetail/Internationalization.rst
+index dc7be59..f0065d6 100755
+--- a/source/ArchitectureInDetail/Internationalization.rst
++++ b/source/ArchitectureInDetail/Internationalization.rst
+@@ -353,7 +353,11 @@ Localeをサーバに保存する場合は、\ ``SessionLocaleResolver``\ を使
+         | beanタグのid属性は"localeResolver"と設定すること。
+         | この設定により、 ``LocaleChangeInterceptor`` 内の処理で\ ``SessionLocaleResolver``\ が使用される。
+     * - | (2)
+-      - | リクエストパラメータでLocaleを指定しない場合、\ ``defaultLocale``\ プロパティに指定されたLocaleが有効になる。この場合、\ ``HttpServletRequest#getLocale``\ での取得値が有効になる。
++      - | \ ``defaultLocale``\ プロパティにLocaleを指定する。セッションからLocaleが取得できない場合、\ ``value``\ の設定値が有効になる。
++
++        .. note::
++
++         \ ``defaultLocale``\ プロパティを省略した場合、ユーザ端末（ブラウザ）に設定されたLocaleが有効になる。
+ 
+ |
+ 
+@@ -383,7 +387,12 @@ Localeをクライアントに保存する場合は、\ ``CookieLocaleResolver``
+         | beanタグのid属性は"localeResolver"と設定すること。
+         | この設定により、 ``LocaleChangeInterceptor`` 内の処理で\ ``CookieLocaleResolver``\ が使用される。
+     * - | (2)
+-      - | Localeを指定しない場合、\ ``defaultLocale``\ プロパティに指定されたLocaleが有効になる。この場合、\ ``HttpServletRequest#getLocale``\ での取得値が有効になる。
++      - | \ ``defaultLocale``\ プロパティにLocaleを指定する。CookieからLocaleが取得できない場合、\ ``value``\ の設定値が有効になる。
++
++        .. note::
++
++         \ ``defaultLocale``\ プロパティを省略した場合、ユーザ端末（ブラウザ）に設定されたLocaleが有効になる。
++
+     * - | (3)
+       - | \ ``cookieName``\ プロパティに指定した値が、cookie名となる。指定しない場合、\ ``org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE``\ となる。**Spring Frameworkを使用していることがわかるため、変更することを推奨する。**
+ 
+diff --git a/source/ArchitectureInDetail/Logging.rst b/source/ArchitectureInDetail/Logging.rst
+index fa5b9f5..7a9bdb3 100755
+--- a/source/ArchitectureInDetail/Logging.rst
++++ b/source/ArchitectureInDetail/Logging.rst
+@@ -815,7 +815,7 @@ logback.xmlの\ ``<pattern>``\ に\ ``%X{X-Track}``\ および、\ ``%X{USER}``\
+ 
+          .. code-block:: xml
+ 
+-             <sec:http auto-config="true" use-expressions="true">
++             <sec:http auto-config="true">
+                  <!-- omitted -->
+                  <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/> <!-- (1) -->
+                  <!-- omitted -->
+diff --git a/source/ArchitectureInDetail/REST.rst b/source/ArchitectureInDetail/REST.rst
+index f31a123..da573e8 100755
+--- a/source/ArchitectureInDetail/REST.rst
++++ b/source/ArchitectureInDetail/REST.rst
+@@ -5316,20 +5316,11 @@ RESTful Web Service向けのリクエストに対して、CSRF対策の処理が
+     <sec:http
+         pattern="/api/v1/**"
+         auto-config="true"
+-        use-expressions="true"
+         create-session="stateless">
+-        <sec:headers />
++        <sec:csrf disabled="true"/>
+     </sec:http>
+ 
+-    <sec:http auto-config="true" use-expressions="true">
+-        <sec:headers>
+-            <sec:cache-control />
+-            <sec:content-type-options />
+-            <sec:hsts />
+-            <sec:frame-options />
+-            <sec:xss-protection />
+-        </sec:headers>
+-        <sec:csrf />
++    <sec:http auto-config="true">
+         <sec:access-denied-handler ref="accessDeniedHandler"/>
+         <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+         <sec:session-management />
+@@ -5350,7 +5341,7 @@ RESTful Web Service向けのリクエストに対して、CSRF対策の処理が
+        | 上記例では、\ ``/api/v1/``\で始まるリクエストパスをREST API用のリクエストパスとして扱う。
+        | また、\ ``create-session``\属性を\ ``stateless``\とする事で、Spring Securityの処理でセッションが使用されなくなる。
+        |
+-       | CSRF対策を無効化するために、\ ``<sec:csrf>``\ 要素は指定していない。
++       | CSRF対策を無効化するために、\ ``<sec:csrf>``\ 要素に \ ``disabled="true"``\ を指定している。
+ 
+ |
+ 
+diff --git a/source/ArchitectureInDetail/Utilities/JodaTime.rst b/source/ArchitectureInDetail/Utilities/JodaTime.rst
+index 34aa60c..82534f6 100755
+--- a/source/ArchitectureInDetail/Utilities/JodaTime.rst
++++ b/source/ArchitectureInDetail/Utilities/JodaTime.rst
+@@ -772,3 +772,54 @@ JSP(calendar.jsp)で、次のように出力する。
+ 
+    \newpage
+ 
++Appendix
++^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++
++Java8未満の和暦操作
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++
++| Java8では ``java.time.chrono.JapaneseDate`` という和暦操作クラスが提供されているが、Java8未満の環境では ``java.util.Calendar`` クラスで和暦を扱うことが出来る。
++| 具体的には、 ``java.util.Calendar`` クラス、 ``java.text.DateFormat`` クラスに以下の ``java.util.Locale`` を指定する必要がある。
++
++.. code-block:: java
++
++   Locale locale = new Locale("ja", "JP", "JP");
++
++| 以下に、``Calendar`` クラスを利用した和暦表示の例を示す。
++
++.. code-block:: java
++
++   Locale locale = new Locale("ja", "JP", "JP");
++   Calendar cal = Calendar.getInstance(locale); // Ex, 2015-06-05
++   String format1 = "Gy.MM.dd";
++   String format2 = "GGGGyy/MM/dd";
++
++   DateFormat df1 = new SimpleDateFormat(format1, locale);
++   DateFormat df2 = new SimpleDateFormat(format2, locale);
++
++   df1.format(cal.getTime()); // "H27.06.05"
++   df2.format(cal.getTime()); // "平成27/06/05"
++
++| また、同様に文字列からのパースも行うことが出来る。
++
++.. code-block:: java
++
++   Locale locale = new Locale("ja", "JP", "JP");
++   String format1 = "Gy.MM.dd";
++   String format2 = "GGGGyy/MM/dd";
++   
++   DateFormat df1 = new SimpleDateFormat(format1, locale);
++   DateFormat df2 = new SimpleDateFormat(format2, locale);
++   
++   Calendar cal1 = Calendar.getInstance(locale);
++   Calendar cal2 = Calendar.getInstance(locale);
++
++   cal1.setTime(df1.parse("H27.06.05"));
++   cal2.setTime(df2.parse("平成27/06/05"));
++
++|
++
++    .. note::
++
++        | ``new Locale("ja", "JP", "JP")`` を ``getInstance`` メソッドに指定することで、 和暦に対応した ``java.util.JapaneseImperialCalendar`` オブジェクトが作成される。
++        | その他を指定すると ``java.util.GregorianCalendar`` オブジェクトが作成されるため、留意されたい。
+diff --git a/source/ArchitectureInDetail/Utilities/StringProcessing.rst b/source/ArchitectureInDetail/Utilities/StringProcessing.rst
+index c69555e..a1be754 100755
+--- a/source/ArchitectureInDetail/Utilities/StringProcessing.rst
++++ b/source/ArchitectureInDetail/Utilities/StringProcessing.rst
+@@ -12,12 +12,168 @@
+ Overview
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-| 
+-|
++| Javaの文字列標準APIでは、日本語に特化した操作が少ない。
++| 全角カタカナ/半角カタカナの変換や、半角カタカナのみで構成される文字列の判定を行う場合などは、
++| 独自に処理を作りこむ必要がある。
++
++| また、Javaでは全ての文字列をUnicodeで表現するが、
++| Unicodeでは 𠮷 のような特殊文字は、サロゲートペアと呼ばれるchar型2つ（32ビット）で表される。
++| このような文字を扱う場合にも予期せぬ挙動が起きぬよう、様々な文字を扱うことを考慮した実装を行う必要がある。
++
++| 本ガイドラインでは、日本語を処理するケースを想定し、
++| 一般的な文字列操作の例と、共通ライブラリによる日本語操作APIの提供を行う。
+ 
+ How to use
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
++トリム
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++| 半角空白のトリム操作を行う場合、``String#trim`` メソッドを利用することも出来るが、前・後ろのみのトリム操作や、任意の文字列のトリム操作などの複雑な操作を行う場合は、Springから提供されている ``org.springframework.util.StringUtils`` を利用するとよい。
++|
++| 以下に例を示す。
++|
++
++.. code-block:: java
++
++   String str = "  Hello World!!";
++
++   StringUtils.trimWhitespace(str); // => "Hello World!!"
++
++   StringUtils.trimLeadingCharacter(str, ' '); // => "Hello World!!"
++
++   StringUtils.trimTrailingCharacter(str, '!'); // => "  Hello World"
++
++.. note::
++  | ``StringUtils#trimLeadingCharacter`` , ``StringUtils#trimTrailingCharacter`` の第1引数にサロゲートペアの文字列は指定しても挙動に変化はない。なお、第2引数はchar型のため、サロゲートペアを指定することは出来ない。
++
++パディング・サプレス
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++
++| パディング（文字列埋め）操作・サプレス（文字列取り）操作を行う場合は、
++| ``String`` クラスから提供されているメソッドで行うことが出来る。
++|
++| 以下に例を示す。
++
++.. code-block:: java
++
++   int num = 1;
++
++   String paddingStr = String.format("%03d", num); // => "001"
++   String suppressStr = paddingStr.replaceFirst("^0+(?!$)", ""); // => "1"
++
++.. warning::
++  | ``String#format`` はサロゲートペアを考慮できないため、見た目上の長さでパディングを行いたい場合、サロゲートペアが含まれると正しい結果が得られない。
++  | サロゲートペアを考慮してパディングを実現するためには、後述するサロゲートペアを考慮した文字数のカウントを行い、パディングすべき正しい文字数を算出して文字列結合を行う必要がある。
++
++サロゲートペアを考慮した文字列処理
++""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
++
++
++文字列長の取得
++''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
++
++| サロゲートペアを考慮した文字列の長さを取得する場合、
++| 単に ``String#length`` メソッドを使用することは出来ない。
++| サロゲートペアは32ビット（char型2つ）で表現されるため、見た目上の文字数よりも多くカウントされてしまう。
++|
++| 下記例では、変数 ``len`` には5が代入される。
++
++.. code-block:: java
++
++   String str = "𠮷田太郎";
++   int len = str.length(); // => 5
++
++|
++| そこで、Java SE 5よりサロゲートペアを考慮した文字列の長さを取得するためのメソッド ``String#codePointCount`` が定義された。
++| ``String#codePointCount`` の引数に、対象文字列の開始インデックスと終了インデックスを指定することで、文字列長を取得することが出来る。
++|
++| 以下に例を示す。
++
++.. code-block:: java
++
++   String str = "𠮷田太郎";
++   int lenOfChar = str.length(); // => 5
++   int lenOfCodePoint = str.codePointCount(0, lenOfChar); // => 4
++
++|
++| また、Unicodeでは結合文字が存在する。
++| 「が」を表す ``\u304c`` と、「か」と「濁点」を表す ``\u304b\u3099`` は、見た目上の違いは存在しないが、「か」＋「濁点」の例は2文字としてカウントされてしまう。
++| こうした結合文字が入力されることも考慮して文字数をカウントする場合、 ``java.text.Normalizer`` を使用してテキストの正規化を行ってからカウントする。
++|
++| 以下に、結合文字とサロゲートペアを考慮をした上で、文字列の長さを返却するメソッドを示す。
++
++.. code-block:: java
++
++   public int getStrLength(String str) {
++     String normalizedStr  = Normalizer.normalize(str, Normalizer.Form.NFC);
++     int length = normalizedStr.codePointCount(0, normalizedStr.length());
++
++     return length;
++   }
++
++
++指定範囲の文字列取得
++''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
++
++| 指定範囲の文字列を取得する場合、単に ``String#substring`` を利用すると、想定していない結果になる可能性がある。
++
++.. code-block:: java
++
++   String str = "𠮷田 太郎";
++   int startIndex = 0;
++   int endIndex = 2;
++   
++   String subStr = str.substring(startIndex, endIndex);
++
++   System.out.println(subStr); // => "𠮷"
++
++| 上記の例では、0文字目（先頭）から2文字を取り出し、 「𠮷田」 を取得しようと試みているが、サロゲートペアは32ビット（char型2つ）で表現されるため「𠮷」しか取得できない。
++| このような場合には、``String#offsetByCodePoints`` を利用し、サロゲートペアを考慮した開始位置と終了位置を求めてから ``String#substring`` メソッドを使う必要がある。
++|
++| 以下に、先頭から2文字（苗字部分）を取り出す例を示す。
++
++.. code-block:: java
++
++   String str = "𠮷田 太郎";
++   int startIndex = 0;
++   int endIndex = 2;
++
++   int startIndexSurrogate = str.offsetByCodePoints(0, startIndex); // => 0
++   int endIndexSurrogate = str.offsetByCodePoints(0, endIndex); // => 3
++
++   String subStrSurrogate = str.substring(startIndexSurrogate, endIndexSurrogate); // => "𠮷田"
++
++|
++
++文字列分割
++''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
++| ``String#split`` メソッドは、サロゲートペアにデフォルトで対応している。
++| 以下に例を示す。
++
++
++.. code-block:: java
++
++   String str = "𠮷田 太郎";
++   
++   str.split(" "); // => {"𠮷田", "太郎"}
++
++|
++
++    .. note::
++      | サロゲートペアを区切り文字として、 ``String#split`` の引数に指定することも出来る。
++      
++    .. note::
++      | Java SE 7までの環境とJava SE 8で、 ``String#split`` に空文字を渡したときの挙動に変化があるため留意されたい。 参照： `Pattern#splitのJavadoc <http://docs.oracle.com/javase/8/docs/api/java/util/regex/Pattern.html#split-java.lang.CharSequence-int->`_
++      
++      .. code-block:: java
++      
++        String str = "ABC";
++        String[] elems = str.split("");
++        
++        // Java SE 7 => {, A, B, C}
++        // Java SE 8 => {A, B, C}
++
++
+ 全角・半角文字列変換
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+diff --git a/source/ArchitectureInDetail/Utilities/index.rst b/source/ArchitectureInDetail/Utilities/index.rst
+index 6a1227c..444befa 100755
+--- a/source/ArchitectureInDetail/Utilities/index.rst
++++ b/source/ArchitectureInDetail/Utilities/index.rst
+@@ -4,6 +4,7 @@
+    :maxdepth: 1
+    
+    Dozer
++   DateAndTime
+    JodaTime
+    StringProcessing
+ 
+diff --git a/source/ArchitectureInDetail/Validation.rst b/source/ArchitectureInDetail/Validation.rst
+index 7c0c9c9..0891fdb 100755
+--- a/source/ArchitectureInDetail/Validation.rst
++++ b/source/ArchitectureInDetail/Validation.rst
+@@ -3789,28 +3789,6 @@ Hibernate Validatorの代表的なアノテーション(\ ``org.hibernate.valida
+             @NotEmpty
+             private String password;
+ 
+-
+-.. warning::
+-
+-    Hibernate Validatorから提供されている以下のアノテーションを使用した場合、
+-    デフォルトで提供されているメッセージを使用するとメッセージが正しく生成されないバグ(\ `HV-881 <https://hibernate.atlassian.net/browse/HV-881>`_\ 、\ `HV-949 <https://hibernate.atlassian.net/browse/HV-949>`_\ )が存在する。
+-
+-    * \ ``@CreditCardNumber``\ (メッセージは表示されるがWARNログが出力される)
+-    * \ ``@LuhnCheck``\
+-    * \ ``@Mod10Check``\
+-    * \ ``@Mod11Check``\
+-    * \ ``@ModCheck``\ (5.1.0.Finalから非推奨API)
+-
+-    このバグは、デフォルトで提供されているメッセージ定義の不備が原因なので、
+-    デフォルトで提供されているメッセージを適切なメッセージで上書きする事で回避可能である。
+-
+-    デフォルトで提供されているメッセージを上書きする場合は、
+-    クラスパス直下(通常src/main/resources)に :file:`ValidationMessages.properties` を作成し、
+-    適切なメッセージ定義を行えばよい。
+-
+-    適切なメッセージ定義については、
+-    \ `Hibernate Validator 5.2系(次のマイナーバージョンアップ)に対して行われている修正内容 <https://github.com/hibernate/hibernate-validator/commit/5a9d7bae26bccb15229ae5612d67506a7a775b48#diff-762e02c90cfb2f00b0b2788486e3fd5e>`_\ を参照されたい。
+-
+ .. _Validation_default_message_in_hibernate_validator:
+ 
+ Hibernate Validatorが用意するデフォルトメッセージ
+diff --git a/source/ArchitectureInDetail/index.rst b/source/ArchitectureInDetail/index.rst
+index 7573b16..c1da306 100755
+--- a/source/ArchitectureInDetail/index.rst
++++ b/source/ArchitectureInDetail/index.rst
+@@ -23,6 +23,7 @@ TERASOLUNA Server Framework for Java (5.x)の機能詳細
+    Ajax
+    REST
+    RestClient
++   SOAP
+    FileUpload
+    FileDownload
+    Email
+diff --git a/source/Overview/ApplicationLayering.rst b/source/Overview/ApplicationLayering.rst
+index 63e6795..2bad496 100755
+--- a/source/Overview/ApplicationLayering.rst
++++ b/source/Overview/ApplicationLayering.rst
+@@ -256,6 +256,8 @@ O/R Mapperは、Repositoryインタフェースの実装に用いられる。
+ 
+ |
+ 
++.. _application-layering_Integration-System-Connector:
++
+ Integration System Connector
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+diff --git a/source/Overview/FirstApplication.rst b/source/Overview/FirstApplication.rst
+index 7c04f21..32cb123 100755
+--- a/source/Overview/FirstApplication.rst
++++ b/source/Overview/FirstApplication.rst
+@@ -146,7 +146,7 @@ Spring MVCの設定方法を理解するために、生成されたSpring MVCの
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+diff --git a/source/TutorialREST/index.rst b/source/TutorialREST/index.rst
+index a6a226d..0092256 100755
+--- a/source/TutorialREST/index.rst
++++ b/source/TutorialREST/index.rst
+@@ -549,7 +549,7 @@ spring-mvc-rest.xmlの作成
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+             <mvc:message-converters register-defaults="false">
+                 <!-- (1) -->
+@@ -660,20 +660,11 @@ REST API用のSpring Securityの定義追加
+         <sec:http
+             pattern="/api/v1/**"
+             auto-config="true"
+-            use-expressions="true"
+             create-session="stateless">
+-            <sec:headers />
++            <sec:csrf disabled="true"/>
+         </sec:http>
+ 
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />
+@@ -731,6 +722,8 @@ REST API用のSpring Securityの定義追加
+        | \ ``<sec:http>``\ 要素の\ ``pattern``\ 属性に、REST API用のリクエストパスのURLパターンを指定している。
+        | 本チュートリアルでは\ ``/api/v1/``\ で始まるリクエストパスをREST API用のリクエストパスとして扱う。
+        | また、\ ``create-session``\ 属性を\ ``stateless``\ とする事で、Spring Securityの処理でセッションが使用されなくなる。
++       | 
++       | CSRF対策を無効化するために、\ ``<sec:csrf>``\ 要素に \ ``disabled="true"``\ を指定している。
+ 
+ |
+ 
+diff --git a/source/TutorialTodo/index.rst b/source/TutorialTodo/index.rst
+index fb83622..f56f7cc 100755
+--- a/source/TutorialTodo/index.rst
++++ b/source/TutorialTodo/index.rst
+@@ -4011,7 +4011,7 @@ spring-mvc.xml
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+@@ -4201,15 +4201,7 @@ spring-security.xml
+             http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+ 
+         <sec:http pattern="/resources/**" security="none"/>
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />
+diff --git a/source_en/ArchitectureInDetail/DataAccessJpa.rst b/source_en/ArchitectureInDetail/DataAccessJpa.rst
+index 71e1551..26138c2 100755
+--- a/source_en/ArchitectureInDetail/DataAccessJpa.rst
++++ b/source_en/ArchitectureInDetail/DataAccessJpa.rst
+@@ -1807,11 +1807,11 @@ Amongst the entities matching the conditions, call a query method to fetch the e
+ 
+     @RequestMapping("list")
+     public String list(@RequestParam("targetDate") Date targetDate,
+-                       @PageableDefaults(
+-                           pageNumber = 0,
++                       @PageableDefault(
++                           page = 0,
+                            value = 5,
+                            sort = { "createdDate" },
+-                           sortDir = Direction.DESC)
++                           direction = Direction.DESC)
+                            Pageable pageable, // (2)
+                        Model model) {
+         Page<Order> accountPage = accountService.getAccounts(targetDate, pageable);
+@@ -1976,7 +1976,7 @@ If no condition is specified, a blank list will be returned.
+                 joinConditions.add("o.orderItems oi");
+                 joinConditions.add("oi.item i");
+                 andConditions.add("i.name LIKE :itemName ESCAPE '~'");
+-                bindParameters.put("itemName", SqlUtils
++                bindParameters.put("itemName", QueryEscapeUtils
+                         .toLikeCondition(criteria.getItemName()));
+             }
+ 
+@@ -2328,7 +2328,7 @@ Further, the description for fetching all records is omitted.
+                 joinConditions.add("o.orderItems oi");
+                 joinConditions.add("oi.item i");
+                 andConditions.add("i.name LIKE :itemName ESCAPE '~'");
+-                bindParameters.put("itemName", SqlUtils.toLikeCondition(criteria
++                bindParameters.put("itemName", QueryEscapeUtils.toLikeCondition(criteria
+                         .getItemName()));
+             }
+ 
+@@ -4315,7 +4315,7 @@ The method to add common conditions for JPQL which is executed at the time of ca
+         | The WHERE clause should be specified in SQL instead of JPQL i.e. it is necessary to specify the column name instead of the property name of Java object.
+     * - | (2)
+       - | The condition specified with ``@Where`` annotation is added.
+-
++      
+ - Extending Dialect to register standard keywords such as ``true``, ``false`` and ``unknown``.
+ 
+  .. code-block:: java
+@@ -4363,7 +4363,7 @@ The method to add common conditions for JPQL which is executed at the time of ca
+       - Description
+     * - | (3)
+       - | The extended Dialect is set as the value of ``databasePlatform`` property in JPA Vendor Adapter of EntityManager.
+-
++      
+  .. note:: **Class that can be specified**
+ 
+     ``@Where`` annotation is valid only in the class with ``@Entity``.

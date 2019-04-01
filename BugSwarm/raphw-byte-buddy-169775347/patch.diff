@@ -1,0 +1,1694 @@
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
+index ee02368..adbd487 100755
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
+@@ -335,54 +335,6 @@ public interface FieldLocator {
+     }
+ 
+     /**
+-     * Attempts to only locate fields declared by the accessing type.
+-     */
+-    class ForAccessingType extends AbstractBase {
+-
+-        /**
+-         * Creates a new field locator for the accessing type.
+-         *
+-         * @param accessingType The accessing type.
+-         */
+-        protected ForAccessingType(TypeDescription accessingType) {
+-            super(accessingType);
+-        }
+-
+-        @Override
+-        protected FieldList<?> locate(ElementMatcher<? super FieldDescription> matcher) {
+-            return accessingType.getDeclaredFields().filter(matcher);
+-        }
+-
+-        @Override
+-        public String toString() {
+-            return "FieldLocator.ForAccessingType{" +
+-                    "accessingType=" + accessingType +
+-                    "}";
+-        }
+-
+-        /**
+-         * A factory for locating fields from the accessing type.
+-         */
+-        public enum Factory implements FieldLocator.Factory {
+-
+-            /**
+-             * The singleton instance.
+-             */
+-            INSTANCE;
+-
+-            @Override
+-            public FieldLocator make(TypeDescription typeDescription) {
+-                return new ForAccessingType(typeDescription);
+-            }
+-
+-            @Override
+-            public String toString() {
+-                return "FieldLocator.ForAccessingType.Factory." + name();
+-            }
+-        }
+-    }
+-
+-    /**
+      * A field locator that looks up fields that are declared within a class's class hierarchy.
+      */
+     class ForClassHierarchy extends AbstractBase {
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
+index 5d04d2b..cfeda08 100755
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
+@@ -178,117 +178,6 @@ public interface InstrumentedType extends TypeDescription {
+          * @return The prepared instrumented type.
+          */
+         InstrumentedType prepare(InstrumentedType instrumentedType);
+-
+-        /**
+-         * A non-operational preparation of an instrumented type.
+-         */
+-        enum NoOp implements Prepareable {
+-
+-            /**
+-             * The singleton instance.
+-             */
+-            INSTANCE;
+-
+-            @Override
+-            public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-                return instrumentedType;
+-            }
+-
+-            @Override
+-            public String toString() {
+-                return "InstrumentedType.Prepareable.NoOp." + name();
+-            }
+-        }
+-
+-        /**
+-         * A preparation of an instrumented type that defines a field.
+-         */
+-        class FieldDefining implements Prepareable {
+-
+-            /**
+-             * The field token to define.
+-             */
+-            private final FieldDescription.Token token;
+-
+-            /**
+-             * Creates a new preparation for a field definition.
+-             *
+-             * @param token The field token to define.
+-             */
+-            public FieldDefining(FieldDescription.Token token) {
+-                this.token = token;
+-            }
+-
+-            @Override
+-            public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-                return instrumentedType.withField(token);
+-            }
+-
+-            @Override
+-            public boolean equals(Object object) {
+-                if (this == object) return true;
+-                if (object == null || getClass() != object.getClass()) return false;
+-                FieldDefining that = (FieldDefining) object;
+-                return token.equals(that.token);
+-            }
+-
+-            @Override
+-            public int hashCode() {
+-                return token.hashCode();
+-            }
+-
+-            @Override
+-            public String toString() {
+-                return "InstrumentedType.Prepareable.FieldDefining{" +
+-                        "token=" + token +
+-                        '}';
+-            }
+-        }
+-
+-        /**
+-         * A preparation of an instrumented type that defines a field.
+-         */
+-        class MethodDefining implements Prepareable {
+-
+-            /**
+-             * The method token to define.
+-             */
+-            private final MethodDescription.Token token;
+-
+-            /**
+-             * Creates a new preparation for a method definition.
+-             *
+-             * @param token The method token to define.
+-             */
+-            public MethodDefining(MethodDescription.Token token) {
+-                this.token = token;
+-            }
+-
+-            @Override
+-            public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-                return instrumentedType.withMethod(token);
+-            }
+-
+-            @Override
+-            public boolean equals(Object object) {
+-                if (this == object) return true;
+-                if (object == null || getClass() != object.getClass()) return false;
+-                MethodDefining that = (MethodDefining) object;
+-                return token.equals(that.token);
+-            }
+-
+-            @Override
+-            public int hashCode() {
+-                return token.hashCode();
+-            }
+-
+-            @Override
+-            public String toString() {
+-                return "InstrumentedType.Prepareable.MethodDefining{" +
+-                        "token=" + token +
+-                        '}';
+-            }
+-        }
+     }
+ 
+     /**
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
+index b04577f..1a8018a 100755
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
+@@ -135,8 +135,18 @@ public class Forwarding implements Implementation {
+ 
+     @Override
+     public ByteCodeAppender appender(Target implementationTarget) {
+-        return new Appender(new StackManipulation.Compound(preparationHandler.loadFieldOwner(),
+-                FieldAccess.forField(implementationTarget.getInstrumentedType().getDeclaredFields().filter((named(fieldName))).getOnly()).getter()));
++        return new Appender(loadDelegate(implementationTarget.getInstrumentedType()));
++    }
++
++    /**
++     * Loads the field onto the operand stack.
++     *
++     * @param instrumentedType The instrumented type that declares the field.
++     * @return A stack manipulation for loading the field value onto the operand stack.
++     */
++    private StackManipulation loadDelegate(TypeDescription instrumentedType) {
++        return new StackManipulation.Compound(preparationHandler.loadFieldOwner(),
++                FieldAccess.forField(instrumentedType.getDeclaredFields().filter((named(fieldName))).getOnly()).getter());
+     }
+ 
+     @Override
+diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
+index c126401..a9d0fca 100755
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
+@@ -3,10 +3,8 @@ package net.bytebuddy.implementation;
+ import net.bytebuddy.description.field.FieldDescription;
+ import net.bytebuddy.description.method.MethodDescription;
+ import net.bytebuddy.description.method.MethodList;
+-import net.bytebuddy.description.modifier.ModifierContributor;
+ import net.bytebuddy.description.type.TypeDefinition;
+ import net.bytebuddy.description.type.TypeDescription;
+-import net.bytebuddy.dynamic.scaffold.FieldLocator;
+ import net.bytebuddy.dynamic.scaffold.InstrumentedType;
+ import net.bytebuddy.dynamic.scaffold.MethodGraph;
+ import net.bytebuddy.implementation.bind.MethodDelegationBinder;
+@@ -159,37 +157,40 @@ public class MethodDelegation implements Implementation.Composable {
+     /**
+      * The implementation delegate for this method delegation.
+      */
+-    protected final ImplementationDelegate implementationDelegate;
++    private final ImplementationDelegate implementationDelegate;
+ 
+     /**
+      * A list of {@link net.bytebuddy.implementation.bind.annotation.TargetMethodAnnotationDrivenBinder.ParameterBinder}s
+      * to be used by this method delegation.
+      */
+-    protected final List<TargetMethodAnnotationDrivenBinder.ParameterBinder<?>> parameterBinders;
++    private final List<TargetMethodAnnotationDrivenBinder.ParameterBinder<?>> parameterBinders;
+ 
+     /**
+      * The {@link net.bytebuddy.implementation.bind.annotation.TargetMethodAnnotationDrivenBinder.DefaultsProvider}
+      * to be used by this method delegation.
+      */
+-    protected final TargetMethodAnnotationDrivenBinder.DefaultsProvider defaultsProvider;
++    private final TargetMethodAnnotationDrivenBinder.DefaultsProvider defaultsProvider;
+ 
+     /**
+      * The termination handler to apply.
+      */
+-    protected final TargetMethodAnnotationDrivenBinder.TerminationHandler terminationHandler;
+-
+-    protected final InstrumentedType.Prepareable prepareable;
++    private final TargetMethodAnnotationDrivenBinder.TerminationHandler terminationHandler;
+ 
+     /**
+      * The {@link net.bytebuddy.implementation.bind.MethodDelegationBinder.AmbiguityResolver}
+      * to be used by this method delegation.
+      */
+-    protected final MethodDelegationBinder.AmbiguityResolver ambiguityResolver;
++    private final MethodDelegationBinder.AmbiguityResolver ambiguityResolver;
+ 
+     /**
+      * The {@link net.bytebuddy.implementation.bytecode.assign.Assigner} to be used by this method delegation.
+      */
+-    protected final Assigner assigner;
++    private final Assigner assigner;
++
++    /**
++     * A method container to query for methods to be considered for delegation.
++     */
++    private final MethodContainer methodContainer;
+ 
+     /**
+      * Creates a new method delegation.
+@@ -200,21 +201,22 @@ public class MethodDelegation implements Implementation.Composable {
+      * @param terminationHandler     The termination handler to apply.
+      * @param ambiguityResolver      The ambiguity resolver to use by this method delegator.
+      * @param assigner               The assigner to be supplied by this method delegator.
++     * @param methodContainer        A method container to query for methods to be considered for delegation.
+      */
+     protected MethodDelegation(ImplementationDelegate implementationDelegate,
+                                List<TargetMethodAnnotationDrivenBinder.ParameterBinder<?>> parameterBinders,
+                                TargetMethodAnnotationDrivenBinder.DefaultsProvider defaultsProvider,
+                                TargetMethodAnnotationDrivenBinder.TerminationHandler terminationHandler,
+-                               InstrumentedType.Prepareable prepareable,
+                                MethodDelegationBinder.AmbiguityResolver ambiguityResolver,
+-                               Assigner assigner) {
++                               Assigner assigner,
++                               MethodContainer methodContainer) {
+         this.implementationDelegate = implementationDelegate;
+         this.parameterBinders = parameterBinders;
+         this.defaultsProvider = defaultsProvider;
+         this.terminationHandler = terminationHandler;
+-        this.prepareable = prepareable;
+         this.ambiguityResolver = ambiguityResolver;
+         this.assigner = assigner;
++        this.methodContainer = methodContainer;
+     }
+ 
+     /**
+@@ -239,13 +241,13 @@ public class MethodDelegation implements Implementation.Composable {
+         } else if (typeDescription.isPrimitive()) {
+             throw new IllegalArgumentException("Cannot delegate to primitive " + typeDescription);
+         }
+-        return new MethodDelegation(ImplementationDelegate.ForStaticMethod.of(typeDescription),
++        return new MethodDelegation(ImplementationDelegate.ForStaticMethod.INSTANCE,
+                 TargetMethodAnnotationDrivenBinder.ParameterBinder.DEFAULTS,
+                 Argument.NextUnboundAsDefaultsProvider.INSTANCE,
+                 TargetMethodAnnotationDrivenBinder.TerminationHandler.Returning.INSTANCE,
+-                InstrumentedType.Prepareable.NoOp.INSTANCE,
+                 MethodDelegationBinder.AmbiguityResolver.DEFAULT,
+-                Assigner.DEFAULT);
++                Assigner.DEFAULT,
++                MethodContainer.ForExplicitMethods.ofStatic(typeDescription));
+     }
+ 
+     /**
+@@ -374,7 +376,7 @@ public class MethodDelegation implements Implementation.Composable {
+     public static MethodDelegation to(Object delegate, Type type, MethodGraph.Compiler methodGraphCompiler) {
+         return to(delegate,
+                 type,
+-                String.format("%s$%d", ImplementationDelegate.PREFIX, Math.abs(delegate.hashCode() % Integer.MAX_VALUE)),
++                String.format("%s$%d", ImplementationDelegate.ForStaticField.PREFIX, Math.abs(delegate.hashCode() % Integer.MAX_VALUE)),
+                 methodGraphCompiler);
+     }
+ 
+@@ -424,140 +426,145 @@ public class MethodDelegation implements Implementation.Composable {
+         if (!typeDescription.asErasure().isInstance(delegate)) {
+             throw new IllegalArgumentException(delegate + " is not an instance of " + type);
+         }
+-        return new MethodDelegation(new ImplementationDelegate.ForField(fieldName, methodGraphCompiler),
+-                TargetMethodAnnotationDrivenBinder.ParameterBinder.DEFAULTS,
+-                Argument.NextUnboundAsDefaultsProvider.INSTANCE,
+-                TargetMethodAnnotationDrivenBinder.TerminationHandler.Returning.INSTANCE,
+-                new FieldDefining(new FieldDescription.Token(fieldName, Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, typeDescription)),
+-                MethodDelegationBinder.AmbiguityResolver.DEFAULT,
+-                Assigner.DEFAULT);
+-    }
+-
+-    /**
+-     * Creates an implementation where method calls are delegated to constructor calls on the given type. As a result,
+-     * the return values of all instrumented methods must be assignable to
+-     *
+-     * @param type The type that should be constructed by the instrumented methods.
+-     * @return An implementation that creates instances of the given type as its result.
+-     */
+-    public static MethodDelegation toConstructor(Class<?> type) {
+-        return toConstructor(new TypeDescription.ForLoadedType(type));
+-    }
+-
+-    /**
+-     * Creates an implementation where method calls are delegated to constructor calls on the given type. As a result,
+-     * the return values of all instrumented methods must be assignable to
+-     *
+-     * @param typeDescription The type that should be constructed by the instrumented methods.
+-     * @return An implementation that creates instances of the given type as its result.
+-     */
+-    public static MethodDelegation toConstructor(TypeDescription typeDescription) {
+-        return new MethodDelegation(ImplementationDelegate.ForConstruction.of(typeDescription),
++        return new MethodDelegation(new ImplementationDelegate.ForStaticField(delegate, fieldName),
+                 TargetMethodAnnotationDrivenBinder.ParameterBinder.DEFAULTS,
+                 Argument.NextUnboundAsDefaultsProvider.INSTANCE,
+                 TargetMethodAnnotationDrivenBinder.TerminationHandler.Returning.INSTANCE,
+-                InstrumentedType.Prepareable.NoOp.INSTANCE,
+                 MethodDelegationBinder.AmbiguityResolver.DEFAULT,
+-                Assigner.DEFAULT);
++                Assigner.DEFAULT,
++                new MethodContainer.ForVirtualMethods(methodGraphCompiler, typeDescription));
+     }
+ 
+     /**
+-     * Creates an implementation where method calls are delegated to a value of a field with {@code fieldName}. The field
+-     * must be defined manually by a user in the scope of the instrumented type and must be set to a value prior to using
+-     * the created instance. Note that this prevents interception of method calls within the constructor of the instrumented
+-     * class which will instead result in a {@link java.lang.NullPointerException} if the field is non-static. Note that this
+-     * includes methods that were defined by the {@link java.lang.Object} class. You can narrow this default selection by
+-     * explicitly selecting methods with calling the
++     * Creates an implementation where method calls are delegated to an instance that is manually stored in a field
++     * {@code fieldName} that is defined for the instrumented type. The field belongs to any instance of the instrumented
++     * type and must be set manually by the user of the instrumented class. Note that this prevents interception of
++     * method calls within the constructor of the instrumented class which will instead result in a
++     * {@link java.lang.NullPointerException}. Note that this includes methods that were defined by the
++     * {@link java.lang.Object} class. You can narrow this default selection by explicitly selecting methods with
++     * calling the
+      * {@link net.bytebuddy.implementation.MethodDelegation#filter(net.bytebuddy.matcher.ElementMatcher)}
+      * method on the returned method delegation as for example:
+-     * <pre>MethodDelegation.toField("foo").filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
++     * <pre>MethodDelegation.to(new Foo()).filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
+      * which will result in a delegation to <code>Foo</code> where no methods of {@link java.lang.Object} are considered
+      * for delegation.
+      * <p>&nbsp;</p>
+      * The field is typically accessed by reflection or by defining an accessor on the instrumented type.
+      *
++     * @param type      The type of the delegate and the field.
+      * @param fieldName The name of the field.
+-     * @return A method delegation that intercepts method calls by delegating to method calls on the value of an pre-existing field.
++     * @return A method delegation that intercepts method calls by delegating to method calls on the given instance.
+      */
+-    public static FieldDefinable toField(String fieldName) {
+-        return toField(fieldName, FieldLocator.ForClassHierarchy.Factory.INSTANCE);
++    public static MethodDelegation toInstanceField(Class<?> type, String fieldName) {
++        return toInstanceField(new TypeDescription.ForLoadedType(type), fieldName);
+     }
+ 
+     /**
+-     * Creates an implementation where method calls are delegated to a value of a field with {@code fieldName}. The field
+-     * must be defined manually by a user in the scope of the instrumented type and must be set to a value prior to using
+-     * the created instance. Note that this prevents interception of method calls within the constructor of the instrumented
+-     * class which will instead result in a {@link java.lang.NullPointerException} if the field is non-static. Note that this
+-     * includes methods that were defined by the {@link java.lang.Object} class. You can narrow this default selection by
+-     * explicitly selecting methods with calling the
++     * Creates an implementation where method calls are delegated to an instance that is manually stored in a field
++     * {@code fieldName} that is defined for the instrumented type. The field belongs to any instance of the instrumented
++     * type and must be set manually by the user of the instrumented class. Note that this prevents interception of
++     * method calls within the constructor of the instrumented class which will instead result in a
++     * {@link java.lang.NullPointerException}. Note that this includes methods that were defined by the
++     * {@link java.lang.Object} class. You can narrow this default selection by explicitly selecting methods with
++     * calling the
+      * {@link net.bytebuddy.implementation.MethodDelegation#filter(net.bytebuddy.matcher.ElementMatcher)}
+      * method on the returned method delegation as for example:
+-     * <pre>MethodDelegation.toField("foo").filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
++     * <pre>MethodDelegation.to(new Foo()).filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
+      * which will result in a delegation to <code>Foo</code> where no methods of {@link java.lang.Object} are considered
+      * for delegation.
+      * <p>&nbsp;</p>
+      * The field is typically accessed by reflection or by defining an accessor on the instrumented type.
+      *
+-     * @param fieldName           The name of the field.
+-     * @param fieldLocatorFactory A field locator factory used to find the field in question.
+-     * @return A method delegation that intercepts method calls by delegating to method calls on the value of an pre-existing field.
++     * @param typeDescription The type of the delegate and the field.
++     * @param fieldName       The name of the field.
++     * @return A method delegation that intercepts method calls by delegating to method calls on the given instance.
+      */
+-    public static FieldDefinable toField(String fieldName, FieldLocator.Factory fieldLocatorFactory) {
+-        return toField(fieldName, fieldLocatorFactory, MethodGraph.Compiler.DEFAULT);
++    public static MethodDelegation toInstanceField(TypeDescription typeDescription, String fieldName) {
++        return toInstanceField(typeDescription, fieldName, MethodGraph.Compiler.DEFAULT);
+     }
+ 
+     /**
+-     * Creates an implementation where method calls are delegated to a value of a field with {@code fieldName}. The field
+-     * must be defined manually by a user in the scope of the instrumented type and must be set to a value prior to using
+-     * the created instance. Note that this prevents interception of method calls within the constructor of the instrumented
+-     * class which will instead result in a {@link java.lang.NullPointerException} if the field is non-static. Note that this
+-     * includes methods that were defined by the {@link java.lang.Object} class. You can narrow this default selection by
+-     * explicitly selecting methods with calling the
++     * Creates an implementation where method calls are delegated to an instance that is manually stored in a field
++     * {@code fieldName} that is defined for the instrumented type. The field belongs to any instance of the instrumented
++     * type and must be set manually by the user of the instrumented class. Note that this prevents interception of
++     * method calls within the constructor of the instrumented class which will instead result in a
++     * {@link java.lang.NullPointerException}. Note that this includes methods that were defined by the
++     * {@link java.lang.Object} class. You can narrow this default selection by explicitly selecting methods with
++     * calling the
+      * {@link net.bytebuddy.implementation.MethodDelegation#filter(net.bytebuddy.matcher.ElementMatcher)}
+      * method on the returned method delegation as for example:
+-     * <pre>MethodDelegation.toField("foo").filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
++     * <pre>MethodDelegation.to(new Foo()).filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
+      * which will result in a delegation to <code>Foo</code> where no methods of {@link java.lang.Object} are considered
+      * for delegation.
+      * <p>&nbsp;</p>
+      * The field is typically accessed by reflection or by defining an accessor on the instrumented type.
+      *
++     * @param type                The type of the delegate and the field.
+      * @param fieldName           The name of the field.
+      * @param methodGraphCompiler The method graph compiler to be used for locating methods to delegate to.
+-     * @return A method delegation that intercepts method calls by delegating to method calls on the value of an pre-existing field.
++     * @return A method delegation that intercepts method calls by delegating to method calls on the given instance.
+      */
+-    public static FieldDefinable toField(String fieldName, MethodGraph.Compiler methodGraphCompiler) {
+-        return toField(fieldName, FieldLocator.ForClassHierarchy.Factory.INSTANCE, methodGraphCompiler);
++    public static MethodDelegation toInstanceField(Class<?> type, String fieldName, MethodGraph.Compiler methodGraphCompiler) {
++        return toInstanceField(new TypeDescription.ForLoadedType(type), fieldName, methodGraphCompiler);
+     }
+ 
+     /**
+-     * Creates an implementation where method calls are delegated to a value of a field with {@code fieldName}. The field
+-     * must be defined manually by a user in the scope of the instrumented type and must be set to a value prior to using
+-     * the created instance. Note that this prevents interception of method calls within the constructor of the instrumented
+-     * class which will instead result in a {@link java.lang.NullPointerException} if the field is non-static. Note that this
+-     * includes methods that were defined by the {@link java.lang.Object} class. You can narrow this default selection by
+-     * explicitly selecting methods with calling the
++     * Creates an implementation where method calls are delegated to an instance that is manually stored in a field
++     * {@code fieldName} that is defined for the instrumented type. The field belongs to any instance of the instrumented
++     * type and must be set manually by the user of the instrumented class. Note that this prevents interception of
++     * method calls within the constructor of the instrumented class which will instead result in a
++     * {@link java.lang.NullPointerException}. Note that this includes methods that were defined by the
++     * {@link java.lang.Object} class. You can narrow this default selection by explicitly selecting methods with
++     * calling the
+      * {@link net.bytebuddy.implementation.MethodDelegation#filter(net.bytebuddy.matcher.ElementMatcher)}
+      * method on the returned method delegation as for example:
+-     * <pre>MethodDelegation.toField("foo").filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
+-     * which will result in a delegation to <code>Foo</code> where no methods of {@link java.lang.Object} are considered
++     * <pre>MethodDelegation.to(new Foo()).filter(MethodMatchers.not(isDeclaredBy(Object.class)));</pre>
++     * which will result in a delegation to {@code Foo} where no methods of {@link java.lang.Object} are considered
+      * for delegation.
+      * <p>&nbsp;</p>
+      * The field is typically accessed by reflection or by defining an accessor on the instrumented type.
+      *
++     * @param typeDefinition      The type of the delegate and the field.
+      * @param fieldName           The name of the field.
+-     * @param fieldLocatorFactory A field locator factory used to find the field in question.
+      * @param methodGraphCompiler The method graph compiler to be used for locating methods to delegate to.
+-     * @return A method delegation that intercepts method calls by delegating to method calls on the value of an pre-existing field.
++     * @return A method delegation that intercepts method calls by delegating to method calls on the given instance.
+      */
+-    public static FieldDefinable toField(String fieldName, FieldLocator.Factory fieldLocatorFactory, MethodGraph.Compiler methodGraphCompiler) {
+-        return new FieldDefinable(new ImplementationDelegate.ForField(fieldName, fieldLocatorFactory, methodGraphCompiler),
++    public static MethodDelegation toInstanceField(TypeDefinition typeDefinition, String fieldName, MethodGraph.Compiler methodGraphCompiler) {
++        return new MethodDelegation(new ImplementationDelegate.ForInstanceField(typeDefinition.asGenericType(), fieldName),
+                 TargetMethodAnnotationDrivenBinder.ParameterBinder.DEFAULTS,
+                 Argument.NextUnboundAsDefaultsProvider.INSTANCE,
+                 TargetMethodAnnotationDrivenBinder.TerminationHandler.Returning.INSTANCE,
+-                InstrumentedType.Prepareable.NoOp.INSTANCE,
+                 MethodDelegationBinder.AmbiguityResolver.DEFAULT,
+                 Assigner.DEFAULT,
+-                fieldName);
++                new MethodContainer.ForVirtualMethods(methodGraphCompiler, typeDefinition.asGenericType()));
++    }
++
++    /**
++     * Creates an implementation where method calls are delegated to constructor calls on the given type. As a result,
++     * the return values of all instrumented methods must be assignable to
++     *
++     * @param type The type that should be constructed by the instrumented methods.
++     * @return An implementation that creates instances of the given type as its result.
++     */
++    public static MethodDelegation toConstructor(Class<?> type) {
++        return toConstructor(new TypeDescription.ForLoadedType(type));
++    }
++
++    /**
++     * Creates an implementation where method calls are delegated to constructor calls on the given type. As a result,
++     * the return values of all instrumented methods must be assignable to
++     *
++     * @param typeDescription The type that should be constructed by the instrumented methods.
++     * @return An implementation that creates instances of the given type as its result.
++     */
++    public static MethodDelegation toConstructor(TypeDescription typeDescription) {
++        return new MethodDelegation(new ImplementationDelegate.ForConstruction(typeDescription),
++                TargetMethodAnnotationDrivenBinder.ParameterBinder.DEFAULTS,
++                Argument.NextUnboundAsDefaultsProvider.INSTANCE,
++                TargetMethodAnnotationDrivenBinder.TerminationHandler.Returning.INSTANCE,
++                MethodDelegationBinder.AmbiguityResolver.DEFAULT,
++                Assigner.DEFAULT,
++                MethodContainer.ForExplicitMethods.ofConstructors(typeDescription));
+     }
+ 
+     /**
+@@ -571,9 +578,9 @@ public class MethodDelegation implements Implementation.Composable {
+                 CompoundList.of(parameterBinders, parameterBinder),
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner);
++                assigner,
++                methodContainer);
+     }
+ 
+     /**
+@@ -587,9 +594,9 @@ public class MethodDelegation implements Implementation.Composable {
+                 Arrays.asList(parameterBinder),
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner);
++                assigner,
++                methodContainer);
+     }
+ 
+     /**
+@@ -603,9 +610,9 @@ public class MethodDelegation implements Implementation.Composable {
+                 parameterBinders,
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner);
++                assigner,
++                methodContainer);
+     }
+ 
+     /**
+@@ -629,9 +636,9 @@ public class MethodDelegation implements Implementation.Composable {
+                 parameterBinders,
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 new MethodDelegationBinder.AmbiguityResolver.Chain(ambiguityResolver),
+-                assigner);
++                assigner,
++                methodContainer);
+     }
+ 
+     /**
+@@ -645,9 +652,9 @@ public class MethodDelegation implements Implementation.Composable {
+                 parameterBinders,
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner);
++                assigner,
++                methodContainer);
+     }
+ 
+     /**
+@@ -657,13 +664,13 @@ public class MethodDelegation implements Implementation.Composable {
+      * @return A method delegation with the filter applied.
+      */
+     public MethodDelegation filter(ElementMatcher<? super MethodDescription> methodMatcher) {
+-        return new MethodDelegation(implementationDelegate.filter(methodMatcher),
++        return new MethodDelegation(implementationDelegate,
+                 parameterBinders,
+                 defaultsProvider,
+                 terminationHandler,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner);
++                assigner,
++                methodContainer.filter(methodMatcher));
+     }
+ 
+     @Override
+@@ -672,28 +679,28 @@ public class MethodDelegation implements Implementation.Composable {
+                 parameterBinders,
+                 defaultsProvider,
+                 TargetMethodAnnotationDrivenBinder.TerminationHandler.Dropping.INSTANCE,
+-                prepareable,
+                 ambiguityResolver,
+-                assigner), implementation);
++                assigner,
++                methodContainer), implementation);
+     }
+ 
+     @Override
+     public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-        return implementationDelegate.prepare(prepareable.prepare(instrumentedType));
++        return implementationDelegate.prepare(instrumentedType);
+     }
+ 
+     @Override
+     public ByteCodeAppender appender(Target implementationTarget) {
+-        ImplementationDelegate.Resolution resolution = implementationDelegate.resolve(implementationTarget.getInstrumentedType());
+-        return new Appender(resolution.getPreparation(),
++        return new Appender(implementationDelegate.getPreparingStackAssignment(implementationTarget.getInstrumentedType()),
+                 implementationTarget,
+-                resolution.getCandidates(),
++                methodContainer.resolve(implementationTarget.getInstrumentedType()),
+                 new MethodDelegationBinder.Processor(new TargetMethodAnnotationDrivenBinder(
+                         parameterBinders,
+                         defaultsProvider,
+                         terminationHandler,
+                         assigner,
+-                        resolution.getMethodInvoker()), ambiguityResolver)
++                        implementationDelegate.getMethodInvoker(implementationTarget.getInstrumentedType())
++                ), ambiguityResolver)
+         );
+     }
+ 
+@@ -706,8 +713,8 @@ public class MethodDelegation implements Implementation.Composable {
+                 && assigner.equals(that.assigner)
+                 && defaultsProvider.equals(that.defaultsProvider)
+                 && terminationHandler.equals(that.terminationHandler)
+-                && prepareable.equals(that.prepareable)
+                 && implementationDelegate.equals(that.implementationDelegate)
++                && methodContainer.equals(that.methodContainer)
+                 && parameterBinders.equals(that.parameterBinders);
+     }
+ 
+@@ -717,9 +724,9 @@ public class MethodDelegation implements Implementation.Composable {
+         result = 31 * result + parameterBinders.hashCode();
+         result = 31 * result + defaultsProvider.hashCode();
+         result = 31 * result + terminationHandler.hashCode();
+-        result = 31 * result + prepareable.hashCode();
+         result = 31 * result + ambiguityResolver.hashCode();
+         result = 31 * result + assigner.hashCode();
++        result = 31 * result + methodContainer.hashCode();
+         return result;
+     }
+ 
+@@ -730,313 +737,203 @@ public class MethodDelegation implements Implementation.Composable {
+                 ", parameterBinders=" + parameterBinders +
+                 ", defaultsProvider=" + defaultsProvider +
+                 ", terminationHandler=" + terminationHandler +
+-                ", prepareable=" + prepareable +
+                 ", ambiguityResolver=" + ambiguityResolver +
+                 ", assigner=" + assigner +
++                ", methodContainer=" + methodContainer +
+                 '}';
+     }
+ 
+     /**
+-     * A method delegation that allows for defining a field that is the target of a delegation.
++     * An implementation delegate is responsible for executing the actual method delegation.
+      */
+-    public static class FieldDefinable extends MethodDelegation {
++    protected interface ImplementationDelegate {
+ 
+         /**
+-         * The name of the field that can be defined.
++         * Prepares the instrumented type.
++         *
++         * @param instrumentedType The instrumented type to be prepared.
++         * @return The instrumented type after it was prepared.
+          */
+-        private final String fieldName;
++        InstrumentedType prepare(InstrumentedType instrumentedType);
+ 
+         /**
+-         * Creates a new method delegation.
++         * Returns the stack manipulation responsible for preparing the instance representing the implementation.
+          *
+-         * @param implementationDelegate The implementation delegate to use by this method delegator.
+-         * @param parameterBinders       The parameter binders to use by this method delegator.
+-         * @param defaultsProvider       The defaults provider to use by this method delegator.
+-         * @param terminationHandler     The termination handler to apply.
+-         * @param ambiguityResolver      The ambiguity resolver to use by this method delegator.
+-         * @param assigner               The assigner to be supplied by this method delegator.
+-         * @param fieldName              The name of the field that can be defined.
++         * @param instrumentedType A description of the instrumented type to which the implementation is applied.
++         * @return A stack manipulation representing the preparation.
+          */
+-        protected FieldDefinable(ImplementationDelegate implementationDelegate,
+-                                 List<TargetMethodAnnotationDrivenBinder.ParameterBinder<?>> parameterBinders,
+-                                 TargetMethodAnnotationDrivenBinder.DefaultsProvider defaultsProvider,
+-                                 TargetMethodAnnotationDrivenBinder.TerminationHandler terminationHandler,
+-                                 InstrumentedType.Prepareable prepareable,
+-                                 MethodDelegationBinder.AmbiguityResolver ambiguityResolver,
+-                                 Assigner assigner,
+-                                 String fieldName) {
+-            super(implementationDelegate, parameterBinders, defaultsProvider, terminationHandler, prepareable, ambiguityResolver, assigner);
+-            this.fieldName = fieldName;
+-        }
++        StackManipulation getPreparingStackAssignment(TypeDescription instrumentedType);
+ 
+         /**
+-         * Defines the field that is the delegation target for the instrumented type.
++         * Returns the method invoker responsible for invoking the delegation method.
+          *
+-         * @param type     The type of the field.
+-         * @param modifier The modifiers of the field.
+-         * @return A method delegation that defines a field of the previous name for the instrumented type and delegates
+-         * all matched methods to the instance assigned to this field.
++         * @param instrumentedType The instrumented type to which the implementation is applied.
++         * @return A method invoker responsible for invoking the delegation method.
+          */
+-        public MethodDelegation defineAs(Type type, ModifierContributor.ForField... modifier) {
+-            return defineAs(TypeDefinition.Sort.describe(type), modifier);
+-        }
++        MethodDelegationBinder.MethodInvoker getMethodInvoker(TypeDescription instrumentedType);
+ 
+         /**
+-         * Defines the field that is the delegation target for the instrumented type.
+-         *
+-         * @param type     The type of the field.
+-         * @param modifier The modifiers of the field.
+-         * @return A method delegation that defines a field of the previous name for the instrumented type and delegates
+-         * all matched methods to the instance assigned to this field.
++         * An implementation applied to a static method.
+          */
+-        public MethodDelegation defineAs(TypeDefinition type, ModifierContributor.ForField... modifier) {
+-            return new MethodDelegation(implementationDelegate,
+-                    parameterBinders,
+-                    defaultsProvider,
+-                    terminationHandler,
+-                    new InstrumentedType.Prepareable.FieldDefining(new FieldDescription.Token(fieldName,
+-                            ModifierContributor.Resolver.of(modifier).resolve(),
+-                            type.asGenericType())),
+-                    ambiguityResolver,
+-                    assigner);
+-        }
++        enum ForStaticMethod implements ImplementationDelegate {
+ 
+-        @Override
+-        public boolean equals(Object object) {
+-            if (this == object) return true;
+-            if (object == null || getClass() != object.getClass()) return false;
+-            if (!super.equals(object)) return false;
+-            FieldDefinable that = (FieldDefinable) object;
+-            return fieldName.equals(that.fieldName);
+-        }
+-
+-        @Override
+-        public int hashCode() {
+-            int result = super.hashCode();
+-            result = 31 * result + fieldName.hashCode();
+-            return result;
+-        }
+-
+-        @Override
+-        public String toString() {
+-            return "MethodDelegation.FieldDefinable{" +
+-                    "implementationDelegate=" + implementationDelegate +
+-                    ", parameterBinders=" + parameterBinders +
+-                    ", defaultsProvider=" + defaultsProvider +
+-                    ", terminationHandler=" + terminationHandler +
+-                    ", prepareable=" + prepareable +
+-                    ", ambiguityResolver=" + ambiguityResolver +
+-                    ", assigner=" + assigner +
+-                    ", fieldName=" + fieldName +
+-                    '}';
+-        }
+-    }
++            /**
++             * The singleton instance.
++             */
++            INSTANCE;
+ 
+-    /**
+-     * An implementation delegate is responsible for executing the actual method delegation.
+-     */
+-    protected interface ImplementationDelegate extends InstrumentedType.Prepareable {
++            @Override
++            public InstrumentedType prepare(InstrumentedType instrumentedType) {
++                return instrumentedType;
++            }
+ 
+-        String PREFIX = "delegate";
++            @Override
++            public StackManipulation getPreparingStackAssignment(TypeDescription instrumentedType) {
++                return StackManipulation.Trivial.INSTANCE;
++            }
+ 
+-        /**
+-         * Applies a filter to an implementation delegate.
+-         *
+-         * @param matcher A matcher for methods to be considered.
+-         * @return An implementation delegate that respects the given filter.
+-         */
+-        ImplementationDelegate filter(ElementMatcher<? super MethodDescription> matcher);
++            @Override
++            public MethodDelegationBinder.MethodInvoker getMethodInvoker(TypeDescription instrumentedType) {
++                return MethodDelegationBinder.MethodInvoker.Simple.INSTANCE;
++            }
+ 
+-        /**
+-         * Resolves this implementation delegate.
+-         *
+-         * @param instrumentedType The instrumented type.
+-         * @return A resolution of this implementation delegate.
+-         */
+-        Resolution resolve(TypeDescription instrumentedType);
++            @Override
++            public String toString() {
++                return "MethodDelegation.ImplementationDelegate.ForStaticMethod." + name();
++            }
++        }
+ 
+         /**
+-         * A resolution of an implementation delegate.
++         * An implementation applied on a static field.
+          */
+-        interface Resolution {
++        class ForStaticField implements ImplementationDelegate {
+ 
+             /**
+-             * Returns the candidate methods.
+-             *
+-             * @return The candidate methods.
++             * The name prefix for the {@code static} field that is containing the delegation target.
+              */
+-            MethodList<?> getCandidates();
++            protected static final String PREFIX = "delegate";
+ 
+             /**
+-             * Returns a stack manipulation to apply prior to a method call and to loading parameter arguments.
+-             *
+-             * @return A preparing stack manipulation.
++             * The name of the field that is containing the delegation target.
+              */
+-            StackManipulation getPreparation();
++            private final String fieldName;
+ 
+             /**
+-             * Returns the method invoker to use.
+-             *
+-             * @return The method invoker to use.
++             * The delegation target.
+              */
+-            MethodDelegationBinder.MethodInvoker getMethodInvoker();
++            private final Object delegate;
+ 
+             /**
+-             * A simple implementation of a resolution.
++             * Creates a new implementation for delegating to an instance that is stored in a {@code static} field.
++             *
++             * @param delegate  The actual delegation target.
++             * @param fieldName The name of the field for storing the delegate instance.
+              */
+-            class Simple implements Resolution {
+-
+-                /**
+-                 * A list of target methods to consider.
+-                 */
+-                private final MethodList<?> candidates;
+-
+-                /**
+-                 * The stack manipulation to apply as a preparation.
+-                 */
+-                private final StackManipulation preparation;
+-
+-                /**
+-                 * The method invoker to use.
+-                 */
+-                private final MethodDelegationBinder.MethodInvoker methodInvoker;
+-
+-                /**
+-                 * Creates a new resolution without a preparation and a simple method invoker.
+-                 *
+-                 * @param candidates A list of target methods to consider.
+-                 */
+-                protected Simple(MethodList<?> candidates) {
+-                    this(candidates, StackManipulation.Trivial.INSTANCE, MethodDelegationBinder.MethodInvoker.Simple.INSTANCE);
+-                }
++            public ForStaticField(Object delegate, String fieldName) {
++                this.delegate = delegate;
++                this.fieldName = fieldName;
++            }
+ 
+-                /**
+-                 * Creates a new simple resolution.
+-                 *
+-                 * @param candidates    A list of target methods to consider.
+-                 * @param preparation   The stack manipulation to apply as a preparation.
+-                 * @param methodInvoker The method invoker to use.
+-                 */
+-                protected Simple(MethodList<?> candidates, StackManipulation preparation, MethodDelegationBinder.MethodInvoker methodInvoker) {
+-                    this.candidates = candidates;
+-                    this.preparation = preparation;
+-                    this.methodInvoker = methodInvoker;
+-                }
++            @Override
++            public InstrumentedType prepare(InstrumentedType instrumentedType) {
++                return instrumentedType
++                        .withField(new FieldDescription.Token(fieldName,
++                                Opcodes.ACC_SYNTHETIC | Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC,
++                                new TypeDescription.Generic.OfNonGenericType.ForLoadedType(delegate.getClass())))
++                        .withInitializer(new LoadedTypeInitializer.ForStaticField(fieldName, delegate));
++            }
+ 
+-                /**
+-                 * Creates a new resolution for invoking a method of an instance field.
+-                 *
+-                 * @param methodGraphCompiler the method graph compiler to use.
+-                 * @param fieldDescription    The field description.
+-                 * @param instrumentedType    The instrumented type.
+-                 * @param matcher             The matcher to apply for filtering methods.
+-                 * @return An appropriate resolution.
+-                 */
+-                protected static Resolution ofInstanceField(FieldDescription fieldDescription,
+-                                                            TypeDescription instrumentedType,
+-                                                            MethodGraph.Compiler methodGraphCompiler,
+-                                                            ElementMatcher<? super MethodDescription> matcher) {
+-                    return new Resolution.Simple(methodGraphCompiler.compile(fieldDescription.getType(), instrumentedType).listNodes().asMethodList().filter(matcher),
+-                            new StackManipulation.Compound(MethodVariableAccess.REFERENCE.loadOffset(0), FieldAccess.forField(fieldDescription).getter()),
+-                            new MethodDelegationBinder.MethodInvoker.Virtual(fieldDescription.getType().asErasure()));
+-                }
++            @Override
++            public StackManipulation getPreparingStackAssignment(TypeDescription instrumentedType) {
++                return FieldAccess.forField(instrumentedType.getDeclaredFields().filter((named(fieldName))).getOnly()).getter();
++            }
+ 
+-                /**
+-                 * Creates a new resolution for invoking a method of a static field.
+-                 *
+-                 * @param methodGraphCompiler the method graph compiler to use.
+-                 * @param fieldDescription    The field description.
+-                 * @param instrumentedType    The instrumented type.
+-                 * @param matcher             The matcher to apply for filtering methods.
+-                 * @return An appropriate resolution.
+-                 */
+-                protected static Resolution ofStaticField(FieldDescription fieldDescription,
+-                                                          TypeDescription instrumentedType,
+-                                                          MethodGraph.Compiler methodGraphCompiler,
+-                                                          ElementMatcher<? super MethodDescription> matcher) {
+-                    return new Resolution.Simple(methodGraphCompiler.compile(fieldDescription.getType(), instrumentedType).listNodes().asMethodList().filter(matcher),
+-                            FieldAccess.forField(fieldDescription).getter(),
+-                            new MethodDelegationBinder.MethodInvoker.Virtual(fieldDescription.getType().asErasure()));
+-                }
++            @Override
++            public MethodDelegationBinder.MethodInvoker getMethodInvoker(TypeDescription instrumentedType) {
++                return new MethodDelegationBinder.MethodInvoker.Virtual(new TypeDescription.ForLoadedType(delegate.getClass()));
++            }
+ 
+-                @Override
+-                public MethodList<?> getCandidates() {
+-                    return candidates;
+-                }
++            @Override
++            public boolean equals(Object other) {
++                return this == other || !(other == null || getClass() != other.getClass())
++                        && delegate.equals(((ForStaticField) other).delegate)
++                        && fieldName.equals(((ForStaticField) other).fieldName);
++            }
+ 
+-                @Override
+-                public StackManipulation getPreparation() {
+-                    return preparation;
+-                }
++            @Override
++            public int hashCode() {
++                return 31 * fieldName.hashCode() + delegate.hashCode();
++            }
+ 
+-                @Override
+-                public MethodDelegationBinder.MethodInvoker getMethodInvoker() {
+-                    return methodInvoker;
+-                }
++            @Override
++            public String toString() {
++                return "MethodDelegation.ImplementationDelegate.ForStaticField{" +
++                        "fieldName='" + fieldName + '\'' +
++                        ", delegate=" + delegate +
++                        '}';
+             }
+         }
+ 
+         /**
+-         * An implementation delegate that invokes a static method.
++         * An implementation applied on an instance field.
+          */
+-        class ForStaticMethod implements ImplementationDelegate {
++        class ForInstanceField implements ImplementationDelegate {
+ 
+             /**
+-             * A list of candidate methods.
++             * The name of the instance field that is containing the target of the method delegation.
+              */
+-            private final MethodList<?> candidates;
++            private final String fieldName;
+ 
+             /**
+-             * Creates a new implementation delegate that invokes a static method.
+-             *
+-             * @param candidates A list of candidate methods.
++             * The type of the method delegation target.
+              */
+-            protected ForStaticMethod(MethodList<?> candidates) {
+-                this.candidates = candidates;
+-            }
++            private final TypeDescription.Generic fieldType;
+ 
+             /**
+-             * Creates an implementation delegate for the static methods of a given type.
++             * Creates a new instance field implementation delegate.
+              *
+-             * @param typeDescription The target type.
+-             * @return An appropriate implementation delegate.
++             * @param fieldType A description of the type that is the target of the implementation and thus also the
++             *                  field type.
++             * @param fieldName The name of the field.
+              */
+-            protected static ImplementationDelegate of(TypeDescription typeDescription) {
+-                return new ForStaticMethod(typeDescription.getDeclaredMethods().filter(isStatic()));
++            public ForInstanceField(TypeDescription.Generic fieldType, String fieldName) {
++                this.fieldType = fieldType;
++                this.fieldName = fieldName;
+             }
+ 
+             @Override
+             public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-                return instrumentedType;
++                return instrumentedType.withField(new FieldDescription.Token(fieldName, Opcodes.ACC_PUBLIC, fieldType));
+             }
+ 
+             @Override
+-            public ImplementationDelegate filter(ElementMatcher<? super MethodDescription> matcher) {
+-                return new ForStaticMethod(candidates.filter(matcher));
++            public StackManipulation getPreparingStackAssignment(TypeDescription instrumentedType) {
++                return new StackManipulation.Compound(MethodVariableAccess.REFERENCE.loadOffset(0),
++                        FieldAccess.forField(instrumentedType.getDeclaredFields().filter((named(fieldName))).getOnly()).getter());
+             }
+ 
+             @Override
+-            public Resolution resolve(TypeDescription instrumentedType) {
+-                return new Resolution.Simple(candidates.filter(isVisibleTo(instrumentedType)));
++            public MethodDelegationBinder.MethodInvoker getMethodInvoker(TypeDescription instrumentedType) {
++                return new MethodDelegationBinder.MethodInvoker.Virtual(fieldType.asErasure());
+             }
+ 
+             @Override
+-            public boolean equals(Object object) {
+-                if (this == object) return true;
+-                if (object == null || getClass() != object.getClass()) return false;
+-                ForStaticMethod that = (ForStaticMethod) object;
+-                return candidates.equals(that.candidates);
++            public boolean equals(Object other) {
++                return this == other || !(other == null || getClass() != other.getClass())
++                        && fieldName.equals(((ForInstanceField) other).fieldName)
++                        && fieldType.equals(((ForInstanceField) other).fieldType);
+             }
+ 
+             @Override
+             public int hashCode() {
+-                return candidates.hashCode();
++                return 31 * fieldName.hashCode() + fieldType.hashCode();
+             }
+ 
+             @Override
+             public String toString() {
+-                return "MethodDelegation.ImplementationDelegate.ForStaticMethod{" +
+-                        "candidates=" + candidates +
++                return "MethodDelegation.ImplementationDelegate.ForInstanceField{" +
++                        "fieldName='" + fieldName + '\'' +
++                        ", fieldType=" + fieldType +
+                         '}';
+             }
+         }
+@@ -1052,29 +949,12 @@ public class MethodDelegation implements Implementation.Composable {
+             private final TypeDescription typeDescription;
+ 
+             /**
+-             * The candidates for constructors.
+-             */
+-            private final MethodList<?> candidates;
+-
+-            /**
+-             * Creates an implementation delegate for constructing a new instance.
++             * Creates a new constructor implementation.
+              *
+-             * @param typeDescription The type to construct.
+-             * @param candidates      The candidates for constructors.
++             * @param typeDescription The type to be constructed.
+              */
+-            protected ForConstruction(TypeDescription typeDescription, MethodList<?> candidates) {
++            public ForConstruction(TypeDescription typeDescription) {
+                 this.typeDescription = typeDescription;
+-                this.candidates = candidates;
+-            }
+-
+-            /**
+-             * Creates an implementation delegate for constructing a specific type.
+-             *
+-             * @param typeDescription The type to construct.
+-             * @return An appropriate implementation delegate.
+-             */
+-            protected static ImplementationDelegate of(TypeDescription typeDescription) {
+-                return new ForConstruction(typeDescription, typeDescription.getDeclaredMethods().filter(isConstructor()));
+             }
+ 
+             @Override
+@@ -1083,56 +963,130 @@ public class MethodDelegation implements Implementation.Composable {
+             }
+ 
+             @Override
+-            public ImplementationDelegate filter(ElementMatcher<? super MethodDescription> matcher) {
+-                return new ForConstruction(typeDescription, candidates.filter(matcher));
++            public StackManipulation getPreparingStackAssignment(TypeDescription instrumentedType) {
++                return new StackManipulation.Compound(
++                        TypeCreation.of(typeDescription),
++                        Duplication.SINGLE);
+             }
+ 
+             @Override
+-            public Resolution resolve(TypeDescription instrumentedType) {
+-                return new Resolution.Simple(candidates,
+-                        new StackManipulation.Compound(TypeCreation.of(typeDescription), Duplication.SINGLE),
+-                        MethodDelegationBinder.MethodInvoker.Simple.INSTANCE);
++            public MethodDelegationBinder.MethodInvoker getMethodInvoker(TypeDescription instrumentedType) {
++                return MethodDelegationBinder.MethodInvoker.Simple.INSTANCE;
+             }
+ 
+             @Override
+-            public boolean equals(Object object) {
+-                if (this == object) return true;
+-                if (object == null || getClass() != object.getClass()) return false;
+-                ForConstruction that = (ForConstruction) object;
+-                return typeDescription.equals(that.typeDescription)
+-                        && candidates.equals(that.candidates);
++            public boolean equals(Object other) {
++                return this == other || !(other == null || getClass() != other.getClass())
++                        && typeDescription.equals(((ForConstruction) other).typeDescription);
+             }
+ 
+             @Override
+             public int hashCode() {
+-                int result = typeDescription.hashCode();
+-                result = 31 * result + candidates.hashCode();
+-                return result;
++                return typeDescription.hashCode();
+             }
+ 
+             @Override
+             public String toString() {
+                 return "MethodDelegation.ImplementationDelegate.ForConstruction{" +
+                         "typeDescription=" + typeDescription +
+-                        ", candidates=" + candidates +
+                         '}';
+             }
+         }
++    }
++
++    /**
++     * A method container collects methods that are considered as a target for delegation.
++     */
++    protected interface MethodContainer {
+ 
+         /**
+-         * An implementation delegate for a field that is defined separately.
++         * Appends a filter that is applied to the methods that this container represents.
++         *
++         * @param matcher The matcher that is to be applied for filtering methods.
++         * @return A method container with the supplied filter applied.
+          */
+-        class ForField implements ImplementationDelegate {
++        MethodContainer filter(ElementMatcher<? super MethodDescription> matcher);
++
++        /**
++         * Resolves this method container to extract a list of methods to be considered for interception.
++         *
++         * @param instrumentedType The instrumented type.
++         * @return A list of methods to be considered as delegation target.
++         */
++        MethodList<?> resolve(TypeDescription instrumentedType);
++
++        /**
++         * A method container for an explicit list of methods.
++         */
++        class ForExplicitMethods implements MethodContainer {
+ 
+             /**
+-             * The name of the defined field.
++             * The methods to be considered.
+              */
+-            private final String fieldName;
++            private final MethodList<?> methodList;
++
++            /**
++             * Creates a new explicit method container.
++             *
++             * @param methodList The methods to be considered.
++             */
++            protected ForExplicitMethods(MethodList<?> methodList) {
++                this.methodList = methodList;
++            }
+ 
+             /**
+-             * A factory for a field locator.
++             * Creates a container for all static methods of the given type description.
++             *
++             * @param typeDescription The type description of which all static methods should be considered.
++             * @return An appropriate method container.
+              */
+-            private final FieldLocator.Factory fieldLocatorFactory;
++            protected static MethodContainer ofStatic(TypeDescription typeDescription) {
++                return new ForExplicitMethods(typeDescription.getDeclaredMethods().filter(isStatic()));
++            }
++
++            /**
++             * Creates a container for all constructors of the given type description.
++             *
++             * @param typeDescription The type description of which all constructors should be considered.
++             * @return An appropriate method container.
++             */
++            protected static MethodContainer ofConstructors(TypeDescription typeDescription) {
++                return new ForExplicitMethods(typeDescription.getDeclaredMethods().filter(isConstructor()));
++            }
++
++            @Override
++            public MethodContainer filter(ElementMatcher<? super MethodDescription> matcher) {
++                return new ForExplicitMethods(methodList.filter(matcher));
++            }
++
++            @Override
++            public MethodList<?> resolve(TypeDescription instrumentedType) {
++                return methodList.filter(isVisibleTo(instrumentedType));
++            }
++
++            @Override
++            public boolean equals(Object other) {
++                return this == other || !(other == null || getClass() != other.getClass())
++                        && methodList.equals(((ForExplicitMethods) other).methodList);
++            }
++
++            @Override
++            public int hashCode() {
++                return methodList.hashCode();
++            }
++
++            @Override
++            public String toString() {
++                return "MethodDelegation.MethodContainer.ForExplicitMethods{" +
++                        "methodList=" + methodList +
++                        '}';
++            }
++        }
++
++        /**
++         * A method container for which all virtual methods of a given type should be considered.
++         */
++        class ForVirtualMethods implements MethodContainer {
+ 
+             /**
+              * The method graph compiler to use.
+@@ -1140,101 +1094,78 @@ public class MethodDelegation implements Implementation.Composable {
+             private final MethodGraph.Compiler methodGraphCompiler;
+ 
+             /**
+-             * A matcher representing a filter to be applied to the extracted methods.
++             * The target type for which the virtual methods should be extracted.
+              */
+-            private final ElementMatcher<? super MethodDescription> matcher;
++            private final TypeDescription.Generic targetType;
+ 
+             /**
+-             * Creates an implementation delegate for a field that is defined separately.
+-             *
+-             * @param fieldName           The name of the defined field.
+-             * @param methodGraphCompiler The method graph compiler to use.
++             * A matcher representing a filter to be applied to the extracted methods.
+              */
+-            protected ForField(String fieldName, MethodGraph.Compiler methodGraphCompiler) {
+-                this(fieldName, FieldLocator.ForAccessingType.Factory.INSTANCE, methodGraphCompiler, any());
+-            }
++            private final ElementMatcher<? super MethodDescription> matcher;
+ 
+             /**
+-             * Creates an implementation delegate for a field that is defined separately.
++             * Creates a new method container for virtual method extraction.
+              *
+-             * @param fieldName           The name of the defined field.
+-             * @param fieldLocatorFactory A factory for a field locator.
+              * @param methodGraphCompiler The method graph compiler to use.
++             * @param targetType          The target type for which the virtual methods should be extracted.
+              */
+-            protected ForField(String fieldName,
+-                               FieldLocator.Factory fieldLocatorFactory,
+-                               MethodGraph.Compiler methodGraphCompiler) {
+-                this(fieldName, fieldLocatorFactory, methodGraphCompiler, any());
++            protected ForVirtualMethods(MethodGraph.Compiler methodGraphCompiler, TypeDescription.Generic targetType) {
++                this(methodGraphCompiler, targetType, any());
+             }
+ 
+             /**
+-             * Creates an implementation delegate for a field that is defined separately.
++             * Creates a new method container for virtual method extraction.
+              *
+-             * @param fieldName           The name of the defined field.
+-             * @param fieldLocatorFactory A factory for a field locator.
+              * @param methodGraphCompiler The method graph compiler to use.
++             * @param targetType          The target type for which the virtual methods should be extracted.
+              * @param matcher             A matcher representing a filter to be applied to the extracted methods.
+              */
+-            private ForField(String fieldName,
+-                             FieldLocator.Factory fieldLocatorFactory,
+-                             MethodGraph.Compiler methodGraphCompiler,
+-                             ElementMatcher<? super MethodDescription> matcher) {
+-                this.fieldName = fieldName;
+-                this.fieldLocatorFactory = fieldLocatorFactory;
++            private ForVirtualMethods(MethodGraph.Compiler methodGraphCompiler,
++                                      TypeDescription.Generic targetType,
++                                      ElementMatcher<? super MethodDescription> matcher) {
+                 this.methodGraphCompiler = methodGraphCompiler;
++                this.targetType = targetType;
+                 this.matcher = matcher;
+             }
+ 
+             @Override
+-            public InstrumentedType prepare(InstrumentedType instrumentedType) {
+-                return instrumentedType;
+-            }
+-
+-            @Override
+-            public ImplementationDelegate filter(ElementMatcher<? super MethodDescription> matcher) {
+-                return new ForField(fieldName,
+-                        fieldLocatorFactory,
+-                        methodGraphCompiler,
++            public MethodContainer filter(ElementMatcher<? super MethodDescription> matcher) {
++                return new ForVirtualMethods(methodGraphCompiler,
++                        targetType,
+                         new ElementMatcher.Junction.Conjunction<MethodDescription>(this.matcher, matcher));
+             }
+ 
+             @Override
+-            public Resolution resolve(TypeDescription instrumentedType) {
+-                FieldLocator.Resolution resolution = fieldLocatorFactory.make(instrumentedType).locate(fieldName);
+-                if (!resolution.isResolved()) {
+-                    throw new IllegalStateException("Could not locate a field named " + fieldName + " for " + instrumentedType);
++            public MethodList<?> resolve(TypeDescription instrumentedType) {
++                if (!targetType.asErasure().isVisibleTo(instrumentedType)) {
++                    throw new IllegalStateException(instrumentedType + " cannot access " + targetType);
+                 }
+-                return resolution.getField().isStatic()
+-                        ? Resolution.Simple.ofStaticField(resolution.getField(), instrumentedType, methodGraphCompiler, matcher)
+-                        : Resolution.Simple.ofInstanceField(resolution.getField(), instrumentedType, methodGraphCompiler, matcher);
++                return methodGraphCompiler.compile(targetType, instrumentedType).listNodes().asMethodList().filter(matcher);
+             }
+ 
+             @Override
+-            public boolean equals(Object object) {
+-                if (this == object) return true;
+-                if (object == null || getClass() != object.getClass()) return false;
+-                ForField that = (ForField) object;
+-                return fieldName.equals(that.fieldName)
+-                        && fieldLocatorFactory.equals(that.fieldLocatorFactory)
+-                        && methodGraphCompiler.equals(that.methodGraphCompiler)
++            public boolean equals(Object other) {
++                if (this == other) return true;
++                if (other == null || getClass() != other.getClass()) return false;
++                ForVirtualMethods that = (ForVirtualMethods) other;
++                return methodGraphCompiler.equals(that.methodGraphCompiler)
++                        && targetType.equals(that.targetType)
+                         && matcher.equals(that.matcher);
+             }
+ 
+             @Override
+             public int hashCode() {
+-                int result = fieldName.hashCode();
+-                result = 31 * result + fieldLocatorFactory.hashCode();
+-                result = 31 * result + methodGraphCompiler.hashCode();
++                int result = methodGraphCompiler.hashCode();
++                result = 31 * result + targetType.hashCode();
+                 result = 31 * result + matcher.hashCode();
+                 return result;
+             }
+ 
+             @Override
+             public String toString() {
+-                return "MethodDelegation.ImplementationDelegate.ForField{" +
+-                        "fieldName='" + fieldName + '\'' +
+-                        ", fieldLocatorFactory=" + fieldLocatorFactory +
+-                        ", methodGraphCompiler=" + methodGraphCompiler +
++                return "MethodDelegation.MethodContainer.ForVirtualMethods{" +
++                        "methodGraphCompiler=" + methodGraphCompiler +
++                        ", targetType=" + targetType +
+                         ", matcher=" + matcher +
+                         '}';
+             }
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
+index 6e531c3..cd2a001 100755
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
+@@ -345,7 +345,7 @@ public class ByteBuddyTutorialExamplesTest {
+         ByteBuddy byteBuddy = new ByteBuddy();
+         Class<? extends UserType> dynamicUserType = byteBuddy
+                 .subclass(UserType.class)
+-                .method(not(isDeclaredBy(Object.class))).intercept(MethodDelegation.toField("interceptor").defineAs(Interceptor2.class))
++                .method(not(isDeclaredBy(Object.class))).intercept(MethodDelegation.toInstanceField(Interceptor2.class, "interceptor"))
+                 .implement(InterceptionAccessor.class).intercept(FieldAccessor.ofBeanProperty())
+                 .make()
+                 .load(getClass().getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
+index 410e7d5..2e0c211 100755
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
+@@ -7,6 +7,9 @@ import org.junit.Test;
+ import java.util.List;
+ 
+ import static net.bytebuddy.matcher.ElementMatchers.isToString;
++import static org.hamcrest.CoreMatchers.is;
++import static org.hamcrest.CoreMatchers.not;
++import static org.hamcrest.MatcherAssert.assertThat;
+ import static org.mockito.Mockito.when;
+ 
+ public class MethodDelegationOtherTest {
+@@ -28,6 +31,48 @@ public class MethodDelegationOtherTest {
+     }
+ 
+     @Test
++    public void testStaticMethodDelegation() throws Exception {
++        assertThat(MethodDelegation.to(Foo.class).hashCode(), is(MethodDelegation.to(Foo.class).hashCode()));
++        assertThat(MethodDelegation.to(Foo.class), is(MethodDelegation.to(Foo.class)));
++        assertThat(MethodDelegation.to(Foo.class).hashCode(), not(MethodDelegation.to(Bar.class).hashCode()));
++        assertThat(MethodDelegation.to(Foo.class), not(MethodDelegation.to(Bar.class)));
++    }
++
++    @Test
++    public void testStaticInstanceDelegation() throws Exception {
++        assertThat(MethodDelegation.to(new Foo()).hashCode(), is(MethodDelegation.to(new Foo()).hashCode()));
++        assertThat(MethodDelegation.to(new Foo()), is(MethodDelegation.to(new Foo())));
++        assertThat(MethodDelegation.to(new Foo()).hashCode(), not(MethodDelegation.to(new Bar()).hashCode()));
++        assertThat(MethodDelegation.to(new Foo()), not(MethodDelegation.to(new Bar())));
++    }
++
++    @Test
++    public void testStaticInstanceDelegationWithFieldName() throws Exception {
++        assertThat(MethodDelegation.to(new Foo(), FOO).hashCode(), is(MethodDelegation.to(new Foo(), FOO).hashCode()));
++        assertThat(MethodDelegation.to(new Foo(), FOO), is(MethodDelegation.to(new Foo(), FOO)));
++        assertThat(MethodDelegation.to(new Foo(), FOO).hashCode(), not(MethodDelegation.to(new Foo(), BAR).hashCode()));
++        assertThat(MethodDelegation.to(new Foo()), not(MethodDelegation.to(new Foo(), BAR)));
++    }
++
++    @Test
++    public void testInstanceFieldDelegation() throws Exception {
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), is(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode()));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), is(MethodDelegation.toInstanceField(Foo.class, FOO)));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(MethodDelegation.toInstanceField(Bar.class, FOO).hashCode()));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(MethodDelegation.toInstanceField(Bar.class, FOO)));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO).hashCode(), not(MethodDelegation.toInstanceField(Foo.class, BAR).hashCode()));
++        assertThat(MethodDelegation.toInstanceField(Foo.class, FOO), not(MethodDelegation.toInstanceField(Foo.class, BAR)));
++    }
++
++    @Test
++    public void testConstructorDelegation() throws Exception {
++        assertThat(MethodDelegation.toConstructor(Foo.class).hashCode(), is(MethodDelegation.toConstructor(Foo.class).hashCode()));
++        assertThat(MethodDelegation.toConstructor(Foo.class), is(MethodDelegation.toConstructor(Foo.class)));
++        assertThat(MethodDelegation.toConstructor(Foo.class).hashCode(), not(MethodDelegation.toConstructor(Bar.class).hashCode()));
++        assertThat(MethodDelegation.toConstructor(Foo.class), not(MethodDelegation.toConstructor(Bar.class)));
++    }
++
++    @Test
+     public void testObjectProperties() throws Exception {
+         ObjectPropertyAssertion.of(MethodDelegation.class).refine(new ObjectPropertyAssertion.Refinement<List<?>>() {
+             @Override
+@@ -35,11 +80,13 @@ public class MethodDelegationOtherTest {
+                 when(mock.size()).thenReturn(1);
+             }
+         }).apply();
+-        ObjectPropertyAssertion.of(MethodDelegation.FieldDefinable.class).apply();
+         ObjectPropertyAssertion.of(MethodDelegation.Appender.class).apply();
++        ObjectPropertyAssertion.of(MethodDelegation.ImplementationDelegate.ForStaticField.class).apply();
++        ObjectPropertyAssertion.of(MethodDelegation.ImplementationDelegate.ForInstanceField.class).apply();
+         ObjectPropertyAssertion.of(MethodDelegation.ImplementationDelegate.ForConstruction.class).apply();
+         ObjectPropertyAssertion.of(MethodDelegation.ImplementationDelegate.ForStaticMethod.class).apply();
+-        ObjectPropertyAssertion.of(MethodDelegation.ImplementationDelegate.ForField.class).apply();
++        ObjectPropertyAssertion.of(MethodDelegation.MethodContainer.ForExplicitMethods.class).apply();
++        ObjectPropertyAssertion.of(MethodDelegation.MethodContainer.ForVirtualMethods.class).apply();
+     }
+ 
+     public static class Foo {
+diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
+index 6ee7421..539ed78 100755
+--- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
++++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
+@@ -1,6 +1,5 @@
+ package net.bytebuddy.implementation;
+ 
+-import net.bytebuddy.description.modifier.Visibility;
+ import net.bytebuddy.dynamic.DynamicType;
+ import net.bytebuddy.test.utility.CallTraceable;
+ import org.hamcrest.CoreMatchers;
+@@ -21,7 +20,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
+ @RunWith(Parameterized.class)
+ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImplementationTest {
+ 
+-    private static final String FOO = "foo", BAR = "bar", FIELD_NAME = "qux", PREDEFINED_FIELD_NAME = "baz", PREDEFINED_FIELD_NAME_STATIC = "foobar";
++    private static final String FOO = "foo", BAR = "bar", FIELD_NAME = "qux";
+ 
+     private static final byte BYTE_MULTIPLICATOR = 3;
+ 
+@@ -121,8 +120,8 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     @Test
+     @SuppressWarnings("unchecked")
+-    public void testFieldInstanceBindingAndDefined() throws Exception {
+-        DynamicType.Loaded<T> loaded = implement(sourceType, MethodDelegation.toField(FIELD_NAME).defineAs(targetType, Visibility.PUBLIC).filter(isDeclaredBy(targetType)));
++    public void testInstanceFieldBinding() throws Exception {
++        DynamicType.Loaded<T> loaded = implement(sourceType, MethodDelegation.toInstanceField(targetType, FIELD_NAME).filter(isDeclaredBy(targetType)));
+         assertThat(loaded.getLoadedAuxiliaryTypes().size(), is(0));
+         assertThat(loaded.getLoaded().getDeclaredMethods().length, is(1));
+         assertThat(loaded.getLoaded().getDeclaredFields().length, is(1));
+@@ -138,44 +137,8 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+         instance.assertZeroCalls();
+     }
+ 
+-    @Test
+-    @SuppressWarnings("unchecked")
+-    public void testFieldStaticBinding() throws Exception {
+-        DynamicType.Loaded<T> loaded = implement(sourceType, MethodDelegation.toField(PREDEFINED_FIELD_NAME_STATIC).filter(isDeclaredBy(targetType)));
+-        assertThat(loaded.getLoadedAuxiliaryTypes().size(), is(0));
+-        assertThat(loaded.getLoaded().getDeclaredMethods().length, is(1));
+-        assertThat(loaded.getLoaded().getDeclaredFields().length, is(0));
+-        T instance = loaded.getLoaded().getDeclaredConstructor().newInstance();
+-        Field field = loaded.getLoaded().getField(PREDEFINED_FIELD_NAME_STATIC);
+-        field.set(null, targetType.getDeclaredConstructor().newInstance());
+-        assertThat(instance.getClass(), not(CoreMatchers.<Class<?>>is(sourceType)));
+-        assertThat(instance, instanceOf(sourceType));
+-        assertThat(loaded.getLoaded().getDeclaredMethod(FOO, parameterTypes).invoke(instance, arguments), (Matcher) matcher);
+-        instance.assertZeroCalls();
+-    }
+-
+-    @Test
+-    @SuppressWarnings("unchecked")
+-    public void testFieldInstanceBinding() throws Exception {
+-        DynamicType.Loaded<T> loaded = implement(sourceType, MethodDelegation.toField(PREDEFINED_FIELD_NAME).filter(isDeclaredBy(targetType)));
+-        assertThat(loaded.getLoadedAuxiliaryTypes().size(), is(0));
+-        assertThat(loaded.getLoaded().getDeclaredMethods().length, is(1));
+-        assertThat(loaded.getLoaded().getDeclaredFields().length, is(0));
+-        T instance = loaded.getLoaded().getDeclaredConstructor().newInstance();
+-        Field field = loaded.getLoaded().getField(PREDEFINED_FIELD_NAME);
+-        field.set(instance, targetType.getDeclaredConstructor().newInstance());
+-        assertThat(instance.getClass(), not(CoreMatchers.<Class<?>>is(sourceType)));
+-        assertThat(instance, instanceOf(sourceType));
+-        assertThat(loaded.getLoaded().getDeclaredMethod(FOO, parameterTypes).invoke(instance, arguments), (Matcher) matcher);
+-        instance.assertZeroCalls();
+-    }
+-
+     public static class BooleanSource extends CallTraceable {
+ 
+-        public BooleanTarget baz;
+-
+-        public static BooleanTarget foobar;
+-
+         public boolean foo(boolean b) {
+             register(FOO);
+             return b;
+@@ -195,10 +158,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class ByteSource extends CallTraceable {
+ 
+-        public ByteTarget baz;
+-
+-        public static ByteTarget foobar;
+-
+         public byte foo(byte b) {
+             register(FOO);
+             return b;
+@@ -218,10 +177,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class ShortSource extends CallTraceable {
+ 
+-        public ShortTarget baz;
+-
+-        public static ShortTarget foobar;
+-
+         public short foo(short s) {
+             register(FOO);
+             return s;
+@@ -241,10 +196,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class CharSource extends CallTraceable {
+ 
+-        public CharTarget baz;
+-
+-        public static CharTarget foobar;
+-
+         public char foo(char s) {
+             register(FOO);
+             return s;
+@@ -264,10 +215,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class IntSource extends CallTraceable {
+ 
+-        public IntTarget baz;
+-
+-        public static IntTarget foobar;
+-
+         public int foo(int i) {
+             register(FOO);
+             return i;
+@@ -287,10 +234,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class LongSource extends CallTraceable {
+ 
+-        public LongTarget baz;
+-
+-        public static LongTarget foobar;
+-
+         public long foo(long l) {
+             register(FOO);
+             return l;
+@@ -310,10 +253,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class FloatSource extends CallTraceable {
+ 
+-        public FloatTarget baz;
+-
+-        public static FloatTarget foobar;
+-
+         public float foo(float f) {
+             register(FOO);
+             return f;
+@@ -333,10 +272,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class DoubleSource extends CallTraceable {
+ 
+-        public DoubleTarget baz;
+-
+-        public static DoubleTarget foobar;
+-
+         public double foo(double d) {
+             register(FOO);
+             return d;
+@@ -356,10 +291,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class VoidSource extends CallTraceable {
+ 
+-        public VoidTarget baz;
+-
+-        public static VoidTarget foobar;
+-
+         public void foo() {
+             register(FOO);
+         }
+@@ -378,10 +309,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+ 
+     public static class StringSource extends CallTraceable {
+ 
+-        public StringTarget baz;
+-
+-        public static StringTarget foobar;
+-
+         public String foo(String s) {
+             register(FOO);
+             return s;

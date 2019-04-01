@@ -1,0 +1,459 @@
+diff --git a/source_en/ArchitectureInDetail/Codelist.rst b/source_en/ArchitectureInDetail/Codelist.rst
+index b9c9795..c91b490 100755
+--- a/source_en/ArchitectureInDetail/Codelist.rst
++++ b/source_en/ArchitectureInDetail/Codelist.rst
+@@ -1234,8 +1234,8 @@ As a result of above settings, when characters other than M, F are stored in ``g
+ 
+ .. tip::
+ 
+-    ``@ExistInCodeList`` input validation supports only ``String`` or ``Character`` data types.
+-    Therefore, even if the fields with ``@ExistInCodeList`` may contain integer values, they should be defined as String data type. (such as Year/Month/Day)
++    ``@ExistInCodeList`` input validation supports only the implementation class (\ ``String``\  etc) of \ ``CharSequence``\  interface or \ ``Character``\  type.
++    Therefore, even if the fields with \ ``@ExistInCodeList``\ may contain integer values, they should be defined as \ ``String``\ data type. (such as Year/Month/Day)
+ 
+ |
+ 
+diff --git a/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst b/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
+index ec8d2c0..a6ab47e 100755
+--- a/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
++++ b/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
+@@ -741,9 +741,16 @@ The attributes that can be specified in ``@TransactionTokenCheck``\  annotation
+      - value
+      - | Any character string. Used as NameSpace.
+      - None
+-     - | value = "create"
+-       | If there is only 1 argument, the "value =" part can be omitted.
++     - | \ ``value = "create"``\ 
++       | \ ``value =``\  part can be omitted if there is only one argument.
+    * - (2)
++     - namespace
++     - | Any string.Used as NameSpace.
++       | It is an alias of value attribute.
++     - None
++     - | \ ``namespace = "create"``\ 
++       | Synonymous with \ ``value = "create"``\ . It is used as an alternative to value attribute since value attribute cannot be used while using  \ ``@TransactionTokenCheck``\  as a meta-annotation.
++   * - (3)
+      - type
+      - | **BEGIN**
+        | A transaction token is created and a new transaction is started.
+@@ -760,7 +767,7 @@ The attributes that can be specified in ``@TransactionTokenCheck``\  annotation
+ 
+  .. note::
+  
+-    It is recommended that the value to be set in "value" attribute should be same as the config value of "value" attribute for \ ``@RequestMapping``\  annotation.
++    It is recommended that the value to be set in value attribute or namespace attribute should be same as the config value of "value" attribute for \ ``@RequestMapping``\  annotation.
+ 
+  .. note::
+  
+diff --git a/source_en/ArchitectureInDetail/FileDownload.rst b/source_en/ArchitectureInDetail/FileDownload.rst
+index fc7d88e..4bd9565 100755
+--- a/source_en/ArchitectureInDetail/FileDownload.rst
++++ b/source_en/ArchitectureInDetail/FileDownload.rst
+@@ -38,7 +38,7 @@ Overview of File Download process is given below.
+ | when rendering PDF files using model information.
+ |
+ | **For Excel files**
+-| \ ``org.springframework.web.servlet.view.document.AbstractExcelView``\  class of Spring is used as a subclass
++| \ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\  class of Spring is used as a subclass
+ | when rendering Excel files using model information.
+ |
+ | For file formats other than those specified above, various types of View implementations are provided in Spring.
+@@ -91,11 +91,11 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described later.
+    * - | (2)
+-     - | Inherit AbstractPdfView.
++     - | Inherit \ ``AbstractPdfView``\ .
+    * - | (3)
+-     - | Execute buildPdfDocument method.
++     - | Execute \ ``buildPdfDocument``\  method.
+ 
+-| AbstractPdfView uses \ `iText <http://itextpdf.com/>`_\  for PDF rendering.
++| \ ``AbstractPdfView``\  uses \ `iText <http://itextpdf.com/>`_\  for PDF rendering.
+ | Therefore, it is necessary to add itext definition to pom.xml of Maven.
+ 
+ .. code-block:: xml
+@@ -149,7 +149,7 @@ Implementation of Custom View
+ Definition of ViewResolver
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  is a class,
+-that selects \ ``View``\  to be executed using bean name stored in Spring context.
++that selects View to be executed using bean name stored in Spring context.
+ 
+ When using \ ``BeanNameViewResolver``\ , it is recommended to define such that \ ``BeanNameViewResolver``\  is executed before
+ 
+@@ -161,7 +161,7 @@ which are generally used.
+ .. note::
+ 
+     Spring Framework provides various types of \ ``ViewResolver``\  and it allows chaining of multiple \ ``ViewResolver``\ .
+-    Therefore, some unintended \ ``View``\  may get selected under certain conditions.
++    Therefore, some unintended View may get selected under certain conditions.
+ 
+     It is possible to avoid such a situation by setting appropriate priority order in \ ``ViewResolver``\ .
+     Method to set priority order differs depending on definition method of \ ``ViewResolver``\ .
+@@ -223,7 +223,7 @@ which are generally used.
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| With the help of BeanNameViewResolver, by returning "samplePDFView" in Controller,
++| With the help of \ ``BeanNameViewResolver``\ , by returning "samplePDFView" in Controller,
+ | a view named "samplePDFView" gets used from the BeanIDs stored in Spring Context.
+ 
+ **Java source code**
+@@ -245,7 +245,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "samplePdfView" as the return value of method,
+-       | SamplePdfView class stored in Spring context is executed.
++       | \ ``SamplePdfView``\  class stored in Spring context is executed.
+ 
+ | Following PDF file can be opened after executing the above procedure.
+ 
+@@ -261,25 +261,25 @@ Specifying View in controller
+ Downloading Excel files
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | For rendering EXCEL files, it is necessary to create a class that
+-| inherits \ ``org.springframework.web.servlet.view.document.AbstractExcelView``\  provided by Spring.
++| inherits \ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\  provided by Spring.
+ | The procedure to download an EXCEL file using controller is explained below.
+ 
+ Implementation of Custom View
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-**Implementation of class that inherits AbstractExcelView**
++**Implementation of class that inherits AbstractXlsxView**
+ 
+ .. code-block:: java
+ 
+         @Component  // (1)
+-        public class SampleExcelView extends AbstractExcelView {  // (2)
++        public class SampleExcelView extends AbstractXlsxView {  // (2)
+ 
+             @Override
+             protected void buildExcelDocument(Map<String, Object> model,
+-                    HSSFWorkbook workbook, HttpServletRequest request,
++                    Workbook workbook, HttpServletRequest request,
+                     HttpServletResponse response) throws Exception {  // (3)
+-                HSSFSheet sheet;
+-                HSSFCell cell;
++                Sheet sheet;
++                Cell cell;
+ 
+                 sheet = workbook.createSheet("Spring");
+                 sheet.setDefaultColumnWidth(12);
+@@ -304,11 +304,11 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described earlier.
+    * - | (2)
+-     - | Inherit AbstractExcelView.
++     - | Inherit \ ``AbstractXlsxView``\ .
+    * - | (3)
+-     - | Execute buildExcelDocument method.
++     - | Execute \ ``buildExcelDocument``\  method.
+ 
+-| AbstractExcelView uses \ `Apache POI <http://poi.apache.org/>`_\  to render EXCEL file.
++| \ ``AbstractXlsxView``\ uses \ `Apache POI <http://poi.apache.org/>`_\  to render EXCEL file.
+ | Therefore, it is necessary to add POI definition to the pom.xml file of Maven.
+ 
+ .. code-block:: xml
+@@ -317,16 +317,18 @@ Implementation of Custom View
+       <!-- omitted -->
+       <dependency>
+           <groupId>org.apache.poi</groupId>
+-          <artifactId>poi</artifactId>
+-          <version>${org.apache.poi.poi.version}</version>
++          <artifactId>poi-ooxml</artifactId>
+       </dependency>
+   </dependencies>
+-  
+-  <properties>
+-      <!-- omitted -->
+-      <org.apache.poi.poi.version>3.9</org.apache.poi.poi.version>
+-  </properties>
++
+         
++\
++    .. note::
++        <version> is omitted in the configuration example since poi-ooxml version uses details defined in Spring IO Platform.
++
++        Also, \ ``AbstractExcelView``\  uses @Deprecated annotation from Spring Framework 4.2. Hence, it is recommended to use \ ``AbstractXlsxView``\ in the same way even if you want to use a xls file.
++        For details, refer \ `AbstractExcelView - JavaDoc <https://docs.spring.io/spring/docs/4.2.4.RELEASE/javadoc-api/org/springframework/web/servlet/view/document/AbstractExcelView.html>`_\ .
++          
+ 
+ Definition of ViewResolver
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+@@ -336,7 +338,7 @@ Settings are same as that for PDF file rendering. For details, refer to \ :ref:`
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| With the help of BeanNameViewResolver, by returning "sampleExcelView" in Controller, 
++| With the help of \ ``BeanNameViewResolver``\ , by returning "sampleExcelView" in Controller, 
+ | a view named "sampleExcelView" gets used from the BeanIDs stored in Spring Context.
+ 
+ **Java source**
+@@ -358,7 +360,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "sampleExcelView"as the return value of method,
+-       | SampleExcelView class stored in Spring context is executed.
++       | \ ``SampleExcelView``\  class stored in Spring context is executed.
+ 
+ | EXCEL file can be opened as shown below after executing the above procedures.
+ 
+@@ -373,7 +375,7 @@ Downloading arbitrary files
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | To download files in formats other than PDF or EXCEL,
+ | class that inherits \ ``org.terasoluna.gfw.web.download.AbstractFileDownloadView``\  provided by common library can be implemented.
+-| Following steps should be implemented in AbstractFileDownloadView to render files in other format.
++| Following steps should be implemented in \ ``AbstractFileDownloadView``\  to render files in other format.
+ 
+ 1. Fetch InputStream in order to write to the response body.
+ 2. Set information in HTTP header.
+@@ -419,12 +421,12 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described earlier.
+    * - | (2)
+-     - | Inherit AbstractFileDownloadView.
++     - | Inherit \ ``AbstractFileDownloadView``\ .
+    * - | (3)
+-     - | Execute getInputStream method.
+-       | InputStream to be downloaded should be returned.
++     - | Execute \ ``getInputStream``\  method.
++       | \ ``InputStream``\  to be downloaded should be returned.
+    * - | (4)
+-     - | Execute addResponseHeader method.
++     - | Execute \ ``addResponseHeader method``\ .
+        | Set Content-Disposition or ContentType as per the file to be downloaded.
+ 
+ Definition of ViewResolver
+@@ -434,7 +436,7 @@ Settings are same as that of PDF file rendering. For details, refer to \ :ref:`v
+ 
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-| With the help of BeanNameViewResolver, by returning "textFileDownloadView" in Controller, 
++| With the help of \ ``BeanNameViewResolver``\ , by returning "textFileDownloadView" in Controller, 
+ | a view named "textFileDownloadView" gets used from the BeanIDs stored in Spring Context. 
+ 
+ **Java source**
+@@ -455,7 +457,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "textFileDownloadView"as the return value of method, 
+-       | TextFileDownloadView class stored in Spring context is executed.
++       | \ ``TextFileDownloadView``\  class stored in Spring context is executed.
+ 
+ \
+ 
+diff --git a/source_en/ArchitectureInDetail/Internationalization.rst b/source_en/ArchitectureInDetail/Internationalization.rst
+index 52e454e..397de4a 100755
+--- a/source_en/ArchitectureInDetail/Internationalization.rst
++++ b/source_en/ArchitectureInDetail/Internationalization.rst
+@@ -37,6 +37,11 @@ The image of switching locale is as follows:
+ 
+     For internationalization of Codelist, refer to :doc:`Codelist`.
+ 
++.. note::
++
++    When the error screen is to be internationalised, transition to error screen is performed by using MVC Controller of Spring.
++    If a direct transition to error screen is performed without Spring MVC, it may happen that the message is not output in intended language.
++
+ .. tip::
+ 
+     The most commonly known abbreviation of internationalization is i18n.
+diff --git a/source_en/ArchitectureInDetail/Logging.rst b/source_en/ArchitectureInDetail/Logging.rst
+index 370cdef..00c38d2 100755
+--- a/source_en/ArchitectureInDetail/Logging.rst
++++ b/source_en/ArchitectureInDetail/Logging.rst
+@@ -813,7 +813,7 @@ Example of log output
+ 
+          .. code-block:: xml
+ 
+-             <sec:http auto-config="true" use-expressions="true">
++             <sec:http auto-config="true">
+                  <!-- omitted -->
+                  <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/> <!-- (1) -->
+                  <!-- omitted -->
+diff --git a/source_en/ArchitectureInDetail/REST.rst b/source_en/ArchitectureInDetail/REST.rst
+index 1baba28..9294751 100755
+--- a/source_en/ArchitectureInDetail/REST.rst
++++ b/source_en/ArchitectureInDetail/REST.rst
+@@ -5316,20 +5316,11 @@ prevented for RESTful Web Service requests.
+     <sec:http
+         pattern="/api/v1/**"
+         auto-config="true"
+-        use-expressions="true"
+         create-session="stateless">
+-        <sec:headers />
++        <sec:csrf disabled="true"/>
+     </sec:http>
+ 
+-    <sec:http auto-config="true" use-expressions="true">
+-        <sec:headers>
+-            <sec:cache-control />
+-            <sec:content-type-options />
+-            <sec:hsts />
+-            <sec:frame-options />
+-            <sec:xss-protection />
+-        </sec:headers>
+-        <sec:csrf />
++    <sec:http auto-config="true">
+         <sec:access-denied-handler ref="accessDeniedHandler"/>
+         <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+         <sec:session-management />
+@@ -5350,7 +5341,7 @@ prevented for RESTful Web Service requests.
+        | In the above example, request path starting with \ ``/api/v1/``\  is handled as the REST API request path.
+        | Further, session is no longer used in Spring Security process by setting \ ``create-session``\  attribute to \ ``stateless``\ .
+        |
+-       | \ ``<sec: csrf>``\  element is not specified to disable the CSRF measures.
++       | Specify \ ``disabled="true"``\  in \ ``<sec:csrf>``\  element for invalidating CSRF countermeasures.
+ 
+ |
+ 
+diff --git a/source_en/ArchitectureInDetail/Utilities/index.rst b/source_en/ArchitectureInDetail/Utilities/index.rst
+index 1c57b3c..99a00b1 100755
+--- a/source_en/ArchitectureInDetail/Utilities/index.rst
++++ b/source_en/ArchitectureInDetail/Utilities/index.rst
+@@ -1,11 +1,11 @@
+ Utilities
+ --------------------
+-
+ .. toctree::
+    :maxdepth: 1
+    
+    Dozer
+    JodaTime
++   StringProcessing
+ 
+ 
+ .. raw:: latex
+diff --git a/source_en/ArchitectureInDetail/index.rst b/source_en/ArchitectureInDetail/index.rst
+index 6c9ec48..0ed2466 100755
+--- a/source_en/ArchitectureInDetail/index.rst
++++ b/source_en/ArchitectureInDetail/index.rst
+@@ -23,6 +23,7 @@ TERASOLUNA Server Framework for Java (5.x)の機能詳細
+    Ajax
+    REST
+    RestClient
++   SOAP
+    FileUpload
+    FileDownload
+    Email
+diff --git a/source_en/Overview/ApplicationLayering.rst b/source_en/Overview/ApplicationLayering.rst
+index b647de1..d4c4163 100755
+--- a/source_en/Overview/ApplicationLayering.rst
++++ b/source_en/Overview/ApplicationLayering.rst
+@@ -247,6 +247,8 @@ O/R Mapper used for implementation of Repository.
+ 
+ |
+ 
++.. _application-layering_Integration-System-Connector:
++
+ Integration System Connector
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+diff --git a/source_en/Overview/FirstApplication.rst b/source_en/Overview/FirstApplication.rst
+index c40ef26..267181c 100755
+--- a/source_en/Overview/FirstApplication.rst
++++ b/source_en/Overview/FirstApplication.rst
+@@ -144,7 +144,7 @@ To understand the configuration of Spring MVC, the generated Spring MVC configur
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+diff --git a/source_en/Security/index.rst b/source_en/Security/index.rst
+index 922b812..ed40eae 100755
+--- a/source_en/Security/index.rst
++++ b/source_en/Security/index.rst
+@@ -1,4 +1,4 @@
+-Security for TERASOLUNA Server Framework for Java (5.x)
++Security countermeasures for TERASOLUNA Server Framework for Java (5.x)
+ ================================================================================
+ 
+ .. toctree::
+@@ -11,6 +11,7 @@ Security for TERASOLUNA Server Framework for Java (5.x)
+    Authorization
+    XSS
+    CSRF
++   Encryption
+ 
+ .. raw:: latex
+ 
+diff --git a/source_en/TutorialREST/index.rst b/source_en/TutorialREST/index.rst
+index 94b6bcd..061c3ab 100755
+--- a/source_en/TutorialREST/index.rst
++++ b/source_en/TutorialREST/index.rst
+@@ -550,7 +550,7 @@ Creation of spring-mvc-rest.xml
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+             <mvc:message-converters register-defaults="false">
+                 <!-- (1) -->
+@@ -661,20 +661,11 @@ Definition of Spring Security for REST API
+         <sec:http
+             pattern="/api/v1/**"
+             auto-config="true"
+-            use-expressions="true"
+             create-session="stateless">
+-            <sec:headers />
++            <sec:csrf disabled="true"/>
+         </sec:http>
+ 
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />
+@@ -732,6 +723,8 @@ Definition of Spring Security for REST API
+        | Specify the URL pattern of the REST API request path at \ ``pattern`` \ attribute of the \ ``<sec:http>`` \ element.
+        | In this tutorial, request path starts with \ ``/api/v1/`` \ is considered as a REST API request.
+        | Furthermore, session is no longer used in the processing of Spring Security by specifying \ ``stateless`` \ at \ ``create-session`` \ attribute.
++       | 
++       | Specify \ ``disabled="true"``\  in \ ``<sec:csrf>``\  element for invalidating CSRF countermeasures.
+ 
+ |
+ 
+diff --git a/source_en/TutorialTodo/index.rst b/source_en/TutorialTodo/index.rst
+index e0abf82..27ea460 100755
+--- a/source_en/TutorialTodo/index.rst
++++ b/source_en/TutorialTodo/index.rst
+@@ -4017,7 +4017,7 @@ The Spring MVC related definitions are done in \ :file:`spring-mvc.xml`\.
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+@@ -4207,15 +4207,7 @@ The Spring Security related definitions are done in \ :file:`spring-security.xml
+             http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+ 
+         <sec:http pattern="/resources/**" security="none"/>
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />

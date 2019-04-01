@@ -1,0 +1,692 @@
+diff --git a/source_en/ArchitectureInDetail/Codelist.rst b/source_en/ArchitectureInDetail/Codelist.rst
+index 2246162..c91b490 100755
+--- a/source_en/ArchitectureInDetail/Codelist.rst
++++ b/source_en/ArchitectureInDetail/Codelist.rst
+@@ -415,12 +415,12 @@ For details on settings shown below, refer to :ref:`Using codelist in Java class
+ Using JdbcCodeList
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+-| ``org.terasoluna.gfw.common.codelist.JdbcCodeList`` is a class for creating codelist by fetching values from DB at the time of launching the application.
+-| ``JdbcCodeList`` create a cache when the application starts. Therefore, There is no delay by the DB access to when you want to display list.
++| ``org.terasoluna.gfw.common.codelist.JdbcCodeList`` is a class for creating codelist by fetching values from DB at the time of starting the application.
++| Since ``JdbcCodeList`` creates a cache while starting the application, no delay occurs during DB access when you want to display a list.
+ 
+-| If you want to reduce the load time of startup, it is preferable to set an upper limit on the number of acquisition.
+-| The ``JdbcCodeList`` there is a field to set the ``org.springframework.jdbc.core.JdbcTemplate``.
+-| If you set the upper limit on the ``fetchSize`` of ``JdbcTemplate``, the upper limit amount record is loaded at startup.
++| If you want to reduce the read time for the startup, it is preferable to set an upper limit on the number of acquisitions.
++| ``JdbcCodeList`` consists of a field which sets the ``org.springframework.jdbc.core.JdbcTemplate``.
++| If an upper limit is set for the ``fetchSize`` of ``JdbcTemplate``, the records only till the upper limit are read at the startup.
+ | The fetched values can be changed dynamically by reloading. For details, refer to :ref:`codeListTaskScheduler`.
+ 
+ **JdbcCodeList image**
+@@ -485,30 +485,30 @@ Example of codelist settings
+    * - Sr. No.
+      - Description
+    * - | (1)
+-     - | Define a bean of ``org.springframework.jdbc.core.JdbcTemplate`` class.
+-       | It is necessary for setting the fetchSize independently.
++     - | Define a bean for ``org.springframework.jdbc.core.JdbcTemplate`` class.
++       | It is necessary for independently setting the fetchSize.
+    * - | (2)
+      - | Set the fetchSize.
+-       | FetchSize may be set to Fetch All by default.By setting an appropriate value.
+-       | When large number of records (in hundreds) need to be read from JdbcCodeList, When the setting of fetchSize is it FetchAll, it takes time to get a list from DB.
++       | An appropriate value must be set since FetchSize is set to Fetch All by default.
++       | When ``fetchSize`` is set to "fetch all" and when the records that are required to be read by ``JdbcCodeList`` are large, process efficiency while fetching a list from DB is likely to reduce resulting in prolonged startup time of application.
+    * - | (3)
+      - | Define a common bean of JdbcCodeList.
+-       | Common parts of other JdbcCodeList are set. Therefore, for bean definition of basic JdbcCodeList, set this bean definition in parent class.
+-       | This bean class cannot be instantiated by setting ``abstract`` attribute to true.
++       | Common parts of another ``JdbcCodeList`` are specified. Therefore, the bean is defined in parent class for bean definition of basic ``JdbcCodeList``.
++       | An instance cannot be created for this bean by setting abstract attribute to true.
+    * - | (4)
+-     - | Set the jdbcTemplate referring to (1).
+-       | JdbcTemplate for which fetchSize value is set is stored in JdbcCodeList.
++     - | Specify ``jdbcTemplate`` set in (1).
++       | ``JdbcTemplate`` which specifies ``fetchSize`` is stored in ``JdbcCodeList``.
+    * - | (5)
+      - | Bean definition of JdbcCodeList
+-       | By setting Bean defined in (3) as parent class in parent attribute, JdbcCodeList is set with fetchSize.
++       | By setting Bean defined in (3) as parent class in parent attribute, ``JdbcCodeList`` which specifies ``fetchSize`` is set.
+        | In this bean definition, only the query related settings are carried out and the required CodeList is created.
+    * - | (6)
+-     - | Write an SQL for fetching the codelist in querySql property. At that time, **make sure to specify ORDER BY clause to define the order**.
+-       | If ORDER BY is not specified, the order gets changed every time when records are fetched using SQL.
++     - | Write an SQL to be fetched in querySql property. At that time, **always specify "ORDER BY" clause and determine the order**.
++       | If "ORDER BY" is not specified, the order gets changed while fetching the records.
+    * - | (7)
+      - | Set the value corresponding to the Key of Map in valueColumn property. In this example, authority_id is set.
+    * - | (8)
+-     - | Set the value corresponding to the Value of Map in labelColumn property. In this example, authority_name is set.
++     - | Set the value corresponding to Value of Map in labelColumn property. In this example, authority_name is set.      
+ 
+ |
+ 
+@@ -897,16 +897,14 @@ For other setting methods, refer to :ref:`afterCodelisti18n`.
+         </property>
+     </bean>
+   
+-    <bean id="CL_PRICE_EN" class="org.terasoluna.gfw.common.codelist.JdbcCodeList">  <!-- (4) -->
+-        <property name="jdbcTemplate" ref="jdbcTemplateForCodeList" />
++    <bean id="CL_PRICE_EN" parent="AbstractJdbcCodeList">  <!-- (4) -->
+         <property name="querySql"
+             value="SELECT code, label FROM price WHERE locale = 'en' ORDER BY code" />
+         <property name="valueColumn" value="code" />
+         <property name="labelColumn" value="label" />
+     </bean>
+   
+-    <bean id="CL_PRICE_JA" class="org.terasoluna.gfw.common.codelist.JdbcCodeList">  <!-- (5) -->
+-        <property name="jdbcTemplate" ref="jdbcTemplateForCodeList" />
++    <bean id="CL_PRICE_JA" parent="AbstractJdbcCodeList">  <!-- (5) -->
+         <property name="querySql"
+             value="SELECT code, label FROM price WHERE locale = 'ja' ORDER BY code" />
+         <property name="valueColumn" value="code" />
+@@ -1236,8 +1234,8 @@ As a result of above settings, when characters other than M, F are stored in ``g
+ 
+ .. tip::
+ 
+-    ``@ExistInCodeList`` input validation supports only ``String`` or ``Character`` data types.
+-    Therefore, even if the fields with ``@ExistInCodeList`` may contain integer values, they should be defined as String data type. (such as Year/Month/Day)
++    ``@ExistInCodeList`` input validation supports only the implementation class (\ ``String``\  etc) of \ ``CharSequence``\  interface or \ ``Character``\  type.
++    Therefore, even if the fields with \ ``@ExistInCodeList``\ may contain integer values, they should be defined as \ ``String``\ data type. (such as Year/Month/Day)
+ 
+ |
+ 
+@@ -1287,8 +1285,7 @@ Example for setting the Task Scheduler is shown below.
+         <task:scheduled ref="CL_AUTHORITIES" method="refresh" cron="${cron.codelist.refreshTime}"/>  <!-- (3) -->
+     </task:scheduled-tasks>
+ 
+-    <bean id="CL_AUTHORITIES" class="org.terasoluna.gfw.common.codelist.JdbcCodeList">
+-        <property name="jdbcTemplate" ref="jdbcTemplateForCodeList" />
++    <bean id="CL_AUTHORITIES" parent="AbstractJdbcCodeList">
+         <property name="querySql"
+             value="SELECT authority_id, authority_name FROM authority ORDER BY authority_id" />
+         <property name="valueColumn" value="authority_id" />
+@@ -1333,8 +1330,7 @@ See the example below for directly calling refresh method of JdbcCodeList in Ser
+ 
+ .. code-block:: xml
+ 
+-    <bean id="CL_AUTHORITIES" class="org.terasoluna.gfw.common.codelist.JdbcCodeList">
+-        <property name="jdbcTemplate" ref="jdbcTemplateForCodeList" />
++    <bean id="CL_AUTHORITIES" parent="AbstractJdbcCodeList">
+         <property name="querySql"
+             value="SELECT authority_id, authority_name FROM authority ORDER BY authority_id" />
+         <property name="valueColumn" value="authority_id" />
+diff --git a/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst b/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
+index ec8d2c0..a6ab47e 100755
+--- a/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
++++ b/source_en/ArchitectureInDetail/DoubleSubmitProtection.rst
+@@ -741,9 +741,16 @@ The attributes that can be specified in ``@TransactionTokenCheck``\  annotation
+      - value
+      - | Any character string. Used as NameSpace.
+      - None
+-     - | value = "create"
+-       | If there is only 1 argument, the "value =" part can be omitted.
++     - | \ ``value = "create"``\ 
++       | \ ``value =``\  part can be omitted if there is only one argument.
+    * - (2)
++     - namespace
++     - | Any string.Used as NameSpace.
++       | It is an alias of value attribute.
++     - None
++     - | \ ``namespace = "create"``\ 
++       | Synonymous with \ ``value = "create"``\ . It is used as an alternative to value attribute since value attribute cannot be used while using  \ ``@TransactionTokenCheck``\  as a meta-annotation.
++   * - (3)
+      - type
+      - | **BEGIN**
+        | A transaction token is created and a new transaction is started.
+@@ -760,7 +767,7 @@ The attributes that can be specified in ``@TransactionTokenCheck``\  annotation
+ 
+  .. note::
+  
+-    It is recommended that the value to be set in "value" attribute should be same as the config value of "value" attribute for \ ``@RequestMapping``\  annotation.
++    It is recommended that the value to be set in value attribute or namespace attribute should be same as the config value of "value" attribute for \ ``@RequestMapping``\  annotation.
+ 
+  .. note::
+  
+diff --git a/source_en/ArchitectureInDetail/FileDownload.rst b/source_en/ArchitectureInDetail/FileDownload.rst
+index fc7d88e..4bd9565 100755
+--- a/source_en/ArchitectureInDetail/FileDownload.rst
++++ b/source_en/ArchitectureInDetail/FileDownload.rst
+@@ -38,7 +38,7 @@ Overview of File Download process is given below.
+ | when rendering PDF files using model information.
+ |
+ | **For Excel files**
+-| \ ``org.springframework.web.servlet.view.document.AbstractExcelView``\  class of Spring is used as a subclass
++| \ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\  class of Spring is used as a subclass
+ | when rendering Excel files using model information.
+ |
+ | For file formats other than those specified above, various types of View implementations are provided in Spring.
+@@ -91,11 +91,11 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described later.
+    * - | (2)
+-     - | Inherit AbstractPdfView.
++     - | Inherit \ ``AbstractPdfView``\ .
+    * - | (3)
+-     - | Execute buildPdfDocument method.
++     - | Execute \ ``buildPdfDocument``\  method.
+ 
+-| AbstractPdfView uses \ `iText <http://itextpdf.com/>`_\  for PDF rendering.
++| \ ``AbstractPdfView``\  uses \ `iText <http://itextpdf.com/>`_\  for PDF rendering.
+ | Therefore, it is necessary to add itext definition to pom.xml of Maven.
+ 
+ .. code-block:: xml
+@@ -149,7 +149,7 @@ Implementation of Custom View
+ Definition of ViewResolver
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  is a class,
+-that selects \ ``View``\  to be executed using bean name stored in Spring context.
++that selects View to be executed using bean name stored in Spring context.
+ 
+ When using \ ``BeanNameViewResolver``\ , it is recommended to define such that \ ``BeanNameViewResolver``\  is executed before
+ 
+@@ -161,7 +161,7 @@ which are generally used.
+ .. note::
+ 
+     Spring Framework provides various types of \ ``ViewResolver``\  and it allows chaining of multiple \ ``ViewResolver``\ .
+-    Therefore, some unintended \ ``View``\  may get selected under certain conditions.
++    Therefore, some unintended View may get selected under certain conditions.
+ 
+     It is possible to avoid such a situation by setting appropriate priority order in \ ``ViewResolver``\ .
+     Method to set priority order differs depending on definition method of \ ``ViewResolver``\ .
+@@ -223,7 +223,7 @@ which are generally used.
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| With the help of BeanNameViewResolver, by returning "samplePDFView" in Controller,
++| With the help of \ ``BeanNameViewResolver``\ , by returning "samplePDFView" in Controller,
+ | a view named "samplePDFView" gets used from the BeanIDs stored in Spring Context.
+ 
+ **Java source code**
+@@ -245,7 +245,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "samplePdfView" as the return value of method,
+-       | SamplePdfView class stored in Spring context is executed.
++       | \ ``SamplePdfView``\  class stored in Spring context is executed.
+ 
+ | Following PDF file can be opened after executing the above procedure.
+ 
+@@ -261,25 +261,25 @@ Specifying View in controller
+ Downloading Excel files
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | For rendering EXCEL files, it is necessary to create a class that
+-| inherits \ ``org.springframework.web.servlet.view.document.AbstractExcelView``\  provided by Spring.
++| inherits \ ``org.springframework.web.servlet.view.document.AbstractXlsxView``\  provided by Spring.
+ | The procedure to download an EXCEL file using controller is explained below.
+ 
+ Implementation of Custom View
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-**Implementation of class that inherits AbstractExcelView**
++**Implementation of class that inherits AbstractXlsxView**
+ 
+ .. code-block:: java
+ 
+         @Component  // (1)
+-        public class SampleExcelView extends AbstractExcelView {  // (2)
++        public class SampleExcelView extends AbstractXlsxView {  // (2)
+ 
+             @Override
+             protected void buildExcelDocument(Map<String, Object> model,
+-                    HSSFWorkbook workbook, HttpServletRequest request,
++                    Workbook workbook, HttpServletRequest request,
+                     HttpServletResponse response) throws Exception {  // (3)
+-                HSSFSheet sheet;
+-                HSSFCell cell;
++                Sheet sheet;
++                Cell cell;
+ 
+                 sheet = workbook.createSheet("Spring");
+                 sheet.setDefaultColumnWidth(12);
+@@ -304,11 +304,11 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described earlier.
+    * - | (2)
+-     - | Inherit AbstractExcelView.
++     - | Inherit \ ``AbstractXlsxView``\ .
+    * - | (3)
+-     - | Execute buildExcelDocument method.
++     - | Execute \ ``buildExcelDocument``\  method.
+ 
+-| AbstractExcelView uses \ `Apache POI <http://poi.apache.org/>`_\  to render EXCEL file.
++| \ ``AbstractXlsxView``\ uses \ `Apache POI <http://poi.apache.org/>`_\  to render EXCEL file.
+ | Therefore, it is necessary to add POI definition to the pom.xml file of Maven.
+ 
+ .. code-block:: xml
+@@ -317,16 +317,18 @@ Implementation of Custom View
+       <!-- omitted -->
+       <dependency>
+           <groupId>org.apache.poi</groupId>
+-          <artifactId>poi</artifactId>
+-          <version>${org.apache.poi.poi.version}</version>
++          <artifactId>poi-ooxml</artifactId>
+       </dependency>
+   </dependencies>
+-  
+-  <properties>
+-      <!-- omitted -->
+-      <org.apache.poi.poi.version>3.9</org.apache.poi.poi.version>
+-  </properties>
++
+         
++\
++    .. note::
++        <version> is omitted in the configuration example since poi-ooxml version uses details defined in Spring IO Platform.
++
++        Also, \ ``AbstractExcelView``\  uses @Deprecated annotation from Spring Framework 4.2. Hence, it is recommended to use \ ``AbstractXlsxView``\ in the same way even if you want to use a xls file.
++        For details, refer \ `AbstractExcelView - JavaDoc <https://docs.spring.io/spring/docs/4.2.4.RELEASE/javadoc-api/org/springframework/web/servlet/view/document/AbstractExcelView.html>`_\ .
++          
+ 
+ Definition of ViewResolver
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+@@ -336,7 +338,7 @@ Settings are same as that for PDF file rendering. For details, refer to \ :ref:`
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+ 
+-| With the help of BeanNameViewResolver, by returning "sampleExcelView" in Controller, 
++| With the help of \ ``BeanNameViewResolver``\ , by returning "sampleExcelView" in Controller, 
+ | a view named "sampleExcelView" gets used from the BeanIDs stored in Spring Context.
+ 
+ **Java source**
+@@ -358,7 +360,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "sampleExcelView"as the return value of method,
+-       | SampleExcelView class stored in Spring context is executed.
++       | \ ``SampleExcelView``\  class stored in Spring context is executed.
+ 
+ | EXCEL file can be opened as shown below after executing the above procedures.
+ 
+@@ -373,7 +375,7 @@ Downloading arbitrary files
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ | To download files in formats other than PDF or EXCEL,
+ | class that inherits \ ``org.terasoluna.gfw.web.download.AbstractFileDownloadView``\  provided by common library can be implemented.
+-| Following steps should be implemented in AbstractFileDownloadView to render files in other format.
++| Following steps should be implemented in \ ``AbstractFileDownloadView``\  to render files in other format.
+ 
+ 1. Fetch InputStream in order to write to the response body.
+ 2. Set information in HTTP header.
+@@ -419,12 +421,12 @@ Implementation of Custom View
+      - | In this example, this class comes under the scope of component scanning by using \ ``@Component``\  annotation.
+        | It will also come under the scope of \ ``org.springframework.web.servlet.view.BeanNameViewResolver``\  which is described earlier.
+    * - | (2)
+-     - | Inherit AbstractFileDownloadView.
++     - | Inherit \ ``AbstractFileDownloadView``\ .
+    * - | (3)
+-     - | Execute getInputStream method.
+-       | InputStream to be downloaded should be returned.
++     - | Execute \ ``getInputStream``\  method.
++       | \ ``InputStream``\  to be downloaded should be returned.
+    * - | (4)
+-     - | Execute addResponseHeader method.
++     - | Execute \ ``addResponseHeader method``\ .
+        | Set Content-Disposition or ContentType as per the file to be downloaded.
+ 
+ Definition of ViewResolver
+@@ -434,7 +436,7 @@ Settings are same as that of PDF file rendering. For details, refer to \ :ref:`v
+ 
+ Specifying View in controller
+ """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-| With the help of BeanNameViewResolver, by returning "textFileDownloadView" in Controller, 
++| With the help of \ ``BeanNameViewResolver``\ , by returning "textFileDownloadView" in Controller, 
+ | a view named "textFileDownloadView" gets used from the BeanIDs stored in Spring Context. 
+ 
+ **Java source**
+@@ -455,7 +457,7 @@ Specifying View in controller
+      - Description
+    * - | (1)
+      - | With "textFileDownloadView"as the return value of method, 
+-       | TextFileDownloadView class stored in Spring context is executed.
++       | \ ``TextFileDownloadView``\  class stored in Spring context is executed.
+ 
+ \
+ 
+diff --git a/source_en/ArchitectureInDetail/Internationalization.rst b/source_en/ArchitectureInDetail/Internationalization.rst
+index 52e454e..397de4a 100755
+--- a/source_en/ArchitectureInDetail/Internationalization.rst
++++ b/source_en/ArchitectureInDetail/Internationalization.rst
+@@ -37,6 +37,11 @@ The image of switching locale is as follows:
+ 
+     For internationalization of Codelist, refer to :doc:`Codelist`.
+ 
++.. note::
++
++    When the error screen is to be internationalised, transition to error screen is performed by using MVC Controller of Spring.
++    If a direct transition to error screen is performed without Spring MVC, it may happen that the message is not output in intended language.
++
+ .. tip::
+ 
+     The most commonly known abbreviation of internationalization is i18n.
+diff --git a/source_en/ArchitectureInDetail/Logging.rst b/source_en/ArchitectureInDetail/Logging.rst
+index 370cdef..00c38d2 100755
+--- a/source_en/ArchitectureInDetail/Logging.rst
++++ b/source_en/ArchitectureInDetail/Logging.rst
+@@ -813,7 +813,7 @@ Example of log output
+ 
+          .. code-block:: xml
+ 
+-             <sec:http auto-config="true" use-expressions="true">
++             <sec:http auto-config="true">
+                  <!-- omitted -->
+                  <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/> <!-- (1) -->
+                  <!-- omitted -->
+diff --git a/source_en/ArchitectureInDetail/REST.rst b/source_en/ArchitectureInDetail/REST.rst
+index 913486c..9294751 100755
+--- a/source_en/ArchitectureInDetail/REST.rst
++++ b/source_en/ArchitectureInDetail/REST.rst
+@@ -1653,7 +1653,7 @@ Settings for activating the Spring MVC components necessary for RESTful Web Serv
+ - :file:`spring-mvc-rest.xml`
+ 
+  .. code-block:: xml
+-    :emphasize-lines: 22, 30-32, 39-41, 44-47, 51, 61, 65
++    :emphasize-lines: 22, 32-34, 39-41, 44-47, 51, 61, 65
+ 
+     <?xml version="1.0" encoding="UTF-8"?>
+     <beans xmlns="http://www.springframework.org/schema/beans" 
+@@ -1682,16 +1682,16 @@ Settings for activating the Spring MVC components necessary for RESTful Web Serv
+     
+         <bean id="jsonMessageConverter"
+             class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+-            <property name="objectMapper">
+-                <bean id="objectMapper" class="com.fasterxml.jackson.datatype.joda.JodaMapper">
+-                    <!-- (2) -->
+-                    <property name="dateFormat">
+-                        <bean class="com.fasterxml.jackson.databind.util.StdDateFormat" />
+-                    </property>
+-                </bean>
+-            </property>
++            <property name="objectMapper" ref="objectMapper" />
+         </bean>
+     
++        <bean id="objectMapper" class="org.springframework.http.converter.json.Jackson2ObjectMapperFactoryBean">
++            <!-- (2) -->
++            <property name="dateFormat">
++                <bean class="com.fasterxml.jackson.databind.util.StdDateFormat" />
++            </property>
++        </bean>
++
+         <!-- Register components of Spring MVC. -->
+         <!-- (3) -->
+          <mvc:annotation-driven>
+@@ -1743,6 +1743,7 @@ Settings for activating the Spring MVC components necessary for RESTful Web Serv
+         | For the details of fetching a value from property file, refer to ":doc:`PropertyManagement`".
+     * - | (2)
+       - | Add the settings for handling the JSON date field format as extended ISO-8601 format.
++        | Also, when JSR-310 Date and Time API or Joda Time class is to be used as a property of JavaBean which represents a resource (Resource class), "\ :ref:`RESTAppendixUsingJSR310_JodaTime`\ " must be carried out.
+     * - | (3)
+       - | Perform bean registration for the Spring MVC framework component necessary for providing RESTful Web Service.
+         | JSON can be used as a resource format by performing these settings.
+@@ -1764,6 +1765,36 @@ Settings for activating the Spring MVC components necessary for RESTful Web Serv
+       - | Specify AOP definition to output the exception handled by Spring MVC framework to a log.
+         | Refer to \ :doc:`ExceptionHandling`\  for \ ``HandlerExceptionResolverLoggingInterceptor``\ .
+ 
++.. note:: **How to define a Bean for ObjectMapper**
++
++    When a Bean is to be defined for \ ``com.fasterxml.jackson.databind.ObjectMapper``\  of Jackson,
++    \ ``Jackson2ObjectMapperFactoryBean``\  provided by Spring should be used.
++    If \ ``Jackson2ObjectMapperFactoryBean``\  is used, extension module for JSR-310 Date and Time API or Joda Time can be auto-registered.
++    Further, \ ``ObjectMapper``\  configuration which is difficult to represent in Bean definition file of XML can be easily configured as well.
++
++    Also, when style is to be changed from directly defining a Bean for \ ``ObjectMapper``\  to using \ ``Jackson2ObjectMapperFactoryBean``\ ,
++    it should be noted that default value for the following configuration differs from the default value of Jackson (disabled).
++
++    * `MapperFeature#DEFAULT_VIEW_INCLUSION <http://fasterxml.github.io/jackson-databind/javadoc/2.6/com/fasterxml/jackson/databind/MapperFeature.html?is-external=true#DEFAULT_VIEW_INCLUSION>`_\
++    * `DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES <http://fasterxml.github.io/jackson-databind/javadoc/2.6/com/fasterxml/jackson/databind/DeserializationFeature.html?is-external=true#FAIL_ON_UNKNOWN_PROPERTIES>`_\
++
++    When \ ``ObjectMapper``\  operation and default Jackson operation are to be matched, the configuration above is enabled using \ ``featuresToEnable``\  property.
++
++     .. code-block:: xml
++
++        <bean id="objectMapper" class="org.springframework.http.converter.json.Jackson2ObjectMapperFactoryBean">
++            <!-- ... -->
++            <property name="featuresToEnable">
++                <array>
++                    <util:constant static-field="com.fasterxml.jackson.databind.MapperFeature.DEFAULT_VIEW_INCLUSION"/>
++                    <util:constant static-field="com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES"/>
++                </array>
++            </property>
++        </bean>
++
++    For \ ``Jackson2ObjectMapperFactoryBean``\  details, refer `JavaDoc of Jackson2ObjectMapperFactoryBean <http://docs.spring.io/spring/docs/4.2.4.RELEASE/javadoc-api/org/springframework/http/converter/json/Jackson2ObjectMapperFactoryBean.html>`_\ .
++
++
+ .. _REST_note_changed_jackson_version:
+ 
+ .. note::
+@@ -4568,6 +4599,53 @@ Cache control for resource
+ Appendix
+ --------------------------------------------------------------------------------
+ 
++.. _RESTAppendixUsingJSR310_JodaTime:
++
++Configuration while using JSR-310 Date and Time API / Joda Time
++^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++
++When JSR-310 Date and Time API or Joda Time class is to be used as a property of JavaBean which represents a resource (Resource class),
++an extension module provided by Jackson in \ ``pom.xml``\  is added to dependent library.
++
++**When JSR-310 Date and Time API class is used**
++
++.. code-block:: xml
++
++    <dependency>
++        <groupId>com.fasterxml.jackson.datatype</groupId>
++        <artifactId>jackson-datatype-jsr310</artifactId>
++    </dependency>
++
++**When Joda Time class is used**
++
++.. code-block:: xml
++
++    <dependency>
++        <groupId>org.terasoluna.gfw</groupId>
++        <artifactId>terasoluna-gfw-jodatime</artifactId>
++    </dependency>
++
++or
++
++.. code-block:: xml
++
++    <dependency>
++        <groupId>com.fasterxml.jackson.datatype</groupId>
++        <artifactId>jackson-datatype-joda</artifactId>
++    </dependency>
++
++.. note::
++
++    Besides above, extension modules (\ ``jackson-datatype-xxx``\ ) for handling
++
++    * \ ``java.nio.file.Path``\  added from Java SE 7
++    * \ ``java.util.Optional``\  added from Java SE 8
++    * Objects that are set as Proxy by using Lazy Load function of Hibernate ORM
++
++    are provided by another Jackson.
++
++|
++
+ .. _RESTAppendixSettingsOfDeployInSameWarFileRestAndClientApplication:
+ 
+ Settings when RESTful Web Service and client application are operated as the same Web application
+@@ -5238,20 +5316,11 @@ prevented for RESTful Web Service requests.
+     <sec:http
+         pattern="/api/v1/**"
+         auto-config="true"
+-        use-expressions="true"
+         create-session="stateless">
+-        <sec:headers />
++        <sec:csrf disabled="true"/>
+     </sec:http>
+ 
+-    <sec:http auto-config="true" use-expressions="true">
+-        <sec:headers>
+-            <sec:cache-control />
+-            <sec:content-type-options />
+-            <sec:hsts />
+-            <sec:frame-options />
+-            <sec:xss-protection />
+-        </sec:headers>
+-        <sec:csrf />
++    <sec:http auto-config="true">
+         <sec:access-denied-handler ref="accessDeniedHandler"/>
+         <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+         <sec:session-management />
+@@ -5272,7 +5341,7 @@ prevented for RESTful Web Service requests.
+        | In the above example, request path starting with \ ``/api/v1/``\  is handled as the REST API request path.
+        | Further, session is no longer used in Spring Security process by setting \ ``create-session``\  attribute to \ ``stateless``\ .
+        |
+-       | \ ``<sec: csrf>``\  element is not specified to disable the CSRF measures.
++       | Specify \ ``disabled="true"``\  in \ ``<sec:csrf>``\  element for invalidating CSRF countermeasures.
+ 
+ |
+ 
+diff --git a/source_en/ArchitectureInDetail/Utilities/index.rst b/source_en/ArchitectureInDetail/Utilities/index.rst
+index 1c57b3c..99a00b1 100755
+--- a/source_en/ArchitectureInDetail/Utilities/index.rst
++++ b/source_en/ArchitectureInDetail/Utilities/index.rst
+@@ -1,11 +1,11 @@
+ Utilities
+ --------------------
+-
+ .. toctree::
+    :maxdepth: 1
+    
+    Dozer
+    JodaTime
++   StringProcessing
+ 
+ 
+ .. raw:: latex
+diff --git a/source_en/ArchitectureInDetail/index.rst b/source_en/ArchitectureInDetail/index.rst
+index 6c9ec48..0ed2466 100755
+--- a/source_en/ArchitectureInDetail/index.rst
++++ b/source_en/ArchitectureInDetail/index.rst
+@@ -23,6 +23,7 @@ TERASOLUNA Server Framework for Java (5.x)の機能詳細
+    Ajax
+    REST
+    RestClient
++   SOAP
+    FileUpload
+    FileDownload
+    Email
+diff --git a/source_en/Overview/ApplicationLayering.rst b/source_en/Overview/ApplicationLayering.rst
+index b647de1..d4c4163 100755
+--- a/source_en/Overview/ApplicationLayering.rst
++++ b/source_en/Overview/ApplicationLayering.rst
+@@ -247,6 +247,8 @@ O/R Mapper used for implementation of Repository.
+ 
+ |
+ 
++.. _application-layering_Integration-System-Connector:
++
+ Integration System Connector
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+diff --git a/source_en/Overview/FirstApplication.rst b/source_en/Overview/FirstApplication.rst
+index c40ef26..267181c 100755
+--- a/source_en/Overview/FirstApplication.rst
++++ b/source_en/Overview/FirstApplication.rst
+@@ -144,7 +144,7 @@ To understand the configuration of Spring MVC, the generated Spring MVC configur
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+diff --git a/source_en/Security/index.rst b/source_en/Security/index.rst
+index 922b812..ed40eae 100755
+--- a/source_en/Security/index.rst
++++ b/source_en/Security/index.rst
+@@ -1,4 +1,4 @@
+-Security for TERASOLUNA Server Framework for Java (5.x)
++Security countermeasures for TERASOLUNA Server Framework for Java (5.x)
+ ================================================================================
+ 
+ .. toctree::
+@@ -11,6 +11,7 @@ Security for TERASOLUNA Server Framework for Java (5.x)
+    Authorization
+    XSS
+    CSRF
++   Encryption
+ 
+ .. raw:: latex
+ 
+diff --git a/source_en/TutorialREST/index.rst b/source_en/TutorialREST/index.rst
+index 94b6bcd..061c3ab 100755
+--- a/source_en/TutorialREST/index.rst
++++ b/source_en/TutorialREST/index.rst
+@@ -550,7 +550,7 @@ Creation of spring-mvc-rest.xml
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+             <mvc:message-converters register-defaults="false">
+                 <!-- (1) -->
+@@ -661,20 +661,11 @@ Definition of Spring Security for REST API
+         <sec:http
+             pattern="/api/v1/**"
+             auto-config="true"
+-            use-expressions="true"
+             create-session="stateless">
+-            <sec:headers />
++            <sec:csrf disabled="true"/>
+         </sec:http>
+ 
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />
+@@ -732,6 +723,8 @@ Definition of Spring Security for REST API
+        | Specify the URL pattern of the REST API request path at \ ``pattern`` \ attribute of the \ ``<sec:http>`` \ element.
+        | In this tutorial, request path starts with \ ``/api/v1/`` \ is considered as a REST API request.
+        | Furthermore, session is no longer used in the processing of Spring Security by specifying \ ``stateless`` \ at \ ``create-session`` \ attribute.
++       | 
++       | Specify \ ``disabled="true"``\  in \ ``<sec:csrf>``\  element for invalidating CSRF countermeasures.
+ 
+ |
+ 
+diff --git a/source_en/TutorialTodo/index.rst b/source_en/TutorialTodo/index.rst
+index e0abf82..27ea460 100755
+--- a/source_en/TutorialTodo/index.rst
++++ b/source_en/TutorialTodo/index.rst
+@@ -4017,7 +4017,7 @@ The Spring MVC related definitions are done in \ :file:`spring-mvc.xml`\.
+                 <bean
+                     class="org.springframework.data.web.PageableHandlerMethodArgumentResolver" />
+                 <bean
+-                    class="org.springframework.security.web.bind.support.AuthenticationPrincipalArgumentResolver" />
++                    class="org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver" />
+             </mvc:argument-resolvers>
+         </mvc:annotation-driven>
+ 
+@@ -4207,15 +4207,7 @@ The Spring Security related definitions are done in \ :file:`spring-security.xml
+             http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+ 
+         <sec:http pattern="/resources/**" security="none"/>
+-        <sec:http auto-config="true" use-expressions="true">
+-            <sec:headers>
+-                <sec:cache-control />
+-                <sec:content-type-options />
+-                <sec:hsts />
+-                <sec:frame-options />
+-                <sec:xss-protection />
+-            </sec:headers>
+-            <sec:csrf />
++        <sec:http auto-config="true">
+             <sec:access-denied-handler ref="accessDeniedHandler"/>
+             <sec:custom-filter ref="userIdMDCPutFilter" after="ANONYMOUS_FILTER"/>
+             <sec:session-management />

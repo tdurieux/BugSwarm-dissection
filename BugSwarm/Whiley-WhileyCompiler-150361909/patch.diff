@@ -1,0 +1,1175 @@
+diff --git a/build.xml b/build.xml
+index 3cbe18e..6e90f3e 100755
+--- a/build.xml
++++ b/build.xml
+@@ -7,8 +7,12 @@
+ 
+   <!-- The set of build files in the order they should be built. -->
+   <filelist id="module.build.files" dir="modules">
++    <file name="wybs/build.xml"/>
++    <file name="wycs/build.xml"/>
+     <file name="wyil/build.xml"/>
+     <file name="wyc/build.xml"/>
++    <file name="wyrt/build.xml"/>
++    <file name="wyjc/build.xml"/>
+   </filelist>
+ 
+ 
+@@ -35,6 +39,15 @@
+        windowtitle="Whiley Compiler API">
+       <doctitle><![CDATA[<h1>The Whiley Compiler (v${version})</h1>]]></doctitle>
+       <bottom><![CDATA[<i>Copyright &#169; 2011 David J. Pearce. All Rights Reserved.</i>]]></bottom>
++      <packageset dir="modules/wybs/src">
++	<include name="wyfs/**"/>
++	<include name="wybs/**"/>
++	<include name="wycc/**"/>
++      </packageset>
++      <packageset dir="modules/wycs/src">
++	<include name="wycs/**"/>
++	<exclude name="wycs/testing/**"/>
++      </packageset>
+       <packageset dir="modules/wyil/src">
+ 	<include name="wyil/**"/>
+ 	<include name="wyautl_old/**"/>
+@@ -44,8 +57,16 @@
+ 	<include name="wyc/**"/>
+ 	<exclude name="wyc/testing/**"/>
+       </packageset>
++      <packageset dir="modules/wyjc/src">
++	<include name="wyjc/**"/>
++	<include name="wyjvm/**"/>
++	<exclude name="wyjc/testing/**"/>
++      </packageset>
++      <group title="Whiley Build System (WYBS)" packages="wybs:wyfs.*:wybs.*:wycc.*"/>
+       <group title="Whiley Compiler (WYC)" packages="wyc:wyc.*"/>
+       <group title="Whiley Intermediate Language (WYIL)" packages="wyil:wyil.*"/>
++      <group title="Whiley-2-Java Compiler (WYJC)" packages="wyjc:wyjc.*:wyjvm.*"/>
++      <group title="Whiley Constraint Solver (WYCS)" packages="wycs:wycs.*"/>
+       </javadoc>
+   </target>
+ 
+@@ -70,18 +91,21 @@
+       <include name="config.xml"/>
+       <include name="modules/**/*.java"/>
+       <include name="modules/**/*.whiley"/>
++      <include name="modules/**/*.wyrl"/>
++      <include name="modules/**/*.wycs"/>
+       <include name="modules/**/*.xml"/>
+       <include name="examples/**/*.whiley"/>
+       <include name="tests/**/*.whiley"/>
+       <include name="tests/**/*.sysout"/>
+       <include name="bin/wyilc"/>
+       <include name="bin/wyc"/>
++      <include name="bin/wyjc"/>
+       <include name="bin/wyj"/>
+       <include name="bin/wycc"/>
++      <include name="bin/wycs"/>
+       <include name="bin/wy_common.bash"/>
+       <include name="lib/*-v${version}.jar"/>
+       <include name="lib/wyrl-v*.jar"/>
+-      <include name="lib/wycs-v*.jar"/>      
+       <include name="lib/jasm-v*.jar"/>
+       <include name="lib/maven-ant-tasks*.jar"/>      
+     </fileset>
+diff --git a/config.xml b/config.xml
+index bd0d8ae..374d562 100755
+--- a/config.xml
++++ b/config.xml
+@@ -12,14 +12,15 @@
+   <property name="LIB_DIR" value="${rootdir}/lib/"/>
+   <property name="DIST_DIR" value="${rootdir}/dist/"/>
+ 
++  <property name="WYBS_DIR" value="${rootdir}/modules/wybs/"/>
+   <property name="WYC_DIR"  value="${rootdir}/modules/wyc/"/>
+   <property name="WYIL_DIR" value="${rootdir}/modules/wyil/"/>
++  <property name="WYCS_DIR" value="${rootdir}/modules/wycs/"/>
++  <property name="WYRT_DIR" value="${rootdir}/modules/wyrt/"/>
+ 
+   <!-- Paths to common JARs -->
+-  <property name="WYCC_JAR" value="${LIB_DIR}/wycc-v0.4.0-SNAPSHOT.jar"/>  
++  <property name="JASM_JAR" value="${LIB_DIR}/jasm-v0.1.7.jar"/>
+   <property name="WYRL_JAR" value="${LIB_DIR}/wyrl-v0.4.4.jar"/>
+-  <property name="WYTP_JAR" value="${LIB_DIR}/wycs-v0.4.0.jar"/>
+-  <property name="JASM_JAR" value="${LIB_DIR}/jasm-v0.1.7.jar"/>  
+ 
+   <!-- Set the classpath for Junit and its dependencies -->
+   <maven:dependencies pathId="junit.classpath">
+diff --git a/modules/README b/modules/README
+index 7c1d15d..f1c4eeb 100755
+--- a/modules/README
++++ b/modules/README
+@@ -17,3 +17,12 @@ wyil/ --- The Whiley Intermediate Language (wyil).  The Whiley
+           code for manipulating structural types in Whiley is included
+           here.  In short, this package constitutes the bulk of the
+           compiler.
++
++wyjc/ --- The Whiley-to-Java Compiler.  This extends the Whiley
++          Compiler (wyc) with additional transforms for converting
++          wyil code into Java bytecode.
++
++wyrt/ --- The Whiley Standard Library.  This provides the core
++          implementation for the standard library.  All architecture
++          specific code is omitted and, instead, is stored within the
++          respective back-end module (e.g. wyjc).
+\ No newline at end of file
+diff --git a/modules/wyc/build.xml b/modules/wyc/build.xml
+index 7a4defa..1f2f886 100755
+--- a/modules/wyc/build.xml
++++ b/modules/wyc/build.xml
+@@ -6,9 +6,9 @@
+   <import file="../../config.xml"/>
+ 
+   <path id="wyc.classpath">
+-    <pathelement path="${WYIL_DIR}/src"/>    
+-    <pathelement path="${WYCC_JAR}"/>
+-    <pathelement path="${WYTP_JAR}"/>
++    <pathelement path="${WYBS_DIR}/src"/>
++    <pathelement path="${WYIL_DIR}/src"/>
++    <pathelement path="${WYCS_DIR}/src"/>
+     <pathelement path="${WYRL_JAR}"/>
+     <path refid="junit.classpath"/>
+   </path>
+@@ -76,7 +76,47 @@
+     <echo message="============================================="/>
+   </target>
+ 
+- <!-- ================================================================== -->
++  <!-- ================================================================== -->
++  <!-- Dist -->
++  <!-- ================================================================== -->
++
++  <target name="dist">
++    <mkdir dir="tmp"/>
++    <manifest file="tmp/MANIFEST.MF">
++      <attribute name="Built-By" value="${user.name}"/>
++      <attribute name="Main-Class" value="wyc.WycMain"/>
++      <attribute name="Implementation-Version" value="${version}"/>
++      <attribute name="Implementation-Title" value="wyc-v${version}.jar"/>
++    </manifest>
++    <jar destfile="${DIST_DIR}/wyc-all-v${version}.jar" manifest="tmp/MANIFEST.MF">
++      <fileset dir="${WYBS_DIR}/src">
++	<include name="wybs/**/*.class"/>
++	<include name="wycc/**/*.class"/>
++	<include name="wyfs/**/*.class"/>
++      </fileset>
++      <fileset dir="${WYCS_DIR}/src">
++	<include name="wycs/**/*.class"/>
++	<exclude name="wyc/testing/**"/>
++      </fileset>
++      <fileset dir="${WYIL_DIR}/src">
++	<include name="wyautl_old/**/*.class"/>
++	<include name="wybs/**/*.class"/>
++	<include name="wycs/**/*.class"/>
++	<include name="wyil/**/*.class"/>
++      </fileset>
++      <fileset dir="src">
++	<include name="wyc/**/*.class"/>
++	<include name="wyjc/**/*.class"/>
++	<include name="wyjvm/**/*.class"/>
++      </fileset>
++    </jar>
++    <delete dir="tmp"/>
++    <echo message="============================================="/>
++    <echo message="BUILT: dist/${ant.project.name}-all-v${version}.jar"/>
++    <echo message="============================================="/>
++  </target>
++
++  <!-- ================================================================== -->
+   <!-- Clean -->
+   <!-- ================================================================== -->
+ 
+diff --git a/modules/wyc/src/wyc/builder/CodeGenerator.java b/modules/wyc/src/wyc/builder/CodeGenerator.java
+index 0faf316..cd15376 100755
+--- a/modules/wyc/src/wyc/builder/CodeGenerator.java
++++ b/modules/wyc/src/wyc/builder/CodeGenerator.java
+@@ -27,19 +27,18 @@ package wyc.builder;
+ 
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError;
+-import wybs.util.ResolveError;
+-
+ import static wyc.lang.WhileyFile.internalFailure;
+ import static wyil.util.ErrorMessages.*;
+ import wyc.lang.*;
+ import wyc.lang.Stmt.*;
+ import wyc.lang.WhileyFile.Context;
+-import wycommon.util.Pair;
+-import wycommon.util.Triple;
++import wycc.lang.Attribute;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
++import wycc.util.Pair;
++import wycc.util.ResolveError;
++import wycc.util.Triple;
+ import wyfs.lang.Path;
+ import wyil.lang.*;
+ import wyil.lang.Bytecode.AliasDeclaration;
+diff --git a/modules/wyc/src/wyc/builder/DefiniteAssignmentAnalysis.java b/modules/wyc/src/wyc/builder/DefiniteAssignmentAnalysis.java
+index ab0d269..2ca9e77 100755
+--- a/modules/wyc/src/wyc/builder/DefiniteAssignmentAnalysis.java
++++ b/modules/wyc/src/wyc/builder/DefiniteAssignmentAnalysis.java
+@@ -3,9 +3,10 @@ package wyc.builder;
+ import wyc.lang.Expr;
+ import wyc.lang.Stmt;
+ import wyc.lang.WhileyFile;
+-import wycommon.util.Triple;
++import wycc.lang.SyntaxError;
++import wycc.util.Triple;
+ 
+-import static wybs.lang.SyntaxError.*;
++import static wycc.lang.SyntaxError.*;
+ import static wyil.util.ErrorMessages.VARIABLE_POSSIBLY_UNITIALISED;
+ import static wyil.util.ErrorMessages.errorMessage;
+ 
+@@ -13,8 +14,6 @@ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
+ 
+-import wybs.lang.SyntaxError;
+-
+ /**
+  * <p>
+  * Responsible for checking that all variables are defined before they are used.
+diff --git a/modules/wyc/src/wyc/builder/FlowTypeChecker.java b/modules/wyc/src/wyc/builder/FlowTypeChecker.java
+index be99bfc..af37c94 100755
+--- a/modules/wyc/src/wyc/builder/FlowTypeChecker.java
++++ b/modules/wyc/src/wyc/builder/FlowTypeChecker.java
+@@ -25,9 +25,9 @@
+ 
+ package wyc.builder;
+ 
+-import static wybs.lang.SyntaxError.InternalFailure;
+ import static wyc.lang.WhileyFile.internalFailure;
+ import static wyc.lang.WhileyFile.syntaxError;
++import static wycc.lang.SyntaxError.InternalFailure;
+ import static wyil.util.ErrorMessages.*;
+ 
+ import java.io.IOException;
+@@ -40,8 +40,12 @@ import wybs.lang.*;
+ import wybs.util.*;
+ import wyc.lang.*;
+ import wyc.lang.WhileyFile.Context;
+-import wycommon.util.Pair;
+-import wycommon.util.Triple;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
++import wycc.util.Pair;
++import wycc.util.ResolveError;
++import wycc.util.Triple;
+ import wyfs.lang.Path;
+ import wyfs.util.Trie;
+ import wyil.lang.Constant;
+diff --git a/modules/wyc/src/wyc/builder/WhileyBuilder.java b/modules/wyc/src/wyc/builder/WhileyBuilder.java
+index 533d1ce..2dbe2d6 100755
+--- a/modules/wyc/src/wyc/builder/WhileyBuilder.java
++++ b/modules/wyc/src/wyc/builder/WhileyBuilder.java
+@@ -31,14 +31,18 @@ import java.util.*;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyfs.util.Trie;
+-import wyil.checks.CoercionCheck;
+-import wyil.checks.ModuleCheck;
++import wyil.*;
+ import wyil.lang.*;
++import wyil.util.*;
+ import wybs.lang.*;
+ import wybs.util.*;
+ import wyc.lang.*;
+-import wycommon.util.Logger;
+-import wycommon.util.Pair;
++import wycc.lang.NameID;
++import wycc.lang.Pipeline;
++import wycc.lang.Transform;
++import wycc.util.Logger;
++import wycc.util.Pair;
++import wycc.util.ResolveError;
+ 
+ /**
+  * Responsible for managing the process of turning source files into binary code
+@@ -84,7 +88,7 @@ import wycommon.util.Pair;
+  * @author David J. Pearce
+  *
+  */
+-public final class WhileyBuilder implements Build.Task {
++public final class WhileyBuilder implements Builder {
+ 
+ 	/**
+ 	 * The master project for identifying all resources available to the
+@@ -94,8 +98,10 @@ public final class WhileyBuilder implements Build.Task {
+ 	private final Build.Project project;
+ 
+ 	/**
+-	 * The logger used for logging system events
++	 * The list of stages which must be applied to a Wyil file.
+ 	 */
++	private final List<Transform<WyilFile>> stages;
++
+ 	private Logger logger;
+ 
+ 	/**
+@@ -109,16 +115,13 @@ public final class WhileyBuilder implements Build.Task {
+ 	 * time. For example, the statement <code>import whiley.lang.*</code>
+ 	 * corresponds to the triple <code>("whiley.lang",*,null)</code>.
+ 	 */
+-	private final HashMap<Trie,ArrayList<Path.ID>> importCache = new HashMap<>();
++	private final HashMap<Trie,ArrayList<Path.ID>> importCache = new HashMap();
+ 
+-	public WhileyBuilder(Build.Project namespace) {
++	public WhileyBuilder(Build.Project namespace, Pipeline<WyilFile> pipeline) {
++		this.stages = pipeline.instantiate(this);
+ 		this.logger = Logger.NULL;
+ 		this.project = namespace;
+ 	}
+-	
+-	public String id() {
+-		return "wyc.builder";
+-	}
+ 
+ 	public Build.Project project() {
+ 		return project;
+@@ -128,7 +131,6 @@ public final class WhileyBuilder implements Build.Task {
+ 		this.logger = logger;
+ 	}
+ 
+-	@SuppressWarnings("unchecked")
+ 	@Override
+ 	public Set<Path.Entry<?>> build(Collection<Pair<Path.Entry<?>, Path.Root>> delta, Build.Graph graph)
+ 			throws IOException {
+@@ -148,7 +150,7 @@ public final class WhileyBuilder implements Build.Task {
+ 			Path.Entry<?> src = p.first();
+ 			if (src.contentType() == WhileyFile.ContentType) {
+ 				Path.Entry<WhileyFile> sf = (Path.Entry<WhileyFile>) src;
+-				sf.read(); // force file to be parsed
++				WhileyFile wf = sf.read();
+ 				count++;
+ 				srcFiles.put(sf.id(), sf);
+ 			}
+@@ -213,12 +215,14 @@ public final class WhileyBuilder implements Build.Task {
+ 		// Pipeline Stages
+ 		// ========================================================================
+ 
+-		for (Pair<Path.Entry<?>, Path.Root> p : delta) {
+-			Path.Entry<?> src = p.first();
+-			Path.Root dst = p.second();
+-			Path.Entry<WyilFile> wf = dst.get(src.id(), WyilFile.ContentType);
+-			new ModuleCheck(this).apply(wf.read());
+-			new CoercionCheck(this).apply(wf.read());
++		for (Transform stage : stages) {
++			for (Pair<Path.Entry<?>, Path.Root> p : delta) {
++				Path.Entry<?> src = p.first();
++				Path.Root dst = p.second();
++				Path.Entry<WyilFile> wf = dst.get(src.id(),
++						WyilFile.ContentType);
++				process(wf.read(), stage);
++			}
+ 		}
+ 
+ 		// ========================================================================
+@@ -346,39 +350,39 @@ public final class WhileyBuilder implements Build.Task {
+ 	// Private Implementation
+ 	// ======================================================================
+ 
+-//	private void process(WyilFile module) throws IOException {
+-//		Runtime runtime = Runtime.getRuntime();
+-//		long start = System.currentTimeMillis();
+-//		long memory = runtime.freeMemory();
+-//		String name = name(stage.getClass().getSimpleName());
+-//
+-//		try {
+-//			stage.apply(module);
+-//			logger.logTimedMessage("[" + module.getEntry().location() + "] applied " + name,
+-//					System.currentTimeMillis() - start, memory - runtime.freeMemory());
+-//			System.gc();
+-//		} catch (RuntimeException ex) {
+-//			logger.logTimedMessage("[" + module.getEntry().location() + "] failed on " + name + " (" + ex.getMessage() + ")",
+-//					System.currentTimeMillis() - start, memory - runtime.freeMemory());
+-//			throw ex;
+-//		} catch (IOException ex) {
+-//			logger.logTimedMessage("[" + module.getEntry().location() + "] failed on " + name + " (" + ex.getMessage() + ")",
+-//					System.currentTimeMillis() - start, memory - runtime.freeMemory());
+-//			throw ex;
+-//		}
+-//	}
+-//
+-//	private static String name(String camelCase) {
+-//		boolean firstTime = true;
+-//		String r = "";
+-//		for(int i=0;i!=camelCase.length();++i) {
+-//			char c = camelCase.charAt(i);
+-//			if(!firstTime && Character.isUpperCase(c)) {
+-//				r += " ";
+-//			}
+-//			firstTime=false;
+-//			r += Character.toLowerCase(c);;
+-//		}
+-//		return r;
+-//	}
++	private void process(WyilFile module, Transform stage) throws IOException {
++		Runtime runtime = Runtime.getRuntime();
++		long start = System.currentTimeMillis();
++		long memory = runtime.freeMemory();
++		String name = name(stage.getClass().getSimpleName());
++
++		try {
++			stage.apply(module);
++			logger.logTimedMessage("[" + module.getEntry().location() + "] applied " + name,
++					System.currentTimeMillis() - start, memory - runtime.freeMemory());
++			System.gc();
++		} catch (RuntimeException ex) {
++			logger.logTimedMessage("[" + module.getEntry().location() + "] failed on " + name + " (" + ex.getMessage() + ")",
++					System.currentTimeMillis() - start, memory - runtime.freeMemory());
++			throw ex;
++		} catch (IOException ex) {
++			logger.logTimedMessage("[" + module.getEntry().location() + "] failed on " + name + " (" + ex.getMessage() + ")",
++					System.currentTimeMillis() - start, memory - runtime.freeMemory());
++			throw ex;
++		}
++	}
++
++	private static String name(String camelCase) {
++		boolean firstTime = true;
++		String r = "";
++		for(int i=0;i!=camelCase.length();++i) {
++			char c = camelCase.charAt(i);
++			if(!firstTime && Character.isUpperCase(c)) {
++				r += " ";
++			}
++			firstTime=false;
++			r += Character.toLowerCase(c);;
++		}
++		return r;
++	}
+ }
+diff --git a/modules/wyc/src/wyc/io/WhileyFileLexer.java b/modules/wyc/src/wyc/io/WhileyFileLexer.java
+index 7193c81..77ce715 100755
+--- a/modules/wyc/src/wyc/io/WhileyFileLexer.java
++++ b/modules/wyc/src/wyc/io/WhileyFileLexer.java
+@@ -35,10 +35,10 @@ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError;
+ import wyc.lang.WhileyFile;
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
+ import wyfs.lang.Path;
+ 
+ /**
+diff --git a/modules/wyc/src/wyc/io/WhileyFileParser.java b/modules/wyc/src/wyc/io/WhileyFileParser.java
+index 81a8dab..3aef0c4 100755
+--- a/modules/wyc/src/wyc/io/WhileyFileParser.java
++++ b/modules/wyc/src/wyc/io/WhileyFileParser.java
+@@ -36,20 +36,19 @@ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Set;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError;
+ import wyc.lang.*;
+ import wyc.lang.Expr.ConstantAccess;
+ import wyc.io.WhileyFileLexer.Token;
+ import static wyil.util.ErrorMessages.*;
+-import static wybs.lang.SyntaxError.*;
+ import static wyc.io.WhileyFileLexer.Token.Kind.*;
+-
++import static wycc.lang.SyntaxError.*;
+ import wyc.lang.WhileyFile.*;
+-import wycommon.util.Pair;
+-import wycommon.util.Triple;
++import wycc.lang.Attribute;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
++import wycc.util.Pair;
++import wycc.util.Triple;
+ import wyfs.lang.Path;
+ import wyfs.util.Trie;
+ import wyil.lang.Modifier;
+diff --git a/modules/wyc/src/wyc/io/WhileyFilePrinter.java b/modules/wyc/src/wyc/io/WhileyFilePrinter.java
+index cea8220..6643fb5 100755
+--- a/modules/wyc/src/wyc/io/WhileyFilePrinter.java
++++ b/modules/wyc/src/wyc/io/WhileyFilePrinter.java
+@@ -11,7 +11,7 @@ import wyc.lang.Expr;
+ import wyc.lang.Stmt;
+ import wyc.lang.SyntacticType;
+ import wyc.lang.WhileyFile;
+-import wycommon.util.Pair;
++import wycc.util.Pair;
+ import wyil.lang.*;
+ 
+ /**
+diff --git a/modules/wyc/src/wyc/lang/Expr.java b/modules/wyc/src/wyc/lang/Expr.java
+index d5ad120..cbdd107 100755
+--- a/modules/wyc/src/wyc/lang/Expr.java
++++ b/modules/wyc/src/wyc/lang/Expr.java
+@@ -27,13 +27,13 @@ package wyc.lang;
+ 
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntacticElement;
+ import wyc.builder.FlowTypeChecker;
+ import wyc.io.WhileyFileLexer;
+-import wycommon.util.Pair;
+-import wycommon.util.Triple;
++import wycc.lang.Attribute;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.util.Pair;
++import wycc.util.Triple;
+ import wyfs.lang.Path;
+ import wyil.lang.*;
+ 
+diff --git a/modules/wyc/src/wyc/lang/Exprs.java b/modules/wyc/src/wyc/lang/Exprs.java
+index 947f9c2..e867927 100755
+--- a/modules/wyc/src/wyc/lang/Exprs.java
++++ b/modules/wyc/src/wyc/lang/Exprs.java
+@@ -4,9 +4,9 @@ import static wyc.lang.WhileyFile.internalFailure;
+ 
+ import java.util.HashSet;
+ 
+-import wybs.lang.SyntaxError;
+ import wyc.lang.WhileyFile.Context;
+-import wycommon.util.Pair;
++import wycc.lang.SyntaxError;
++import wycc.util.Pair;
+ import wyil.lang.Type;
+ 
+ public class Exprs {
+diff --git a/modules/wyc/src/wyc/lang/Nominal.java b/modules/wyc/src/wyc/lang/Nominal.java
+index 358391f..b31f0d0 100755
+--- a/modules/wyc/src/wyc/lang/Nominal.java
++++ b/modules/wyc/src/wyc/lang/Nominal.java
+@@ -2,7 +2,7 @@ package wyc.lang;
+ 
+ import java.util.*;
+ 
+-import wycommon.util.Pair;
++import wycc.util.Pair;
+ import wyil.lang.Type;
+ 
+ /**
+diff --git a/modules/wyc/src/wyc/lang/Stmt.java b/modules/wyc/src/wyc/lang/Stmt.java
+index 4ebc2df..8fb618c 100755
+--- a/modules/wyc/src/wyc/lang/Stmt.java
++++ b/modules/wyc/src/wyc/lang/Stmt.java
+@@ -27,8 +27,8 @@ package wyc.lang;
+ 
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.SyntacticElement;
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
+ import wyil.lang.Constant;
+ import wyil.util.*;
+ 
+diff --git a/modules/wyc/src/wyc/lang/SyntacticType.java b/modules/wyc/src/wyc/lang/SyntacticType.java
+index 55b3af2..61e20fb 100755
+--- a/modules/wyc/src/wyc/lang/SyntacticType.java
++++ b/modules/wyc/src/wyc/lang/SyntacticType.java
+@@ -27,9 +27,9 @@ package wyc.lang;
+ 
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.SyntacticElement;
+ import wyc.lang.SyntacticType.NonUnion;
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
+ 
+ /**
+  * <p>
+diff --git a/modules/wyc/src/wyc/lang/WhileyFile.java b/modules/wyc/src/wyc/lang/WhileyFile.java
+index 3ad0fff..a386032 100755
+--- a/modules/wyc/src/wyc/lang/WhileyFile.java
++++ b/modules/wyc/src/wyc/lang/WhileyFile.java
+@@ -28,13 +28,13 @@ package wyc.lang;
+ import java.io.*;
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.CompilationUnit;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError;
+-import wybs.util.AbstractCompilationUnit;
+ import wyc.io.WhileyFileLexer;
+ import wyc.io.WhileyFileParser;
++import wycc.lang.Attribute;
++import wycc.lang.CompilationUnit;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
++import wycc.util.AbstractCompilationUnit;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyfs.util.Trie;
+diff --git a/modules/wyc/src/wyc/testing/AllInvalidTests.java b/modules/wyc/src/wyc/testing/AllInvalidTests.java
+index 9395822..fd26a34 100755
+--- a/modules/wyc/src/wyc/testing/AllInvalidTests.java
++++ b/modules/wyc/src/wyc/testing/AllInvalidTests.java
+@@ -44,7 +44,7 @@ import org.junit.runners.Parameterized.Parameters;
+ 
+ import wyc.WycMain;
+ import wyc.util.WycBuildTask;
+-import wycommon.util.Pair;
++import wycc.util.Pair;
+ 
+ /**
+  * Run through all invalid test cases with verification enabled. Since every
+diff --git a/modules/wyc/src/wyc/testing/AllValidTests.java b/modules/wyc/src/wyc/testing/AllValidTests.java
+index e9041d8..a07e67d 100755
+--- a/modules/wyc/src/wyc/testing/AllValidTests.java
++++ b/modules/wyc/src/wyc/testing/AllValidTests.java
+@@ -45,7 +45,7 @@ import wybs.lang.Build;
+ import wybs.util.StdProject;
+ import wyc.WycMain;
+ import wyc.util.WycBuildTask;
+-import wycommon.util.Pair;
++import wycc.util.Pair;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyfs.util.DirectoryRoot;
+diff --git a/modules/wyc/src/wyc/testing/AllValidVerificationTests.java b/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
+index 3bd7dc3..eacf6ee 100755
+--- a/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
++++ b/modules/wyc/src/wyc/testing/AllValidVerificationTests.java
+@@ -39,7 +39,7 @@ import org.junit.runners.Parameterized;
+ import org.junit.runners.Parameterized.Parameters;
+ 
+ import wyc.WycMain;
+-import wycommon.util.Pair;
++import wycc.util.Pair;
+ 
+ /**
+  * Run through all valid test cases with verification enabled. Since every test
+diff --git a/modules/wyc/src/wyc/testing/TestUtils.java b/modules/wyc/src/wyc/testing/TestUtils.java
+index a322338..5c24ec7 100755
+--- a/modules/wyc/src/wyc/testing/TestUtils.java
++++ b/modules/wyc/src/wyc/testing/TestUtils.java
+@@ -9,11 +9,11 @@ import java.util.Collections;
+ import java.util.Comparator;
+ 
+ import wybs.lang.Build;
+-import wybs.lang.NameID;
+ import wybs.util.StdProject;
+ import wyc.WycMain;
+ import wyc.util.WycBuildTask;
+-import wycommon.util.Pair;
++import wycc.lang.NameID;
++import wycc.util.Pair;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyfs.util.DirectoryRoot;
+diff --git a/modules/wyil/build.xml b/modules/wyil/build.xml
+index bc33ea3..a53b2a0 100755
+--- a/modules/wyil/build.xml
++++ b/modules/wyil/build.xml
+@@ -6,8 +6,8 @@
+   <import file="../../config.xml"/>
+ 
+   <path id="wyil.classpath">
+-    <pathelement path="${WYCC_JAR}"/>
+-    <pathelement path="${WYTP_JAR}"/>
++    <pathelement path="${WYBS_DIR}/src"/>
++    <pathelement path="${WYCS_DIR}/src"/>
+     <pathelement path="${WYRL_JAR}"/>
+     <path refid="junit.classpath"/>
+   </path>
+@@ -55,6 +55,31 @@
+   </target>
+ 
+   <!-- ================================================================== -->
++  <!-- Dist -->
++  <!-- ================================================================== -->
++
++  <target name="dist">
++    <mkdir dir="tmp"/>
++    <manifest file="tmp/MANIFEST.MF">
++      <attribute name="Built-By" value="${user.name}"/>
++      <attribute name="Main-Class" value="wyil.WyilMain"/>
++      <attribute name="Implementation-Version" value="${version}"/>
++      <attribute name="Implementation-Title" value="wyil-v${version}.jar"/>
++    </manifest>
++    <jar destfile="${DIST_DIR}/wyil-all-v${version}.jar" manifest="tmp/MANIFEST.MF">
++      <fileset dir="src">
++	<include name="wyautl_old/**/*.class"/>
++	<include name="wybs/**/*.class"/>
++	<include name="wyil/**/*.class"/>
++      </fileset>
++    </jar>
++    <delete dir="tmp"/>
++    <echo message="============================================="/>
++    <echo message="BUILT: dist/${ant.project.name}-all-v${version}.jar"/>
++    <echo message="============================================="/>
++  </target>
++
++  <!-- ================================================================== -->
+   <!-- Clean -->
+   <!-- ================================================================== -->
+ 
+diff --git a/modules/wyil/src/wyil/Main.java b/modules/wyil/src/wyil/Main.java
+index 8ceb816..323c788 100755
+--- a/modules/wyil/src/wyil/Main.java
++++ b/modules/wyil/src/wyil/Main.java
+@@ -2,13 +2,14 @@ package wyil;
+ 
+ import java.io.*;
+ import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.Collections;
+ 
+ import wybs.lang.Build;
+ import wybs.util.StdProject;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntaxError;
+-import wybs.lang.SyntaxError.InternalFailure;
++import wycc.lang.NameID;
++import wycc.lang.SyntaxError;
++import wycc.lang.SyntaxError.InternalFailure;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyfs.util.DirectoryRoot;
+diff --git a/modules/wyil/src/wyil/builders/VerificationConditionGenerator.java b/modules/wyil/src/wyil/builders/VerificationConditionGenerator.java
+index 08a49da..688c7e1 100755
+--- a/modules/wyil/src/wyil/builders/VerificationConditionGenerator.java
++++ b/modules/wyil/src/wyil/builders/VerificationConditionGenerator.java
+@@ -9,12 +9,12 @@ import static wyil.util.ErrorMessages.errorMessage;
+ import java.math.BigInteger;
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError.InternalFailure;
+-import wybs.util.ResolveError;
+-import wycommon.util.Pair;
++import wycc.lang.Attribute;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError.InternalFailure;
++import wycc.util.Pair;
++import wycc.util.ResolveError;
+ import wycs.core.Value;
+ import wycs.syntax.Expr;
+ import wycs.syntax.SyntacticType;
+diff --git a/modules/wyil/src/wyil/builders/Wyil2WyalBuilder.java b/modules/wyil/src/wyil/builders/Wyil2WyalBuilder.java
+index ff0dbee..589733b 100755
+--- a/modules/wyil/src/wyil/builders/Wyil2WyalBuilder.java
++++ b/modules/wyil/src/wyil/builders/Wyil2WyalBuilder.java
+@@ -29,10 +29,12 @@ import java.io.IOException;
+ import java.util.*;
+ 
+ import wybs.lang.Build;
+-import wycommon.util.Logger;
+-import wycommon.util.Pair;
++import wybs.lang.Builder;
+ import wyfs.lang.Path;
+ import wyil.lang.*;
++import wycc.util.Logger;
++import wycc.util.Pair;
++import wycs.syntax.Expr;
+ import wycs.syntax.WyalFile;
+ 
+ /**
+@@ -42,7 +44,7 @@ import wycs.syntax.WyalFile;
+  * @author David J. Pearce
+  *
+  */
+-public class Wyil2WyalBuilder implements Build.Task {
++public class Wyil2WyalBuilder implements Builder {
+ 
+ 	/**
+ 	 * The master namespace for identifying all resources available to the
+@@ -56,6 +58,8 @@ public class Wyil2WyalBuilder implements Build.Task {
+ 	 */
+ 	protected Logger logger = Logger.NULL;
+ 
++	private String filename;
++
+ 	public Wyil2WyalBuilder(Build.Project project) {
+ 		this.project = project;
+ 	}
+@@ -68,12 +72,7 @@ public class Wyil2WyalBuilder implements Build.Task {
+ 		this.logger = logger;
+ 	}
+ 
+-	public String id() {
+-		return null;
+-	}
+-	
+ 	@Override
+-	@SuppressWarnings("unchecked")
+ 	public Set<Path.Entry<?>> build(Collection<Pair<Path.Entry<?>, Path.Root>> delta, Build.Graph graph)
+ 			throws IOException {
+ 		Runtime runtime = Runtime.getRuntime();
+diff --git a/modules/wyil/src/wyil/checks/CoercionCheck.java b/modules/wyil/src/wyil/checks/CoercionCheck.java
+index 011ad29..b935018 100755
+--- a/modules/wyil/src/wyil/checks/CoercionCheck.java
++++ b/modules/wyil/src/wyil/checks/CoercionCheck.java
+@@ -28,11 +28,12 @@ package wyil.checks;
+ import java.util.*;
+ 
+ import static wyil.util.ErrorMessages.*;
+-import wybs.lang.Attribute;
+-import wybs.lang.Build;
+-import wybs.lang.SyntacticElement;
+-import wybs.lang.SyntaxError;
+-import wycommon.util.Pair;
++import wybs.lang.Builder;
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
++import wycc.lang.SyntaxError;
++import wycc.lang.Transform;
++import wycc.util.Pair;
+ import wyil.lang.*;
+ 
+ /**
+@@ -72,10 +73,10 @@ import wyil.lang.*;
+  *
+  * @author David J. Pearce
+  */
+-public class CoercionCheck {
++public class CoercionCheck implements Transform<WyilFile> {
+ 	private WyilFile file;
+ 
+-	public CoercionCheck(Build.Task builder) {
++	public CoercionCheck(Builder builder) {
+ 
+ 	}
+ 
+diff --git a/modules/wyil/src/wyil/checks/ModuleCheck.java b/modules/wyil/src/wyil/checks/ModuleCheck.java
+index a04190f..c8367a2 100755
+--- a/modules/wyil/src/wyil/checks/ModuleCheck.java
++++ b/modules/wyil/src/wyil/checks/ModuleCheck.java
+@@ -27,9 +27,10 @@ package wyil.checks;
+ 
+ import java.util.*;
+ 
+-import wybs.lang.Build;
+-import wybs.lang.SyntaxError;
+-import wycommon.util.Pair;
++import wybs.lang.Builder;
++import wycc.lang.SyntaxError;
++import wycc.lang.Transform;
++import wycc.util.Pair;
+ import wyil.lang.*;
+ import wyil.lang.Bytecode.*;
+ import wyil.lang.SyntaxTree.Location;
+@@ -55,10 +56,10 @@ import static wyil.util.ErrorMessages.*;
+  * @author David J. Pearce
+  *
+  */
+-public class ModuleCheck {
++public class ModuleCheck implements Transform<WyilFile> {
+ 	private WyilFile file;
+ 
+-	public ModuleCheck(Build.Task builder) {
++	public ModuleCheck(Builder builder) {
+ 
+ 	}
+ 
+diff --git a/modules/wyil/src/wyil/io/WyilFilePrinter.java b/modules/wyil/src/wyil/io/WyilFilePrinter.java
+index f49ad8c..e171a43 100755
+--- a/modules/wyil/src/wyil/io/WyilFilePrinter.java
++++ b/modules/wyil/src/wyil/io/WyilFilePrinter.java
+@@ -28,7 +28,7 @@ package wyil.io;
+ import java.io.*;
+ import java.util.*;
+ 
+-import wybs.lang.Build;
++import wycc.lang.Transform;
+ import wyil.lang.*;
+ import wyil.lang.Constant;
+ import wyil.lang.Bytecode.AliasDeclaration;
+@@ -49,11 +49,11 @@ import wyil.lang.WyilFile.*;
+  * @author David J. Pearce
+  *
+  */
+-public final class WyilFilePrinter {
++public final class WyilFilePrinter implements Transform<WyilFile> {
+ 	private PrintWriter out;
+ 	private boolean verbose = getVerbose();
+ 	
+-	public WyilFilePrinter(Build.Task builder) {
++	public WyilFilePrinter(wybs.lang.Builder builder) {
+ 
+ 	}
+ 
+@@ -244,6 +244,7 @@ public final class WyilFilePrinter {
+ 	}
+ 	
+ 	private void writeAliasDeclaration(int indent, Location<AliasDeclaration> loc, PrintWriter out) {
++		Location<?>[] operands = loc.getOperands();
+ 		out.print("alias ");
+ 		out.print(loc.getType());
+ 		out.print(" ");
+@@ -450,10 +451,23 @@ public final class WyilFilePrinter {
+ 	}
+ 
+ 	private void writeExpressions(Location<?>[] exprs, PrintWriter out) {
++		Bytecode last = null;
+ 		for (int i = 0; i != exprs.length; ++i) {
+ 			if (i != 0) {
+ 				out.print(", ");
+ 			}
++			Location<?> e = exprs[i];
++
++			// FIXME: support position operators
++			
++//			if (e instanceof SyntaxTree.PositionalLocation<?>) {
++//				SyntaxTree.PositionalLocation<?> p = (SyntaxTree.PositionalLocation<?>) e;
++//				if (p.getBytecode() == last) {
++//					continue;
++//				} else {
++//					last = p.getBytecode();
++//				}
++//			}
+ 			writeExpression(exprs[i], out);
+ 		}
+ 	}
+@@ -800,7 +814,6 @@ public final class WyilFilePrinter {
+ 		}
+ 	}
+ 	
+-	@SuppressWarnings("unchecked")
+ 	private Location<VariableDeclaration> getVariableDeclaration(Location<?> loc) {
+ 		switch (loc.getOpcode()) {
+ 		case Bytecode.OPCODE_vardecl:
+diff --git a/modules/wyil/src/wyil/io/WyilFileReader.java b/modules/wyil/src/wyil/io/WyilFileReader.java
+index d5f9f51..f0ca482 100755
+--- a/modules/wyil/src/wyil/io/WyilFileReader.java
++++ b/modules/wyil/src/wyil/io/WyilFileReader.java
+@@ -29,8 +29,8 @@ import java.io.*;
+ import java.math.BigInteger;
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.NameID;
++import wycc.lang.Attribute;
++import wycc.lang.NameID;
+ import wyfs.io.BinaryInputStream;
+ import wyfs.lang.Path;
+ import wyfs.util.Trie;
+diff --git a/modules/wyil/src/wyil/io/WyilFileWriter.java b/modules/wyil/src/wyil/io/WyilFileWriter.java
+index b0ae011..3604a2c 100755
+--- a/modules/wyil/src/wyil/io/WyilFileWriter.java
++++ b/modules/wyil/src/wyil/io/WyilFileWriter.java
+@@ -29,8 +29,8 @@ import java.io.*;
+ import java.math.BigInteger;
+ import java.util.*;
+ 
+-import wybs.lang.NameID;
+-import wycommon.util.Pair;
++import wycc.lang.NameID;
++import wycc.util.Pair;
+ import wyfs.io.BinaryOutputStream;
+ import wyfs.lang.Path;
+ import wyil.lang.*;
+diff --git a/modules/wyil/src/wyil/lang/Bytecode.java b/modules/wyil/src/wyil/lang/Bytecode.java
+index 50c631e..1cc26e4 100755
+--- a/modules/wyil/src/wyil/lang/Bytecode.java
++++ b/modules/wyil/src/wyil/lang/Bytecode.java
+@@ -27,8 +27,13 @@ package wyil.lang;
+ 
+ import java.util.*;
+ 
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
++import wyil.lang.Bytecode.Extras;
++import wyil.lang.Bytecode.Operands;
++import wyil.lang.Bytecode.Schema;
+ import wyil.util.AbstractBytecode;
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ 
+ /**
+  * <p>
+diff --git a/modules/wyil/src/wyil/lang/Constant.java b/modules/wyil/src/wyil/lang/Constant.java
+index 0a1f3d4..2afb598 100755
+--- a/modules/wyil/src/wyil/lang/Constant.java
++++ b/modules/wyil/src/wyil/lang/Constant.java
+@@ -28,7 +28,7 @@ package wyil.lang;
+ import java.math.BigInteger;
+ import java.util.*;
+ 
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ 
+ public abstract class Constant implements Comparable<Constant> {
+ 
+diff --git a/modules/wyil/src/wyil/lang/SyntaxTree.java b/modules/wyil/src/wyil/lang/SyntaxTree.java
+index 209b498..61e886f 100755
+--- a/modules/wyil/src/wyil/lang/SyntaxTree.java
++++ b/modules/wyil/src/wyil/lang/SyntaxTree.java
+@@ -3,8 +3,8 @@ package wyil.lang;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.SyntacticElement;
++import wycc.lang.Attribute;
++import wycc.lang.SyntacticElement;
+ 
+ /**
+  * A SyntaxTree representation of the Whiley Intermediate Language (WyIL).
+diff --git a/modules/wyil/src/wyil/lang/Type.java b/modules/wyil/src/wyil/lang/Type.java
+index bca2839..0b79d75 100755
+--- a/modules/wyil/src/wyil/lang/Type.java
++++ b/modules/wyil/src/wyil/lang/Type.java
+@@ -25,7 +25,7 @@ import wyautl_old.io.BinaryAutomataReader;
+ import wyautl_old.io.BinaryAutomataWriter;
+ import wyautl_old.lang.*;
+ import wyautl_old.lang.Automaton.State;
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ import wyfs.io.BinaryInputStream;
+ import wyfs.io.BinaryOutputStream;
+ import wyfs.util.Trie;
+diff --git a/modules/wyil/src/wyil/lang/WyilFile.java b/modules/wyil/src/wyil/lang/WyilFile.java
+index 3478748..c644e19 100755
+--- a/modules/wyil/src/wyil/lang/WyilFile.java
++++ b/modules/wyil/src/wyil/lang/WyilFile.java
+@@ -30,10 +30,11 @@ import java.io.InputStream;
+ import java.io.OutputStream;
+ import java.util.*;
+ 
+-import wybs.lang.Attribute;
+-import wybs.lang.CompilationUnit;
+-import wybs.lang.SyntacticElement;
+-import wybs.util.AbstractCompilationUnit;
++import wycc.lang.Attribute;
++import wycc.lang.CompilationUnit;
++import wycc.lang.SyntacticElement;
++import wycc.util.AbstractCompilationUnit;
++import wycc.util.Pair;
+ import wyfs.lang.Content;
+ import wyfs.lang.Path;
+ import wyil.io.*;
+diff --git a/modules/wyil/src/wyil/util/AbstractBytecode.java b/modules/wyil/src/wyil/util/AbstractBytecode.java
+index 0210114..73bbbdb 100755
+--- a/modules/wyil/src/wyil/util/AbstractBytecode.java
++++ b/modules/wyil/src/wyil/util/AbstractBytecode.java
+@@ -2,7 +2,7 @@ package wyil.util;
+ 
+ import java.util.Arrays;
+ 
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ import wyil.lang.Bytecode;
+ import wyil.lang.Constant;
+ import wyil.lang.Type;
+diff --git a/modules/wyil/src/wyil/util/ErrorMessages.java b/modules/wyil/src/wyil/util/ErrorMessages.java
+index 63e0444..2eca48b 100755
+--- a/modules/wyil/src/wyil/util/ErrorMessages.java
++++ b/modules/wyil/src/wyil/util/ErrorMessages.java
+@@ -25,6 +25,10 @@
+ 
+ package wyil.util;
+ 
++import java.util.Collection;
++
++import wycc.lang.SyntaxError.InternalFailure;
++import wycc.lang.Attribute;
+ import wyil.lang.Type;
+ 
+ /**
+diff --git a/modules/wyil/src/wyil/util/TypeSystem.java b/modules/wyil/src/wyil/util/TypeSystem.java
+index 8bec8d8..3fcb489 100755
+--- a/modules/wyil/src/wyil/util/TypeSystem.java
++++ b/modules/wyil/src/wyil/util/TypeSystem.java
+@@ -11,8 +11,9 @@ import wyautl_old.lang.Automata;
+ import wyautl_old.lang.Automaton;
+ import wyautl_old.lang.Automaton.State;
+ import wybs.lang.Build;
+-import wybs.lang.NameID;
+-import wybs.util.ResolveError;
++import wycc.lang.NameID;
++import wycc.util.ResolveError;
++import wyfs.lang.Path;
+ import wyil.lang.Type;
+ import wyil.lang.WyilFile;
+ 
+@@ -142,6 +143,7 @@ public class TypeSystem {
+ 			if (type instanceof Type.Nominal) {
+ 				Type.Nominal nt = (Type.Nominal) type;
+ 				NameID nid = nt.name();
++				Path.ID mid = nid.module();
+ 				WyilFile m = project.get(nid.module(), WyilFile.ContentType).read();
+ 				WyilFile.Type td = m.type(nid.name());
+ 				return expandOneLevel(td.type());
+diff --git a/modules/wyil/src/wyil/util/interpreter/Interpreter.java b/modules/wyil/src/wyil/util/interpreter/Interpreter.java
+index 92aae66..9b64d84 100755
+--- a/modules/wyil/src/wyil/util/interpreter/Interpreter.java
++++ b/modules/wyil/src/wyil/util/interpreter/Interpreter.java
+@@ -10,10 +10,10 @@ import java.util.*;
+ 
+ import wyautl.util.BigRational;
+ import wybs.lang.Build;
+-import wybs.lang.NameID;
+-import wybs.lang.SyntacticElement;
+-import wybs.util.ResolveError;
+-import wycommon.util.Pair;
++import wycc.lang.NameID;
++import wycc.lang.SyntacticElement;
++import wycc.util.Pair;
++import wycc.util.ResolveError;
+ import wyfs.lang.Path;
+ import wyil.lang.*;
+ import wyil.lang.Bytecode.*;
+diff --git a/modules/wyil/src/wyil/util/type/SubtypeOperator.java b/modules/wyil/src/wyil/util/type/SubtypeOperator.java
+index 5e9c4f3..7407b07 100755
+--- a/modules/wyil/src/wyil/util/type/SubtypeOperator.java
++++ b/modules/wyil/src/wyil/util/type/SubtypeOperator.java
+@@ -30,7 +30,7 @@ import static wyil.lang.Type.*;
+ import java.util.*;
+ 
+ import wyautl_old.lang.*;
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ import wyil.lang.Type;
+ 
+ /**
+diff --git a/modules/wyil/src/wyil/util/type/TypeAlgorithms.java b/modules/wyil/src/wyil/util/type/TypeAlgorithms.java
+index e0a331c..576907d 100755
+--- a/modules/wyil/src/wyil/util/type/TypeAlgorithms.java
++++ b/modules/wyil/src/wyil/util/type/TypeAlgorithms.java
+@@ -36,7 +36,7 @@ import java.util.Comparator;
+ import java.util.HashMap;
+ 
+ import wyautl_old.lang.*;
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
+ import wyil.lang.Type;
+ 
+ /**
+diff --git a/modules/wyil/src/wyil/util/type/TypeParser.java b/modules/wyil/src/wyil/util/type/TypeParser.java
+index 9b054b3..fb8cd24 100755
+--- a/modules/wyil/src/wyil/util/type/TypeParser.java
++++ b/modules/wyil/src/wyil/util/type/TypeParser.java
+@@ -25,10 +25,13 @@
+ 
+ package wyil.util.type;
+ 
++import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.HashSet;
++import java.util.List;
+ 
+-import wybs.lang.NameID;
++import wycc.lang.NameID;
++import wyfs.lang.Path;
+ import wyfs.util.Trie;
+ import wyil.lang.Type;
+ import static wyil.lang.Type.*;

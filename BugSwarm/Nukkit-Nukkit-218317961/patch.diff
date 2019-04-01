@@ -1,0 +1,119 @@
+diff --git a/pom.xml b/pom.xml
+index b53361af86..1658aba71c 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -55,11 +55,6 @@
+             <artifactId>netty-all</artifactId>
+             <version>4.1.6.Final</version>
+         </dependency>
+-        <dependency>
+-            <groupId>io.netty</groupId>
+-            <artifactId>netty-parent</artifactId>
+-            <version>4.1.9.Final</version>
+-        </dependency>
+     </dependencies>
+ 
+     <build>
+@@ -129,4 +124,4 @@
+         </plugins>
+     </build>
+ 
+-</project>
+\ No newline at end of file
++</project>
+diff --git a/src/main/java/cn/nukkit/Player.java b/src/main/java/cn/nukkit/Player.java
+index cb1dc63416..24abc8995a 100644
+--- a/src/main/java/cn/nukkit/Player.java
++++ b/src/main/java/cn/nukkit/Player.java
+@@ -3006,24 +3006,10 @@ public void handleDataPacket(DataPacket packet) {
+                         textPacket.message = this.removeFormat ? TextFormat.clean(textPacket.message) : textPacket.message;
+                         for (String msg : textPacket.message.split("\n")) {
+                             if (!"".equals(msg.trim()) && msg.length() <= 255 && this.messageCounter-- > 0) {
+-                                if (msg.startsWith("./")) { //Command
+-                                    PlayerCommandPreprocessEvent commandPreprocessEvent = new PlayerCommandPreprocessEvent(this, msg);
+-                                    if (commandPreprocessEvent.getMessage().length() > 320) {
+-                                        commandPreprocessEvent.setCancelled();
+-                                    }
+-                                    this.server.getPluginManager().callEvent(commandPreprocessEvent);
+-                                    if (commandPreprocessEvent.isCancelled()) {
+-                                        break;
+-                                    }
+-                                    Timings.playerCommandTimer.startTiming();
+-                                    this.server.dispatchCommand(commandPreprocessEvent.getPlayer(), commandPreprocessEvent.getMessage().substring(2));
+-                                    Timings.playerCommandTimer.stopTiming();
+-                                } else { //Chat
+-                                    PlayerChatEvent chatEvent = new PlayerChatEvent(this, msg);
+-                                    this.server.getPluginManager().callEvent(chatEvent);
+-                                    if (!chatEvent.isCancelled()) {
+-                                        this.server.broadcastMessage(this.getServer().getLanguage().translateString(chatEvent.getFormat(), new String[]{chatEvent.getPlayer().getDisplayName(), chatEvent.getMessage()}), chatEvent.getRecipients());
+-                                    }
++                                PlayerChatEvent chatEvent = new PlayerChatEvent(this, msg);
++                                this.server.getPluginManager().callEvent(chatEvent);
++                                if (!chatEvent.isCancelled()) {
++                                    this.server.broadcastMessage(this.getServer().getLanguage().translateString(chatEvent.getFormat(), new String[]{chatEvent.getPlayer().getDisplayName(), chatEvent.getMessage()}), chatEvent.getRecipients());
+                                 }
+                             }
+                         }
+diff --git a/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java b/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
+index e1979f6ec3..89c5cf4c0d 100644
+--- a/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
++++ b/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
+@@ -9,9 +9,9 @@
+     /**
+      * Actual Minecraft: PE protocol version
+      */
+-    byte CURRENT_PROTOCOL = 105;
+-    String MINECRAFT_VERSION = "v1.0.5";
+-    String MINECRAFT_VERSION_NETWORK = "1.0.5";
++    byte CURRENT_PROTOCOL = 106;
++    String MINECRAFT_VERSION = "v1.0.6";
++    String MINECRAFT_VERSION_NETWORK = "1.0.6";
+ 
+     byte LOGIN_PACKET = 0x01;
+     byte PLAY_STATUS_PACKET = 0x02;
+diff --git a/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java b/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
+index 56a693e190..e44610d131 100644
+--- a/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
++++ b/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
+@@ -25,6 +25,7 @@ public void encode() {
+             this.putString(entry.getPackId());
+             this.putString(entry.getPackVersion());
+             this.putLLong(entry.getPackSize());
++            this.putString(""); //unknown
+         }
+ 
+         this.putLShort(this.resourcePackEntries.length);
+@@ -32,6 +33,7 @@ public void encode() {
+             this.putString(entry.getPackId());
+             this.putString(entry.getPackVersion());
+             this.putLLong(entry.getPackSize());
++            this.putString(""); //unknown
+         }
+     }
+ 
+diff --git a/src/main/java/cn/nukkit/scheduler/ServerScheduler.java b/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
+index 3bf64e07ce..0ad34daaed 100644
+--- a/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
++++ b/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
+@@ -236,7 +236,7 @@ public boolean isQueued(int taskId) {
+     }
+ 
+     private TaskHandler addTask(Task task, int delay, int period, boolean asynchronous) {
+-        return addTask(task instanceof PluginTask ? ((PluginTask) task).getOwner() : null, () -> task.onRun(currentTick + delay), delay, period, asynchronous);
++        return addTask(task instanceof PluginTask ? ((PluginTask) task).getOwner() : null, task, delay, period, asynchronous);
+     }
+ 
+     private TaskHandler addTask(Plugin plugin, Runnable task, int delay, int period, boolean asynchronous) {
+diff --git a/src/main/java/cn/nukkit/scheduler/Task.java b/src/main/java/cn/nukkit/scheduler/Task.java
+index f8f86e4887..0e88945df6 100644
+--- a/src/main/java/cn/nukkit/scheduler/Task.java
++++ b/src/main/java/cn/nukkit/scheduler/Task.java
+@@ -48,7 +48,7 @@ public final void setHandler(TaskHandler taskHandler) {
+ 
+     @Override
+     public final void run() {
+-
++        this.onRun(taskHandler.getLastRunTick());
+     }
+ 
+     public void onCancel() {

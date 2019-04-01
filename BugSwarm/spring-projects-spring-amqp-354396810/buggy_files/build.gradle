@@ -1,0 +1,506 @@
+buildscript {
+	repositories {
+		maven { url 'https://repo.spring.io/plugins-release' }
+	}
+	dependencies {
+		classpath 'io.spring.gradle:docbook-reference-plugin:0.3.1'
+		classpath 'org.asciidoctor:asciidoctor-gradle-plugin:1.5.0'
+		classpath 'me.champeau.gradle:gradle-javadoc-hotfix-plugin:0.1'
+		classpath 'io.spring.gradle:dependency-management-plugin:1.0.2.RELEASE'
+		classpath 'io.spring.gradle:spring-io-plugin:0.0.8.RELEASE'
+	}
+}
+
+plugins {
+	id "org.sonarqube" version '2.5'
+}
+
+description = 'Spring AMQP'
+
+apply plugin: 'base'
+apply plugin: 'project-report'
+apply plugin: 'idea'
+
+def docsDir = 'src/reference/asciidoc' // Will be default with newer asciidoctor plugin
+
+ext {
+	isTravisBuild = System.getenv().get("TRAVIS") == 'true'
+	linkHomepage = 'https://projects.spring.io/spring-amqp'
+	linkCi       = 'https://build.spring.io/browse/AMQP'
+	linkIssue    = 'https://jira.spring.io/browse/AMQP'
+	linkScmUrl           = 'https://github.com/spring-projects/spring-amqp'
+	linkScmConnection    = 'git://github.com/spring-projects/spring-amqp.git'
+	linkScmDevConnection = 'git@github.com:spring-projects/spring-amqp.git'
+}
+
+allprojects {
+	group = 'org.springframework.amqp'
+
+	repositories {
+		if (version.endsWith('BUILD-SNAPSHOT')) {
+			maven { url 'https://repo.spring.io/libs-snapshot' }
+		}
+		maven { url 'https://repo.spring.io/libs-release' }
+//		maven { url 'https://repo.spring.io/libs-staging-local' }
+	}
+	apply plugin: 'javadocHotfix'
+}
+
+ext {
+	expandPlaceholders = '**/quick-tour.xml'
+	javadocLinks = [
+		"http://docs.oracle.com/javase/8/docs/api/",
+		"http://docs.oracle.com/javaee/7/api/",
+		"http://docs.spring.io/spring/docs/current/javadoc-api/"
+	] as String[]
+}
+
+subprojects { subproject ->
+
+	apply plugin: 'java'
+	apply from:   "${rootProject.projectDir}/publish-maven.gradle"
+	apply plugin: 'eclipse'
+	apply plugin: 'idea'
+	apply plugin: 'project-report'
+	apply plugin: 'jacoco'
+	apply plugin: 'checkstyle'
+
+	if (project.hasProperty('platformVersion')) {
+		apply plugin: 'spring-io'
+
+		repositories {
+			maven { url 'https://repo.spring.io/libs-snapshot' }
+		}
+
+		dependencyManagement {
+			springIoTestRuntime {
+				imports {
+					mavenBom "io.spring.platform:platform-bom:$platformVersion"
+				}
+			}
+		}
+	}
+
+	sourceCompatibility=1.8
+	targetCompatibility=1.8
+
+	ext {
+		hamcrestVersion = '1.3'
+		jackson2Version = '2.9.1'
+		junit4Version = '4.12'
+		junitJupiterVersion = '5.1.0'
+		junitPlatformVersion = '1.1.0'
+		junitVintageVersion = '5.1.0'
+		log4jVersion = '2.8.2'
+		logbackVersion = '1.2.3'
+		mockitoVersion = '2.11.0'
+		rabbitmqVersion = project.hasProperty('rabbitmqVersion') ? project.rabbitmqVersion : '5.2.0'
+		rabbitmqHttpClientVersion = '2.0.1.RELEASE'
+
+		springVersion = project.hasProperty('springVersion') ? project.springVersion : '5.0.4.RELEASE'
+
+		springRetryVersion = '1.2.2.RELEASE'
+	}
+
+	eclipse {
+		project {
+			natures += 'org.springframework.ide.eclipse.core.springnature'
+		}
+	}
+
+	jacoco {
+		toolVersion = '0.7.9'
+	}
+
+	// dependencies that are common across all java projects
+	dependencies {
+		testCompile ("junit:junit:$junit4Version") {
+			exclude group: 'org.hamcrest', module: 'hamcrest-core'
+		}
+		testCompile "org.apache.logging.log4j:log4j-core:$log4jVersion"
+		testCompile "org.hamcrest:hamcrest-all:$hamcrestVersion"
+		testCompile ("org.mockito:mockito-core:$mockitoVersion") {
+			exclude group: 'org.hamcrest', module: 'hamcrest-core'
+		}
+		testCompile "org.springframework:spring-test:$springVersion"
+
+		testRuntime "org.apache.logging.log4j:log4j-slf4j-impl:$log4jVersion"
+		testRuntime "org.apache.logging.log4j:log4j-jcl:$log4jVersion"
+
+		testCompile "org.junit.jupiter:junit-jupiter-api:$junitJupiterVersion"
+		testRuntime "org.junit.jupiter:junit-jupiter-engine:$junitJupiterVersion"
+		testRuntime "org.junit.platform:junit-platform-launcher:$junitPlatformVersion"
+
+		// To support JUnit 4 tests
+		testRuntime "org.junit.vintage:junit-vintage-engine:$junitVintageVersion"
+
+		// To avoid compiler warnings about @API annotations in JUnit code
+		testCompileOnly 'org.apiguardian:apiguardian-api:1.0.0'
+
+	}
+
+	// enable all compiler warnings; individual projects may customize further
+	ext.xLintArg = '-Xlint:all,-options,-processing'
+	[compileJava, compileTestJava]*.options*.compilerArgs = [xLintArg]
+
+	task checkTestConfigs {
+		doLast {
+			def configFiles = []
+			sourceSets.test.allSource.srcDirs.each {
+				fileTree(it).include('**/*.xml').exclude('**/log4j.xml').each { configFile ->
+					def configXml = new XmlParser(false, false).parse(configFile)
+
+					if (configXml.@'xsi:schemaLocation' ==~ /.*spring-[a-z-]*\d\.\d\.xsd.*/) {
+						configFiles << configFile
+					}
+				}
+			}
+			if (configFiles) {
+				throw new InvalidUserDataException('Hardcoded XSD version in the config files:\n' +
+						configFiles.collect {relativePath(it)}.join('\n') +
+						'\nPlease, use versionless schemaLocations for Spring XSDs to avoid issues with builds on different versions of dependencies.')
+			}
+		}
+	}
+
+	test {
+		jacoco {
+			append = false
+			destinationFile = file("$buildDir/jacoco.exec")
+		}
+		if (isTravisBuild) {
+			// restrict memory usage, so tests don't fail with exit code 137 on travis
+			maxHeapSize = '256m'
+		}
+	}
+
+	task testAll(type: Test, dependsOn: check)
+
+	gradle.taskGraph.whenReady { graph ->
+		if (graph.hasTask(testAll)) {
+			test.enabled = false
+		}
+	}
+
+	tasks.withType(Test).all {
+		// suppress all console output during testing unless running `gradle -i`
+		logging.captureStandardOutput(LogLevel.INFO)
+		dependsOn checkTestConfigs
+
+		if (name ==~ /(springIo.*)|(testAll)/) {
+			systemProperty 'RUN_LONG_INTEGRATION_TESTS', 'true'
+		}
+		useJUnitPlatform()
+	}
+
+	task sourcesJar(type: Jar) {
+		classifier = 'sources'
+		from sourceSets.main.allJava
+	}
+
+	task javadocJar(type: Jar) {
+		classifier = 'javadoc'
+		from javadoc
+	}
+
+	checkstyle {
+		configFile = file("${rootDir}/src/checkstyle/checkstyle.xml")
+		toolVersion = "8.1"
+	}
+
+	artifacts {
+		archives sourcesJar
+		archives javadocJar
+	}
+
+	jar {
+		manifest {
+			attributes(
+					'Implementation-Version': version,
+					'Created-By': "JDK ${System.properties['java.version']} (${System.properties['java.specification.vendor']})",
+					'Implementation-Title': subproject.name,
+					'Implementation-Vendor-Id': subproject.group,
+					'Implementation-Vendor': 'Pivotal Software, Inc.',
+					'Implementation-URL': linkHomepage,
+					'Automatic-Module-Name': subproject.name.replace('-', '.')  // for Jigsaw
+			)
+		}
+	}
+
+	check.dependsOn javadoc
+	build.dependsOn jacocoTestReport
+
+}
+
+project('spring-amqp') {
+	description = 'Spring AMQP Core'
+	dependencies {
+
+		compile "org.springframework:spring-core:$springVersion"
+		compile ("org.springframework:spring-messaging:$springVersion", optional)
+		compile ("org.springframework:spring-oxm:$springVersion", optional)
+		compile ("org.springframework:spring-context:$springVersion", optional)
+		compile ("com.fasterxml.jackson.core:jackson-core:$jackson2Version", optional)
+		compile ("com.fasterxml.jackson.core:jackson-databind:$jackson2Version", optional)
+	}
+
+}
+
+project('spring-rabbit') {
+	description = 'Spring RabbitMQ Support'
+	dependencies {
+
+		compile project(":spring-amqp")
+
+		compile "com.rabbitmq:amqp-client:$rabbitmqVersion"
+		compile ("com.rabbitmq:http-client:$rabbitmqHttpClientVersion") {
+			exclude group: 'org.springframework', module: 'spring-web'
+		}
+
+		compile ("org.springframework:spring-aop:$springVersion", optional)
+		compile "org.springframework:spring-context:$springVersion"
+		compile "org.springframework:spring-messaging:$springVersion"
+		compile "org.springframework:spring-tx:$springVersion"
+		compile "org.springframework:spring-web:$springVersion"
+
+		compile "org.springframework.retry:spring-retry:$springRetryVersion"
+
+		compile ("ch.qos.logback:logback-classic:$logbackVersion", optional)
+
+		compile ("org.apache.logging.log4j:log4j-core:$log4jVersion", optional)
+
+		testCompile project(":spring-rabbit-junit")
+	}
+
+}
+
+project('spring-rabbit-junit') {
+	description = 'Spring Rabbit JUnit Support'
+
+	dependencies { // no spring-amqp dependencies allowed
+
+		compile "org.springframework:spring-core:$springVersion"
+		compile "junit:junit:$junit4Version"
+		compile "com.rabbitmq:amqp-client:$rabbitmqVersion"
+		compile ("com.rabbitmq:http-client:$rabbitmqHttpClientVersion") {
+			exclude group: 'org.springframework', module: 'spring-web'
+		}
+		compile "org.springframework:spring-web:$springVersion"
+		compile ("org.junit.jupiter:junit-jupiter-api:$junitJupiterVersion", optional)
+		compileOnly 'org.apiguardian:apiguardian-api:1.0.0'
+
+	}
+
+}
+
+project('spring-rabbit-test') {
+	description = 'Spring Rabbit Test Support'
+
+	dependencies {
+
+		compile project(":spring-rabbit")
+		compile ("junit:junit:$junit4Version") {
+			exclude group: 'org.hamcrest', module: 'hamcrest-core'
+		}
+		compile "org.hamcrest:hamcrest-all:$hamcrestVersion"
+		compile ("org.mockito:mockito-core:$mockitoVersion") {
+			exclude group: 'org.hamcrest', module: 'hamcrest-core'
+		}
+		testCompile project(":spring-rabbit").sourceSets.test.output
+		testCompile project(":spring-rabbit-junit")
+
+	}
+
+}
+
+
+apply plugin: org.asciidoctor.gradle.AsciidoctorPlugin
+
+asciidoctor {
+	sourceDir file("$docsDir")
+	sourceDocumentNames = files("$docsDir/index.adoc") // Change in >= 1.5.1
+	outputDir file("$buildDir/html")
+	backends = ['html5', 'docbook']
+	logDocuments = true
+	options = [
+		doctype: 'book',
+		attributes: [
+			docinfo: '',
+			toc2: '',
+			'compat-mode': '',
+			imagesdir: '',
+			stylesdir: "stylesheets/",
+			stylesheet: 'golo.css',
+			'spring-amqp-version': "$version",
+			'source-highlighter': 'highlightjs'
+		]
+	]
+}
+
+apply plugin: DocbookReferencePlugin
+
+reference {
+	sourceFileName = 'index.xml'
+	sourceDir = asciidoctor.outputDir
+	pdfFilename = 'spring-amqp-reference.pdf'
+	expandPlaceholders = ''
+}
+
+reference.dependsOn asciidoctor
+
+sonarqube {
+	properties {
+		property "sonar.jacoco.reportPath", "${buildDir.name}/jacoco.exec"
+		property "sonar.links.homepage", linkHomepage
+		property "sonar.links.ci", linkCi
+		property "sonar.links.issue", linkIssue
+		property "sonar.links.scm", linkScmUrl
+		property "sonar.links.scm_dev", linkScmDevConnection
+		property "sonar.java.coveragePlugin", "jacoco"
+	}
+}
+
+task api(type: Javadoc) {
+	group = 'Documentation'
+	description = 'Generates aggregated Javadoc API documentation.'
+	title = "${rootProject.description} ${version} API"
+	options.memberLevel = org.gradle.external.javadoc.JavadocMemberLevel.PROTECTED
+	options.author = true
+	options.header = rootProject.description
+	options.overview = 'src/api/overview.html'
+	options.stylesheetFile = file("src/api/stylesheet.css")
+	options.links(rootProject.ext.javadocLinks)
+
+	source subprojects.collect { project ->
+		project.sourceSets.main.allJava
+	}
+	destinationDir = new File(buildDir, "api")
+	classpath = files(subprojects.collect { project ->
+		project.sourceSets.main.compileClasspath
+	})
+}
+
+task schemaZip(type: Zip) {
+	group = 'Distribution'
+	classifier = 'schema'
+	description = "Builds -${classifier} archive containing all " +
+		"XSDs for deployment at static.springframework.org/schema."
+
+	subprojects.each { subproject ->
+		def Properties schemas = new Properties();
+		def shortName = subproject.name.replaceFirst("${rootProject.name}-", '')
+
+		if (subproject.name.endsWith("-rabbit")) {
+			shortName = 'rabbit'
+		}
+
+		subproject.sourceSets.main.resources.find {
+			it.path.endsWith("META-INF${File.separator}spring.schemas")
+		}?.withInputStream { schemas.load(it) }
+
+		for (def key : schemas.keySet()) {
+			File xsdFile = subproject.sourceSets.main.resources.find {
+				it.path.replaceAll('\\\\', '/').endsWith(schemas.get(key))
+			}
+			assert xsdFile != null
+			into ("${shortName}") {
+				from xsdFile.path
+			}
+		}
+	}
+}
+
+task docsZip(type: Zip) {
+		group = 'Distribution'
+		classifier = 'docs'
+		description = "Builds -${classifier} archive containing api and reference " +
+			"for deployment at static.springframework.org/spring-integration/docs."
+
+		from('src/dist') {
+			include 'changelog.txt'
+		}
+
+		from (api) {
+			into 'api'
+		}
+
+		from (reference) {
+			into 'reference'
+		}
+}
+
+task distZip(type: Zip, dependsOn: [docsZip, schemaZip]) {
+	group = 'Distribution'
+	classifier = 'dist'
+	description = "Builds -${classifier} archive, containing all jars and docs, " +
+		"suitable for community download page."
+
+	ext.baseDir = "${project.name}-${project.version}";
+
+	from('src/dist') {
+		include 'README.md'
+		include 'apache-license.txt'
+		include 'epl-license.txt'
+		include 'notice.txt'
+		into "${baseDir}"
+	}
+
+	from(zipTree(docsZip.archivePath)) {
+		into "${baseDir}/docs"
+	}
+
+	from(zipTree(schemaZip.archivePath)) {
+		into "${baseDir}/schema"
+	}
+
+	subprojects.each { subproject ->
+		into ("${baseDir}/libs") {
+			from subproject.jar
+			from subproject.sourcesJar
+			from subproject.javadocJar
+		}
+	}
+}
+
+// Create an optional "with dependencies" distribution.
+// Not published by default; only for use when building from source.
+task depsZip(type: Zip, dependsOn: distZip) { zipTask ->
+	group = 'Distribution'
+	classifier = 'dist-with-deps'
+	description = "Builds -${classifier} archive, containing everything " +
+		"in the -${distZip.classifier} archive plus all dependencies."
+
+	from zipTree(distZip.archivePath)
+
+	gradle.taskGraph.whenReady { taskGraph ->
+		if (taskGraph.hasTask(":${zipTask.name}")) {
+			def projectNames = rootProject.subprojects*.name
+			def artifacts = new HashSet()
+			subprojects.each { subproject ->
+				subproject.configurations.runtime.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+					def dependency = artifact.moduleVersion.id
+					if (!projectNames.contains(dependency.name)) {
+						artifacts << artifact.file
+					}
+				}
+			}
+
+			zipTask.from(artifacts) {
+				into "${distZip.baseDir}/deps"
+			}
+		}
+	}
+}
+
+tasks.build.dependsOn assemble
+
+artifacts {
+	archives distZip
+	archives docsZip
+	archives schemaZip
+}
+
+task dist(dependsOn: assemble) {
+	group = 'Distribution'
+	description = 'Builds -dist, -docs and -schema distribution archives.'
+}
