@@ -1,5 +1,5 @@
 diff --git a/server/app/api.py b/server/app/api.py
-index 28e2d59f..6f7b65d8 100644
+index e5622a8f11..6f7b65d8b2 100755
 --- a/server/app/api.py
 +++ b/server/app/api.py
 @@ -25,6 +25,7 @@
@@ -33,18 +33,7 @@ index 28e2d59f..6f7b65d8 100644
              for part in parts:
                  course = part.course.get()
                  offering = course.offering.split('/')
-@@ -950,8 +952,9 @@ def data_for_zip(self, obj):
-         try:
-             user = obj.submitter.get()
-             name = user.email[0]+'-'+str(obj.created)
--        except IndexError:
-+        except IndexError, AttributeError:
-             name = str(obj.created)
-+
-         name = name.replace('.', '-').replace(' ', '_')
-         messages = obj.get_messages()
-         if 'file_contents' not in messages:
-@@ -1550,12 +1553,12 @@ class CourseAPI(APIResource):
+@@ -1551,12 +1553,12 @@ class CourseAPI(APIResource):
          }
      }
  
@@ -60,7 +49,7 @@ index 28e2d59f..6f7b65d8 100644
      def index(self, user, data):
          if data['onlyenrolled']:
              return dict(results=[result.course for result in models.Participant.query(
-@@ -1563,34 +1566,27 @@ def index(self, user, data):
+@@ -1564,34 +1566,27 @@ def index(self, user, data):
          else:
              return super(CourseAPI, self).index(user, data)
  
@@ -99,7 +88,7 @@ index 28e2d59f..6f7b65d8 100644
      def get_courses(self, course, user, data):
          query = models.Participant.query(
              models.Participant.user == data['user'])
-@@ -1598,6 +1594,7 @@ def get_courses(self, course, user, data):
+@@ -1599,6 +1594,7 @@ def get_courses(self, course, user, data):
          query = models.Participant.can(user, need, course, query)
          return list(query)
  
@@ -107,7 +96,7 @@ index 28e2d59f..6f7b65d8 100644
      def get_students(self, course, user, data):
          query = models.Participant.query(
              models.Participant.course == course.key,
-@@ -1607,33 +1604,25 @@ def get_students(self, course, user, data):
+@@ -1608,33 +1604,25 @@ def get_students(self, course, user, data):
              raise need.exception()
          return list(query.fetch())
  
@@ -145,122 +134,3 @@ index 28e2d59f..6f7b65d8 100644
      def assignments(self, course, user, data):
          return course.assignments.fetch()
      
-diff --git a/server/app/models.py b/server/app/models.py
-index a8158a0c..d6b819e4 100644
---- a/server/app/models.py
-+++ b/server/app/models.py
-@@ -26,6 +26,7 @@
- 
- import datetime
- import itertools
-+import logging
- 
- from app import app
- from app.constants import STUDENT_ROLE, STAFF_ROLE, VALID_ROLES
-@@ -260,13 +261,13 @@ def update(x):
-             b = x.backup.get()
-             b.submission = x
-             return b
--        
-+
-         all_subms = [update(x) for x in all_subms]
-         all_subms = [x for x in all_subms if x.assignment == assignment \
-                 and self._contains_files(x)]
- 
-         all_subms.sort(lambda x, y: int(-5*(int(x.server_time > y.server_time) - 0.5)))
--        
-+
-         return all_subms[:num_submissions]
- 
-     get_num_submissions = make_num_counter(_get_submissions_helper)
-@@ -431,13 +432,13 @@ def _pre_put_hook(self):
-         #utils.check_user(self.key.id())
- 
-     def scores_for_assignment(self, assignment):
--        """ Returns a tuple of two elements: 
-+        """ Returns a tuple of two elements:
-                 1) Score data (list of lists) for STUDENT's final submission for ASSIGNMENT.
--                    There is an element for each score. 
-+                    There is an element for each score.
-                     * OBS * If the student is in a group, the list will contain an
-                     element for each combination of group member and score.
-                 2) A boolean indicating whether the student had a
--                    scored final submission for ASSIGNMENT. 
-+                    scored final submission for ASSIGNMENT.
-             Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
-         """
-         fs = self.get_final_submission(assignment.key)
-@@ -1124,20 +1125,28 @@ def _pre_put_hook(self):
- 
-     def scores_for_assignment(self, assignment):
-         """ Returns a list of lists containing score data
--            for the groups's final submission for ASSIGNMENT. 
--            There is one element for each combination of 
-+            for the groups's final submission for ASSIGNMENT.
-+            There is one element for each combination of
-             group member and score.
--            Ensures that each student only appears once in the list. 
-+            Ensures that each student only appears once in the list.
-             Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
-         """
-         content = []
-+        member = self.member[0].get()
-+
-         for m in self.member:
-             member = m.get()
--            data, success = member.scores_for_assignment(assignment)
--            content.extend(data)
--            if success:
--                # get_scores_for_student_or_group will return scores for all group members. 
--                return content
-+            if member:
-+              data, success = member.scores_for_assignment(assignment)
-+              content.extend(data)
-+              if success:
-+                  # get_scores_for_student_or_group will return scores for all group members.
-+                  return content
-+
-+        # Handle the case where the member key no longer exists.
-+        if not member:
-+          return [["Unknown-"+str(self.member[0]), 0, None, None, None]]
-+
-         return [[member.email[0], 0, None, None, None]]
- 
- 
-@@ -1299,11 +1308,15 @@ def get_scores(self):
-         else:
-             members = [self.submitter]
-         for member in members:
--            email = member.get().email[0]
--            for score in self.submission.get().score:
--                all_scores.append([email,
--                        score.score,
--                        score.message,
--                        score.grader.get().email[0],
--                        score.tag])
-+            member_row = member.get()
-+            if member_row:
-+              email = member_row.email[0]
-+              for score in self.submission.get().score:
-+                  all_scores.append([email,
-+                          score.score,
-+                          score.message,
-+                          score.grader.get().email[0],
-+                          score.tag])
-+            else:
-+              logging.warning("User key not found - " + str(member))
-         return all_scores
-diff --git a/server/index.yaml b/server/index.yaml
-index 8a77ca48..082c4263 100755
---- a/server/index.yaml
-+++ b/server/index.yaml
-@@ -259,3 +259,9 @@ indexes:
-   properties:
-   - name: email
-   - name: status
-+
-+- kind: Backupv2
-+  properties:
-+  - name: assignment
-+  - name: created
-+    direction: desc

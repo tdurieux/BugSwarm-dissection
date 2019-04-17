@@ -1,124 +1,18 @@
 diff --git a/.ci/eclipse-compiler-javac.sh b/.ci/eclipse-compiler-javac.sh
-new file mode 100755
-index 0000000000..55cd64fc71
---- /dev/null
+index cf0e5fe4c2..55cd64fc71 100755
+--- a/.ci/eclipse-compiler-javac.sh
 +++ b/.ci/eclipse-compiler-javac.sh
-@@ -0,0 +1,16 @@
-+#!/bin/sh
-+set -e
-+
-+ECJ_VERSION="4.7"
-+mkdir -p target/classes
-+mkdir -p target/eclipse
-+
-+if [ ! -e ~/.m2/repository/ecj-$ECJ_VERSION.jar ]; then
-+    wget http://ftp-stud.fht-esslingen.de/pub/Mirrors/eclipse/eclipse/downloads/drops4/R-4.7-201706120950/"ecj-$ECJ_VERSION.jar" -P ~/.m2/repository/
-+fi
-+
-+java -jar ~/.m2/repository/ecj-$ECJ_VERSION.jar -target 1.8 -source 1.8 -cp $1 \
-+        -nowarn:[./target/generated-sources/antlr] -d target/eclipse-compile \
-+        -enableJavadoc src/main/java target/generated-sources/antlr -properties config/org.eclipse.jdt.core.prefs \
-+    \
-+    > target/eclipse/report.txt 2>&1
-diff --git a/.travis.yml b/.travis.yml
-index d6c5a12a01..d3bfe7b0b9 100644
---- a/.travis.yml
-+++ b/.travis.yml
-@@ -58,6 +58,12 @@ matrix:
-         - DESC="findbugs, spotbugs and pmd"
-         - CMD="mvn clean compile pmd:check findbugs:check spotbugs:check"
+@@ -5,7 +5,7 @@ ECJ_VERSION="4.7"
+ mkdir -p target/classes
+ mkdir -p target/eclipse
  
-+    # eclipse static analysis
-+    - jdk: oraclejdk8
-+      env:
-+        - DESC="eclipse static analysis"
-+        - CMD="mvn clean compile exec:exec -Peclipse-compiler"
-+
-     # Releasenotes generation - validaton
-     - jdk: oraclejdk8
-       env:
-diff --git a/config/org.eclipse.jdt.core.prefs b/config/org.eclipse.jdt.core.prefs
-new file mode 100644
-index 0000000000..5ba759cf59
---- /dev/null
-+++ b/config/org.eclipse.jdt.core.prefs
-@@ -0,0 +1,74 @@
-+org.eclipse.jdt.core.compiler.annotation.inheritNullAnnotations=enabled
-+org.eclipse.jdt.core.compiler.annotation.nullanalysis=enabled
-+org.eclipse.jdt.core.compiler.problem.comparingIdentical=error
-+org.eclipse.jdt.core.compiler.problem.deadCode=error
-+org.eclipse.jdt.core.compiler.problem.deprecationInDeprecatedCode=enabled
-+org.eclipse.jdt.core.compiler.problem.deprecationWhenOverridingDeprecatedMethod=enabled
-+org.eclipse.jdt.core.compiler.problem.discouragedReference=error
-+org.eclipse.jdt.core.compiler.problem.emptyStatement=error
-+org.eclipse.jdt.core.compiler.problem.fallthroughCase=error
-+org.eclipse.jdt.core.compiler.problem.fatalOptionalError=disabled
-+org.eclipse.jdt.core.compiler.problem.finallyBlockNotCompletingNormally=error
-+org.eclipse.jdt.core.compiler.problem.finalParameterBound=error
-+org.eclipse.jdt.core.compiler.problem.hiddenCatchBlock=error
-+org.eclipse.jdt.core.compiler.problem.includeNullInfoFromAsserts=enabled
-+org.eclipse.jdt.core.compiler.problem.incompatibleNonInheritedInterfaceMethod=error
-+org.eclipse.jdt.core.compiler.problem.incompleteEnumSwitch=error
-+org.eclipse.jdt.core.compiler.problem.indirectStaticAccess=error
-+org.eclipse.jdt.core.compiler.problem.localVariableHiding=error
-+org.eclipse.jdt.core.compiler.problem.methodWithConstructorName=error
-+org.eclipse.jdt.core.compiler.problem.missingDefaultCase=error
-+org.eclipse.jdt.core.compiler.problem.missingEnumCaseDespiteDefault=enabled
-+org.eclipse.jdt.core.compiler.problem.missingHashCodeMethod=error
-+org.eclipse.jdt.core.compiler.problem.missingSerialVersion=error
-+org.eclipse.jdt.core.compiler.problem.missingSynchronizedOnInheritedMethod=error
-+org.eclipse.jdt.core.compiler.problem.noEffectAssignment=error
-+org.eclipse.jdt.core.compiler.problem.noImplicitStringConversion=error
-+org.eclipse.jdt.core.compiler.problem.nonnullParameterAnnotationDropped=error
-+org.eclipse.jdt.core.compiler.problem.nonnullTypeVariableFromLegacyInvocation=error
-+org.eclipse.jdt.core.compiler.problem.nullReference=error
-+org.eclipse.jdt.core.compiler.problem.nullUncheckedConversion=error
-+org.eclipse.jdt.core.compiler.problem.overridingPackageDefaultMethod=error
-+org.eclipse.jdt.core.compiler.problem.parameterAssignment=error
-+org.eclipse.jdt.core.compiler.problem.pessimisticNullAnalysisForFreeTypeVariables=error
-+org.eclipse.jdt.core.compiler.problem.possibleAccidentalBooleanAssignment=error
-+org.eclipse.jdt.core.compiler.problem.redundantNullAnnotation=error
-+org.eclipse.jdt.core.compiler.problem.redundantNullCheck=error
-+org.eclipse.jdt.core.compiler.problem.redundantSpecificationOfTypeArguments=error
-+org.eclipse.jdt.core.compiler.problem.redundantSuperinterface=error
-+org.eclipse.jdt.core.compiler.problem.reportMethodCanBeStatic=error
-+org.eclipse.jdt.core.compiler.problem.staticAccessReceiver=error
-+org.eclipse.jdt.core.compiler.problem.syntacticNullAnalysisForFields=enabled
-+org.eclipse.jdt.core.compiler.problem.unclosedCloseable=error
-+org.eclipse.jdt.core.compiler.problem.undocumentedEmptyBlock=error
-+org.eclipse.jdt.core.compiler.problem.unlikelyCollectionMethodArgumentType=error
-+org.eclipse.jdt.core.compiler.problem.unlikelyCollectionMethodArgumentTypeStrict=enabled
-+org.eclipse.jdt.core.compiler.problem.unlikelyEqualsArgumentType=error
-+org.eclipse.jdt.core.compiler.problem.unusedDeclaredThrownException=error
-+org.eclipse.jdt.core.compiler.problem.unusedImport=error
-+org.eclipse.jdt.core.compiler.problem.unusedLabel=error
-+org.eclipse.jdt.core.compiler.problem.unusedLocal=error
-+org.eclipse.jdt.core.compiler.problem.unusedObjectAllocation=error
-+org.eclipse.jdt.core.compiler.problem.unusedParameter=error
-+org.eclipse.jdt.core.compiler.problem.unusedPrivateMember=error
-+org.eclipse.jdt.core.compiler.problem.unusedTypeParameter=error
-+org.eclipse.jdt.core.compiler.problem.varargsArgumentNeedCast=error
-+
-+org.eclipse.jdt.core.compiler.annotation.missingNonNullByDefaultAnnotation=ignore
-+org.eclipse.jdt.core.compiler.problem.autoboxing=ignore
-+org.eclipse.jdt.core.compiler.problem.deprecation=ignore
-+org.eclipse.jdt.core.compiler.problem.explicitlyClosedAutoCloseable=ignore
-+org.eclipse.jdt.core.compiler.problem.fieldHiding=ignore
-+org.eclipse.jdt.core.compiler.problem.nonExternalizedStringLiteral=ignore
-+org.eclipse.jdt.core.compiler.problem.potentiallyUnclosedCloseable=ignore
-+org.eclipse.jdt.core.compiler.problem.potentialNullReference=ignore
-+org.eclipse.jdt.core.compiler.problem.rawTypeReference=ignore
-+org.eclipse.jdt.core.compiler.problem.reportMethodCanBePotentiallyStatic=ignore
-+org.eclipse.jdt.core.compiler.problem.specialParameterHidingField=ignore
-+org.eclipse.jdt.core.compiler.problem.syntheticAccessEmulation=ignore
-+org.eclipse.jdt.core.compiler.problem.typeParameterHiding=ignore
-+org.eclipse.jdt.core.compiler.problem.uncheckedTypeOperation=ignore
-+org.eclipse.jdt.core.compiler.problem.unnecessaryElse=ignore
-+org.eclipse.jdt.core.compiler.problem.unnecessaryTypeCheck=ignore
-+org.eclipse.jdt.core.compiler.problem.unqualifiedFieldAccess=ignore
-+org.eclipse.jdt.core.compiler.problem.unusedExceptionParameter=ignore
+-if [ ! -e ~/.m2/repository/ecj-${ECJ_VERSION}.jar ]; then
++if [ ! -e ~/.m2/repository/ecj-$ECJ_VERSION.jar ]; then
+     wget http://ftp-stud.fht-esslingen.de/pub/Mirrors/eclipse/eclipse/downloads/drops4/R-4.7-201706120950/"ecj-$ECJ_VERSION.jar" -P ~/.m2/repository/
+ fi
+ 
 diff --git a/pom.xml b/pom.xml
-index bbcf2b6b12..63d55f98e3 100644
+index e59609757d..63d55f98e3 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -213,7 +213,7 @@
@@ -130,15 +24,16 @@ index bbcf2b6b12..63d55f98e3 100644
      <maven.spotbugs.plugin.version>3.0.6</maven.spotbugs.plugin.version>
      <maven.pmd.plugin.version>3.8</maven.pmd.plugin.version>
      <pmd.version>5.8.1</pmd.version>
-@@ -1029,6 +1029,7 @@
+@@ -1029,7 +1029,7 @@
                <excludes>
                  <exclude>java.header</exclude>
                  <exclude>java_regexp.header</exclude>
+-                <exclude>eclipse.properties</exclude>
 +                <exclude>org.eclipse.jdt.core.prefs</exclude>
                </excludes>
              </validationSet>
              <validationSet>
-@@ -1502,7 +1503,7 @@
+@@ -1503,7 +1503,7 @@
            <!-- Creates the binary and source distributions -->
            <plugin>
              <artifactId>maven-assembly-plugin</artifactId>
@@ -147,7 +42,7 @@ index bbcf2b6b12..63d55f98e3 100644
              <configuration>
                <descriptors>
                  <descriptor>config/assembly-bin.xml</descriptor>
-@@ -1743,7 +1744,7 @@
+@@ -1744,7 +1744,7 @@
                <targetTests>
                  <param>com.puppycrawl.tools.checkstyle.checks.coding.*</param>
                </targetTests>
@@ -156,7 +51,7 @@ index bbcf2b6b12..63d55f98e3 100644
                <timeoutFactor>${pitest.plugin.timeout.factor}</timeoutFactor>
                <timeoutConstant>${pitest.plugin.timeout.constant}</timeoutConstant>
                <threads>${pitest.plugin.threads}</threads>
-@@ -2017,7 +2018,7 @@
+@@ -2018,7 +2018,7 @@
                <targetTests>
                  <param>com.puppycrawl.tools.checkstyle.checks.sizes.*</param>
                </targetTests>
@@ -165,7 +60,7 @@ index bbcf2b6b12..63d55f98e3 100644
                <timeoutFactor>${pitest.plugin.timeout.factor}</timeoutFactor>
                <timeoutConstant>${pitest.plugin.timeout.constant}</timeoutConstant>
                <threads>${pitest.plugin.threads}</threads>
-@@ -2044,7 +2045,7 @@
+@@ -2045,7 +2045,7 @@
                <targetTests>
                  <param>com.puppycrawl.tools.checkstyle.checks.whitespace.*</param>
                </targetTests>
@@ -174,34 +69,8 @@ index bbcf2b6b12..63d55f98e3 100644
                <timeoutFactor>${pitest.plugin.timeout.factor}</timeoutFactor>
                <timeoutConstant>${pitest.plugin.timeout.constant}</timeoutConstant>
                <threads>${pitest.plugin.threads}</threads>
-@@ -2305,6 +2306,25 @@
-         </plugins>
-       </build>
-     </profile>
-+    <profile>
-+      <id>eclipse-compiler</id>
-+      <build>
-+        <plugins>
-+          <plugin>
-+            <groupId>org.codehaus.mojo</groupId>
-+            <artifactId>exec-maven-plugin</artifactId>
-+            <version>1.6.0</version>
-+            <configuration>
-+              <executable>.ci/eclipse-compiler-javac.sh</executable>
-+              <classpathScope>compile</classpathScope>
-+              <arguments>
-+                <classpath />
-+              </arguments>
-+            </configuration>
-+          </plugin>
-+        </plugins>
-+      </build>
-+    </profile>
-     <profile>
-       <id>pitest-checkstyle-xpath</id>
-       <build>
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/JavadocTokenTypes.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/JavadocTokenTypes.java
-index c76ce07525..5c42037c1c 100644
+index c76ce07525..5c42037c1c 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/api/JavadocTokenTypes.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/JavadocTokenTypes.java
 @@ -1575,6 +1575,42 @@
@@ -248,7 +117,7 @@ index c76ce07525..5c42037c1c 100644
  
      /** Html comment: {@code <!-- -->}. */
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
-index 6f4b14b155..ebbf88f201 100644
+index 6f4b14b155..ebbf88f201 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheck.java
 @@ -124,6 +124,8 @@
@@ -297,7 +166,7 @@ index 6f4b14b155..ebbf88f201 100644
      }
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheck.java
-index 168f080989..d99cb94068 100644
+index 168f080989..d99cb94068 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheck.java
 @@ -113,7 +113,10 @@ private int getLengthOfBlock(DetailAST openingBrace, DetailAST closingBrace) {
@@ -313,7 +182,7 @@ index 168f080989..d99cb94068 100644
                      length--;
                  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
-index 080bb735da..3b25204feb 100644
+index 080bb735da..3b25204feb 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
 @@ -328,7 +328,7 @@ else if (!hasEmptyLineAfter(ast)) {
@@ -352,7 +221,7 @@ index 080bb735da..3b25204feb 100644
              for (int emptyLineNo : emptyLines) {
                  if (previousEmptyLineNo + 1 == emptyLineNo) {
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
-index 789204af2e..79c031f108 100644
+index 789204af2e..79c031f108 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
 @@ -150,7 +150,7 @@ private void processEnd(DetailAST ast) {
@@ -402,7 +271,7 @@ index 789204af2e..79c031f108 100644
       * Checks whether given character is valid to be right after generic ends.
       * @param charAfter character to check
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheck.java
-index 3fc287e535..64386b259c 100644
+index 3fc287e535..64386b259c 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheck.java
 @@ -108,12 +108,12 @@ public void visitToken(DetailAST ast) {
@@ -421,7 +290,7 @@ index 3fc287e535..64386b259c 100644
                      flag = true;
                      break;
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocLexer.g4 b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocLexer.g4
-index 4aed5fb803..2a14055d23 100644
+index 4aed5fb803..2a14055d23 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocLexer.g4
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocLexer.g4
 @@ -309,6 +309,10 @@ LINK_HTML_TAG_NAME: L I N K {!htmlTagNameCatched}? {htmlTagNameCatched=true;};
@@ -436,7 +305,7 @@ index 4aed5fb803..2a14055d23 100644
  // other tag names and attribute names
  HTML_TAG_NAME: NAME_START_CHAR NAME_CHAR* {htmlTagNameCatched=true;};
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4 b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
-index b1a3399d02..74dc10c294 100644
+index b1a3399d02..74dc10c294 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
 @@ -768,6 +768,10 @@ singletonElement: emptyTag
@@ -477,7 +346,7 @@ index b1a3399d02..74dc10c294 100644
                    ;
  
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index d0bb71a064..e96438e94c 100644
+index d0bb71a064..e96438e94c 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 @@ -60,6 +60,7 @@
@@ -507,7 +376,7 @@ index d0bb71a064..e96438e94c 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheckTest.java
-index ecb82f323d..4c0302b7dd 100644
+index ecb82f323d..4c0302b7dd 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTypeCheckTest.java
 @@ -21,6 +21,8 @@
@@ -542,7 +411,7 @@ index ecb82f323d..4c0302b7dd 100644
      public void testTokensNotNull() {
          final IllegalTypeCheck check = new IllegalTypeCheck();
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
-index dc1dfff153..00e5d70f2e 100644
+index dc1dfff153..00e5d70f2e 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
 @@ -297,6 +297,20 @@ public void testNoWsBeforeDescriptionInJavadocTags() throws Exception {
@@ -567,7 +436,7 @@ index dc1dfff153..00e5d70f2e 100644
  
          @Override
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ExecutableStatementCountCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ExecutableStatementCountCheckTest.java
-index 1bbd89f129..04aebe99f3 100644
+index 1bbd89f129..04aebe99f3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ExecutableStatementCountCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ExecutableStatementCountCheckTest.java
 @@ -23,13 +23,18 @@
@@ -608,7 +477,7 @@ index 1bbd89f129..04aebe99f3 100644
      public void testMaxZero() throws Exception {
          final DefaultConfiguration checkConfig =
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/FileLengthCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/FileLengthCheckTest.java
-index 71e8615ac3..26bc6f7445 100644
+index 71e8615ac3..26bc6f7445 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/FileLengthCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/FileLengthCheckTest.java
 @@ -50,11 +50,22 @@ public void testAlarm() throws Exception {
@@ -636,7 +505,7 @@ index 71e8615ac3..26bc6f7445 100644
          verify(createChecker(checkConfig),
                  getPath("InputFileLength.java"),
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheckTest.java
-index 3981edf41e..09d6fae52f 100644
+index 3981edf41e..09d6fae52f 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodLengthCheckTest.java
 @@ -77,6 +77,18 @@ public void testCountEmpty() throws Exception {
@@ -659,7 +528,7 @@ index 3981edf41e..09d6fae52f 100644
      public void testAbstract() throws Exception {
          final DefaultConfiguration checkConfig =
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ParameterNumberCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ParameterNumberCheckTest.java
-index a118455a43..3a8a57f63d 100644
+index a118455a43..3a8a57f63d 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ParameterNumberCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/ParameterNumberCheckTest.java
 @@ -81,6 +81,16 @@ public void testNum()
@@ -680,7 +549,7 @@ index a118455a43..3a8a57f63d 100644
      public void shouldLogActualParameterNumber()
              throws Exception {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
-index ad01f13ed5..59d3e4e3bd 100644
+index ad01f13ed5..59d3e4e3bd 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
 @@ -165,6 +165,31 @@ public void testPrePreviousLineEmptiness() throws Exception {
@@ -716,7 +585,7 @@ index ad01f13ed5..59d3e4e3bd 100644
      public void testDisAllowMultipleEmptyLinesInsideClassMembers() throws Exception {
          final DefaultConfiguration checkConfig = createModuleConfig(EmptyLineSeparatorCheck.class);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheckTest.java
-index 0008b4f243..af324dae85 100644
+index 0008b4f243..af324dae85 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheckTest.java
 @@ -95,6 +95,23 @@ public void testDefault() throws Exception {
@@ -744,7 +613,7 @@ index 0008b4f243..af324dae85 100644
      public void testList() throws Exception {
          final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheckTest.java
-index b6c57a9150..39d096f06b 100644
+index b6c57a9150..39d096f06b 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/NoWhitespaceBeforeCheckTest.java
 @@ -95,4 +95,23 @@ public void testMethodReference() throws Exception {
@@ -772,7 +641,7 @@ index b6c57a9150..39d096f06b 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
-index 81079261d8..15377652b3 100644
+index 81079261d8..15377652b3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
 @@ -435,4 +435,14 @@ public void testLambdaCheckOnlyWithSpace() throws Exception {
@@ -791,7 +660,7 @@ index 81079261d8..15377652b3 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
-index d1324b03e4..0a283d7b4d 100644
+index d1324b03e4..0a283d7b4d 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
 @@ -111,6 +111,15 @@ public void testSimpleInput()
@@ -811,7 +680,7 @@ index d1324b03e4..0a283d7b4d 100644
      public void testBraces()
              throws Exception {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
-index 8deb98115d..2ab69c16e6 100644
+index 8deb98115d..2ab69c16e6 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
 @@ -275,4 +275,28 @@ public void testSpaceBeforeDescriptionInBlockJavadocTags() throws Exception {
@@ -844,7 +713,7 @@ index 8deb98115d..2ab69c16e6 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
-index bfea081dd4..e3a46a29c1 100644
+index bfea081dd4..e3a46a29c1 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
 @@ -24,6 +24,7 @@
@@ -896,7 +765,7 @@ index bfea081dd4..e3a46a29c1 100644
       * Returns the default PackageObjectFactory with the default package names.
       * @return the default PackageObjectFactory.
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtilsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtilsTest.java
-index 3664c11f32..517d8a57c3 100644
+index 3664c11f32..517d8a57c3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtilsTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtilsTest.java
 @@ -346,6 +346,6 @@ public void testGetPreviousSibling() {
@@ -908,7 +777,7 @@ index 3664c11f32..517d8a57c3 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/illegaltype/InputIllegalTypeSimilarClassName.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/illegaltype/InputIllegalTypeSimilarClassName.java
-new file mode 100644
+new file mode 100755
 index 0000000000..704a9e92fb
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/illegaltype/InputIllegalTypeSimilarClassName.java
@@ -922,7 +791,7 @@ index 0000000000..704a9e92fb
 +	}
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/abstractjavadoc/InputAbstractJavadocWrongSingletonTagInJavadoc.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/abstractjavadoc/InputAbstractJavadocWrongSingletonTagInJavadoc.java
-new file mode 100644
+new file mode 100755
 index 0000000000..970c800e15
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/abstractjavadoc/InputAbstractJavadocWrongSingletonTagInJavadoc.java
@@ -956,7 +825,7 @@ index 0000000000..970c800e15
 +    private int field5;
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/methodlength/InputMethodLengthComments.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/methodlength/InputMethodLengthComments.java
-new file mode 100644
+new file mode 100755
 index 0000000000..8fbcc0e1d2
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/methodlength/InputMethodLengthComments.java
@@ -989,7 +858,7 @@ index 0000000000..8fbcc0e1d2
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPrePreviousLineIsEmpty.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPrePreviousLineIsEmpty.java
-new file mode 100644
+new file mode 100755
 index 0000000000..a80435c968
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPrePreviousLineIsEmpty.java
@@ -1001,7 +870,7 @@ index 0000000000..a80435c968
 +public class InputEmptyLineSeparatorPrePreviousLineIsEmpty {
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPreviousLineEmptiness.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPreviousLineEmptiness.java
-new file mode 100644
+new file mode 100755
 index 0000000000..d8ab51dd0d
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/emptylineseparator/InputEmptyLineSeparatorPreviousLineEmptiness.java
@@ -1041,7 +910,7 @@ index 0000000000..d8ab51dd0d
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceAtStartOfTheLine.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceAtStartOfTheLine.java
-new file mode 100644
+new file mode 100755
 index 0000000000..466a0f8136
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceAtStartOfTheLine.java
@@ -1062,7 +931,7 @@ index 0000000000..466a0f8136
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceNested.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceNested.java
-new file mode 100644
+new file mode 100755
 index 0000000000..79fd3f7e04
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/genericwhitespace/InputGenericWhitespaceNested.java
@@ -1080,7 +949,7 @@ index 0000000000..79fd3f7e04
 +>& IntEnum & NumberEnum<E>> {}
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/nowhitespacebefore/InputNoWhitespaceBeforeAtStartOfTheLine.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/nowhitespacebefore/InputNoWhitespaceBeforeAtStartOfTheLine.java
-new file mode 100644
+new file mode 100755
 index 0000000000..f79da888a9
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/nowhitespacebefore/InputNoWhitespaceBeforeAtStartOfTheLine.java
@@ -1102,7 +971,7 @@ index 0000000000..f79da888a9
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/parenpad/InputParenPadStartOfTheLine.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/parenpad/InputParenPadStartOfTheLine.java
-new file mode 100644
+new file mode 100755
 index 0000000000..7ebcd6e496
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/parenpad/InputParenPadStartOfTheLine.java
@@ -1116,7 +985,7 @@ index 0000000000..7ebcd6e496
 +   }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/whitespacearound/InputWhitespaceAroundStartOfTheLine.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/whitespacearound/InputWhitespaceAroundStartOfTheLine.java
-new file mode 100644
+new file mode 100755
 index 0000000000..0833d9ee5b
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/whitespacearound/InputWhitespaceAroundStartOfTheLine.java
@@ -1130,7 +999,7 @@ index 0000000000..0833d9ee5b
 + }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementKeygen.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementKeygen.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..5fdbb39438
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementKeygen.javadoc
@@ -1179,7 +1048,7 @@ index 0000000000..5fdbb39438
 +* attr2="someotherting"/>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementSource.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementSource.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..607b8d61d8
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementSource.javadoc
@@ -1228,7 +1097,7 @@ index 0000000000..607b8d61d8
 +* attr2="someotherting"/>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementTrack.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementTrack.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..f6852570b0
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementTrack.javadoc
@@ -1277,7 +1146,7 @@ index 0000000000..f6852570b0
 +* attr2="someotherting"/>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementWbr.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementWbr.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..40479ab1b0
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputHtmlVoidElementWbr.javadoc
@@ -1326,7 +1195,7 @@ index 0000000000..40479ab1b0
 +* attr2="someotherting"/>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementKeygenAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementKeygenAst.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..962a4a0f62
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementKeygenAst.txt
@@ -2093,7 +1962,7 @@ index 0000000000..962a4a0f62
 +|           `--SLASH_END -> /> [41:24]
 +`--EOF -> <EOF> [41:26]
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementSourceAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementSourceAst.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..10c9fd8da2
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementSourceAst.txt
@@ -2860,7 +2729,7 @@ index 0000000000..10c9fd8da2
 +|           `--SLASH_END -> /> [41:24]
 +`--EOF -> <EOF> [41:26]
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementTrackAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementTrackAst.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..de4b9296be
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementTrackAst.txt
@@ -3627,7 +3496,7 @@ index 0000000000..de4b9296be
 +|           `--SLASH_END -> /> [41:24]
 +`--EOF -> <EOF> [41:26]
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementWbrAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementWbrAst.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..252000f4e1
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedHtmlVoidElementWbrAst.txt
@@ -4393,24 +4262,8 @@ index 0000000000..252000f4e1
 +|           |   `--ATTR_VALUE -> "someotherting" [41:8]
 +|           `--SLASH_END -> /> [41:24]
 +`--EOF -> <EOF> [41:26]
-diff --git a/src/xdocs/eclipse.xml b/src/xdocs/eclipse.xml
-index 483a3b8c6e..a16a386c03 100644
---- a/src/xdocs/eclipse.xml
-+++ b/src/xdocs/eclipse.xml
-@@ -86,6 +86,11 @@
-       <p>
-         <img alt="screenshot" src="images/gui_screenshot_eclipse_ignore_warnings.png"/>
-       </p>
-+      <br/>
-+      <p>
-+        Next, you need to put <i>.ci/org.eclipse.jdt.core.prefs</i> file to the <i>.settings/org.eclipse.jdt.core.prefs</i>
-+        to setup Eclipse compiler.
-+      </p>
-     </section>
- 
-     <section name="Organize Imports">
 diff --git a/wercker.yml b/wercker.yml
-index 4d1918f98a..df4252d7b1 100644
+index 4d1918f98a..df4252d7b1 100755
 --- a/wercker.yml
 +++ b/wercker.yml
 @@ -146,7 +146,7 @@ build:

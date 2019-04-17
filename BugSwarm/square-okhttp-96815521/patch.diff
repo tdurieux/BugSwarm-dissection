@@ -1,28 +1,8 @@
 diff --git a/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java b/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
-index 89570cc87..4f02f9c0a 100644
+index 1d7c3ad19d..4f02f9c0a5 100755
 --- a/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
 +++ b/okhttp-android-support/src/main/java/com/squareup/okhttp/internal/huc/JavaApiConverter.java
-@@ -15,6 +15,7 @@
-  */
- package com.squareup.okhttp.internal.huc;
- 
-+import com.squareup.okhttp.CipherSuite;
- import com.squareup.okhttp.Handshake;
- import com.squareup.okhttp.Headers;
- import com.squareup.okhttp.MediaType;
-@@ -124,8 +125,9 @@ public static Response createOkResponseForCachePut(URI uri, URLConnection urlCon
- 
-       Certificate[] localCertificates = httpsUrlConnection.getLocalCertificates();
- 
--      Handshake handshake = Handshake.get(
--          httpsUrlConnection.getCipherSuite(), nullSafeImmutableList(peerCertificates),
-+      String cipherSuiteString = httpsUrlConnection.getCipherSuite();
-+      CipherSuite cipherSuite = CipherSuite.forJavaName(cipherSuiteString);
-+      Handshake handshake = Handshake.get(cipherSuite, nullSafeImmutableList(peerCertificates),
-           nullSafeImmutableList(localCertificates));
-       okResponseBuilder.handshake(handshake);
-     }
-@@ -210,7 +212,7 @@ static Response createOkResponseForCacheGet(Request request, CacheResponse javaR
+@@ -212,7 +212,7 @@ static Response createOkResponseForCacheGet(Request request, CacheResponse javaR
      }
  
      Request cacheRequest = new Request.Builder()
@@ -31,29 +11,7 @@ index 89570cc87..4f02f9c0a 100644
          .method(request.method(), null)
          .headers(varyHeaders)
          .build();
-@@ -249,8 +251,10 @@ static Response createOkResponseForCacheGet(Request request, CacheResponse javaR
-       if (localCertificates == null) {
-         localCertificates = Collections.emptyList();
-       }
--      Handshake handshake = Handshake.get(
--          javaSecureCacheResponse.getCipherSuite(), peerCertificates, localCertificates);
-+
-+      String cipherSuiteString = javaSecureCacheResponse.getCipherSuite();
-+      CipherSuite cipherSuite = CipherSuite.forJavaName(cipherSuiteString);
-+      Handshake handshake = Handshake.get(cipherSuite, peerCertificates, localCertificates);
-       okResponseBuilder.handshake(handshake);
-     }
- 
-@@ -294,7 +298,7 @@ public static CacheResponse createJavaCacheResponse(final Response response) {
-       return new SecureCacheResponse() {
-         @Override
-         public String getCipherSuite() {
--          return handshake != null ? handshake.cipherSuite() : null;
-+          return handshake != null ? handshake.cipherSuite().javaName() : null;
-         }
- 
-         @Override
-@@ -537,7 +541,7 @@ private static ResponseBody createOkBody(final URLConnection urlConnection) {
+@@ -541,7 +541,7 @@ private static ResponseBody createOkBody(final URLConnection urlConnection) {
      private final Response response;
  
      public CacheHttpURLConnection(Response response) {
@@ -63,18 +21,10 @@ index 89570cc87..4f02f9c0a 100644
        this.response = response;
  
 diff --git a/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/JavaApiConverterTest.java b/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/JavaApiConverterTest.java
-index 7255372bb..fae976462 100644
+index 02e77c6724..fae9764623 100755
 --- a/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/JavaApiConverterTest.java
 +++ b/okhttp-android-support/src/test/java/com/squareup/okhttp/internal/huc/JavaApiConverterTest.java
-@@ -15,6 +15,7 @@
-  */
- package com.squareup.okhttp.internal.huc;
- 
-+import com.squareup.okhttp.CipherSuite;
- import com.squareup.okhttp.Handshake;
- import com.squareup.okhttp.Headers;
- import com.squareup.okhttp.MediaType;
-@@ -118,7 +119,7 @@
+@@ -119,7 +119,7 @@
  
      Response response = JavaApiConverter.createOkResponseForCacheGet(request, cacheResponse);
      Request cacheRequest = response.request();
@@ -83,16 +33,7 @@ index 7255372bb..fae976462 100644
      assertEquals(request.method(), cacheRequest.method());
      assertEquals(0, request.headers().size());
  
-@@ -176,7 +177,7 @@
-       }
- 
-       @Override public String getCipherSuite() {
--        return "SuperSecure";
-+        return "SSL_RSA_WITH_NULL_MD5";
-       }
- 
-       @Override public List<Certificate> getLocalCertificateChain() {
-@@ -198,7 +199,7 @@
+@@ -199,7 +199,7 @@
  
      Response response = JavaApiConverter.createOkResponseForCacheGet(request, cacheResponse);
      Request cacheRequest = response.request();
@@ -101,56 +42,8 @@ index 7255372bb..fae976462 100644
      assertEquals(request.method(), cacheRequest.method());
      assertEquals(0, request.headers().size());
  
-@@ -211,7 +212,7 @@
- 
-     Handshake handshake = response.handshake();
-     assertNotNull(handshake);
--    assertNotNullAndEquals("SuperSecure", handshake.cipherSuite());
-+    assertNotNullAndEquals(CipherSuite.TLS_RSA_WITH_NULL_MD5, handshake.cipherSuite());
-     assertEquals(localPrincipal, handshake.localPrincipal());
-     assertEquals(serverPrincipal, handshake.peerPrincipal());
-     assertEquals(serverCertificates, handshake.peerCertificates());
-@@ -461,15 +462,15 @@ private void assertHeadersContainsMapping(Map<String, List<String>> headers, Str
-         .get()
-         .url("https://secure/request")
-         .build();
--    Handshake handshake = Handshake.get("SecureCipher", Arrays.<Certificate>asList(SERVER_CERT),
--        Arrays.<Certificate>asList(LOCAL_CERT));
-+    Handshake handshake = Handshake.get(CipherSuite.TLS_RSA_WITH_NULL_MD5,
-+        Arrays.<Certificate>asList(SERVER_CERT), Arrays.<Certificate>asList(LOCAL_CERT));
-     Response okResponse = createArbitraryOkResponse(okRequest).newBuilder()
-         .handshake(handshake)
-         .build();
-     HttpsURLConnection httpsUrlConnection =
-         (HttpsURLConnection) JavaApiConverter.createJavaUrlConnectionForCachePut(okResponse);
- 
--    assertEquals("SecureCipher", httpsUrlConnection.getCipherSuite());
-+    assertEquals("SSL_RSA_WITH_NULL_MD5", httpsUrlConnection.getCipherSuite());
-     assertEquals(SERVER_CERT.getSubjectX500Principal(), httpsUrlConnection.getPeerPrincipal());
-     assertArrayEquals(new Certificate[] { LOCAL_CERT }, httpsUrlConnection.getLocalCertificates());
-     assertArrayEquals(new Certificate[] { SERVER_CERT },
-@@ -551,8 +552,8 @@ private void assertHeadersContainsMapping(Map<String, List<String>> headers, Str
-             .post(createRequestBody("RequestBody") )
-             .build();
-     ResponseBody responseBody = createResponseBody("ResponseBody");
--    Handshake handshake = Handshake.get("SecureCipher", Arrays.<Certificate>asList(SERVER_CERT),
--        Arrays.<Certificate>asList(LOCAL_CERT));
-+    Handshake handshake = Handshake.get(CipherSuite.TLS_RSA_WITH_NULL_MD5,
-+        Arrays.<Certificate>asList(SERVER_CERT), Arrays.<Certificate>asList(LOCAL_CERT));
-     Response okResponse = createArbitraryOkResponse(okRequest).newBuilder()
-         .protocol(Protocol.HTTP_1_1)
-         .code(200)
-@@ -569,7 +570,7 @@ private void assertHeadersContainsMapping(Map<String, List<String>> headers, Str
-     assertEquals(Arrays.asList("value1_1", "value1_2"), javaHeaders.get("key1"));
-     assertEquals(Arrays.asList("HTTP/1.1 200 Fantastic"), javaHeaders.get(null));
-     assertEquals("ResponseBody", readAll(javaCacheResponse.getBody()));
--    assertEquals(handshake.cipherSuite(), javaCacheResponse.getCipherSuite());
-+    assertEquals(handshake.cipherSuite().javaName(), javaCacheResponse.getCipherSuite());
-     assertEquals(handshake.localCertificates(), javaCacheResponse.getLocalCertificateChain());
-     assertEquals(handshake.peerCertificates(), javaCacheResponse.getServerCertificateChain());
-     assertEquals(handshake.localPrincipal(), javaCacheResponse.getLocalPrincipal());
 diff --git a/okhttp-logging-interceptor/src/main/java/com/squareup/okhttp/logging/HttpLoggingInterceptor.java b/okhttp-logging-interceptor/src/main/java/com/squareup/okhttp/logging/HttpLoggingInterceptor.java
-index 402eee0a8..0ce0fecef 100644
+index 402eee0a85..0ce0fecef4 100755
 --- a/okhttp-logging-interceptor/src/main/java/com/squareup/okhttp/logging/HttpLoggingInterceptor.java
 +++ b/okhttp-logging-interceptor/src/main/java/com/squareup/okhttp/logging/HttpLoggingInterceptor.java
 @@ -151,7 +151,7 @@ public Level getLevel() {
@@ -176,7 +69,7 @@ index 402eee0a8..0ce0fecef 100644
      if (logHeaders) {
        Headers headers = response.headers();
 diff --git a/okhttp-logging-interceptor/src/test/java/com/squareup/okhttp/logging/HttpLoggingInterceptorTest.java b/okhttp-logging-interceptor/src/test/java/com/squareup/okhttp/logging/HttpLoggingInterceptorTest.java
-index dbd1e84c3..255162d10 100644
+index dbd1e84c35..255162d106 100755
 --- a/okhttp-logging-interceptor/src/test/java/com/squareup/okhttp/logging/HttpLoggingInterceptorTest.java
 +++ b/okhttp-logging-interceptor/src/test/java/com/squareup/okhttp/logging/HttpLoggingInterceptorTest.java
 @@ -112,12 +112,12 @@ private void setLevel(Level level) {
@@ -423,7 +316,7 @@ index dbd1e84c3..255162d10 100644
          .assertLogMatch("OkHttp-Sent-Millis: \\d+")
          .assertLogMatch("OkHttp-Received-Millis: \\d+")
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
-index f70026145..ff5e8ea9a 100644
+index f70026145e..ff5e8ea9ab 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CacheTest.java
 @@ -259,7 +259,7 @@ private void testResponseCaching(TransferKind transferKind) throws IOException {
@@ -445,7 +338,7 @@ index f70026145..ff5e8ea9a 100644
      assertEquals(serverCerts, response2.handshake().peerCertificates());
      assertEquals(peerPrincipal, response2.handshake().peerPrincipal());
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
-index 34ca42a7c..7e947a42d 100644
+index 34ca42a7c5..7e947a42d3 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/CallTest.java
 @@ -134,7 +134,7 @@
@@ -558,7 +451,7 @@ index 34ca42a7c..7e947a42d 100644
    }
  
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
-index 37512195d..92c31b8e6 100644
+index 37512195dd..92c31b8e65 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/InterceptorTest.java
 @@ -380,7 +380,7 @@ private void asyncInterceptors(List<Interceptor> interceptors) throws Exception
@@ -607,7 +500,7 @@ index 37512195d..92c31b8e6 100644
  
    @Test public void applicationkInterceptorThrowsRuntimeExceptionSynchronous() throws Exception {
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
-index 129fecf14..06e74c34c 100644
+index 129fecf145..06e74c34c2 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordedResponse.java
 @@ -17,7 +17,6 @@
@@ -628,7 +521,7 @@ index 129fecf14..06e74c34c 100644
      return this;
    }
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
-index f2447ecc6..cc8300e86 100644
+index f2447ecc64..cc8300e869 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/RecordingCallback.java
 @@ -49,7 +49,7 @@ public synchronized RecordedResponse await(HttpUrl url) throws Exception {
@@ -650,7 +543,7 @@ index f2447ecc6..cc8300e86 100644
        }
      }
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/RequestTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/RequestTest.java
-index 39da50037..9b30f89b6 100644
+index 39da50037c..9b30f89b67 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/RequestTest.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/RequestTest.java
 @@ -20,7 +20,6 @@
@@ -686,7 +579,7 @@ index 39da50037..9b30f89b6 100644
  
    @Test public void cacheControl() throws Exception {
 diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
-index 99010ddc7..9c384a521 100644
+index 99010ddc78..9c384a5211 100755
 --- a/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
 +++ b/okhttp-tests/src/test/java/com/squareup/okhttp/URLConnectionTest.java
 @@ -2890,7 +2890,7 @@ private void reusedConnectionFailsWithPost(TransferKind transferKind, int reques
@@ -720,21 +613,8 @@ index 99010ddc7..9c384a521 100644
    }
  
    @Test public void attemptAuthorization20Times() throws Exception {
-diff --git a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/DelegatingHttpsURLConnection.java b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/DelegatingHttpsURLConnection.java
-index 631a2ae03..efe495a4c 100644
---- a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/DelegatingHttpsURLConnection.java
-+++ b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/DelegatingHttpsURLConnection.java
-@@ -57,7 +57,7 @@ public DelegatingHttpsURLConnection(HttpURLConnection delegate) {
- 
-   @Override public String getCipherSuite() {
-     Handshake handshake = handshake();
--    return handshake != null ? handshake.cipherSuite() : null;
-+    return handshake != null ? handshake.cipherSuite().javaName() : null;
-   }
- 
-   @Override public Certificate[] getLocalCertificates() {
 diff --git a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
-index b7b8c723c..7d1d27f95 100644
+index b7b8c723c3..7d1d27f956 100755
 --- a/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
 +++ b/okhttp-urlconnection/src/main/java/com/squareup/okhttp/internal/huc/HttpURLConnectionImpl.java
 @@ -413,7 +413,7 @@ private HttpEngine getResponse() throws IOException {
@@ -755,31 +635,8 @@ index b7b8c723c..7d1d27f95 100644
          streamAllocation.release();
          streamAllocation = null;
        }
-diff --git a/okhttp/src/main/java/com/squareup/okhttp/Cache.java b/okhttp/src/main/java/com/squareup/okhttp/Cache.java
-index dcf363486..8f54e57c0 100644
---- a/okhttp/src/main/java/com/squareup/okhttp/Cache.java
-+++ b/okhttp/src/main/java/com/squareup/okhttp/Cache.java
-@@ -551,7 +551,8 @@ public Entry(Source in) throws IOException {
-           if (blank.length() > 0) {
-             throw new IOException("expected \"\" but was \"" + blank + "\"");
-           }
--          String cipherSuite = source.readUtf8LineStrict();
-+          String cipherSuiteString = source.readUtf8LineStrict();
-+          CipherSuite cipherSuite = CipherSuite.forJavaName(cipherSuiteString);
-           List<Certificate> peerCertificates = readCertificateList(source);
-           List<Certificate> localCertificates = readCertificateList(source);
-           handshake = Handshake.get(cipherSuite, peerCertificates, localCertificates);
-@@ -603,7 +604,7 @@ public void writeTo(DiskLruCache.Editor editor) throws IOException {
- 
-       if (isHttps()) {
-         sink.writeByte('\n');
--        sink.writeUtf8(handshake.cipherSuite());
-+        sink.writeUtf8(handshake.cipherSuite().javaName());
-         sink.writeByte('\n');
-         writeCertList(sink, handshake.peerCertificates());
-         writeCertList(sink, handshake.localCertificates());
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/Call.java b/okhttp/src/main/java/com/squareup/okhttp/Call.java
-index 651bd0de9..340c2c6e2 100644
+index 651bd0de94..340c2c6e2d 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/Call.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/Call.java
 @@ -146,7 +146,7 @@ private AsyncCall(Callback responseCallback, boolean forWebSocket) {
@@ -809,79 +666,8 @@ index 651bd0de9..340c2c6e2 100644
          streamAllocation.release();
          streamAllocation = null;
        }
-diff --git a/okhttp/src/main/java/com/squareup/okhttp/CipherSuite.java b/okhttp/src/main/java/com/squareup/okhttp/CipherSuite.java
-index 13344578b..252b8b156 100644
---- a/okhttp/src/main/java/com/squareup/okhttp/CipherSuite.java
-+++ b/okhttp/src/main/java/com/squareup/okhttp/CipherSuite.java
-@@ -367,6 +367,15 @@ private CipherSuite(
-     this.javaName = javaName;
-   }
- 
-+  /**
-+   * Returns the Java name of this cipher suite. For some older cipher suites the Java name has the
-+   * prefix {@code SSL_}, causing the Java name to be different from the {@linkplain #name() enum
-+   * name} which is always prefixed {@code TLS_}.
-+   */
-+  public String javaName() {
-+    return javaName;
-+  }
-+
-   public static CipherSuite forJavaName(String javaName) {
-     return javaName.startsWith("SSL_")
-         ? valueOf("TLS_" + javaName.substring(4))
-diff --git a/okhttp/src/main/java/com/squareup/okhttp/Handshake.java b/okhttp/src/main/java/com/squareup/okhttp/Handshake.java
-index d9f536675..57f2f4c5e 100644
---- a/okhttp/src/main/java/com/squareup/okhttp/Handshake.java
-+++ b/okhttp/src/main/java/com/squareup/okhttp/Handshake.java
-@@ -33,20 +33,21 @@
-  * javax.net.ssl.SSLSocketFactory} to set policy for new handshakes.
-  */
- public final class Handshake {
--  private final String cipherSuite;
-+  private final CipherSuite cipherSuite;
-   private final List<Certificate> peerCertificates;
-   private final List<Certificate> localCertificates;
- 
--  private Handshake(
--      String cipherSuite, List<Certificate> peerCertificates, List<Certificate> localCertificates) {
-+  private Handshake(CipherSuite cipherSuite, List<Certificate> peerCertificates,
-+      List<Certificate> localCertificates) {
-     this.cipherSuite = cipherSuite;
-     this.peerCertificates = peerCertificates;
-     this.localCertificates = localCertificates;
-   }
- 
-   public static Handshake get(SSLSession session) {
--    String cipherSuite = session.getCipherSuite();
--    if (cipherSuite == null) throw new IllegalStateException("cipherSuite == null");
-+    String cipherSuiteString = session.getCipherSuite();
-+    if (cipherSuiteString == null) throw new IllegalStateException("cipherSuite == null");
-+    CipherSuite cipherSuite = CipherSuite.forJavaName(cipherSuiteString);
- 
-     Certificate[] peerCertificates;
-     try {
-@@ -66,15 +67,15 @@ public static Handshake get(SSLSession session) {
-     return new Handshake(cipherSuite, peerCertificatesList, localCertificatesList);
-   }
- 
--  public static Handshake get(
--      String cipherSuite, List<Certificate> peerCertificates, List<Certificate> localCertificates) {
-+  public static Handshake get(CipherSuite cipherSuite, List<Certificate> peerCertificates,
-+      List<Certificate> localCertificates) {
-     if (cipherSuite == null) throw new IllegalArgumentException("cipherSuite == null");
-     return new Handshake(cipherSuite, Util.immutableList(peerCertificates),
-         Util.immutableList(localCertificates));
-   }
- 
--  /** Returns a cipher suite name like "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA". */
--  public String cipherSuite() {
-+  /** Returns the cipher suite used for the connection. */
-+  public CipherSuite cipherSuite() {
-     return cipherSuite;
-   }
- 
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/Request.java b/okhttp/src/main/java/com/squareup/okhttp/Request.java
-index e099267c9..36822cf40 100644
+index e099267c94..36822cf409 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/Request.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/Request.java
 @@ -32,7 +32,6 @@
@@ -910,7 +696,7 @@ index e099267c9..36822cf40 100644
      try {
        URI result = javaNetUri;
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/AuthenticatorAdapter.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/AuthenticatorAdapter.java
-index 8d884105d..9e7f1c162 100644
+index 8d884105d0..9e7f1c162e 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/AuthenticatorAdapter.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/AuthenticatorAdapter.java
 @@ -37,7 +37,7 @@
@@ -932,7 +718,7 @@ index 8d884105d..9e7f1c162 100644
        Challenge challenge = challenges.get(i);
        if (!"Basic".equalsIgnoreCase(challenge.getScheme())) continue;
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
-index aee0dae50..172b178f1 100644
+index aee0dae500..172b178f10 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/CacheStrategy.java
 @@ -253,7 +253,7 @@ private long computeFreshnessLifetime() {
@@ -945,7 +731,7 @@ index aee0dae50..172b178f1 100644
          // max age of a document should be defaulted to 10% of the
          // document's age at the time it was served. Default expiration
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/Http2xStream.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/Http2xStream.java
-index 6b8b68f5c..cbde39b39 100644
+index 6b8b68f5cd..cbde39b39e 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/Http2xStream.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/Http2xStream.java
 @@ -160,10 +160,10 @@ public Http2xStream(StreamAllocation streamAllocation, FramedConnection framedCo
@@ -976,7 +762,7 @@ index 6b8b68f5c..cbde39b39 100644
      for (int i = 0, size = headers.size(); i < size; i++) {
        // header names must be lowercase.
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
-index 7894a65c0..0dd856be3 100644
+index 7894a65c06..0dd856be35 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/HttpEngine.java
 @@ -521,7 +521,7 @@ private Request networkRequest(Request request) throws IOException {
@@ -1034,7 +820,7 @@ index 7894a65c0..0dd856be3 100644
          client.getAuthenticator(), client.getProxy(), client.getProtocols(),
          client.getConnectionSpecs(), client.getProxySelector());
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/http/RequestLine.java b/okhttp/src/main/java/com/squareup/okhttp/internal/http/RequestLine.java
-index 1a621a53e..23bf43c29 100644
+index 1a621a53e7..23bf43c295 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/http/RequestLine.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/http/RequestLine.java
 @@ -20,9 +20,9 @@ static String get(Request request, Proxy.Type proxyType) {
@@ -1050,7 +836,7 @@ index 1a621a53e..23bf43c29 100644
  
      result.append(" HTTP/1.1");
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/internal/io/RealConnection.java b/okhttp/src/main/java/com/squareup/okhttp/internal/io/RealConnection.java
-index 09e88274a..8c4cd49f7 100644
+index 09e88274af..8c4cd49f79 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/internal/io/RealConnection.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/internal/io/RealConnection.java
 @@ -234,7 +234,7 @@ private void connectTls(int readTimeout, int writeTimeout,
@@ -1063,7 +849,7 @@ index 09e88274a..8c4cd49f7 100644
      while (true) {
        Http1xStream tunnelConnection = new Http1xStream(null, source, sink);
 diff --git a/samples/crawler/src/main/java/com/squareup/okhttp/sample/Crawler.java b/samples/crawler/src/main/java/com/squareup/okhttp/sample/Crawler.java
-index 8c731beba..b3034b1e8 100644
+index 8c731bebac..b3034b1e82 100755
 --- a/samples/crawler/src/main/java/com/squareup/okhttp/sample/Crawler.java
 +++ b/samples/crawler/src/main/java/com/squareup/okhttp/sample/Crawler.java
 @@ -106,7 +106,7 @@ public void fetch(HttpUrl url) throws IOException {
@@ -1076,7 +862,7 @@ index 8c731beba..b3034b1e8 100644
      }
    }
 diff --git a/samples/guide/src/main/java/com/squareup/okhttp/recipes/LoggingInterceptors.java b/samples/guide/src/main/java/com/squareup/okhttp/recipes/LoggingInterceptors.java
-index bcfa6e9aa..d0c1e4a93 100644
+index bcfa6e9aa9..d0c1e4a93f 100755
 --- a/samples/guide/src/main/java/com/squareup/okhttp/recipes/LoggingInterceptors.java
 +++ b/samples/guide/src/main/java/com/squareup/okhttp/recipes/LoggingInterceptors.java
 @@ -32,12 +32,12 @@ public LoggingInterceptors() {

@@ -1,111 +1,53 @@
-diff --git a/checkstyle.xml b/checkstyle.xml
-index ad560109..27c390b2 100644
---- a/checkstyle.xml
-+++ b/checkstyle.xml
-@@ -97,7 +97,7 @@
-     <!--module name="HiddenField"/-->
-     <module name="IllegalInstantiation"/>
-     <module name="InnerAssignment"/>
--    <module name="MagicNumber"/>
-+    <!--<module name="MagicNumber"/>-->
-     <module name="MissingSwitchDefault"/>
-     <module name="RedundantThrows"/>
-     <module name="SimplifyBooleanExpression"/>
-diff --git a/src/main/java/com/squareup/javawriter/ParameterizedTypeName.java b/src/main/java/com/squareup/javawriter/ParameterizedTypeName.java
-index 4c4e98cc..ccd18f31 100644
---- a/src/main/java/com/squareup/javawriter/ParameterizedTypeName.java
-+++ b/src/main/java/com/squareup/javawriter/ParameterizedTypeName.java
-@@ -33,6 +33,14 @@
-     this.parameters = ImmutableList.copyOf(parameters);
-   }
- 
-+  public ClassName type() {
-+    return type;
-+  }
-+
-+  public ImmutableList<? extends TypeName> parameters() {
-+    return parameters;
-+  }
-+
-   @Override
-   public Set<ClassName> referencedClasses() {
-     return FluentIterable.from(parameters)
-diff --git a/src/main/java/com/squareup/javawriter/WildcardName.java b/src/main/java/com/squareup/javawriter/WildcardName.java
-index 76563eaf..becde39d 100644
---- a/src/main/java/com/squareup/javawriter/WildcardName.java
-+++ b/src/main/java/com/squareup/javawriter/WildcardName.java
-@@ -34,6 +34,14 @@
-     this.superBound = superBound;
-   }
- 
-+  public TypeName extendsBound() {
-+    return extendsBound.orNull();
-+  }
-+
-+  public TypeName superBound() {
-+    return superBound.orNull();
-+  }
-+
-   static WildcardName forTypeMirror(WildcardType mirror) {
-     return new WildcardName(
-         Optional.fromNullable(mirror.getExtendsBound()).transform(FOR_TYPE_MIRROR),
 diff --git a/src/main/java/com/squareup/javawriter/builders/AnnotationSpec.java b/src/main/java/com/squareup/javawriter/builders/AnnotationSpec.java
-new file mode 100644
-index 00000000..da836604
---- /dev/null
+index 223e944447..da83660470 100755
+--- a/src/main/java/com/squareup/javawriter/builders/AnnotationSpec.java
 +++ b/src/main/java/com/squareup/javawriter/builders/AnnotationSpec.java
-@@ -0,0 +1,108 @@
-+/*
-+ * Copyright (C) 2015 Square, Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ * http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package com.squareup.javawriter.builders;
-+
+@@ -15,8 +15,8 @@
+  */
+ package com.squareup.javawriter.builders;
+ 
 +import com.google.common.collect.ImmutableSet;
-+import com.google.common.collect.ImmutableSortedMap;
-+import com.google.common.collect.Maps;
-+import com.squareup.javawriter.ClassName;
-+import java.lang.annotation.Annotation;
-+import java.util.Iterator;
-+import java.util.Map;
-+import java.util.SortedMap;
-+
-+import static com.google.common.base.Preconditions.checkNotNull;
-+import static com.google.common.collect.Iterables.getOnlyElement;
-+
-+/** A generated annotation on a declaration. */
-+public final class AnnotationSpec {
-+  public final ClassName type;
-+  public final ImmutableSortedMap<String, Snippet> members;
-+
-+  private AnnotationSpec(Builder builder) {
-+    this.type = checkNotNull(builder.type);
-+    this.members = ImmutableSortedMap.copyOf(builder.members);
-+  }
-+
+ import com.google.common.collect.ImmutableSortedMap;
+-import com.google.common.collect.ImmutableSortedSet;
+ import com.google.common.collect.Maps;
+ import com.squareup.javawriter.ClassName;
+ import java.lang.annotation.Annotation;
+@@ -29,10 +29,6 @@
+ 
+ /** A generated annotation on a declaration. */
+ public final class AnnotationSpec {
+-  public static final AnnotationSpec OVERRIDE = new Builder()
+-      .type(ClassName.fromClass(Override.class))
+-      .build();
+-
+   public final ClassName type;
+   public final ImmutableSortedMap<String, Snippet> members;
+ 
+@@ -41,30 +37,39 @@ private AnnotationSpec(Builder builder) {
+     this.members = ImmutableSortedMap.copyOf(builder.members);
+   }
+ 
+-  void emit(CodeWriter codeWriter) {
 +  void emit(CodeWriter codeWriter, boolean inline) {
 +    String separator = inline ? "" : "\n";
 +    String suffix = inline ? " " : "\n";
-+    if (members.isEmpty()) {
-+      // @Singleton
+     if (members.isEmpty()) {
+       // @Singleton
+-      codeWriter.emit("@$T\n", type);
+-    } else if (members.keySet().equals(ImmutableSortedSet.of("value"))) {
 +      codeWriter.emit("@$T$L", type, suffix);
 +    } else if (members.keySet().equals(ImmutableSet.of("value"))) {
-+      // @Named("foo")
-+      codeWriter.emit("@$T(");
-+      codeWriter.emit(getOnlyElement(members.values()));
+       // @Named("foo")
+       codeWriter.emit("@$T(");
+       codeWriter.emit(getOnlyElement(members.values()));
+-      codeWriter.emit(")\n");
 +      codeWriter.emit(")$L", suffix);
-+    } else {
+     } else {
+-      // @Column(
+-      //   name = "updated_at",
+-      //   nullable = false
+-      // )
+-      codeWriter.emit("@$T(\n", type);
 +      // Inline:
 +      //   @Column(name = "updated_at", nullable = false)
 +      //
@@ -116,296 +58,126 @@ index 00000000..da836604
 +      //   )
 +      codeWriter.emit("@$T($L", type, separator);
 +      codeWriter.indent();
-+      codeWriter.indent();
-+      for (Iterator<Map.Entry<String, Snippet>> i = members.entrySet().iterator(); i.hasNext();) {
-+        Map.Entry<String, Snippet> entry = i.next();
-+        codeWriter.emit("$L = ", entry.getKey());
-+        codeWriter.emit(entry.getValue());
+       codeWriter.indent();
+       for (Iterator<Map.Entry<String, Snippet>> i = members.entrySet().iterator(); i.hasNext();) {
+         Map.Entry<String, Snippet> entry = i.next();
+         codeWriter.emit("$L = ", entry.getKey());
+         codeWriter.emit(entry.getValue());
+-        codeWriter.emit(i.hasNext() ? ",\n" : "\n");
 +        if (i.hasNext()) codeWriter.emit(",");
 +        codeWriter.emit("$L", separator);
-+      }
-+      codeWriter.unindent();
+       }
+       codeWriter.unindent();
+-      codeWriter.emit(")\n");
 +      codeWriter.unindent();
 +      codeWriter.emit(")$L", suffix);
-+    }
-+  }
-+
-+  public static AnnotationSpec of(Class<? extends Annotation> annotation) {
-+    return new Builder().type(ClassName.fromClass(annotation)).build();
-+  }
-+
-+  @Override public boolean equals(Object o) {
-+    return o instanceof AnnotationSpec
-+        && ((AnnotationSpec) o).type.equals(type)
-+        && ((AnnotationSpec) o).members.equals(members);
-+  }
-+
-+  @Override public int hashCode() {
-+    return type.hashCode() + 37 * members.hashCode();
-+  }
-+
-+  public static final class Builder {
-+    private ClassName type;
-+    private final SortedMap<String, Snippet> members = Maps.newTreeMap();
-+
-+    public Builder type(ClassName type) {
-+      this.type = type;
-+      return this;
-+    }
-+
-+    public Builder addMember(String name, String format, Object... args) {
-+      members.put(name, new Snippet(format, args));
-+      return this;
-+    }
-+
-+    public AnnotationSpec build() {
-+      return new AnnotationSpec(this);
-+    }
-+  }
-+}
+     }
+   }
+ 
 diff --git a/src/main/java/com/squareup/javawriter/builders/CodeWriter.java b/src/main/java/com/squareup/javawriter/builders/CodeWriter.java
-index 005b666f..1f905fc2 100644
+index f7b7a56428..1f905fc2f3 100755
 --- a/src/main/java/com/squareup/javawriter/builders/CodeWriter.java
 +++ b/src/main/java/com/squareup/javawriter/builders/CodeWriter.java
-@@ -15,17 +15,24 @@
-  */
- package com.squareup.javawriter.builders;
- 
-+import com.google.common.base.Ascii;
-+import com.google.common.collect.ImmutableList;
- import com.google.common.collect.ImmutableMap;
-+import com.google.common.collect.ImmutableSet;
- import com.google.common.collect.ImmutableSortedMap;
- import com.squareup.javawriter.ClassName;
-+import com.squareup.javawriter.ParameterizedTypeName;
- import com.squareup.javawriter.StringLiteral;
- import com.squareup.javawriter.TypeName;
+@@ -27,6 +27,7 @@
  import com.squareup.javawriter.TypeNames;
-+import com.squareup.javawriter.WildcardName;
+ import com.squareup.javawriter.WildcardName;
  import java.util.ArrayList;
 +import java.util.EnumSet;
  import java.util.LinkedHashMap;
  import java.util.LinkedHashSet;
  import java.util.List;
- import java.util.Map;
-+import javax.lang.model.element.Modifier;
- 
- import static com.google.common.base.Preconditions.checkNotNull;
- import static com.google.common.base.Preconditions.checkState;
-@@ -34,7 +41,7 @@
-  * Converts a {@link JavaFile} to a string suitable to both human- and javac-consumption. This
+@@ -41,9 +42,6 @@
   * honors imports, indentation, and deferred variable names.
   */
--class CodeWriter {
-+final class CodeWriter {
+ final class CodeWriter {
+-  private static final ImmutableList<AnnotationSpec> OVERRIDE_ONLY
+-      = ImmutableList.of(AnnotationSpec.OVERRIDE);
+-
    private final String indent = "  ";
    private final StringBuilder out;
    private final ImmutableMap<ClassName, String> importedTypes;
-@@ -68,6 +75,21 @@ public CodeWriter popVisibleType(TypeName typeName) {
+@@ -77,21 +75,18 @@ public CodeWriter popVisibleType(TypeName typeName) {
      return this;
    }
  
+-  public void emitAnnotations(ImmutableList<AnnotationSpec> annotations) {
+-    if (annotations.equals(OVERRIDE_ONLY)) {
+-      emit("@$T ", Override.class);
+-    } else {
+-      for (AnnotationSpec annotationSpec : annotations) {
+-        annotationSpec.emit(this);
+-      }
 +  public void emitAnnotations(ImmutableList<AnnotationSpec> annotations, boolean inline) {
 +    for (AnnotationSpec annotationSpec : annotations) {
 +      annotationSpec.emit(this, inline);
-+    }
-+  }
-+
-+  public void emitModifiers(ImmutableSet<Modifier> modifiers) {
+     }
+   }
+ 
+   public void emitModifiers(ImmutableSet<Modifier> modifiers) {
+-    // TODO(jwilson): sort in standard order.
+-    for (Modifier modifier : modifiers) {
+-      emitAndIndent(Ascii.toLowerCase(modifier.name()));
+-      emitAndIndent(" ");
 +    if (!modifiers.isEmpty()) {
 +      for (Modifier modifier : EnumSet.copyOf(modifiers)) {
 +        emitAndIndent(Ascii.toLowerCase(modifier.name()));
 +        emitAndIndent(" ");
 +      }
-+    }
-+  }
-+
-   public CodeWriter emit(String format, Object... args) {
-     return emit(new Snippet(format, args));
-   }
-@@ -77,7 +99,11 @@ public CodeWriter emit(Snippet snippet) {
-     for (String part : snippet.formatParts) {
-       switch (part) {
-         case "$L":
--          emitAndIndent(String.valueOf(snippet.args.get(a++)));
-+          emitLiteral(snippet.args.get(a++));
-+          break;
-+
-+        case "$N":
-+          emitName(snippet.args.get(a++));
-           break;
- 
-         case "$S":
-@@ -101,15 +127,49 @@ public CodeWriter emit(Snippet snippet) {
-     return this;
+     }
    }
  
-+  private void emitLiteral(Object o) {
-+    if (o instanceof TypeSpec) {
-+      TypeSpec typeSpec = (TypeSpec) o;
-+      typeSpec.emit(this);
-+    } else {
-+      emitAndIndent(String.valueOf(o));
-+    }
-+  }
-+
-   private void emitType(Object arg) {
-     TypeName typeName = toTypeName(arg);
-     emittedTypes.add(typeName);
- 
--    String shortName = !visibleTypes.contains(typeName)
--        ? importedTypes.get(typeName)
--        : null;
--
--    emitAndIndent(shortName != null ? shortName : typeName.toString());
-+    // TODO(jwilson): replace instanceof nonsense with polymorphism!
-+    if (typeName instanceof ParameterizedTypeName) {
-+      ParameterizedTypeName parameterizedTypeName = (ParameterizedTypeName) typeName;
-+      emitType(parameterizedTypeName.type());
-+      emitAndIndent("<");
-+      boolean firstParameter = true;
-+      for (TypeName parameter : parameterizedTypeName.parameters()) {
-+        if (!firstParameter) emitAndIndent(", ");
-+        emitType(parameter);
-+        firstParameter = false;
-+      }
-+      emitAndIndent(">");
-+    } else if (typeName instanceof WildcardName) {
-+      WildcardName wildcardName = (WildcardName) typeName;
-+      TypeName extendsBound = wildcardName.extendsBound();
-+      TypeName superBound = wildcardName.superBound();
+@@ -161,7 +156,9 @@ private void emitType(Object arg) {
+       WildcardName wildcardName = (WildcardName) typeName;
+       TypeName extendsBound = wildcardName.extendsBound();
+       TypeName superBound = wildcardName.superBound();
+-      if (extendsBound != null) {
 +      if (ClassName.fromClass(Object.class).equals(extendsBound)) {
 +        emit("?");
 +      } else if (extendsBound != null) {
-+        emit("? extends $T", extendsBound);
-+      } else if (superBound != null) {
-+        emit("? super $T", superBound);
-+      }
-+      // TODO(jwilson): special case ? for List<?>.
-+    } else {
-+      String shortName = !visibleTypes.contains(typeName)
-+          ? importedTypes.get(typeName)
-+          : null;
-+      emitAndIndent(shortName != null ? shortName : typeName.toString());
-+    }
-   }
- 
-   /** Emits {@code s} with indentation as required. */
-@@ -139,6 +199,20 @@ private TypeName toTypeName(Object arg) {
-     throw new IllegalArgumentException("Expected type but was " + arg);
-   }
- 
-+  private void emitName(Object o) {
-+    emitAndIndent(toName(o));
-+  }
-+
-+  private String toName(Object o) {
-+    // TODO(jwilson): implement deferred naming so that `new Name("public")` yields "public_" etc.
-+    if (o instanceof String) return (String) o;
-+    if (o instanceof Name) return ((Name) o).seed;
-+    if (o instanceof ParameterSpec) return ((ParameterSpec) o).name.seed;
-+    if (o instanceof FieldSpec) return ((FieldSpec) o).name.seed;
-+    if (o instanceof MethodSpec) return ((MethodSpec) o).name.seed;
-+    throw new IllegalArgumentException("Expected name but was " + o);
-+  }
-+
-   /**
-    * Returns the types that should have been imported for this code. If there were any simple name
-    * collisions, that type's first use is imported.
+         emit("? extends $T", extendsBound);
+       } else if (superBound != null) {
+         emit("? super $T", superBound);
 diff --git a/src/main/java/com/squareup/javawriter/builders/FieldSpec.java b/src/main/java/com/squareup/javawriter/builders/FieldSpec.java
-index 20322d89..49bae9c5 100644
+index 5736e02e9d..49bae9c527 100755
 --- a/src/main/java/com/squareup/javawriter/builders/FieldSpec.java
 +++ b/src/main/java/com/squareup/javawriter/builders/FieldSpec.java
-@@ -15,27 +15,66 @@
-  */
- package com.squareup.javawriter.builders;
- 
-+import com.google.common.collect.ImmutableList;
-+import com.google.common.collect.ImmutableSet;
+@@ -20,7 +20,7 @@
  import com.squareup.javawriter.TypeName;
-+import java.lang.annotation.Annotation;
-+import java.util.ArrayList;
+ import java.lang.annotation.Annotation;
+ import java.util.ArrayList;
+-import java.util.Arrays;
 +import java.util.Collections;
-+import java.util.List;
-+import javax.lang.model.element.Modifier;
+ import java.util.List;
+ import javax.lang.model.element.Modifier;
  
- import static com.google.common.base.Preconditions.checkNotNull;
- 
- /** A generated field declaration. */
- public final class FieldSpec {
-+  public final ImmutableList<AnnotationSpec> annotations;
-+  public final ImmutableSet<Modifier> modifiers;
-   public final TypeName type;
-   public final Name name;
-   public final Snippet initializer;
- 
-   private FieldSpec(Builder builder) {
-+    this.annotations = ImmutableList.copyOf(builder.annotations);
-+    this.modifiers = ImmutableSet.copyOf(builder.modifiers);
+@@ -39,11 +39,11 @@ private FieldSpec(Builder builder) {
+     this.modifiers = ImmutableSet.copyOf(builder.modifiers);
      this.type = checkNotNull(builder.type);
      this.name = checkNotNull(builder.name);
 -    this.initializer = checkNotNull(builder.initializer);
 +    this.initializer = builder.initializer;
-+  }
-+
-+  void emit(CodeWriter codeWriter) {
-+    codeWriter.emitAnnotations(annotations, false);
-+    codeWriter.emitModifiers(modifiers);
-+    codeWriter.emit("$T $L", type, name);
-+    if (initializer != null) {
-+      codeWriter.emit(" = ");
-+      codeWriter.emit(initializer);
-+    }
-+    codeWriter.emit(";\n");
    }
  
-   public static final class Builder {
-+    private final List<AnnotationSpec> annotations = new ArrayList<>();
-+    private final List<Modifier> modifiers = new ArrayList<>();
-     private TypeName type;
-     private Name name;
-     private Snippet initializer;
+   void emit(CodeWriter codeWriter) {
+-    codeWriter.emitAnnotations(annotations);
++    codeWriter.emitAnnotations(annotations, false);
+     codeWriter.emitModifiers(modifiers);
+     codeWriter.emit("$T $L", type, name);
+     if (initializer != null) {
+@@ -71,7 +71,7 @@ public Builder addAnnotation(Class<? extends Annotation> annotation) {
+     }
  
-+    public Builder addAnnotation(AnnotationSpec annotationSpec) {
-+      this.annotations.add(annotationSpec);
-+      return this;
-+    }
-+
-+    public Builder addAnnotation(Class<? extends Annotation> annotation) {
-+      this.annotations.add(AnnotationSpec.of(annotation));
-+      return this;
-+    }
-+
-+    public Builder addModifiers(Modifier... modifiers) {
+     public Builder addModifiers(Modifier... modifiers) {
+-      this.modifiers.addAll(Arrays.asList(modifiers));
 +      Collections.addAll(this.modifiers, modifiers);
-+      return this;
-+    }
-+
-     public Builder type(TypeName type) {
-       this.type = type;
-       return this;
-@@ -46,6 +85,10 @@ public Builder name(Name name) {
        return this;
      }
  
-+    public Builder name(String name) {
-+      return name(new Name(name));
-+    }
-+
-     public Builder initializer(String format, Object... args) {
-       this.initializer = new Snippet(format, args);
-       return this;
 diff --git a/src/main/java/com/squareup/javawriter/builders/MethodSpec.java b/src/main/java/com/squareup/javawriter/builders/MethodSpec.java
-index 4d0a24bf..7cc8eb63 100644
+index b46d3717f0..7cc8eb63b3 100755
 --- a/src/main/java/com/squareup/javawriter/builders/MethodSpec.java
 +++ b/src/main/java/com/squareup/javawriter/builders/MethodSpec.java
-@@ -17,12 +17,12 @@
- 
- import com.google.common.collect.ImmutableList;
- import com.google.common.collect.ImmutableSet;
--import com.squareup.javawriter.ClassName;
- import com.squareup.javawriter.TypeName;
-+import com.squareup.javawriter.TypeNames;
+@@ -22,7 +22,7 @@
  import com.squareup.javawriter.VoidName;
  import java.lang.annotation.Annotation;
  import java.util.ArrayList;
@@ -414,401 +186,114 @@ index 4d0a24bf..7cc8eb63 100644
  import java.util.List;
  import javax.lang.model.element.Modifier;
  
-@@ -30,29 +30,31 @@
- 
- /** A generated method declaration. */
- public final class MethodSpec {
--  public final Name name;
--  public final ImmutableList<ClassName> annotations;
--  public final ImmutableList<ParameterSpec> parameters;
-+  public final ImmutableList<AnnotationSpec> annotations;
-   public final ImmutableSet<Modifier> modifiers;
-   public final TypeName returnType;
-+  public final Name name;
-+  public final ImmutableList<ParameterSpec> parameters;
-   public final ImmutableList<Snippet> snippets;
- 
-   private MethodSpec(Builder builder) {
--    this.name = checkNotNull(builder.name);
-     this.annotations = ImmutableList.copyOf(builder.annotations);
--    this.parameters = ImmutableList.copyOf(builder.parameters);
-     this.modifiers = ImmutableSet.copyOf(builder.modifiers);
-     this.returnType = builder.returnType;
-+    this.name = checkNotNull(builder.name);
-+    this.parameters = ImmutableList.copyOf(builder.parameters);
-     this.snippets = ImmutableList.copyOf(builder.snippets);
+@@ -47,7 +47,7 @@ private MethodSpec(Builder builder) {
    }
  
    void emit(CodeWriter codeWriter) {
--    codeWriter.emit("$T $L(", returnType, name); // TODO(jwilson): modifiers.
+-    codeWriter.emitAnnotations(annotations);
 +    codeWriter.emitAnnotations(annotations, false);
-+    codeWriter.emitModifiers(modifiers);
-+    codeWriter.emit("$T $L(", returnType, name);
+     codeWriter.emitModifiers(modifiers);
+     codeWriter.emit("$T $L(", returnType, name);
  
-     boolean firstParameter = true;
-     for (ParameterSpec parameterSpec : parameters) {
-       if (!firstParameter) codeWriter.emit(", ");
--      codeWriter.emit("$T $L", parameterSpec.type, parameterSpec.name);
-+      parameterSpec.emit(codeWriter);
-       firstParameter = false;
-     }
-     codeWriter.emit(") {\n");
-@@ -67,48 +69,60 @@ void emit(CodeWriter codeWriter) {
-   }
- 
-   public static final class Builder {
--    private Name name;
--    private List<ClassName> annotations = new ArrayList<>();
--    private List<ParameterSpec> parameters = new ArrayList<>();
--    private List<Modifier> modifiers = new ArrayList<>();
-+    private final List<AnnotationSpec> annotations = new ArrayList<>();
-+    private final List<Modifier> modifiers = new ArrayList<>();
-     private TypeName returnType = VoidName.VOID;
--    private List<Snippet> snippets = new ArrayList<>();
-+    private Name name;
-+    private final List<ParameterSpec> parameters = new ArrayList<>();
-+    private final List<Snippet> snippets = new ArrayList<>();
- 
--    public Builder name(String name) {
--      this.name = new Name(name);
-+    public Builder addAnnotation(AnnotationSpec annotationSpec) {
-+      this.annotations.add(annotationSpec);
-       return this;
+@@ -87,7 +87,7 @@ public Builder addAnnotation(Class<? extends Annotation> annotation) {
      }
  
--    public Builder name(Name name) {
--      this.name = name;
-+    public Builder addAnnotation(Class<? extends Annotation> annotation) {
-+      this.annotations.add(AnnotationSpec.of(annotation));
-       return this;
-     }
- 
--    public Builder addAnnotation(Class<? extends Annotation> annotation) {
--      this.annotations.add(ClassName.fromClass(annotation));
-+    public Builder addModifiers(Modifier... modifiers) {
+     public Builder addModifiers(Modifier... modifiers) {
+-      this.modifiers.addAll(Arrays.asList(modifiers));
 +      Collections.addAll(this.modifiers, modifiers);
        return this;
      }
  
--    public Builder addParameter(ParameterSpec parameterSpec) {
--      this.parameters.add(parameterSpec);
-+    public Builder returns(Class<?> returnType) {
-+      return returns(TypeNames.forClass(returnType));
-+    }
-+
-+    public Builder returns(TypeName returnType) {
-+      this.returnType = returnType;
-       return this;
-     }
- 
--    public Builder addParameter(Class<?> type, String name) {
--      this.parameters.add(new ParameterSpec.Builder().type(type).name(name).build());
-+    public Builder name(String name) {
-+      this.name = new Name(name);
-       return this;
-     }
- 
--    public Builder addModifiers(Modifier... modifiers) {
--      this.modifiers.addAll(Arrays.asList(modifiers));
-+    public Builder name(Name name) {
-+      this.name = name;
-       return this;
-     }
- 
--    public Builder returns(Class<?> returnType) {
--      this.returnType = ClassName.fromClass(returnType);
-+    public Builder addParameter(ParameterSpec parameterSpec) {
-+      this.parameters.add(parameterSpec);
-       return this;
-     }
- 
-+    public Builder addParameter(Class<?> type, String name) {
-+      return addParameter(new ParameterSpec.Builder().type(type).name(name).build());
-+    }
-+
-+    public Builder addParameter(TypeName type, String name) {
-+      return addParameter(new ParameterSpec.Builder().type(type).name(name).build());
-+    }
-+
-     public Builder addCode(String format, Object... args) {
-       snippets.add(new Snippet(format, args));
-       return this;
-diff --git a/src/main/java/com/squareup/javawriter/builders/Name.java b/src/main/java/com/squareup/javawriter/builders/Name.java
-index 36d1fb2b..36c65b0f 100644
---- a/src/main/java/com/squareup/javawriter/builders/Name.java
-+++ b/src/main/java/com/squareup/javawriter/builders/Name.java
-@@ -30,7 +30,6 @@ public Name(String seed) {
-   }
- 
-   @Override public String toString() {
--    // TODO(jwilson): implement deferred naming so that `new Name("public")` yields "public_" etc.
-     return seed;
-   }
- }
 diff --git a/src/main/java/com/squareup/javawriter/builders/ParameterSpec.java b/src/main/java/com/squareup/javawriter/builders/ParameterSpec.java
-index 2db9ae79..6a2167e4 100644
+index db343774a5..6a2167e40f 100755
 --- a/src/main/java/com/squareup/javawriter/builders/ParameterSpec.java
 +++ b/src/main/java/com/squareup/javawriter/builders/ParameterSpec.java
-@@ -15,25 +15,59 @@
-  */
- package com.squareup.javawriter.builders;
- 
-+import com.google.common.collect.ImmutableList;
-+import com.google.common.collect.ImmutableSet;
- import com.squareup.javawriter.TypeName;
+@@ -21,7 +21,7 @@
  import com.squareup.javawriter.TypeNames;
-+import java.lang.annotation.Annotation;
-+import java.util.ArrayList;
-+import java.util.Collections;
-+import java.util.List;
-+import javax.lang.model.element.Modifier;
- 
- import static com.google.common.base.Preconditions.checkNotNull;
- 
- /** A generated parameter declaration. */
- public final class ParameterSpec {
-+  public final ImmutableList<AnnotationSpec> annotations;
-+  public final ImmutableSet<Modifier> modifiers;
-   public final TypeName type;
-   public final Name name;
- 
-   private ParameterSpec(Builder builder) {
-+    this.annotations = ImmutableList.copyOf(builder.annotations);
-+    this.modifiers = ImmutableSet.copyOf(builder.modifiers);
-     this.type = checkNotNull(builder.type);
-     this.name = checkNotNull(builder.name);
-   }
- 
-+  void emit(CodeWriter codeWriter) {
-+    codeWriter.emitAnnotations(annotations, true);
-+    codeWriter.emitModifiers(modifiers);
-+    codeWriter.emit("$T $L", type, name);
-+  }
-+
-   public static final class Builder {
-+    private final List<AnnotationSpec> annotations = new ArrayList<>();
-+    private final List<Modifier> modifiers = new ArrayList<>();
-     private TypeName type;
-     private Name name;
- 
-+    public Builder addAnnotation(AnnotationSpec annotationSpec) {
-+      this.annotations.add(annotationSpec);
-+      return this;
-+    }
-+
-+    public Builder addAnnotation(Class<? extends Annotation> annotation) {
-+      this.annotations.add(AnnotationSpec.of(annotation));
-+      return this;
-+    }
-+
-+    public Builder addModifiers(Modifier... modifiers) {
-+      Collections.addAll(this.modifiers, modifiers);
-+      return this;
-+    }
-+
-     public Builder type(TypeName type) {
-       this.type = type;
-       return this;
-diff --git a/src/main/java/com/squareup/javawriter/builders/Snippet.java b/src/main/java/com/squareup/javawriter/builders/Snippet.java
-index 39aa6955..28ec2607 100644
---- a/src/main/java/com/squareup/javawriter/builders/Snippet.java
-+++ b/src/main/java/com/squareup/javawriter/builders/Snippet.java
-@@ -26,6 +26,7 @@
-  *
-  * <ul>
-  *   <li>{@code $L} emits the <em>literal</em> value with no escaping.
-+ *   <li>{@code $N} emits a <em>name</em>, using name collision avoidance where necessary.
-  *   <li>{@code $S} escapes the value as a <em>string</em>, wraps it with double quotes, and emits
-  *       that.
-  *   <li>{@code $T} emits a <em>type</em> reference. Types will be imported if possible.
-@@ -48,6 +49,7 @@ public Snippet(String format, Object[] args) {
-         checkState(p + 1 < format.length(), "dangling $ in format string %s", format);
-         switch (format.charAt(p + 1)) {
-           case 'L':
-+          case 'N':
-           case 'S':
-           case 'T':
-             expectedArgsLength++;
-diff --git a/src/main/java/com/squareup/javawriter/builders/TypeSpec.java b/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
-index 7cd0d804..f9d324c0 100644
---- a/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
-+++ b/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
-@@ -16,37 +16,69 @@
- package com.squareup.javawriter.builders;
- 
- import com.google.common.collect.ImmutableList;
-+import com.google.common.collect.ImmutableSet;
- import com.squareup.javawriter.ClassName;
-+import com.squareup.javawriter.TypeName;
-+import java.lang.annotation.Annotation;
+ import java.lang.annotation.Annotation;
  import java.util.ArrayList;
+-import java.util.Arrays;
 +import java.util.Collections;
  import java.util.List;
-+import javax.lang.model.element.Modifier;
+ import javax.lang.model.element.Modifier;
  
-+import static com.google.common.base.Preconditions.checkArgument;
- import static com.google.common.base.Preconditions.checkNotNull;
- 
- /** A generated class, interface, or enum declaration. */
- public final class TypeSpec {
-+  public final ImmutableList<AnnotationSpec> annotations;
-+  public final ImmutableSet<Modifier> modifiers;
-   public final Type type;
-   public final ClassName name;
-+  public final TypeName supertype;
-+  public final Snippet anonymousTypeArguments;
-+  public final ImmutableList<FieldSpec> fieldSpecs;
-   public final ImmutableList<MethodSpec> methodSpecs;
- 
-   private TypeSpec(Builder builder) {
-+    checkArgument(builder.name != null ^ builder.anonymousTypeArguments != null,
-+        "types must have either a name or anonymous type arguments");
-+    this.annotations = ImmutableList.copyOf(builder.annotations);
-+    this.modifiers = ImmutableSet.copyOf(builder.modifiers);
-     this.type = checkNotNull(builder.type);
--    this.name = checkNotNull(builder.name);
-+    this.name = builder.name;
-+    this.supertype = builder.supertype;
-+    this.anonymousTypeArguments = builder.anonymousTypeArguments;
-+    this.fieldSpecs = ImmutableList.copyOf(builder.fieldSpecs);
-     this.methodSpecs = ImmutableList.copyOf(builder.methodSpecs);
+@@ -42,7 +42,7 @@ private ParameterSpec(Builder builder) {
    }
  
    void emit(CodeWriter codeWriter) {
--    codeWriter.emit("class $L {\n", name.simpleName()); // TODO(jwilson): modifiers.
-+    if (anonymousTypeArguments != null) {
-+      codeWriter.emit("new $T(", supertype);
-+      codeWriter.emit(anonymousTypeArguments);
-+      codeWriter.emit(") {\n");
-+    } else {
-+      codeWriter.emitAnnotations(annotations, false);
-+      codeWriter.emitModifiers(modifiers);
-+      codeWriter.emit("class $L {\n", name.simpleName());
-+    }
-+
-     codeWriter.indent();
+-    codeWriter.emitAnnotations(annotations);
++    codeWriter.emitAnnotations(annotations, true);
+     codeWriter.emitModifiers(modifiers);
+     codeWriter.emit("$T $L", type, name);
+   }
+@@ -64,7 +64,7 @@ public Builder addAnnotation(Class<? extends Annotation> annotation) {
+     }
  
--    boolean firstMethod = true;
-+    boolean firstMember = true;
-+    for (FieldSpec fieldSpec : fieldSpecs) {
-+      if (!firstMember) codeWriter.emit("\n");
-+      fieldSpec.emit(codeWriter);
-+      firstMember = false;
-+    }
-     for (MethodSpec methodSpec : methodSpecs) {
--      if (!firstMethod) codeWriter.emit("\n");
-+      if (!firstMember) codeWriter.emit("\n");
-       methodSpec.emit(codeWriter);
--      firstMethod = false;
-+      firstMember = false;
+     public Builder addModifiers(Modifier... modifiers) {
+-      this.modifiers.addAll(Arrays.asList(modifiers));
++      Collections.addAll(this.modifiers, modifiers);
+       return this;
+     }
+ 
+diff --git a/src/main/java/com/squareup/javawriter/builders/TypeSpec.java b/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
+index 214cdf62b7..f9d324c0a1 100755
+--- a/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
++++ b/src/main/java/com/squareup/javawriter/builders/TypeSpec.java
+@@ -21,7 +21,7 @@
+ import com.squareup.javawriter.TypeName;
+ import java.lang.annotation.Annotation;
+ import java.util.ArrayList;
+-import java.util.Arrays;
++import java.util.Collections;
+ import java.util.List;
+ import javax.lang.model.element.Modifier;
+ 
+@@ -58,7 +58,7 @@ void emit(CodeWriter codeWriter) {
+       codeWriter.emit(anonymousTypeArguments);
+       codeWriter.emit(") {\n");
+     } else {
+-      codeWriter.emitAnnotations(annotations);
++      codeWriter.emitAnnotations(annotations, false);
+       codeWriter.emitModifiers(modifiers);
+       codeWriter.emit("class $L {\n", name.simpleName());
+     }
+@@ -78,7 +78,7 @@ void emit(CodeWriter codeWriter) {
      }
  
      codeWriter.unindent();
--    codeWriter.emit("}\n");
+-    codeWriter.emit(anonymousTypeArguments != null ? "}" : "};");
 +    codeWriter.emit(anonymousTypeArguments != null ? "}" : "}\n");
    }
  
    public static enum Type {
-@@ -54,10 +86,30 @@ void emit(CodeWriter codeWriter) {
-   }
+@@ -106,7 +106,7 @@ public Builder addAnnotation(Class<? extends Annotation> annotation) {
+     }
  
-   public static final class Builder {
-+    private final List<AnnotationSpec> annotations = new ArrayList<>();
-+    private final List<Modifier> modifiers = new ArrayList<>();
-     private Type type = Type.CLASS;
-     private ClassName name;
-+    private TypeName supertype = ClassName.fromClass(Object.class);
-+    private Snippet anonymousTypeArguments;
-+    private List<FieldSpec> fieldSpecs = new ArrayList<>();
-     private List<MethodSpec> methodSpecs = new ArrayList<>();
- 
-+    public Builder addAnnotation(AnnotationSpec annotationSpec) {
-+      this.annotations.add(annotationSpec);
-+      return this;
-+    }
-+
-+    public Builder addAnnotation(Class<? extends Annotation> annotation) {
-+      this.annotations.add(AnnotationSpec.of(annotation));
-+      return this;
-+    }
-+
-+    public Builder addModifiers(Modifier... modifiers) {
+     public Builder addModifiers(Modifier... modifiers) {
+-      this.modifiers.addAll(Arrays.asList(modifiers));
 +      Collections.addAll(this.modifiers, modifiers);
-+      return this;
-+    }
-+
-     public Builder type(Type type) {
-       this.type = type;
-       return this;
-@@ -68,11 +120,26 @@ public Builder name(ClassName name) {
        return this;
      }
  
-+    public Builder supertype(TypeName supertype) {
-+      this.supertype = supertype;
-+      return this;
-+    }
-+
-+    public Builder anonymousTypeArguments(String format, Object... args) {
-+      this.anonymousTypeArguments = new Snippet(format, args);
-+      return this;
-+    }
-+
-     public Builder addMethod(MethodSpec methodSpec) {
-       methodSpecs.add(methodSpec);
-       return this;
-     }
- 
-+    public Builder addField(FieldSpec fieldSpec) {
-+      fieldSpecs.add(fieldSpec);
-+      return this;
-+    }
-+
-     public TypeSpec build() {
-       return new TypeSpec(this);
-     }
 diff --git a/src/test/java/com/squareup/javawriter/builders/TypeSpecTest.java b/src/test/java/com/squareup/javawriter/builders/TypeSpecTest.java
-index 8fd68be7..64340a2b 100644
+index c3e07491f4..64340a2b16 100755
 --- a/src/test/java/com/squareup/javawriter/builders/TypeSpecTest.java
 +++ b/src/test/java/com/squareup/javawriter/builders/TypeSpecTest.java
-@@ -15,14 +15,20 @@
-  */
- package com.squareup.javawriter.builders;
- 
-+import com.google.common.collect.ImmutableList;
+@@ -19,6 +19,9 @@
  import com.squareup.javawriter.ClassName;
-+import com.squareup.javawriter.ParameterizedTypeName;
-+import com.squareup.javawriter.WildcardName;
+ import com.squareup.javawriter.ParameterizedTypeName;
+ import com.squareup.javawriter.WildcardName;
 +import java.io.Serializable;
 +import java.util.ArrayList;
 +import java.util.List;
  import javax.lang.model.element.Modifier;
  import org.junit.Test;
  
- import static com.google.common.truth.Truth.assertThat;
- 
- public class TypeSpecTest {
--  @Test public void test() throws Exception {
-+  @Test public void basic() throws Exception {
-     TypeSpec taco = new TypeSpec.Builder()
-         .name(ClassName.create("com.squareup.tacos", "Taco"))
-         .addMethod(new MethodSpec.Builder()
-@@ -33,22 +39,134 @@
-             .addCode("return $S;\n", "taco")
-             .build())
-         .build();
--
--    // TODO: fix modifiers
--    // TODO: fix annotations
--
-     assertThat(toString(taco)).isEqualTo(""
-         + "package com.squareup.tacos;\n"
-         + "\n"
-+        + "import java.lang.Override;\n"
+@@ -43,12 +46,48 @@
          + "import java.lang.String;\n"
          + "\n"
          + "class Taco {\n"
--        + "  String toString() {\n"
+-        + "  @Override public final String toString() {\n"
 +        + "  @Override\n"
 +        + "  public final String toString() {\n"
          + "    return \"taco\";\n"
@@ -851,85 +336,20 @@ index 8fd68be7..64340a2b 100644
 +        + "}\n");
 +  }
 +
-+  @Test public void anonymousInnerClass() throws Exception {
-+    ClassName foo = ClassName.create("com.squareup.tacos", "Foo");
-+    ClassName bar = ClassName.create("com.squareup.tacos", "Bar");
-+    ClassName thingThang = ClassName.create(
-+        "com.squareup.tacos", ImmutableList.of("Thing"), "Thang");
-+    ParameterizedTypeName thingThangOfFooBar
-+        = ParameterizedTypeName.create(thingThang, foo, bar);
-+    ClassName thung = ClassName.create("com.squareup.tacos", "Thung");
-+    ClassName simpleThung = ClassName.create("com.squareup.tacos", "SimpleThung");
-+    ParameterizedTypeName thungOfSuperBar
-+        = ParameterizedTypeName.create(thung, WildcardName.createWithLowerBound(bar));
-+    ParameterizedTypeName thungOfSuperFoo
-+        = ParameterizedTypeName.create(thung, WildcardName.createWithLowerBound(foo));
-+    ParameterizedTypeName simpleThungOfBar = ParameterizedTypeName.create(simpleThung, bar);
-+
-+    ParameterSpec thungParameter = new ParameterSpec.Builder()
-+        .addModifiers(Modifier.FINAL)
-+        .type(thungOfSuperFoo)
-+        .name("thung")
-+        .build();
-+    TypeSpec aSimpleThung = new TypeSpec.Builder()
-+        .supertype(simpleThungOfBar)
-+        .anonymousTypeArguments("$N", thungParameter)
-+        .addMethod(new MethodSpec.Builder()
-+            .addAnnotation(Override.class)
-+            .addModifiers(Modifier.PUBLIC)
-+            .name("doSomething")
-+            .addParameter(bar, "bar")
-+            .addCode("/* code snippets */\n")
-+            .build())
-+        .build();
-+    TypeSpec aThingThang = new TypeSpec.Builder()
-+        .supertype(thingThangOfFooBar)
-+        .anonymousTypeArguments("")
-+        .addMethod(new MethodSpec.Builder()
-+            .addAnnotation(Override.class)
-+            .addModifiers(Modifier.PUBLIC)
-+            .returns(thungOfSuperBar)
-+            .name("call")
-+            .addParameter(thungParameter)
-+            .addCode("return $L;\n", aSimpleThung)
-+            .build())
-+        .build();
-+    TypeSpec taco = new TypeSpec.Builder()
-+        .name(ClassName.create("com.squareup.tacos", "Taco"))
-+        .addField(new FieldSpec.Builder()
-+            .addModifiers(Modifier.STATIC, Modifier.FINAL)
-+            .type(thingThangOfFooBar)
-+            .name("NAME")
-+            .initializer("$L", aThingThang)
-+            .build())
-+        .build();
-+
-+    // TODO: import Thing, and change references from "Thang" to "Thing.Thang"
-+    assertThat(toString(taco)).isEqualTo(""
-+        + "package com.squareup.tacos;\n"
-+        + "\n"
-+        + "import com.squareup.tacos.Bar;\n"
-+        + "import com.squareup.tacos.Foo;\n"
-+        + "import com.squareup.tacos.SimpleThung;\n"
-+        + "import com.squareup.tacos.Thing.Thang;\n"
-+        + "import com.squareup.tacos.Thung;\n"
-+        + "import java.lang.Override;\n"
-+        + "\n"
-+        + "class Taco {\n"
-+        + "  static final Thang<Foo, Bar> NAME = new Thang<Foo, Bar>() {\n"
+   @Test public void anonymousInnerClass() throws Exception {
+     ClassName foo = ClassName.create("com.squareup.tacos", "Foo");
+     ClassName bar = ClassName.create("com.squareup.tacos", "Bar");
+@@ -115,9 +154,11 @@
+         + "\n"
+         + "class Taco {\n"
+         + "  static final Thang<Foo, Bar> NAME = new Thang<Foo, Bar>() {\n"
+-        + "    @Override public Thung<? super Bar> call(final Thung<? super Foo> thung) {\n"
 +        + "    @Override\n"
 +        + "    public Thung<? super Bar> call(final Thung<? super Foo> thung) {\n"
-+        + "      return new SimpleThung<Bar>(thung) {\n"
+         + "      return new SimpleThung<Bar>(thung) {\n"
+-        + "        @Override public void doSomething(Bar bar) {\n"
 +        + "        @Override\n"
 +        + "        public void doSomething(Bar bar) {\n"
-+        + "          /* code snippets */\n"
-+        + "        }\n"
-+        + "      };\n"
-+        + "    }\n"
-+        + "  };\n"
-+        + "}\n");
-+  }
-+
-   private String toString(TypeSpec typeSpec) {
-     return new JavaFile.Builder()
-         .classSpec(typeSpec)
+         + "          /* code snippets */\n"
+         + "        }\n"
+         + "      };\n"

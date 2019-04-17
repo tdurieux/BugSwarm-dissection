@@ -1,5 +1,5 @@
 diff --git a/doc/whats_new.rst b/doc/whats_new.rst
-index 9ae61a3f434b..e17a088fdf43 100644
+index 9ae61a3f43..e17a088fdf 100755
 --- a/doc/whats_new.rst
 +++ b/doc/whats_new.rst
 @@ -29,17 +29,16 @@ Bug fixes
@@ -35,8 +35,8 @@ index 9ae61a3f434b..e17a088fdf43 100644
  -------------------
      - Attribute `data_min`, `data_max` and `data_range` in
 diff --git a/examples/tree/unveil_tree_structure.py b/examples/tree/unveil_tree_structure.py
-new file mode 100644
-index 000000000000..f94468ffb580
+new file mode 100755
+index 0000000000..f94468ffb5
 --- /dev/null
 +++ b/examples/tree/unveil_tree_structure.py
 @@ -0,0 +1,134 @@
@@ -175,7 +175,7 @@ index 000000000000..f94468ffb580
 +      % (sample_ids, common_node_id))
 +print("It is %s %% of all nodes." % (100 * len(common_node_id) / n_nodes,))
 diff --git a/sklearn/cross_decomposition/pls_.py b/sklearn/cross_decomposition/pls_.py
-index a24078e439b3..46961c90b36c 100644
+index a24078e439..46961c90b3 100755
 --- a/sklearn/cross_decomposition/pls_.py
 +++ b/sklearn/cross_decomposition/pls_.py
 @@ -4,6 +4,8 @@
@@ -346,7 +346,7 @@ index a24078e439b3..46961c90b36c 100644
          self.x_scores_ = np.dot(X, U)
          self.y_scores_ = np.dot(Y, V)
 diff --git a/sklearn/cross_decomposition/tests/test_pls.py b/sklearn/cross_decomposition/tests/test_pls.py
-index a8619f663c2e..0cc0052658bd 100644
+index a8619f663c..0cc0052658 100755
 --- a/sklearn/cross_decomposition/tests/test_pls.py
 +++ b/sklearn/cross_decomposition/tests/test_pls.py
 @@ -1,8 +1,9 @@
@@ -571,7 +571,7 @@ index a8619f663c2e..0cc0052658bd 100644
  def test_pls_errors():
      d = load_linnerud()
 diff --git a/sklearn/decomposition/pca.py b/sklearn/decomposition/pca.py
-index 84aa4874dff4..06f102cc550d 100644
+index 84aa4874df..06f102cc55 100755
 --- a/sklearn/decomposition/pca.py
 +++ b/sklearn/decomposition/pca.py
 @@ -488,7 +488,9 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
@@ -597,7 +597,7 @@ index 84aa4874dff4..06f102cc550d 100644
  
      mean_ : array, [n_features]
 diff --git a/sklearn/ensemble/forest.py b/sklearn/ensemble/forest.py
-index a1dc304d026c..d4eea7b37106 100644
+index a1dc304d02..d4eea7b371 100755
 --- a/sklearn/ensemble/forest.py
 +++ b/sklearn/ensemble/forest.py
 @@ -48,6 +48,8 @@ class calls the ``fit`` method of each sub-estimator on random samples
@@ -660,7 +660,7 @@ index a1dc304d026c..d4eea7b37106 100644
              # Pre-sort indices to avoid that each individual tree of the
              # ensemble sorts the indices.
 diff --git a/sklearn/ensemble/tests/test_forest.py b/sklearn/ensemble/tests/test_forest.py
-index 3010532f1f78..205829ba3d00 100644
+index 3010532f1f..205829ba3d 100755
 --- a/sklearn/ensemble/tests/test_forest.py
 +++ b/sklearn/ensemble/tests/test_forest.py
 @@ -138,7 +138,7 @@ def check_boston_criterion(name, criterion):
@@ -706,7 +706,7 @@ index 3010532f1f78..205829ba3d00 100644
 +    for name in FOREST_REGRESSORS:
 +        yield check_decision_path, name
 diff --git a/sklearn/externals/joblib/format_stack.py b/sklearn/externals/joblib/format_stack.py
-index bef5c3bd0a2f..a1faa6879d0c 100644
+index bef5c3bd0a..a1faa6879d 100755
 --- a/sklearn/externals/joblib/format_stack.py
 +++ b/sklearn/externals/joblib/format_stack.py
 @@ -284,6 +284,7 @@ def linereader(file=file, lnum=[lnum], getline=linecache.getline):
@@ -718,7 +718,7 @@ index bef5c3bd0a2f..a1faa6879d0c 100644
          # prune names list of duplicates, but keep the right order
          unique_names = uniq_stable(names)
 diff --git a/sklearn/linear_model/coordinate_descent.py b/sklearn/linear_model/coordinate_descent.py
-index f756b01d74a9..b5d26cb2e735 100644
+index f756b01d74..b5d26cb2e7 100755
 --- a/sklearn/linear_model/coordinate_descent.py
 +++ b/sklearn/linear_model/coordinate_descent.py
 @@ -1632,7 +1632,7 @@ def fit(self, X, y):
@@ -730,129 +730,8 @@ index f756b01d74a9..b5d26cb2e735 100644
  
          if hasattr(self, 'l1_ratio'):
              model_str = 'ElasticNet'
-diff --git a/sklearn/linear_model/least_angle.py b/sklearn/linear_model/least_angle.py
-index 8fa0a021bcc3..fadd1112e0c0 100644
---- a/sklearn/linear_model/least_angle.py
-+++ b/sklearn/linear_model/least_angle.py
-@@ -174,16 +174,19 @@ def lars_path(X, y, Xy=None, Gram=None, max_iter=500,
-     swap, nrm2 = linalg.get_blas_funcs(('swap', 'nrm2'), (X,))
-     solve_cholesky, = get_lapack_funcs(('potrs',), (X,))
- 
--    if Gram is None:
-+    if Gram is None or Gram is False:
-+        Gram = None
-         if copy_X:
-             # force copy. setting the array to be fortran-ordered
-             # speeds up the calculation of the (partial) Gram matrix
-             # and allows to easily swap columns
-             X = X.copy('F')
--    elif isinstance(Gram, string_types) and Gram == 'auto':
--        Gram = None
--        if X.shape[0] > X.shape[1]:
-+
-+    elif isinstance(Gram, string_types) and Gram == 'auto' or Gram is True:
-+        if Gram is True or X.shape[0] > X.shape[1]:
-             Gram = np.dot(X.T, X)
-+        else:
-+            Gram = None
-     elif copy_Gram:
-         Gram = Gram.copy()
- 
-@@ -593,16 +596,14 @@ def __init__(self, fit_intercept=True, verbose=False, normalize=True,
-         self.copy_X = copy_X
-         self.fit_path = fit_path
- 
--    def _get_gram(self):
--        # precompute if n_samples > n_features
--        precompute = self.precompute
--        if hasattr(precompute, '__array__'):
--            Gram = precompute
--        elif precompute == 'auto':
--            Gram = 'auto'
--        else:
--            Gram = None
--        return Gram
-+    def _get_gram(self, precompute, X, y):
-+        if (not hasattr(precompute, '__array__')) and (
-+                (precompute is True) or
-+                (precompute == 'auto' and X.shape[0] > X.shape[1]) or
-+                (precompute == 'auto' and y.shape[1] > 1)):
-+            precompute = np.dot(X.T, X)
-+
-+        return precompute
- 
-     def fit(self, X, y, Xy=None):
-         """Fit the model using X, y as training data.
-@@ -645,14 +646,7 @@ def fit(self, X, y, Xy=None):
-         else:
-             max_iter = self.max_iter
- 
--        precompute = self.precompute
--        if not hasattr(precompute, '__array__') and (
--                precompute is True or
--                (precompute == 'auto' and X.shape[0] > X.shape[1]) or
--                (precompute == 'auto' and y.shape[1] > 1)):
--            Gram = np.dot(X.T, X)
--        else:
--            Gram = self._get_gram()
-+        Gram = self._get_gram(self.precompute, X, y)
- 
-         self.alphas_ = []
-         self.n_iter_ = []
-@@ -972,10 +966,10 @@ class LarsCV(Lars):
-     copy_X : boolean, optional, default True
-         If ``True``, X will be copied; else, it may be overwritten.
- 
--    precompute : True | False | 'auto' | array-like
-+    precompute : True | False | 'auto'
-         Whether to use a precomputed Gram matrix to speed up
--        calculations. If set to ``'auto'`` let us decide. The Gram
--        matrix can also be passed as argument.
-+        calculations. If set to ``'auto'`` let us decide. The Gram matrix
-+        cannot be passed as argument since we will use only subsets of X.
- 
-     max_iter: integer, optional
-         Maximum number of iterations to perform.
-@@ -1081,7 +1075,13 @@ def fit(self, X, y):
-         # init cross-validation generator
-         cv = check_cv(self.cv, X, y, classifier=False)
- 
--        Gram = 'auto' if self.precompute else None
-+        # As we use cross-validation, the Gram matrix is not precomputed here
-+        Gram = self.precompute
-+        if hasattr(Gram, '__array__'):
-+            warnings.warn("Parameter 'precompute' cannot be an array in "
-+                          "%s. Automatically switch to 'auto' instead."
-+                          % self.__class__.__name__)
-+            Gram = 'auto'
- 
-         cv_paths = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-             delayed(_lars_path_residues)(
-@@ -1171,10 +1171,10 @@ class LassoLarsCV(LarsCV):
-     normalize : boolean, optional, default False
-         If True, the regressors X will be normalized before regression.
- 
--    precompute : True | False | 'auto' | array-like
-+    precompute : True | False | 'auto'
-         Whether to use a precomputed Gram matrix to speed up
--        calculations. If set to ``'auto'`` let us decide. The Gram
--        matrix can also be passed as argument.
-+        calculations. If set to ``'auto'`` let us decide. The Gram matrix
-+        cannot be passed as argument since we will use only subsets of X.
- 
-     max_iter : integer, optional
-         Maximum number of iterations to perform.
-@@ -1404,7 +1404,7 @@ def fit(self, X, y, copy_X=True):
-             X, y, self.fit_intercept, self.normalize, self.copy_X)
-         max_iter = self.max_iter
- 
--        Gram = self._get_gram()
-+        Gram = self.precompute
- 
-         alphas_, active_, coef_path_, self.n_iter_ = lars_path(
-             X, y, Gram=Gram, copy_X=copy_X, copy_Gram=True, alpha_min=0.0,
 diff --git a/sklearn/linear_model/logistic.py b/sklearn/linear_model/logistic.py
-index 2d52cca8107a..1b6fc6784595 100644
+index 2d52cca810..1b6fc67845 100755
 --- a/sklearn/linear_model/logistic.py
 +++ b/sklearn/linear_model/logistic.py
 @@ -594,11 +594,11 @@ def logistic_regression_path(X, y, pos_class=None, Cs=10, fit_intercept=True,
@@ -957,34 +836,10 @@ index 2d52cca8107a..1b6fc6784595 100644
                      verbose=max(0, self.verbose - 1),
                      random_state=self.random_state,
 diff --git a/sklearn/linear_model/randomized_l1.py b/sklearn/linear_model/randomized_l1.py
-index bef06f59911b..7fe524ca460b 100644
+index 54b9cc68af..7fe524ca46 100755
 --- a/sklearn/linear_model/randomized_l1.py
 +++ b/sklearn/linear_model/randomized_l1.py
-@@ -165,6 +165,7 @@ def _randomized_lasso(X, y, weights, mask, alpha=1., verbose=False,
-     alpha = np.atleast_1d(np.asarray(alpha, dtype=np.float64))
- 
-     X = (1 - weights) * X
-+
-     with warnings.catch_warnings():
-         warnings.simplefilter('ignore', ConvergenceWarning)
-         alphas_, _, coef_ = lars_path(X, y,
-@@ -226,10 +227,11 @@ class RandomizedLasso(BaseRandomizedLinearModel):
-     normalize : boolean, optional, default True
-         If True, the regressors X will be normalized before regression.
- 
--    precompute : True | False | 'auto'
--        Whether to use a precomputed Gram matrix to speed up
--        calculations. If set to 'auto' let us decide. The Gram
--        matrix can also be passed as argument.
-+    precompute : True | False | 'auto' | array-like
-+        Whether to use a precomputed Gram matrix to speed up calculations.
-+        If set to 'auto' let us decide.
-+        The Gram matrix can also be passed as argument, but it will be used
-+        only for the selection of parameter alpha, if alpha is 'aic' or 'bic'.
- 
-     max_iter : integer, optional
-         Maximum number of iterations to perform in the Lars algorithm.
-@@ -328,7 +330,6 @@ def __init__(self, alpha='aic', scaling=.5, sample_fraction=.75,
+@@ -330,7 +330,6 @@ def __init__(self, alpha='aic', scaling=.5, sample_fraction=.75,
          self.memory = memory
  
      def _make_estimator_and_params(self, X, y):
@@ -992,51 +847,16 @@ index bef06f59911b..7fe524ca460b 100644
          alpha = self.alpha
          if alpha in ('aic', 'bic'):
              model = LassoLarsIC(precompute=self.precompute,
-@@ -337,9 +338,16 @@ def _make_estimator_and_params(self, X, y):
-                                 eps=self.eps)
-             model.fit(X, y)
-             self.alpha_ = alpha = model.alpha_
-+
-+        precompute = self.precompute
-+        # A precomputed Gram array is useless, since _randomized_lasso
-+        # change X a each iteration
-+        if hasattr(precompute, '__array__'):
-+            precompute = 'auto'
+@@ -345,6 +344,7 @@ def _make_estimator_and_params(self, X, y):
+         # change X a each iteration
+         if hasattr(precompute, '__array__'):
+             precompute = 'auto'
 +        assert precompute in (True, False, None, 'auto')
          return _randomized_lasso, dict(alpha=alpha, max_iter=self.max_iter,
                                         eps=self.eps,
--                                       precompute=self.precompute)
-+                                       precompute=precompute)
- 
- 
- ###############################################################################
-diff --git a/sklearn/linear_model/tests/test_least_angle.py b/sklearn/linear_model/tests/test_least_angle.py
-index 9692edaaa2b2..a8df130c98e5 100644
---- a/sklearn/linear_model/tests/test_least_angle.py
-+++ b/sklearn/linear_model/tests/test_least_angle.py
-@@ -169,6 +169,20 @@ def test_no_path_all_precomputed():
-     assert_true(alpha_ == alphas_[-1])
- 
- 
-+def test_lars_precompute():
-+    # Check for different values of precompute
-+    X, y = diabetes.data, diabetes.target
-+    G = np.dot(X.T, X)
-+    for classifier in [linear_model.Lars, linear_model.LarsCV,
-+                       linear_model.LassoLarsIC]:
-+        clf = classifier(precompute=G)
-+        output_1 = ignore_warnings(clf.fit)(X, y).coef_
-+        for precompute in [True, False, 'auto', None]:
-+            clf = classifier(precompute=precompute)
-+            output_2 = clf.fit(X, y).coef_
-+            assert_array_almost_equal(output_1, output_2, decimal=8)
-+
-+
- def test_singular_matrix():
-     # Test when input is a singular matrix
-     X1 = np.array([[1, 1.], [1., 1.]])
+                                        precompute=precompute)
 diff --git a/sklearn/linear_model/tests/test_logistic.py b/sklearn/linear_model/tests/test_logistic.py
-index ddaab4981dc1..a48ba1a0c554 100644
+index ddaab4981d..a48ba1a0c5 100755
 --- a/sklearn/linear_model/tests/test_logistic.py
 +++ b/sklearn/linear_model/tests/test_logistic.py
 @@ -11,10 +11,12 @@
@@ -1134,68 +954,8 @@ index ddaab4981dc1..a48ba1a0c554 100644
  def test_logistic_regression_convergence_warnings():
      # Test that warnings are raised if model does not converge
  
-diff --git a/sklearn/linear_model/tests/test_randomized_l1.py b/sklearn/linear_model/tests/test_randomized_l1.py
-index 4057ebdfa2ff..8ff09ceec7c8 100644
---- a/sklearn/linear_model/tests/test_randomized_l1.py
-+++ b/sklearn/linear_model/tests/test_randomized_l1.py
-@@ -42,17 +42,18 @@ def test_randomized_lasso():
-     # Check randomized lasso
-     scaling = 0.3
-     selection_threshold = 0.5
-+    n_resampling = 20
- 
-     # or with 1 alpha
-     clf = RandomizedLasso(verbose=False, alpha=1, random_state=42,
--                          scaling=scaling,
-+                          scaling=scaling, n_resampling=n_resampling,
-                           selection_threshold=selection_threshold)
-     feature_scores = clf.fit(X, y).scores_
-     assert_array_equal(np.argsort(F)[-3:], np.argsort(feature_scores)[-3:])
- 
-     # or with many alphas
-     clf = RandomizedLasso(verbose=False, alpha=[1, 0.8], random_state=42,
--                          scaling=scaling,
-+                          scaling=scaling, n_resampling=n_resampling,
-                           selection_threshold=selection_threshold)
-     feature_scores = clf.fit(X, y).scores_
-     assert_equal(clf.all_scores_.shape, (X.shape[1], 2))
-@@ -64,7 +65,7 @@ def test_randomized_lasso():
-     assert_equal(X_full.shape, X.shape)
- 
-     clf = RandomizedLasso(verbose=False, alpha='aic', random_state=42,
--                          scaling=scaling)
-+                          scaling=scaling, n_resampling=n_resampling)
-     feature_scores = clf.fit(X, y).scores_
-     assert_array_equal(feature_scores, X.shape[1] * [1.])
- 
-@@ -75,6 +76,25 @@ def test_randomized_lasso():
-     assert_raises(ValueError, clf.fit, X, y)
- 
- 
-+def test_randomized_lasso_precompute():
-+    # Check randomized lasso for different values of precompute
-+    n_resampling = 20
-+    alpha = 1
-+    random_state = 42
-+
-+    G = np.dot(X.T, X)
-+
-+    clf = RandomizedLasso(alpha=alpha, random_state=random_state,
-+                          precompute=G, n_resampling=n_resampling)
-+    feature_scores_1 = clf.fit(X, y).scores_
-+
-+    for precompute in [True, False, None, 'auto']:
-+        clf = RandomizedLasso(alpha=alpha, random_state=random_state,
-+                              precompute=precompute, n_resampling=n_resampling)
-+        feature_scores_2 = clf.fit(X, y).scores_
-+        assert_array_equal(feature_scores_1, feature_scores_2)
-+
-+
- def test_randomized_logistic():
-     # Check randomized sparse logistic regression
-     iris = load_iris()
 diff --git a/sklearn/preprocessing/imputation.py b/sklearn/preprocessing/imputation.py
-index 0ef23c471bd6..50416e8b0fab 100644
+index 0ef23c471b..50416e8b0f 100755
 --- a/sklearn/preprocessing/imputation.py
 +++ b/sklearn/preprocessing/imputation.py
 @@ -10,10 +10,10 @@
@@ -1240,7 +1000,7 @@ index 0ef23c471bd6..50416e8b0fab 100644
  
          # Delete the invalid rows/columns
 diff --git a/sklearn/svm/base.py b/sklearn/svm/base.py
-index ce0a0f0a3616..4d068eb9c5a5 100644
+index ce0a0f0a36..4d068eb9c5 100755
 --- a/sklearn/svm/base.py
 +++ b/sklearn/svm/base.py
 @@ -10,7 +10,7 @@
@@ -1262,7 +1022,7 @@ index ce0a0f0a3616..4d068eb9c5a5 100644
  
          sample_weight = np.asarray([]
 diff --git a/sklearn/tests/test_common.py b/sklearn/tests/test_common.py
-index 5a28b31b33c2..58cbf4c41ff4 100644
+index 5a28b31b33..58cbf4c41f 100755
 --- a/sklearn/tests/test_common.py
 +++ b/sklearn/tests/test_common.py
 @@ -113,12 +113,6 @@ def test_class_weight_balanced_linear_classifiers():
@@ -1279,7 +1039,7 @@ index 5a28b31b33c2..58cbf4c41ff4 100644
  
  
 diff --git a/sklearn/tree/_tree.c b/sklearn/tree/_tree.c
-index c0a2afa2c4a6..dbc873e3f4ec 100644
+index c0a2afa2c4..dbc873e3f4 100755
 --- a/sklearn/tree/_tree.c
 +++ b/sklearn/tree/_tree.c
 @@ -513,7 +513,7 @@ typedef struct {
@@ -6787,7 +6547,7 @@ index c0a2afa2c4a6..dbc873e3f4ec 100644
   * 
   * cdef inline object get_array_base(ndarray arr):             # <<<<<<<<<<<<<<
 diff --git a/sklearn/tree/_tree.pxd b/sklearn/tree/_tree.pxd
-index 0390e3f5b465..6b34e51a07c8 100644
+index 0390e3f5b4..6b34e51a07 100755
 --- a/sklearn/tree/_tree.pxd
 +++ b/sklearn/tree/_tree.pxd
 @@ -65,10 +65,15 @@ cdef class Tree:
@@ -6815,7 +6575,7 @@ index 0390e3f5b465..6b34e51a07c8 100644
                  np.ndarray X_idx_sorted=*)
      cdef _check_input(self, object X, np.ndarray y, np.ndarray sample_weight)
 diff --git a/sklearn/tree/_tree.pyx b/sklearn/tree/_tree.pyx
-index 12b9262ee7e6..56785b1524d2 100644
+index 12b9262ee7..56785b1524 100755
 --- a/sklearn/tree/_tree.pyx
 +++ b/sklearn/tree/_tree.pyx
 @@ -139,7 +139,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
@@ -7027,7 +6787,7 @@ index 12b9262ee7e6..56785b1524d2 100644
 \ No newline at end of file
 +        return arr
 diff --git a/sklearn/tree/tests/test_tree.py b/sklearn/tree/tests/test_tree.py
-index fa44be7a46c5..acadaf6cadf5 100644
+index fa44be7a46..acadaf6cad 100755
 --- a/sklearn/tree/tests/test_tree.py
 +++ b/sklearn/tree/tests/test_tree.py
 @@ -25,6 +25,7 @@
@@ -7109,7 +6869,7 @@ index fa44be7a46c5..acadaf6cadf5 100644
 +    for name in ALL_TREES:
 +        yield (check_decision_path, name)
 diff --git a/sklearn/tree/tree.py b/sklearn/tree/tree.py
-index 23c1bacd9cd0..028d2626bc23 100644
+index 23c1bacd9c..028d2626bc 100755
 --- a/sklearn/tree/tree.py
 +++ b/sklearn/tree/tree.py
 @@ -28,7 +28,7 @@
@@ -7194,7 +6954,7 @@ index 23c1bacd9cd0..028d2626bc23 100644
      def feature_importances_(self):
          """Return the feature importances.
 diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
-index 4e396db755d3..9b4e1ba78246 100644
+index 4e396db755..9b4e1ba782 100755
 --- a/sklearn/utils/estimator_checks.py
 +++ b/sklearn/utils/estimator_checks.py
 @@ -131,6 +131,26 @@ def _yield_classifier_checks(name, Classifier):
@@ -7287,7 +7047,7 @@ index 4e396db755d3..9b4e1ba78246 100644
      set_random_state(estimator, 0)
      if name == 'AffinityPropagation':
 diff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py
-index e71a2e5f1241..fddae700b02c 100644
+index e71a2e5f12..fddae700b0 100755
 --- a/sklearn/utils/extmath.py
 +++ b/sklearn/utils/extmath.py
 @@ -195,11 +195,14 @@ def randomized_range_finder(A, size, n_iter=2,
@@ -7344,7 +7104,7 @@ index e71a2e5f1241..fddae700b02c 100644
          The output of a singular value decomposition is only unique up to a
          permutation of the signs of the singular vectors. If `flip_sign` is
 diff --git a/sklearn/utils/tests/test_estimator_checks.py b/sklearn/utils/tests/test_estimator_checks.py
-index 47c71759a859..be4a3c4f5b5d 100644
+index 47c71759a8..be4a3c4f5b 100755
 --- a/sklearn/utils/tests/test_estimator_checks.py
 +++ b/sklearn/utils/tests/test_estimator_checks.py
 @@ -8,6 +8,7 @@

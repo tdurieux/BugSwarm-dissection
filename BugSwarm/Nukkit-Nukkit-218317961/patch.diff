@@ -1,5 +1,5 @@
 diff --git a/pom.xml b/pom.xml
-index b53361af86..1658aba71c 100644
+index b53361af86..8a49cd30c3 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -55,11 +55,6 @@
@@ -14,15 +14,8 @@ index b53361af86..1658aba71c 100644
      </dependencies>
  
      <build>
-@@ -129,4 +124,4 @@
-         </plugins>
-     </build>
- 
--</project>
-\ No newline at end of file
-+</project>
 diff --git a/src/main/java/cn/nukkit/Player.java b/src/main/java/cn/nukkit/Player.java
-index cb1dc63416..24abc8995a 100644
+index cb1dc63416..24abc8995a 100755
 --- a/src/main/java/cn/nukkit/Player.java
 +++ b/src/main/java/cn/nukkit/Player.java
 @@ -3006,24 +3006,10 @@ public void handleDataPacket(DataPacket packet) {
@@ -54,66 +47,30 @@ index cb1dc63416..24abc8995a 100644
                                  }
                              }
                          }
-diff --git a/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java b/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
-index e1979f6ec3..89c5cf4c0d 100644
---- a/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
-+++ b/src/main/java/cn/nukkit/network/protocol/ProtocolInfo.java
-@@ -9,9 +9,9 @@
-     /**
-      * Actual Minecraft: PE protocol version
-      */
--    byte CURRENT_PROTOCOL = 105;
--    String MINECRAFT_VERSION = "v1.0.5";
--    String MINECRAFT_VERSION_NETWORK = "1.0.5";
-+    byte CURRENT_PROTOCOL = 106;
-+    String MINECRAFT_VERSION = "v1.0.6";
-+    String MINECRAFT_VERSION_NETWORK = "1.0.6";
- 
-     byte LOGIN_PACKET = 0x01;
-     byte PLAY_STATUS_PACKET = 0x02;
-diff --git a/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java b/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
-index 56a693e190..e44610d131 100644
---- a/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
-+++ b/src/main/java/cn/nukkit/network/protocol/ResourcePacksInfoPacket.java
-@@ -25,6 +25,7 @@ public void encode() {
-             this.putString(entry.getPackId());
-             this.putString(entry.getPackVersion());
-             this.putLLong(entry.getPackSize());
-+            this.putString(""); //unknown
-         }
- 
-         this.putLShort(this.resourcePackEntries.length);
-@@ -32,6 +33,7 @@ public void encode() {
-             this.putString(entry.getPackId());
-             this.putString(entry.getPackVersion());
-             this.putLLong(entry.getPackSize());
-+            this.putString(""); //unknown
-         }
+diff --git a/src/main/java/cn/nukkit/command/defaults/TimeCommand.java b/src/main/java/cn/nukkit/command/defaults/TimeCommand.java
+index 812a7e0194..026e0840f3 100755
+--- a/src/main/java/cn/nukkit/command/defaults/TimeCommand.java
++++ b/src/main/java/cn/nukkit/command/defaults/TimeCommand.java
+@@ -28,10 +28,6 @@ public TimeCommand(String name) {
+                 new CommandParameter("add|set", CommandParameter.ARG_TYPE_STRING, false),
+                 new CommandParameter("value", CommandParameter.ARG_TYPE_INT, false)
+         });
+-        this.commandParameters.put("2args_", new CommandParameter[]{
+-                new CommandParameter("add|set", CommandParameter.ARG_TYPE_STRING, false),
+-                new CommandParameter("value", CommandParameter.ARG_TYPE_STRING, false)
+-        });
      }
- 
-diff --git a/src/main/java/cn/nukkit/scheduler/ServerScheduler.java b/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
-index 3bf64e07ce..0ad34daaed 100644
---- a/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
-+++ b/src/main/java/cn/nukkit/scheduler/ServerScheduler.java
-@@ -236,7 +236,7 @@ public boolean isQueued(int taskId) {
-     }
- 
-     private TaskHandler addTask(Task task, int delay, int period, boolean asynchronous) {
--        return addTask(task instanceof PluginTask ? ((PluginTask) task).getOwner() : null, () -> task.onRun(currentTick + delay), delay, period, asynchronous);
-+        return addTask(task instanceof PluginTask ? ((PluginTask) task).getOwner() : null, task, delay, period, asynchronous);
-     }
- 
-     private TaskHandler addTask(Plugin plugin, Runnable task, int delay, int period, boolean asynchronous) {
-diff --git a/src/main/java/cn/nukkit/scheduler/Task.java b/src/main/java/cn/nukkit/scheduler/Task.java
-index f8f86e4887..0e88945df6 100644
---- a/src/main/java/cn/nukkit/scheduler/Task.java
-+++ b/src/main/java/cn/nukkit/scheduler/Task.java
-@@ -48,7 +48,7 @@ public final void setHandler(TaskHandler taskHandler) {
  
      @Override
-     public final void run() {
--
-+        this.onRun(taskHandler.getLastRunTick());
-     }
+diff --git a/src/main/java/cn/nukkit/level/Level.java b/src/main/java/cn/nukkit/level/Level.java
+index 1853a9752c..3e9cc535ef 100755
+--- a/src/main/java/cn/nukkit/level/Level.java
++++ b/src/main/java/cn/nukkit/level/Level.java
+@@ -729,7 +729,6 @@ public void doTick(int currentTick) {
  
-     public void onCancel() {
+                         EntityLightning bolt = new EntityLightning(chunk, nbt);
+                         LightningStrikeEvent ev = new LightningStrikeEvent(this, bolt);
+-                        getServer().getPluginManager().callEvent(ev);
+                         if (!ev.isCancelled()) {
+                             bolt.spawnToAll();
+                         } else {

@@ -1,5 +1,5 @@
 diff --git a/okhttp-logging-interceptor/src/main/java/okhttp3/logging/HttpLoggingInterceptor.java b/okhttp-logging-interceptor/src/main/java/okhttp3/logging/HttpLoggingInterceptor.java
-index c5217b16c..173d88caf 100644
+index c5217b16c9..173d88caff 100755
 --- a/okhttp-logging-interceptor/src/main/java/okhttp3/logging/HttpLoggingInterceptor.java
 +++ b/okhttp-logging-interceptor/src/main/java/okhttp3/logging/HttpLoggingInterceptor.java
 @@ -18,7 +18,6 @@
@@ -28,7 +28,7 @@ index c5217b16c..173d88caf 100644
  
          if (!isPlaintext(buffer)) {
 diff --git a/okhttp-logging-interceptor/src/test/java/okhttp3/logging/HttpLoggingInterceptorTest.java b/okhttp-logging-interceptor/src/test/java/okhttp3/logging/HttpLoggingInterceptorTest.java
-index caa6cd72b..c631899fb 100644
+index caa6cd72bd..c631899fb3 100755
 --- a/okhttp-logging-interceptor/src/test/java/okhttp3/logging/HttpLoggingInterceptorTest.java
 +++ b/okhttp-logging-interceptor/src/test/java/okhttp3/logging/HttpLoggingInterceptorTest.java
 @@ -563,7 +563,7 @@ private void bodyGetNoBody(int code) throws IOException {
@@ -62,125 +62,3 @@ index caa6cd72b..c631899fb 100644
          .assertNoMoreLogs();
    }
  
-diff --git a/okhttp-tests/src/test/java/okhttp3/MediaTypeTest.java b/okhttp-tests/src/test/java/okhttp3/MediaTypeTest.java
-index 5e4a14f48..b2d3f396f 100644
---- a/okhttp-tests/src/test/java/okhttp3/MediaTypeTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/MediaTypeTest.java
-@@ -17,15 +17,12 @@
- package okhttp3;
- 
- import java.nio.charset.Charset;
--import java.nio.charset.IllegalCharsetNameException;
--import java.nio.charset.UnsupportedCharsetException;
- import okhttp3.internal.Util;
- import org.junit.Test;
- 
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.assertNull;
- import static org.junit.Assert.assertTrue;
--import static org.junit.Assert.fail;
- 
- /**
-  * Test MediaType API and parsing.
-@@ -123,29 +120,17 @@
-   }
- 
-   @Test public void testMultipleCharsets() {
--    try {
--      MediaType.parse("text/plain; charset=utf-8; charset=utf-16");
--      fail();
--    } catch (IllegalArgumentException expected) {
--    }
-+    assertNull(MediaType.parse("text/plain; charset=utf-8; charset=utf-16"));
-   }
- 
-   @Test public void testIllegalCharsetName() {
-     MediaType mediaType = MediaType.parse("text/plain; charset=\"!@#$%^&*()\"");
--    try {
--      mediaType.charset();
--      fail();
--    } catch (IllegalCharsetNameException expected) {
--    }
-+    assertNull(mediaType.charset());
-   }
- 
-   @Test public void testUnsupportedCharset() {
-     MediaType mediaType = MediaType.parse("text/plain; charset=utf-wtf");
--    try {
--      mediaType.charset();
--      fail();
--    } catch (UnsupportedCharsetException expected) {
--    }
-+    assertNull(mediaType.charset());
-   }
- 
-   /**
-@@ -159,20 +144,12 @@
- 
-   @Test public void testCharsetNameIsDoubleQuotedAndSingleQuoted() throws Exception {
-     MediaType mediaType = MediaType.parse("text/plain;charset=\"'utf-8'\"");
--    try {
--      mediaType.charset();
--      fail();
--    } catch (IllegalCharsetNameException expected) {
--    }
-+    assertNull(mediaType.charset());
-   }
- 
-   @Test public void testCharsetNameIsDoubleQuotedSingleQuote() throws Exception {
-     MediaType mediaType = MediaType.parse("text/plain;charset=\"'\"");
--    try {
--      mediaType.charset();
--      fail();
--    } catch (IllegalCharsetNameException expected) {
--    }
-+    assertNull(mediaType.charset());
-   }
- 
-   @Test public void testDefaultCharset() throws Exception {
-@@ -189,7 +166,7 @@
-     MediaType mediaType = MediaType.parse("text/plain;");
-     assertEquals("text", mediaType.type());
-     assertEquals("plain", mediaType.subtype());
--    assertEquals(null, mediaType.charset());
-+    assertNull(mediaType.charset());
-     assertEquals("text/plain;", mediaType.toString());
-   }
- 
-diff --git a/okhttp/src/main/java/okhttp3/MediaType.java b/okhttp/src/main/java/okhttp3/MediaType.java
-index 77b943e58..d171f06c1 100644
---- a/okhttp/src/main/java/okhttp3/MediaType.java
-+++ b/okhttp/src/main/java/okhttp3/MediaType.java
-@@ -73,7 +73,7 @@ public static MediaType parse(String string) {
-         charsetParameter = parameter.group(3);
-       }
-       if (charset != null && !charsetParameter.equalsIgnoreCase(charset)) {
--        throw new IllegalArgumentException("Multiple different charsets: " + string);
-+        return null; // Multiple different charsets!
-       }
-       charset = charsetParameter;
-     }
-@@ -100,15 +100,19 @@ public String subtype() {
-    * Returns the charset of this media type, or null if this media type doesn't specify a charset.
-    */
-   public Charset charset() {
--    return charset != null ? Charset.forName(charset) : null;
-+    return charset(null);
-   }
- 
-   /**
--   * Returns the charset of this media type, or {@code defaultValue} if this media type doesn't
--   * specify a charset.
-+   * Returns the charset of this media type, or {@code defaultValue} if either this media type
-+   * doesn't specify a charset, of it its charset is unsupported by the current runtime.
-    */
-   public Charset charset(Charset defaultValue) {
--    return charset != null ? Charset.forName(charset) : defaultValue;
-+    try {
-+      return charset != null ? Charset.forName(charset) : defaultValue;
-+    } catch (IllegalArgumentException e) {
-+      return defaultValue; // This charset is invalid or unsupported. Give up.
-+    }
-   }
- 
-   /**

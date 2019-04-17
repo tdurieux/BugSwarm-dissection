@@ -1,5 +1,5 @@
 diff --git a/doc/release/1.11.0-notes.rst b/doc/release/1.11.0-notes.rst
-index 6de10b5539c..1e5f93db4cf 100644
+index 6de10b5539..1e5f93db4c 100755
 --- a/doc/release/1.11.0-notes.rst
 +++ b/doc/release/1.11.0-notes.rst
 @@ -130,6 +130,10 @@ useless computations when printing a masked array.
@@ -14,7 +14,7 @@ index 6de10b5539c..1e5f93db4cf 100644
  =======
  
 diff --git a/numpy/core/src/multiarray/iterators.c b/numpy/core/src/multiarray/iterators.c
-index 829994b1e51..702f9e21ac4 100644
+index 829994b1e5..702f9e21ac 100755
 --- a/numpy/core/src/multiarray/iterators.c
 +++ b/numpy/core/src/multiarray/iterators.c
 @@ -1458,8 +1458,8 @@ PyArray_MultiIterFromObjects(PyObject **mps, int n, int nadd, ...)
@@ -49,107 +49,58 @@ index 829994b1e51..702f9e21ac4 100644
          return NULL;
      }
 diff --git a/numpy/random/mtrand/mtrand.pyx b/numpy/random/mtrand/mtrand.pyx
-index 489cc9e6e24..cec41377a54 100644
+index 16a1674876..cec41377a5 100755
 --- a/numpy/random/mtrand/mtrand.pyx
 +++ b/numpy/random/mtrand/mtrand.pyx
-@@ -24,6 +24,8 @@
- include "Python.pxi"
- include "numpy.pxd"
- 
-+from libc cimport string
-+
- cdef extern from "math.h":
-     double exp(double x)
-     double log(double x)
-@@ -4971,33 +4973,42 @@ cdef class RandomState:
-                [0, 1, 2]])
- 
-         """
--        cdef npy_intp i, j
--
--        i = len(x) - 1
--
--        # Logic adapted from random.shuffle()
--        if isinstance(x, np.ndarray) and \
--           (x.ndim > 1 or x.dtype.fields is not None):
--            # For a multi-dimensional ndarray, indexing returns a view onto
--            # each row. So we can't just use ordinary assignment to swap the
--            # rows; we need a bounce buffer.
-+        cdef:
-+            npy_intp i, j, n = len(x)
-+            size_t stride, nbytes
-+            char* x_ptr
+@@ -4977,24 +4977,34 @@ cdef class RandomState:
+             npy_intp i, j, n = len(x)
+             size_t stride, nbytes
+             char* x_ptr
+-            char* buf
 +            char* buf_ptr
-+
+ 
+-        # Fast, statically typed path: shuffle the underlying buffer.
+-        # We exclude subclasses as this approach fails e.g. with MaskedArrays.
+-        if type(x) is np.ndarray and x.size:  # Special-case empty arrays.
 +        if type(x) is np.ndarray and x.ndim == 1 and x.size:
 +            # Fast, statically typed path: shuffle the underlying buffer.
 +            # Only for non-empty, 1d objects of class ndarray (subclasses such
 +            # as MaskedArrays may not support this approach).
-+            x_ptr = NULL + <size_t>x.ctypes.data  # Fool cython's type-checker.
-+            stride = x.strides[0]
-+            nbytes = x[:1].nbytes
+             x_ptr = NULL + <size_t>x.ctypes.data  # Fool cython's type-checker.
+             stride = x.strides[0]
+             nbytes = x[:1].nbytes
+-            _buf = np.empty_like(x[0])  # GC'd at function exit
+-            buf = NULL + <size_t>_buf.ctypes.data
 +            buf = np.empty_like(x[0])  # GC'd at function exit
 +            buf_ptr = NULL + <size_t>buf.ctypes.data
-+            with self.lock:
-+                for i in reversed(range(1, n)):
-+                    j = rk_interval(i, self.internal_state)
+             with self.lock:
+                 for i in reversed(range(1, n)):
+                     j = rk_interval(i, self.internal_state)
+-                    string.memcpy(buf, x_ptr + j * stride, nbytes)
 +                    string.memcpy(buf_ptr, x_ptr + j * stride, nbytes)
-+                    string.memcpy(x_ptr + j * stride, x_ptr + i * stride, nbytes)
+                     string.memcpy(x_ptr + j * stride, x_ptr + i * stride, nbytes)
+-                    string.memcpy(x_ptr + i * stride, buf, nbytes)
+-        # Untyped path.
 +                    string.memcpy(x_ptr + i * stride, buf_ptr, nbytes)
 +        elif isinstance(x, np.ndarray) and x.ndim > 1 and x.size:
 +            # Multidimensional ndarrays require a bounce buffer.
-             buf = np.empty_like(x[0])
-             with self.lock:
--                while i > 0:
++            buf = np.empty_like(x[0])
++            with self.lock:
 +                for i in reversed(range(1, n)):
-                     j = rk_interval(i, self.internal_state)
-                     buf[...] = x[j]
-                     x[j] = x[i]
-                     x[i] = buf
--                    i = i - 1
++                    j = rk_interval(i, self.internal_state)
++                    buf[...] = x[j]
++                    x[j] = x[i]
++                    x[i] = buf
          else:
--            # For single-dimensional arrays, lists, and any other Python
--            # sequence types, indexing returns a real object that's
--            # independent of the array contents, so we can just swap directly.
 +            # Untyped path.
              with self.lock:
--                while i > 0:
-+                for i in reversed(range(1, n)):
+                 for i in reversed(range(1, n)):
                      j = rk_interval(i, self.internal_state)
-                     x[i], x[j] = x[j], x[i]
--                    i = i - 1
- 
-     def permutation(self, object x):
-         """
 diff --git a/numpy/random/tests/test_random.py b/numpy/random/tests/test_random.py
-index a6783fe8f47..fe945075649 100644
+index 7604eeb7c4..fe94507564 100755
 --- a/numpy/random/tests/test_random.py
 +++ b/numpy/random/tests/test_random.py
-@@ -8,6 +8,7 @@
- from numpy.compat import asbytes
- import sys
- 
-+
- class TestSeed(TestCase):
-     def test_scalar(self):
-         s = np.random.RandomState(0)
-@@ -38,6 +39,7 @@ def test_invalid_array(self):
-         assert_raises(ValueError, np.random.RandomState, [1, 2, 4294967296])
-         assert_raises(ValueError, np.random.RandomState, [1, -2, 4294967296])
- 
-+
- class TestBinomial(TestCase):
-     def test_n_zero(self):
-         # Tests the corner case of n == 0 for the binomial distribution.
-@@ -128,6 +130,7 @@ def test_negative_binomial(self):
-         # arguments without truncation.
-         self.prng.negative_binomial(0.5, 0.5)
- 
-+
- class TestRandint(TestCase):
- 
-     rfunc = np.random.randint
-@@ -205,12 +208,13 @@ def test_repeatability(self):
+@@ -208,12 +208,13 @@ def test_repeatability(self):
          assert_(tgt[np.dtype(np.bool).name] == res)
  
  
@@ -166,65 +117,33 @@ index a6783fe8f47..fe945075649 100644
  
      def test_rand(self):
          np.random.seed(self.seed)
-@@ -352,40 +356,41 @@ def test_bytes(self):
-         np.testing.assert_equal(actual, desired)
+@@ -356,15 +357,16 @@ def test_bytes(self):
  
      def test_shuffle(self):
--        # Test lists, arrays, and multidimensional versions of both:
+         # Test lists, arrays (of various dtypes), and multidimensional versions
+-        # of both:
+-        np.random.shuffle(np.array([]))
 -        for conv in [lambda x: x,
--                     np.asarray,
-+        # Test lists, arrays (of various dtypes), and multidimensional versions
 +        # of both, c-contiguous or not:
 +        for conv in [lambda x: np.array([]),
 +                     lambda x: x,
-+                     lambda x: np.asarray(x).astype(np.int8),
-+                     lambda x: np.asarray(x).astype(np.float32),
-+                     lambda x: np.asarray(x).astype(np.complex64),
-+                     lambda x: np.asarray(x).astype(object),
+                      lambda x: np.asarray(x).astype(np.int8),
+                      lambda x: np.asarray(x).astype(np.float32),
+                      lambda x: np.asarray(x).astype(np.complex64),
+                      lambda x: np.asarray(x).astype(object),
                       lambda x: [(i, i) for i in x],
--                     lambda x: np.asarray([(i, i) for i in x])]:
+-                     lambda x: np.asarray([(i, i) for i in x]),
 +                     lambda x: np.asarray([[i, i] for i in x]),
 +                     lambda x: np.vstack([x, x]).T,
-+                     # gh-4270
-+                     lambda x: np.asarray([(i, i) for i in x],
-+                                          [("a", object, 1),
-+                                           ("b", np.int32, 1)])]:
-             np.random.seed(self.seed)
-             alist = conv([1, 2, 3, 4, 5, 6, 7, 8, 9, 0])
+                      # gh-4270
+                      lambda x: np.asarray([(i, i) for i in x],
+                                           [("a", object, 1),
+@@ -374,7 +376,7 @@ def test_shuffle(self):
              np.random.shuffle(alist)
              actual = alist
              desired = conv([0, 1, 9, 6, 2, 4, 5, 8, 7, 3])
 -            np.testing.assert_array_equal(actual, desired)
--
--    def test_shuffle_flexible(self):
--        # gh-4270
--        arr = [(0, 1), (2, 3)]
--        dt = np.dtype([('a', np.int32, 1), ('b', np.int32, 1)])
--        nparr = np.array(arr, dtype=dt)
--        a, b = nparr[0].copy(), nparr[1].copy()
--        for i in range(50):
--            np.random.shuffle(nparr)
--            assert_(a in nparr)
--            assert_(b in nparr)
 +            yield np.testing.assert_array_equal, actual, desired
  
      def test_shuffle_masked(self):
          # gh-3263
-         a = np.ma.masked_values(np.reshape(range(20), (5,4)) % 3 - 1, -1)
-         b = np.ma.masked_values(np.arange(20) % 3 - 1, -1)
--        ma = np.ma.count_masked(a)
--        mb = np.ma.count_masked(b)
-+        a_orig = a.copy()
-+        b_orig = b.copy()
-         for i in range(50):
-             np.random.shuffle(a)
--            self.assertEqual(ma, np.ma.count_masked(a))
-+            assert_equal(
-+                sorted(a.data[~a.mask]), sorted(a_orig.data[~a_orig.mask]))
-             np.random.shuffle(b)
--            self.assertEqual(mb, np.ma.count_masked(b))
-+            assert_equal(
-+                sorted(b.data[~b.mask]), sorted(b_orig.data[~b_orig.mask]))
- 
-     def test_beta(self):
-         np.random.seed(self.seed)

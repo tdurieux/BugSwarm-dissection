@@ -1,139 +1,8 @@
-diff --git a/php-frontend/src/main/java/org/sonar/php/metrics/CounterVisitor.java b/php-frontend/src/main/java/org/sonar/php/metrics/CounterVisitor.java
-index 86e887ff4..c5d2a37f6 100644
---- a/php-frontend/src/main/java/org/sonar/php/metrics/CounterVisitor.java
-+++ b/php-frontend/src/main/java/org/sonar/php/metrics/CounterVisitor.java
-@@ -19,24 +19,85 @@
-  */
- package org.sonar.php.metrics;
- 
--import org.sonar.plugins.php.api.tree.CompilationUnitTree;
-+import org.sonar.plugins.php.api.tree.Tree;
-+import org.sonar.plugins.php.api.tree.Tree.Kind;
-+import org.sonar.plugins.php.api.visitors.PHPSubscriptionCheck;
- 
--public class CounterVisitor {
-+import java.util.ArrayList;
-+import java.util.Arrays;
-+import java.util.List;
- 
-+public class CounterVisitor extends PHPSubscriptionCheck {
- 
--  public CounterVisitor(CompilationUnitTree tree) {
-+  private int functionCounter = 0;
-+  private int statementCounter = 0;
-+  private int classCounter = 0;
- 
-+  private static final Kind[] STATEMENT_NODES = {
-+    Kind.USE_STATEMENT,
-+    Kind.NAMESPACE_STATEMENT,
-+    Kind.CONSTANT_DECLARATION,
-+    Kind.IF_STATEMENT,
-+    Kind.ALTERNATIVE_IF_STATEMENT,
-+    Kind.FOR_STATEMENT,
-+    Kind.FOREACH_STATEMENT,
-+    Kind.WHILE_STATEMENT,
-+    Kind.DO_WHILE_STATEMENT,
-+    Kind.SWITCH_STATEMENT,
-+    Kind.BREAK_STATEMENT,
-+    Kind.CONTINUE_STATEMENT,
-+    Kind.RETURN_STATEMENT,
-+    Kind.THROW_STATEMENT,
-+    Kind.TRY_STATEMENT,
-+    Kind.EMPTY_STATEMENT,
-+    Kind.EXPRESSION_STATEMENT,
-+    Kind.UNSET_VARIABLE_STATEMENT,
-+    Kind.LABEL,
-+    Kind.GOTO_STATEMENT,
-+    Kind.DECLARE_STATEMENT,
-+    Kind.STATIC_STATEMENT,
-+    Kind.YIELD_STATEMENT,
-+    Kind.GLOBAL_STATEMENT,
-+    Kind.CLASS_CONSTANT_PROPERTY_DECLARATION,
-+    Kind.CLASS_PROPERTY_DECLARATION,
-+    Kind.USE_TRAIT_DECLARATION
-+  };
-+
-+  public CounterVisitor(Tree tree) {
-+    scanTree(tree);
-   }
- 
--  public int getClassNumber() {
--    return 0;
-+  @Override
-+  public List<Kind> nodesToVisit() {
-+    List<Kind> result = new ArrayList<>(Arrays.asList(MetricsVisitor.FUNCTION_NODES));
-+    result.addAll(Arrays.asList(STATEMENT_NODES));
-+    result.addAll(Arrays.asList(MetricsVisitor.CLASS_NODES));
-+    return result;
-+  }
-+
-+  @Override
-+  public void visitNode(Tree tree) {
-+    if (tree.is(MetricsVisitor.FUNCTION_NODES)) {
-+      functionCounter++;
-+
-+    } else if (tree.is(STATEMENT_NODES)) {
-+      statementCounter++;
-+
-+    } else if (tree.is(MetricsVisitor.CLASS_NODES)) {
-+      classCounter++;
-+    }
-   }
- 
-   public int getFunctionNumber() {
--    return 0;
-+    return functionCounter;
-   }
- 
-   public int getStatementNumber() {
--    return 0;
-+    return statementCounter;
-   }
-+
-+  public int getClassNumber() {
-+    return classCounter;
-+  }
-+
- }
-diff --git a/php-frontend/src/main/java/org/sonar/php/metrics/MetricsVisitor.java b/php-frontend/src/main/java/org/sonar/php/metrics/MetricsVisitor.java
-index 5f843c863..965797032 100644
---- a/php-frontend/src/main/java/org/sonar/php/metrics/MetricsVisitor.java
-+++ b/php-frontend/src/main/java/org/sonar/php/metrics/MetricsVisitor.java
-@@ -37,19 +37,26 @@
-   private static final Number[] LIMITS_COMPLEXITY_FUNCTIONS = {1, 2, 4, 6, 8, 10, 12, 20, 30};
-   private static final Number[] FILES_DISTRIBUTION_BOTTOM_LIMITS = {0, 5, 10, 20, 30, 60, 90};
- 
--  private static final Kind[] FUNCTION_NODES = {
-+  public static final Kind[] FUNCTION_NODES = {
-     Kind.FUNCTION_DECLARATION,
-     Kind.FUNCTION_EXPRESSION,
-     Kind.METHOD_DECLARATION,
-   };
- 
-+  public static final Kind[] CLASS_NODES = {
-+    Kind.CLASS_DECLARATION,
-+    Kind.INTERFACE_DECLARATION,
-+    Kind.TRAIT_DECLARATION
-+  };
-+
-+
-   private FileMeasures fileMeasures;
-   private FileLinesContext fileLinesContext;
- 
-   @Override
-   public List<Kind> nodesToVisit() {
-     List<Kind> result = new ArrayList<>(Arrays.asList(FUNCTION_NODES));
--    result.add(Kind.CLASS_DECLARATION);
-+    result.addAll(Arrays.asList(CLASS_NODES));
-     result.add(Kind.COMPILATION_UNIT);
-     return result;
-   }
 diff --git a/php-frontend/src/test/java/org/sonar/php/metrics/CounterVisitorTest.java b/php-frontend/src/test/java/org/sonar/php/metrics/CounterVisitorTest.java
-new file mode 100644
-index 000000000..4ac43d7fe
---- /dev/null
+index 992cb508f3..4ac43d7feb 100755
+--- a/php-frontend/src/test/java/org/sonar/php/metrics/CounterVisitorTest.java
 +++ b/php-frontend/src/test/java/org/sonar/php/metrics/CounterVisitorTest.java
-@@ -0,0 +1,47 @@
+@@ -1,3 +1,22 @@
 +/*
 + * SonarQube PHP Plugin
 + * Copyright (C) 2010 SonarSource and Akram Ben Aissi
@@ -153,132 +22,38 @@ index 000000000..4ac43d7fe
 + * License along with this program; if not, write to the Free Software
 + * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
 + */
-+package org.sonar.php.metrics;
-+
-+import org.junit.Test;
-+
-+import static org.fest.assertions.Assertions.assertThat;
-+
-+
-+public class CounterVisitorTest extends MetricTest {
-+
-+  @Test
-+  public void test_class() throws Exception {
-+    CounterVisitor counterVisitor = new CounterVisitor(parse("classes.php"));
-+    assertThat(counterVisitor.getClassNumber()).isEqualTo(4);
-+  }
-+
-+  @Test
-+  public void test_statements() throws Exception {
-+    CounterVisitor counterVisitor = new CounterVisitor(parse("statements.php"));
-+    assertThat(counterVisitor.getStatementNumber()).isEqualTo(29);
-+  }
-+
-+  @Test
-+  public void test_functions() throws Exception {
-+    CounterVisitor counterVisitor = new CounterVisitor(parse("functions.php"));
-+    assertThat(counterVisitor.getFunctionNumber()).isEqualTo(4);
-+  }
-+
-+}
-diff --git a/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java b/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java
-new file mode 100644
-index 000000000..713a6081f
---- /dev/null
-+++ b/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java
-@@ -0,0 +1,41 @@
-+/*
-+ * SonarQube PHP Plugin
-+ * Copyright (C) 2010 SonarSource and Akram Ben Aissi
-+ * sonarqube@googlegroups.com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public
-+ * License along with this program; if not, write to the Free Software
-+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
-+ */
-+package org.sonar.php.metrics;
-+
-+import com.google.common.base.Charsets;
-+import com.sonar.sslr.api.typed.ActionParser;
-+import org.sonar.php.parser.PHPLexicalGrammar;
-+import org.sonar.php.parser.PHPParserBuilder;
-+import org.sonar.plugins.php.api.tree.CompilationUnitTree;
-+import org.sonar.plugins.php.api.tree.Tree;
-+
-+import java.io.File;
-+
-+public class MetricTest {
-+
-+  protected ActionParser<Tree> p = PHPParserBuilder.createParser(PHPLexicalGrammar.COMPILATION_UNIT, Charsets.UTF_8);
-+
-+  protected CompilationUnitTree parse(String filename) {
-+    File file = new File("src/test/resources/metrics/", filename);
-+
-+    ActionParser<Tree> parser = PHPParserBuilder.createParser(Charsets.UTF_8);
-+    return (CompilationUnitTree) parser.parse(file);
-+  }
-+}
-diff --git a/php-frontend/src/test/java/org/sonar/php/metrics/MetricsVisitorTest.java b/php-frontend/src/test/java/org/sonar/php/metrics/MetricsVisitorTest.java
-index 19f872884..c340b2b19 100644
---- a/php-frontend/src/test/java/org/sonar/php/metrics/MetricsVisitorTest.java
-+++ b/php-frontend/src/test/java/org/sonar/php/metrics/MetricsVisitorTest.java
-@@ -19,38 +19,31 @@
-  */
  package org.sonar.php.metrics;
  
--import com.google.common.base.Charsets;
--import com.sonar.sslr.api.typed.ActionParser;
  import org.junit.Test;
- import org.sonar.api.measures.FileLinesContext;
--import org.sonar.php.parser.PHPParserBuilder;
--import org.sonar.plugins.php.api.tree.CompilationUnitTree;
--import org.sonar.plugins.php.api.tree.Tree;
+diff --git a/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java b/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java
+index 3b03591cb8..713a6081f1 100755
+--- a/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java
++++ b/php-frontend/src/test/java/org/sonar/php/metrics/MetricTest.java
+@@ -1,3 +1,22 @@
++/*
++ * SonarQube PHP Plugin
++ * Copyright (C) 2010 SonarSource and Akram Ben Aissi
++ * sonarqube@googlegroups.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
++ */
+ package org.sonar.php.metrics;
  
- import java.io.File;
- 
- import static org.fest.assertions.Assertions.assertThat;
- import static org.mockito.Mockito.mock;
- 
--public class MetricsVisitorTest {
-+public class MetricsVisitorTest extends MetricTest {
- 
-   @Test
-   public void test() {
--    String relativePath = "src/test/resources/metrics/lines_of_code.php";
--    File file = new File(relativePath);
-+    String filename = "lines_of_code.php";
-+    File file = new File(filename);
- 
-     FileLinesContext linesContext = mock(FileLinesContext.class);
- 
-     MetricsVisitor metricsVisitor = new MetricsVisitor();
- 
--    ActionParser<Tree> parser = PHPParserBuilder.createParser(Charsets.UTF_8);
--    Tree tree = parser.parse(file);
--    FileMeasures fileMeasures = metricsVisitor.getFileMeasures(file, (CompilationUnitTree) tree, linesContext);
-+    FileMeasures fileMeasures = metricsVisitor.getFileMeasures(file, parse(filename), linesContext);
- 
-     // fixme : finish this test
-     assertThat(fileMeasures.getFileComplexity()).isEqualTo(1.0);
--    assertThat(fileMeasures.getFunctionNumber()).isEqualTo(0.0);
-+    assertThat(fileMeasures.getFunctionNumber()).isEqualTo(1.0);
-     assertThat(fileMeasures.getStatementNumber()).isEqualTo(0.0);
--    assertThat(fileMeasures.getClassNumber()).isEqualTo(0.0);
-+    assertThat(fileMeasures.getClassNumber()).isEqualTo(1.0);
-   }
- }
+ import com.google.common.base.Charsets;
 diff --git a/sonar-php-plugin/src/main/java/org/sonar/plugins/php/PHPSensor.java b/sonar-php-plugin/src/main/java/org/sonar/plugins/php/PHPSensor.java
-index 6b04a8853..73b980146 100644
+index 6b04a88533..73b980146b 100755
 --- a/sonar-php-plugin/src/main/java/org/sonar/plugins/php/PHPSensor.java
 +++ b/sonar-php-plugin/src/main/java/org/sonar/plugins/php/PHPSensor.java
 @@ -141,7 +141,7 @@ public void analyse(Project project, SensorContext context) {
@@ -338,7 +113,7 @@ index 6b04a8853..73b980146 100644
    }
  
 diff --git a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
-index aea4b10c8..3fc96622b 100644
+index aea4b10c83..3fc96622bb 100755
 --- a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
 +++ b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
 @@ -91,14 +91,14 @@ public void analyse() {

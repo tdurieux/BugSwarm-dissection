@@ -1,93 +1,42 @@
 diff --git a/php-frontend/src/main/java/org/sonar/php/parser/NewPHPGrammar.java b/php-frontend/src/main/java/org/sonar/php/parser/NewPHPGrammar.java
-index 45385e678..1d92c1e78 100644
+index 7ffd6b290e..1d92c1e788 100755
 --- a/php-frontend/src/main/java/org/sonar/php/parser/NewPHPGrammar.java
 +++ b/php-frontend/src/main/java/org/sonar/php/parser/NewPHPGrammar.java
-@@ -61,6 +61,8 @@
- import org.sonar.plugins.php.api.tree.statement.LabelTree;
- import org.sonar.plugins.php.api.tree.statement.ReturnStatementTree;
- import org.sonar.plugins.php.api.tree.statement.StatementTree;
-+import org.sonar.plugins.php.api.tree.statement.SwitchCaseClauseTree;
-+import org.sonar.plugins.php.api.tree.statement.SwitchStatementTree;
- import org.sonar.plugins.php.api.tree.statement.ThrowStatementTree;
- import org.sonar.plugins.php.api.tree.statement.TryStatementTree;
- import org.sonar.plugins.php.api.tree.statement.WhileStatementTree;
-@@ -138,7 +140,7 @@ public StatementTree STATEMENT() {
-             DO_WHILE_STATEMENT(),
-             FOREACH_STATEMENT(),
-             FOR_STATEMENT(),
--//            SWITCH_STATEMENT(),
-+            SWITCH_STATEMENT(),
-             BREAK_STATEMENT(),
-             CONTINUE_STATEMENT(),
-             RETURN_STATEMENT(),
-@@ -157,6 +159,48 @@ public StatementTree STATEMENT() {
-         ));
-   }
- 
-+  public SwitchStatementTree SWITCH_STATEMENT() {
-+    return b.<SwitchStatementTree>nonterminal(PHPLexicalGrammar.SWITCH_STATEMENT)
-+        .is(b.firstOf(
-+            f.switchStatement(
-+                b.token(PHPKeyword.SWITCH),
-+                PARENTHESIZED_EXPRESSION(),
-+                b.token(PHPPunctuator.LCURLYBRACE),
-+                b.optional(b.token(PHPPunctuator.SEMICOLON)),
+@@ -167,7 +167,7 @@ public SwitchStatementTree SWITCH_STATEMENT() {
+                 PARENTHESIZED_EXPRESSION(),
+                 b.token(PHPPunctuator.LCURLYBRACE),
+                 b.optional(b.token(PHPPunctuator.SEMICOLON)),
+-                b.oneOrMore(SWITCH_CASE_CLAUSE()),
 +                b.zeroOrMore(SWITCH_CASE_CLAUSE()),
-+                b.token(PHPPunctuator.RCURLYBRACE)
-+            ),
-+            f.alternativeSwitchStatement(
-+                b.token(PHPKeyword.SWITCH),
-+                PARENTHESIZED_EXPRESSION(),
-+                b.token(PHPPunctuator.COLON),
-+                b.optional(b.token(PHPPunctuator.SEMICOLON)),
+                 b.token(PHPPunctuator.RCURLYBRACE)
+             ),
+             f.alternativeSwitchStatement(
+@@ -175,7 +175,7 @@ public SwitchStatementTree SWITCH_STATEMENT() {
+                 PARENTHESIZED_EXPRESSION(),
+                 b.token(PHPPunctuator.COLON),
+                 b.optional(b.token(PHPPunctuator.SEMICOLON)),
+-                b.oneOrMore(SWITCH_CASE_CLAUSE()),
 +                b.zeroOrMore(SWITCH_CASE_CLAUSE()),
-+                b.token(PHPKeyword.ENDSWITCH),
-+                EOS()
-+            )
-+        ));
-+  }
-+
-+  public SwitchCaseClauseTree SWITCH_CASE_CLAUSE() {
-+    return b.<SwitchCaseClauseTree>nonterminal(PHPLexicalGrammar.SWITCH_CASE_CLAUSE)
-+        .is(b.firstOf(
-+            f.caseClause(
-+                b.token(PHPKeyword.CASE),
-+                EXPRESSION(),
-+                b.firstOf(b.token(PHPPunctuator.COLON), b.token(PHPPunctuator.SEMICOLON)),
-+                //fixme (Lena) : should be INNER_STATEMENT_LIST
-+                b.zeroOrMore(STATEMENT())
-+            ),
-+            f.defaultClause(
-+                b.token(PHPKeyword.DEFAULT),
-+                b.firstOf(b.token(PHPPunctuator.COLON), b.token(PHPPunctuator.SEMICOLON)),
-+                //fixme (Lena) : should be INNER_STATEMENT_LIST
-+                b.zeroOrMore(STATEMENT())
-+            )
-+        ));
-+  }
-+
-   public WhileStatementTree WHILE_STATEMENT() {
-     return b.<WhileStatementTree>nonterminal(PHPLexicalGrammar.WHILE_STATEMENT)
-         .is(b.firstOf(
+                 b.token(PHPKeyword.ENDSWITCH),
+                 EOS()
+             )
 diff --git a/php-frontend/src/main/java/org/sonar/php/parser/PHPLexicalGrammar.java b/php-frontend/src/main/java/org/sonar/php/parser/PHPLexicalGrammar.java
-index 6810adc28..6ab716967 100644
+index ff313267c0..6ab7169671 100755
 --- a/php-frontend/src/main/java/org/sonar/php/parser/PHPLexicalGrammar.java
 +++ b/php-frontend/src/main/java/org/sonar/php/parser/PHPLexicalGrammar.java
-@@ -117,11 +117,7 @@
-   FOREACH_EXPR,
+@@ -118,10 +118,6 @@
    FOREACH_VARIABLE,
    SWITCH_STATEMENT,
--  SWITCH_CASE_LIST,
+   SWITCH_CASE_CLAUSE,
 -  CASE_LIST,
 -  CASE_CLAUSE,
 -  DEFAULT_CLAUSE,
 -  CASE_SEPARTOR,
-+  SWITCH_CASE_CLAUSE,
    BREAK_STATEMENT,
    CONTINUE_STATEMENT,
    RETURN_STATEMENT,
 diff --git a/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java b/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
-index 304320bba..c0986c2a2 100644
+index e82cc62570..c0986c2a20 100755
 --- a/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
 +++ b/php-frontend/src/main/java/org/sonar/php/parser/TreeFactory.java
 @@ -44,8 +44,10 @@
@@ -120,16 +69,7 @@ index 304320bba..c0986c2a2 100644
  import org.sonar.plugins.php.api.tree.statement.DoWhileStatementTree;
  import org.sonar.plugins.php.api.tree.statement.ElseClauseTree;
  import org.sonar.plugins.php.api.tree.statement.ElseifClauseTree;
-@@ -99,6 +104,8 @@
- import org.sonar.plugins.php.api.tree.statement.LabelTree;
- import org.sonar.plugins.php.api.tree.statement.ReturnStatementTree;
- import org.sonar.plugins.php.api.tree.statement.StatementTree;
-+import org.sonar.plugins.php.api.tree.statement.SwitchCaseClauseTree;
-+import org.sonar.plugins.php.api.tree.statement.SwitchStatementTree;
- import org.sonar.plugins.php.api.tree.statement.ThrowStatementTree;
- import org.sonar.plugins.php.api.tree.statement.TryStatementTree;
- import org.sonar.plugins.php.api.tree.statement.WhileStatementTree;
-@@ -404,6 +411,46 @@ public WhileStatementTree alternativeWhileStatement(
+@@ -406,6 +411,46 @@ public WhileStatementTree alternativeWhileStatement(
      );
    }
  
@@ -176,17 +116,27 @@ index 304320bba..c0986c2a2 100644
    /**
     * [ END ] Statement
     */
-@@ -638,7 +685,6 @@ public ExpressionTree memberExpression(ExpressionTree object, Optional<List<Expr
+@@ -640,17 +685,6 @@ public ExpressionTree memberExpression(ExpressionTree object, Optional<List<Expr
      return result;
    }
  
+-  public SwitchStatementTree switchStatement(InternalSyntaxToken switchToken, ParenthesisedExpressionTree expression, InternalSyntaxToken openCurlyBraceToken, Optional<InternalSyntaxToken> semicolonToken, List<SwitchCaseClauseTree> switchCaseClauses, InternalSyntaxToken closeCurlyBraceToken) {
+-    return new SwitchStatementTreeImpl(
+-        switchToken,
+-        expression,
+-        openCurlyBraceToken,
+-        semicolonToken.orNull(),
+-        switchCaseClauses,
+-        closeCurlyBraceToken
+-    );
+-  }
 -
    /**
     * [ END ] Expression
     */
 diff --git a/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/CaseClauseTreeImpl.java b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/CaseClauseTreeImpl.java
-new file mode 100644
-index 000000000..417923827
+new file mode 100755
+index 0000000000..4179238277
 --- /dev/null
 +++ b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/CaseClauseTreeImpl.java
 @@ -0,0 +1,88 @@
@@ -279,8 +229,8 @@ index 000000000..417923827
 +  }
 +}
 diff --git a/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/DefaultClauseTreeImpl.java b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/DefaultClauseTreeImpl.java
-new file mode 100644
-index 000000000..1c4c6df8a
+new file mode 100755
+index 0000000000..1c4c6df8a8
 --- /dev/null
 +++ b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/DefaultClauseTreeImpl.java
 @@ -0,0 +1,80 @@
@@ -365,8 +315,8 @@ index 000000000..1c4c6df8a
 +  }
 +}
 diff --git a/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeImpl.java b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeImpl.java
-new file mode 100644
-index 000000000..bfe6609e4
+new file mode 100755
+index 0000000000..bfe6609e4e
 --- /dev/null
 +++ b/php-frontend/src/main/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeImpl.java
 @@ -0,0 +1,159 @@
@@ -530,7 +480,7 @@ index 000000000..bfe6609e4
 +  }
 +}
 diff --git a/php-frontend/src/main/java/org/sonar/plugins/php/api/tree/statement/SwitchStatementTree.java b/php-frontend/src/main/java/org/sonar/plugins/php/api/tree/statement/SwitchStatementTree.java
-index 957868534..19e30a768 100644
+index 9578685347..19e30a7683 100755
 --- a/php-frontend/src/main/java/org/sonar/plugins/php/api/tree/statement/SwitchStatementTree.java
 +++ b/php-frontend/src/main/java/org/sonar/plugins/php/api/tree/statement/SwitchStatementTree.java
 @@ -48,7 +48,7 @@
@@ -543,7 +493,7 @@ index 957868534..19e30a768 100644
    @Nullable
    SyntaxToken eosToken();
 diff --git a/php-frontend/src/main/java/org/sonar/plugins/php/api/visitors/TreeVisitor.java b/php-frontend/src/main/java/org/sonar/plugins/php/api/visitors/TreeVisitor.java
-index ea377b956..22290b534 100644
+index ea377b956a..22290b534c 100755
 --- a/php-frontend/src/main/java/org/sonar/plugins/php/api/visitors/TreeVisitor.java
 +++ b/php-frontend/src/main/java/org/sonar/plugins/php/api/visitors/TreeVisitor.java
 @@ -40,8 +40,10 @@
@@ -578,87 +528,70 @@ index ea377b956..22290b534 100644
    void visitWhileStatement(WhileStatementTree tree);
  
    void visitDoWhileStatement(DoWhileStatementTree tree);
-diff --git a/php-frontend/src/test/java/org/sonar/php/parser/statement/CaseClauseTest.java b/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchCaseClauseTest.java
-similarity index 73%
-rename from php-frontend/src/test/java/org/sonar/php/parser/statement/CaseClauseTest.java
-rename to php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchCaseClauseTest.java
-index eb3bed925..a4f147979 100644
---- a/php-frontend/src/test/java/org/sonar/php/parser/statement/CaseClauseTest.java
+diff --git a/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchCaseClauseTest.java b/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchCaseClauseTest.java
+new file mode 100755
+index 0000000000..a4f147979a
+--- /dev/null
 +++ b/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchCaseClauseTest.java
-@@ -19,23 +19,21 @@
-  */
- package org.sonar.php.parser.statement;
- 
--import org.junit.Before;
- import org.junit.Test;
--import org.sonar.php.parser.PHPGrammar;
--import org.sonar.php.parser.RuleTest;
+@@ -0,0 +1,39 @@
++/*
++ * SonarQube PHP Plugin
++ * Copyright (C) 2010 SonarSource and Akram Ben Aissi
++ * sonarqube@googlegroups.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
++ */
++package org.sonar.php.parser.statement;
++
++import org.junit.Test;
 +import org.sonar.php.parser.PHPLexicalGrammar;
- 
--public class CaseClauseTest extends RuleTest {
++
 +import static org.sonar.php.utils.Assertions.assertThat;
- 
--  @Before
--  public void setUp() {
--    setTestedRule(PHPGrammar.CASE_CLAUSE);
--  }
++
 +public class SwitchCaseClauseTest {
- 
-   @Test
-   public void test() {
++
++  @Test
++  public void test() {
 +    assertThat(PHPLexicalGrammar.SWITCH_CASE_CLAUSE)
 +      .matches("case $a:")
 +      .matches("case $a;")
 +      .matches("case $a: $b;")
- 
--    matches("case $a:");
--    matches("case $a;");
--    matches("case $a: exit;");
++
 +      .matches("default: break;")
 +      .matches("default: $b; break;");
-   }
- }
++  }
++}
 diff --git a/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchStatementTest.java b/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchStatementTest.java
-index 1d9c6f6b1..1768f5994 100644
+index b2c9c6a938..1768f5994c 100755
 --- a/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchStatementTest.java
 +++ b/php-frontend/src/test/java/org/sonar/php/parser/statement/SwitchStatementTest.java
-@@ -19,22 +19,23 @@
-  */
- package org.sonar.php.parser.statement;
- 
--import org.junit.Before;
- import org.junit.Test;
--import org.sonar.php.parser.PHPGrammar;
-+import org.sonar.php.parser.PHPLexicalGrammar;
- import org.sonar.php.parser.RuleTest;
- 
--public class SwitchStatementTest extends RuleTest {
-+import static org.sonar.php.utils.Assertions.assertThat;
- 
--  @Before
--  public void setUp() {
--    setTestedRule(PHPGrammar.SWITCH_STATEMENT);
--  }
-+public class SwitchStatementTest extends RuleTest {
- 
-   @Test
+@@ -31,9 +31,11 @@
    public void test() {
--    matches("switch ($a) {}");
--    matches("switch ($a): endswitch;");
--    matches("switch ($a): ; endswitch;"); // TODO: complete when cas_list complete
-+    assertThat(PHPLexicalGrammar.SWITCH_STATEMENT)
-+      .matches("switch ($a) {}")
+     assertThat(PHPLexicalGrammar.SWITCH_STATEMENT)
+       .matches("switch ($a) {}")
 +      .matches("switch ($a) {; }")
-+      .matches("switch ($a): endswitch;")
-+      .matches("switch ($a): ; endswitch;")
-+
+       .matches("switch ($a): endswitch;")
+       .matches("switch ($a): ; endswitch;")
+ 
 +      .matches("switch ($a) { case $a : default : }")
-+    ;
+     ;
    }
  }
 diff --git a/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchCaseClauseTreeTest.java b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchCaseClauseTreeTest.java
-new file mode 100644
-index 000000000..0a7bed47c
+new file mode 100755
+index 0000000000..0a7bed47ce
 --- /dev/null
 +++ b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchCaseClauseTreeTest.java
 @@ -0,0 +1,52 @@
@@ -714,35 +647,41 @@ index 000000000..0a7bed47c
 +  }
 +
 +}
-diff --git a/php-frontend/src/test/java/org/sonar/php/parser/statement/DefaultClauseTest.java b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchClauseTreeTest.java
-similarity index 52%
-rename from php-frontend/src/test/java/org/sonar/php/parser/statement/DefaultClauseTest.java
-rename to php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchClauseTreeTest.java
-index 07e13e442..4c5aca83e 100644
---- a/php-frontend/src/test/java/org/sonar/php/parser/statement/DefaultClauseTest.java
+diff --git a/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchClauseTreeTest.java b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchClauseTreeTest.java
+new file mode 100755
+index 0000000000..4c5aca83e8
+--- /dev/null
 +++ b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchClauseTreeTest.java
-@@ -17,24 +17,33 @@
-  * License along with this program; if not, write to the Free Software
-  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
-  */
--package org.sonar.php.parser.statement;
+@@ -0,0 +1,49 @@
++/*
++ * SonarQube PHP Plugin
++ * Copyright (C) 2010 SonarSource and Akram Ben Aissi
++ * sonarqube@googlegroups.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02
++ */
 +package org.sonar.php.tree.impl.statement;
- 
--import org.junit.Before;
- import org.junit.Test;
--import org.sonar.php.parser.PHPGrammar;
--import org.sonar.php.parser.RuleTest;
++
++import org.junit.Test;
 +import org.sonar.php.PHPTreeModelTest;
 +import org.sonar.php.parser.PHPLexicalGrammar;
 +import org.sonar.plugins.php.api.tree.Tree.Kind;
 +import org.sonar.plugins.php.api.tree.statement.BlockTree;
- 
--public class DefaultClauseTest extends RuleTest {
++
 +import static org.fest.assertions.Assertions.assertThat;
- 
--  @Before
--  public void setUp() {
--    setTestedRule(PHPGrammar.DEFAULT_CLAUSE);
++
 +public class SwitchClauseTreeTest extends PHPTreeModelTest {
 +
 +  @Test
@@ -751,24 +690,21 @@ index 07e13e442..4c5aca83e 100644
 +
 +    assertThat(tree.is(Kind.BLOCK)).isTrue();
 +    assertThat(tree.statements()).isEmpty();
-   }
- 
-   @Test
--  public void test() {
++  }
++
++  @Test
 +  public void not_empty() throws Exception {
 +    BlockTree tree = parse("{ $a; }", PHPLexicalGrammar.BLOCK);
 +    assertThat(tree.statements()).hasSize(1);
- 
--    matches("default: break;");
--    matches("default: $a++; break;");
++
 +    tree = parse("{ $a; $b; }", PHPLexicalGrammar.BLOCK);
 +    assertThat(tree.statements()).hasSize(2);
-   }
++  }
 +
- }
++}
 diff --git a/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeTest.java b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeTest.java
-new file mode 100644
-index 000000000..7d7677c82
+new file mode 100755
+index 0000000000..7d7677c821
 --- /dev/null
 +++ b/php-frontend/src/test/java/org/sonar/php/tree/impl/statement/SwitchStatementTreeTest.java
 @@ -0,0 +1,58 @@

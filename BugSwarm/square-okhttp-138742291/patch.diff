@@ -1,5 +1,5 @@
 diff --git a/okhttp-android-support/src/test/java/okhttp3/internal/huc/ResponseCacheTest.java b/okhttp-android-support/src/test/java/okhttp3/internal/huc/ResponseCacheTest.java
-index a533b919b..90864623b 100644
+index a533b919b7..90864623b8 100755
 --- a/okhttp-android-support/src/test/java/okhttp3/internal/huc/ResponseCacheTest.java
 +++ b/okhttp-android-support/src/test/java/okhttp3/internal/huc/ResponseCacheTest.java
 @@ -190,6 +190,9 @@ private void assertCached(boolean shouldPut, int responseCode) throws Exception
@@ -12,107 +12,54 @@ index a533b919b..90864623b 100644
      }
      server.enqueue(mockResponse);
  
-diff --git a/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java b/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-index cdfc26a76..224707fe8 100644
---- a/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-@@ -405,6 +405,9 @@ private void testRequestBodySurvivesRetries(TransferKind transferKind) throws Ex
-   @Test public void invalidHost() throws Exception {
-     // Note that 1234.1.1.1 is an invalid host in a URI, but URL isn't as strict.
-     URL url = new URL("http://1234.1.1.1/index.html");
-+    urlFactory.setClient(urlFactory.client().newBuilder()
-+        .dns(new FakeDns())
-+        .build());
-     HttpURLConnection connection = urlFactory.open(url);
-     try {
-       connection.connect();
-@@ -2309,7 +2312,6 @@ private void testRedirect(boolean temporary, String method) throws Exception {
-     } catch (ProtocolException expected) {
-       assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, connection.getResponseCode());
-       assertEquals("Too many follow-up requests: 21", expected.getMessage());
--      assertContent("Redirecting to /21", connection);
-       assertEquals(server.url("/20").url(), connection.getURL());
-     }
-   }
-@@ -2536,12 +2538,17 @@ protected ServerSocket configureServerSocket(ServerSocket serverSocket)
-   }
- 
-   @Test public void responseCodeDisagreesWithHeaders() throws IOException, InterruptedException {
--    server.enqueue(new MockResponse().setResponseCode(HttpURLConnection.HTTP_NO_CONTENT)
-+    server.enqueue(new MockResponse()
-+        .setResponseCode(HttpURLConnection.HTTP_NO_CONTENT)
-         .setBody("This body is not allowed!"));
- 
-     URLConnection connection = urlFactory.open(server.url("/").url());
--    assertEquals("This body is not allowed!",
--        readAscii(connection.getInputStream(), Integer.MAX_VALUE));
-+    try {
-+      connection.getInputStream();
-+      fail();
-+    } catch (IOException expected) {
-+      assertEquals("HTTP 204 had non-zero Content-Length: 25", expected.getMessage());
-+    }
-   }
- 
-   @Test public void singleByteReadIsSigned() throws IOException {
-@@ -2614,6 +2621,9 @@ private void testFlushAfterStreamTransmitted(TransferKind transferKind) throws I
-   }
- 
-   @Test public void dnsFailureThrowsIOException() throws IOException {
-+    urlFactory.setClient(urlFactory.client().newBuilder()
-+        .dns(new FakeDns())
-+        .build());
-     connection = urlFactory.open(new URL("http://host.unlikelytld"));
-     try {
-       connection.connect();
 diff --git a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/BufferedRequestBody.java b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/BufferedRequestBody.java
-new file mode 100644
-index 000000000..b4b2f6834
---- /dev/null
+index 57e3ec4717..b4b2f68347 100755
+--- a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/BufferedRequestBody.java
 +++ b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/BufferedRequestBody.java
-@@ -0,0 +1,62 @@
-+/*
-+ * Copyright (C) 2016 Square, Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *      http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package okhttp3.internal.huc;
-+
-+import java.io.IOException;
+@@ -16,11 +16,9 @@
+ package okhttp3.internal.huc;
+ 
+ import java.io.IOException;
+-import java.io.OutputStream;
+-import okhttp3.MediaType;
 +import okhttp3.Request;
-+import okio.Buffer;
-+import okio.BufferedSink;
-+
-+/**
-+ * This request body involves an application thread only. First all bytes are written to the buffer.
-+ * Only once that is complete are bytes then copied to the network.
-+ *
-+ * <p>This body has two special powers. First, it can retransmit the same request body multiple
-+ * times in order to recover from failures or cope with redirects. Second, it can compute the total
-+ * length of the request body by measuring it after it has been written to the output stream.
-+ */
-+final class BufferedRequestBody extends OutputStreamRequestBody {
-+  final Buffer buffer = new Buffer();
+ import okio.Buffer;
+ import okio.BufferedSink;
+-import okio.Timeout;
+ 
+ /**
+  * This request body involves an application thread only. First all bytes are written to the buffer.
+@@ -32,29 +30,30 @@
+  */
+ final class BufferedRequestBody extends OutputStreamRequestBody {
+   final Buffer buffer = new Buffer();
+-  final long expectedContentLength;
+-  final OutputStream outputStream;
 +  long contentLength = -1L;
-+
-+  BufferedRequestBody(long expectedContentLength) {
+ 
+   BufferedRequestBody(long expectedContentLength) {
+-    this.expectedContentLength = expectedContentLength;
+-    this.outputStream = newOutputStream(expectedContentLength, buffer);
 +    initOutputStream(buffer, expectedContentLength);
-+  }
-+
+   }
+ 
+-  @Override OutputStream outputStream() {
+-    return outputStream;
+-  }
+-
+-  @Override Timeout timeout() {
+-    return Timeout.NONE;
+-  }
+-
+-  @Override public MediaType contentType() {
+-    return null; // We let the caller provide this in a regular header.
 +  @Override public long contentLength() throws IOException {
 +    return contentLength;
-+  }
-+
+   }
+ 
+-  @Override public long contentLength() throws IOException {
+-    outputStream.close(); // Lock in the current size!
+-    return buffer.size();
 +  /**
 +   * Now that we've buffered the entire request body, update the request headers and the body
 +   * itself. This happens late to enable HttpURLConnection users to complete the socket connection
@@ -127,593 +74,28 @@ index 000000000..b4b2f6834
 +        .removeHeader("Transfer-Encoding")
 +        .header("Content-Length", Long.toString(buffer.size()))
 +        .build();
-+  }
-+
-+  @Override public void writeTo(BufferedSink sink) throws IOException {
-+    buffer.copyTo(sink.buffer(), 0, buffer.size());
-+  }
-+}
+   }
+ 
+   @Override public void writeTo(BufferedSink sink) throws IOException {
 diff --git a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpURLConnectionImpl.java b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpURLConnectionImpl.java
-index 08f73710d..d96c7e298 100644
+index 55754ad70e..d96c7e298d 100755
 --- a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpURLConnectionImpl.java
 +++ b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpURLConnectionImpl.java
-@@ -20,16 +20,14 @@
- import java.io.FileNotFoundException;
- import java.io.IOException;
- import java.io.InputStream;
-+import java.io.InterruptedIOException;
- import java.io.OutputStream;
--import java.net.HttpRetryException;
- import java.net.HttpURLConnection;
- import java.net.InetSocketAddress;
--import java.net.MalformedURLException;
- import java.net.ProtocolException;
- import java.net.Proxy;
- import java.net.SocketPermission;
- import java.net.URL;
--import java.net.UnknownHostException;
- import java.security.Permission;
- import java.util.ArrayList;
- import java.util.Arrays;
-@@ -40,16 +38,16 @@
- import java.util.Map;
- import java.util.Set;
- import java.util.concurrent.TimeUnit;
--import okhttp3.Connection;
-+import okhttp3.Call;
-+import okhttp3.Callback;
- import okhttp3.Handshake;
- import okhttp3.Headers;
- import okhttp3.HttpUrl;
-+import okhttp3.Interceptor;
- import okhttp3.OkHttpClient;
- import okhttp3.Protocol;
- import okhttp3.Request;
--import okhttp3.RequestBody;
- import okhttp3.Response;
--import okhttp3.Route;
- import okhttp3.internal.Internal;
- import okhttp3.internal.JavaNetHeaders;
- import okhttp3.internal.Platform;
-@@ -60,20 +58,12 @@
- import okhttp3.internal.http.HttpEngine;
- import okhttp3.internal.http.HttpMethod;
- import okhttp3.internal.http.OkHeaders;
--import okhttp3.internal.http.RequestException;
--import okhttp3.internal.http.RetryableSink;
--import okhttp3.internal.http.RouteException;
- import okhttp3.internal.http.StatusLine;
--import okhttp3.internal.http.StreamAllocation;
--import okio.BufferedSink;
--import okio.Sink;
- 
- import static okhttp3.internal.Platform.WARN;
- 
- /**
-- * This implementation uses HttpEngine to send requests and receive responses. This class may use
-- * multiple HttpEngines to follow redirects, authentication retries, etc. to retrieve the final
-- * response body.
-+ * This implementation uses {@linkplain Call} to send requests and receive responses.
-  *
-  * <h3>What does 'connected' mean?</h3> This class inherits a {@code connected} field from the
-  * superclass. That field is <strong>not</strong> used to indicate whether this URLConnection is
-@@ -81,36 +71,30 @@
-  * connection has been attempted, certain properties (request header fields, request method, etc.)
-  * are immutable.
-  */
--public class HttpURLConnectionImpl extends HttpURLConnection {
-+public class HttpURLConnectionImpl extends HttpURLConnection implements Callback {
-   private static final Set<String> METHODS = new LinkedHashSet<>(
-       Arrays.asList("OPTIONS", "GET", "HEAD", "POST", "PUT", "DELETE", "TRACE", "PATCH"));
--  private static final RequestBody EMPTY_REQUEST_BODY = RequestBody.create(null, new byte[0]);
- 
-   OkHttpClient client;
- 
--  private Headers.Builder requestHeaders = new Headers.Builder();
-+  Headers.Builder requestHeaders = new Headers.Builder();
- 
-   /** Like the superclass field of the same name, but a long and available on all platforms. */
--  private long fixedContentLength = -1;
--  private int followUpCount;
--  protected IOException httpEngineFailure;
--  protected HttpEngine httpEngine;
-+  long fixedContentLength = -1L;
-+  IOException callFailure;
-+  Call call;
-+  Response response;
-+  Response networkResponse;
-   /** Lazily created (with synthetic headers) on first call to getHeaders(). */
--  private Headers responseHeaders;
-+  Headers responseHeaders;
- 
--  /**
--   * The most recently attempted route. This will be null if we haven't sent a request yet, or if
--   * the response comes from a cache.
--   */
--  private Route route;
-+  URLFilter urlFilter;
- 
--  /**
--   * The most recently received TLS handshake. This will be null if we haven't connected yet, or if
--   * the most recent connection was HTTP (and not HTTPS).
--   */
-+  boolean executed;
-+  boolean connectPending = true;
-+  Proxy proxy;
-   Handshake handshake;
--
--  private URLFilter urlFilter;
-+  final NetworkInterceptor networkInterceptor = new NetworkInterceptor();
- 
-   public HttpURLConnectionImpl(URL url, OkHttpClient client) {
-     super(url);
-@@ -123,24 +107,32 @@ public HttpURLConnectionImpl(URL url, OkHttpClient client, URLFilter urlFilter)
-   }
- 
-   @Override public final void connect() throws IOException {
--    initHttpEngine();
--    boolean success;
--    do {
--      success = execute(false);
--    } while (!success);
-+    if (executed) return;
-+
-+    Call call = buildCall();
-+    executed = true;
-+    call.enqueue(this);
-+
-+    synchronized (this) {
-+      try {
-+        while (connectPending && response == null && callFailure == null) {
-+          wait();
-+        }
-+        if (callFailure != null) {
-+          throw callFailure;
-+        }
-+      } catch (InterruptedException e) {
-+        throw new InterruptedIOException();
-+      }
-+    }
-   }
- 
-   @Override public final void disconnect() {
-     // Calling disconnect() before a connection exists should have no effect.
--    if (httpEngine == null) return;
--
--    httpEngine.cancel();
-+    if (call == null) return;
- 
--    // This doesn't close the stream because doing so would require all stream
--    // access to be synchronized. It's expected that the thread using the
--    // connection will close its streams directly. If it doesn't, the worst
--    // case is that the GzipSource's Inflater won't be released until it's
--    // finalized. (This logs a warning on Android.)
-+    networkInterceptor.proceed(); // Unblock any waiting async thread.
-+    call.cancel();
-   }
- 
-   /**
-@@ -149,10 +141,9 @@ public HttpURLConnectionImpl(URL url, OkHttpClient client, URLFilter urlFilter)
-    */
-   @Override public final InputStream getErrorStream() {
-     try {
--      HttpEngine response = getResponse();
--      if (HttpEngine.hasBody(response.getResponse())
--          && response.getResponse().code() >= HTTP_BAD_REQUEST) {
--        return response.getResponse().body().byteStream();
-+      Response response = getResponse();
-+      if (HttpEngine.hasBody(response) && response.code() >= HTTP_BAD_REQUEST) {
-+        return response.body().byteStream();
-       }
-       return null;
-     } catch (IOException e) {
-@@ -162,7 +153,7 @@ public HttpURLConnectionImpl(URL url, OkHttpClient client, URLFilter urlFilter)
- 
-   private Headers getHeaders() throws IOException {
-     if (responseHeaders == null) {
--      Response response = getResponse().getResponse();
-+      Response response = getResponse();
-       Headers headers = response.headers();
-       responseHeaders = headers.newBuilder()
-           .add(OkHeaders.SELECTED_PROTOCOL, response.protocol().toString())
-@@ -206,7 +197,7 @@ private static String responseSourceHeader(Response response) {
-   @Override public final String getHeaderField(String fieldName) {
-     try {
-       return fieldName == null
--          ? StatusLine.get(getResponse().getResponse()).toString()
-+          ? StatusLine.get(getResponse()).toString()
-           : getHeaders().get(fieldName);
-     } catch (IOException e) {
-       return null;
-@@ -226,7 +217,7 @@ private static String responseSourceHeader(Response response) {
-   @Override public final Map<String, List<String>> getHeaderFields() {
-     try {
-       return JavaNetHeaders.toMultimap(getHeaders(),
--          StatusLine.get(getResponse().getResponse()).toString());
-+          StatusLine.get(getResponse()).toString());
-     } catch (IOException e) {
-       return Collections.emptyMap();
-     }
-@@ -246,30 +237,33 @@ private static String responseSourceHeader(Response response) {
-       throw new ProtocolException("This protocol does not support input");
-     }
- 
--    HttpEngine response = getResponse();
-+    Response response = getResponse();
- 
--    // if the requested file does not exist, throw an exception formerly the
--    // Error page from the server was returned if the requested file was
--    // text/html this has changed to return FileNotFoundException for all
--    // file types
--    if (getResponseCode() >= HTTP_BAD_REQUEST) {
-+    if (response.code() >= HTTP_BAD_REQUEST) {
-       throw new FileNotFoundException(url.toString());
-     }
- 
--    return response.getResponse().body().byteStream();
-+    return response.body().byteStream();
-   }
- 
-   @Override public final OutputStream getOutputStream() throws IOException {
--    connect();
--
--    BufferedSink sink = httpEngine.getBufferedRequestBody();
--    if (sink == null) {
-+    OutputStreamRequestBody requestBody = (OutputStreamRequestBody) buildCall().request().body();
-+    if (requestBody == null) {
-       throw new ProtocolException("method does not support a request body: " + method);
--    } else if (httpEngine.hasResponse()) {
-+    }
-+
-+    // If this request needs to stream bytes to the server, build a physical connection immediately
-+    // and start streaming those bytes over that connection.
-+    if (requestBody instanceof StreamedRequestBody) {
-+      connect();
-+      networkInterceptor.proceed();
+@@ -257,7 +257,9 @@ private static String responseSourceHeader(Response response) {
+     if (requestBody instanceof StreamedRequestBody) {
+       connect();
+       networkInterceptor.proceed();
+-    } else if (executed) {
 +    }
 +
 +    if (requestBody.isClosed()) {
        throw new ProtocolException("cannot write request body after response has been read");
      }
  
--    return sink.outputStream();
-+    return requestBody.outputStream();
-   }
- 
-   @Override public final Permission getPermission() throws IOException {
-@@ -322,81 +316,71 @@ public void setInstanceFollowRedirects(boolean followRedirects) {
-     return client.readTimeoutMillis();
-   }
- 
--  private void initHttpEngine() throws IOException {
--    if (httpEngineFailure != null) {
--      throw httpEngineFailure;
--    } else if (httpEngine != null) {
--      return;
-+  private Call buildCall() throws IOException {
-+    if (call != null) {
-+      return call;
+@@ -579,6 +581,13 @@ public void proceed() {
      }
  
-     connected = true;
--    try {
--      if (doOutput) {
--        if (method.equals("GET")) {
--          // they are requesting a stream to write to. This implies a POST method
--          method = "POST";
--        } else if (!HttpMethod.permitsRequestBody(method)) {
--          throw new ProtocolException(method + " does not support writing");
--        }
-+    if (doOutput) {
-+      if (method.equals("GET")) {
-+        // they are requesting a stream to write to. This implies a POST method
-+        method = "POST";
-+      } else if (!HttpMethod.permitsRequestBody(method)) {
-+        throw new ProtocolException(method + " does not support writing");
-       }
--      // If the user set content length to zero, we know there will not be a request body.
--      httpEngine = newHttpEngine(method, null, null, null);
--    } catch (IOException e) {
--      httpEngineFailure = e;
--      throw e;
-     }
--  }
- 
--  private HttpEngine newHttpEngine(String method, StreamAllocation streamAllocation,
--      RetryableSink requestBody, Response priorResponse)
--      throws MalformedURLException, UnknownHostException {
--    // OkHttp's Call API requires a placeholder body; the real body will be streamed separately.
--    RequestBody placeholderBody = HttpMethod.requiresRequestBody(method)
--        ? EMPTY_REQUEST_BODY
--        : null;
--    URL url = getURL();
--    HttpUrl httpUrl = Internal.instance.getHttpUrlChecked(url.toString());
--    Request.Builder builder = new Request.Builder()
--        .url(httpUrl)
--        .method(method, placeholderBody);
--    Headers headers = requestHeaders.build();
--    for (int i = 0, size = headers.size(); i < size; i++) {
--      builder.addHeader(headers.name(i), headers.value(i));
-+    if (requestHeaders.get("User-Agent") == null) {
-+      requestHeaders.add("User-Agent", defaultUserAgent());
-     }
- 
--    boolean bufferRequestBody = false;
-+    OutputStreamRequestBody requestBody = null;
-     if (HttpMethod.permitsRequestBody(method)) {
--      // Specify how the request body is terminated.
--      if (fixedContentLength != -1) {
--        builder.header("Content-Length", Long.toString(fixedContentLength));
--      } else if (chunkLength > 0) {
--        builder.header("Transfer-Encoding", "chunked");
--      } else {
--        bufferRequestBody = true;
-+      // Add a content type for the request body, if one isn't already present.
-+      String contentType = requestHeaders.get("Content-Type");
-+      if (contentType == null) {
-+        contentType = "application/x-www-form-urlencoded";
-+        requestHeaders.add("Content-Type", contentType);
-       }
- 
--      // Add a content type for the request body, if one isn't already present.
--      if (headers.get("Content-Type") == null) {
--        builder.header("Content-Type", "application/x-www-form-urlencoded");
-+      boolean stream = fixedContentLength != -1L || chunkLength > 0;
-+
-+      long contentLength = -1L;
-+      String contentLengthString = requestHeaders.get("Content-Length");
-+      if (fixedContentLength != -1L) {
-+        contentLength = fixedContentLength;
-+      } else if (contentLengthString != null) {
-+        contentLength = Long.parseLong(contentLengthString);
-       }
-+
-+      requestBody = stream
-+          ? new StreamedRequestBody(contentLength)
-+          : new BufferedRequestBody(contentLength);
-+      requestBody.timeout().timeout(client.writeTimeoutMillis(), TimeUnit.MILLISECONDS);
-     }
- 
--    if (headers.get("User-Agent") == null) {
--      builder.header("User-Agent", defaultUserAgent());
-+    Request request = new Request.Builder()
-+        .url(Internal.instance.getHttpUrlChecked(getURL().toString()))
-+        .headers(requestHeaders.build())
-+        .method(method, requestBody)
-+        .build();
-+
-+    if (urlFilter != null) {
-+      urlFilter.checkURLPermitted(request.url().url());
-     }
- 
--    Request request = builder.build();
-+    OkHttpClient.Builder clientBuilder = client.newBuilder();
-+    clientBuilder.interceptors().clear();
-+    clientBuilder.networkInterceptors().clear();
-+    clientBuilder.networkInterceptors().add(networkInterceptor);
- 
-     // If we're currently not using caches, make sure the engine's client doesn't have one.
--    OkHttpClient engineClient = client;
--    if (Internal.instance.internalCache(engineClient) != null && !getUseCaches()) {
--      engineClient = client.newBuilder()
--          .cache(null)
--          .build();
-+    if (!getUseCaches()) {
-+      clientBuilder.cache(null);
-     }
- 
--    return new HttpEngine(engineClient, request, bufferRequestBody, true, false, streamAllocation,
--        requestBody, priorResponse);
-+    return call = clientBuilder.build().newCall(request);
-   }
- 
-   private String defaultUserAgent() {
-@@ -408,120 +392,43 @@ private String defaultUserAgent() {
-    * Aggressively tries to get the final HTTP response, potentially making many HTTP requests in the
-    * process in order to cope with redirects and authentication.
-    */
--  private HttpEngine getResponse() throws IOException {
--    initHttpEngine();
--
--    if (httpEngine.hasResponse()) {
--      return httpEngine;
--    }
--
--    while (true) {
--      if (!execute(true)) {
--        continue;
--      }
--
--      Response response = httpEngine.getResponse();
--      Request followUp = httpEngine.followUpRequest();
--
--      if (followUp == null) {
--        httpEngine.releaseStreamAllocation();
--        return httpEngine;
--      }
--
--      if (++followUpCount > HttpEngine.MAX_FOLLOW_UPS) {
--        throw new ProtocolException("Too many follow-up requests: " + followUpCount);
--      }
--
--      // The first request was insufficient. Prepare for another...
--      url = followUp.url().url();
--      requestHeaders = followUp.headers().newBuilder();
--
--      // Although RFC 2616 10.3.2 specifies that a HTTP_MOVED_PERM redirect
--      // should keep the same method, Chrome, Firefox and the RI all issue GETs
--      // when following any redirect.
--      Sink requestBody = httpEngine.getRequestBody();
--      if (!followUp.method().equals(method)) {
--        requestBody = null;
--      }
--
--      if (requestBody != null && !(requestBody instanceof RetryableSink)) {
--        throw new HttpRetryException("Cannot retry streamed HTTP body", responseCode);
-+  private Response getResponse() throws IOException {
-+    if (response != null) {
-+      return response;
-+    } else if (networkResponse != null) {
-+      return networkResponse;
-+    } else if (callFailure != null) {
-+      throw callFailure;
-+    }
-+
-+    Call call = buildCall();
-+    networkInterceptor.proceed();
-+
-+    OutputStreamRequestBody requestBody = (OutputStreamRequestBody) call.request().body();
-+    if (requestBody != null) requestBody.outputStream().close();
-+
-+    if (executed) {
-+      synchronized (this) {
-+        try {
-+          while (response == null && callFailure == null) {
-+            wait();
-+          }
-+        } catch (InterruptedException e) {
-+          throw new InterruptedIOException();
-+        }
-       }
--
--      StreamAllocation streamAllocation = httpEngine.close();
--      if (!httpEngine.sameConnection(followUp.url())) {
--        streamAllocation.release();
--        streamAllocation = null;
-+    } else {
-+      executed = true;
-+      try {
-+        onResponse(call, call.execute());
-+      } catch (IOException e) {
-+        onFailure(call, e);
-       }
--
--      httpEngine = newHttpEngine(followUp.method(), streamAllocation, (RetryableSink) requestBody,
--          response);
--    }
--  }
--
--  /**
--   * Sends a request and optionally reads a response. Returns true if the request was successfully
--   * executed, and false if the request can be retried. Throws an exception if the request failed
--   * permanently.
--   */
--  private boolean execute(boolean readResponse) throws IOException {
--    boolean releaseConnection = true;
--    if (urlFilter != null) {
--      urlFilter.checkURLPermitted(httpEngine.getRequest().url().url());
-     }
--    try {
--      httpEngine.sendRequest();
--      Connection connection = httpEngine.getConnection();
--      if (connection != null) {
--        route = connection.route();
--        handshake = connection.handshake();
--      } else {
--        route = null;
--        handshake = null;
--      }
--      if (readResponse) {
--        httpEngine.readResponse();
--      }
--      releaseConnection = false;
--
--      return true;
--    } catch (RequestException e) {
--      // An attempt to interpret a request failed.
--      IOException toThrow = e.getCause();
--      httpEngineFailure = toThrow;
--      throw toThrow;
--    } catch (RouteException e) {
--      // The attempt to connect via a route failed. The request will not have been sent.
--      HttpEngine retryEngine = httpEngine.recover(e.getLastConnectException(), true);
--      if (retryEngine != null) {
--        releaseConnection = false;
--        httpEngine = retryEngine;
--        return false;
--      }
- 
--      // Give up; recovery is not possible.
--      IOException toThrow = e.getLastConnectException();
--      httpEngineFailure = toThrow;
--      throw toThrow;
--    } catch (IOException e) {
--      // An attempt to communicate with a server failed. The request may have been sent.
--      HttpEngine retryEngine = httpEngine.recover(e, false);
--      if (retryEngine != null) {
--        releaseConnection = false;
--        httpEngine = retryEngine;
--        return false;
--      }
--
--      // Give up; recovery is not possible.
--      httpEngineFailure = e;
--      throw e;
--    } finally {
--      // We're throwing an unchecked exception. Release any resources.
--      if (releaseConnection) {
--        StreamAllocation streamAllocation = httpEngine.close();
--        streamAllocation.release();
--      }
--    }
-+    if (callFailure != null) throw callFailure;
-+    if (response != null) return response;
-+    throw new AssertionError();
-   }
- 
-   /**
-@@ -537,18 +444,17 @@ private boolean execute(boolean readResponse) throws IOException {
-    * afterwards.
-    */
-   @Override public final boolean usingProxy() {
--    Proxy proxy = route != null
--        ? route.proxy()
--        : client.proxy();
--    return proxy != null && proxy.type() != Proxy.Type.DIRECT;
-+    if (proxy != null) return true;
-+    Proxy clientProxy = client.proxy();
-+    return clientProxy != null && clientProxy.type() != Proxy.Type.DIRECT;
-   }
- 
-   @Override public String getResponseMessage() throws IOException {
--    return getResponse().getResponse().message();
-+    return getResponse().message();
-   }
- 
-   @Override public final int getResponseCode() throws IOException {
--    return getResponse().getResponse().code();
-+    return getResponse().code();
-   }
- 
-   @Override public final void setRequestProperty(String field, String newValue) {
-@@ -651,4 +557,66 @@ private void setProtocols(String protocolsString, boolean append) {
-     this.fixedContentLength = contentLength;
-     super.fixedContentLength = (int) Math.min(contentLength, Integer.MAX_VALUE);
-   }
-+
-+  @Override public synchronized void onFailure(Call call, IOException e) {
-+    this.callFailure = e;
-+    notifyAll();
-+  }
-+
-+  @Override public synchronized void onResponse(Call call, Response response) {
-+    this.response = response;
-+    this.handshake = response.handshake();
-+    this.url = response.request().url().url();
-+    notifyAll();
-+  }
-+
-+  final class NetworkInterceptor implements Interceptor {
-+    private boolean proceed;
-+
-+    public void proceed() {
-+      synchronized (HttpURLConnectionImpl.this) {
-+        this.proceed = true;
-+        HttpURLConnectionImpl.this.notifyAll();
-+      }
-+    }
-+
-+    @Override public Response intercept(Chain chain) throws IOException {
+     @Override public Response intercept(Chain chain) throws IOException {
 +      Request request = chain.request();
 +
 +      // Double-check the URL filter to prevent redirects from hitting filtered URLs.
@@ -721,21 +103,14 @@ index 08f73710d..d96c7e298 100644
 +        urlFilter.checkURLPermitted(request.url().url());
 +      }
 +
-+      synchronized (HttpURLConnectionImpl.this) {
-+        connectPending = false;
-+        proxy = chain.connection().route().proxy();
-+        handshake = chain.connection().handshake();
-+        HttpURLConnectionImpl.this.notifyAll();
-+
-+        try {
-+          while (!proceed) {
-+            HttpURLConnectionImpl.this.wait();
-+          }
-+        } catch (InterruptedException e) {
-+          throw new InterruptedIOException();
-+        }
-+      }
-+
+       synchronized (HttpURLConnectionImpl.this) {
+         connectPending = false;
+         proxy = chain.connection().route().proxy();
+@@ -594,7 +603,13 @@ public void proceed() {
+         }
+       }
+ 
+-      Response response = chain.proceed(chain.request());
 +      // Try to lock in the Content-Length before transmitting the request body.
 +      if (request.body() instanceof OutputStreamRequestBody) {
 +        OutputStreamRequestBody requestBody = (OutputStreamRequestBody) request.body();
@@ -743,78 +118,37 @@ index 08f73710d..d96c7e298 100644
 +      }
 +
 +      Response response = chain.proceed(request);
-+
-+      synchronized (HttpURLConnectionImpl.this) {
-+        networkResponse = response;
-+        url = response.request().url().url();
-+      }
-+
-+      return response;
-+    }
-+  }
- }
-diff --git a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpsURLConnectionImpl.java b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpsURLConnectionImpl.java
-index 05e26353c..8c1d69c0a 100644
---- a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpsURLConnectionImpl.java
-+++ b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/HttpsURLConnectionImpl.java
-@@ -40,16 +40,11 @@ public HttpsURLConnectionImpl(HttpURLConnectionImpl delegate) {
-   }
  
-   @Override protected Handshake handshake() {
--    if (delegate.httpEngine == null) {
-+    if (delegate.call == null) {
-       throw new IllegalStateException("Connection has not yet been established");
-     }
- 
--    // If there's a response, get the handshake from there so that caching
--    // works. Otherwise get the handshake from the connection because we might
--    // have not connected yet.
--    return delegate.httpEngine.hasResponse()
--        ? delegate.httpEngine.getResponse().handshake()
--        : delegate.handshake;
-+    return delegate.handshake;
-   }
- 
-   @Override public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
+       synchronized (HttpURLConnectionImpl.this) {
+         networkResponse = response;
 diff --git a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/OutputStreamRequestBody.java b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/OutputStreamRequestBody.java
-new file mode 100644
-index 000000000..602ca024b
---- /dev/null
+index 8abe5f6095..602ca024bc 100755
+--- a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/OutputStreamRequestBody.java
 +++ b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/OutputStreamRequestBody.java
-@@ -0,0 +1,105 @@
-+/*
-+ * Copyright (C) 2016 Square, Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *      http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package okhttp3.internal.huc;
-+
-+import java.io.IOException;
-+import java.io.OutputStream;
-+import java.net.ProtocolException;
+@@ -18,6 +18,8 @@
+ import java.io.IOException;
+ import java.io.OutputStream;
+ import java.net.ProtocolException;
 +import okhttp3.MediaType;
 +import okhttp3.Request;
-+import okhttp3.RequestBody;
-+import okio.BufferedSink;
-+import okio.Timeout;
-+
-+/**
-+ * A request body that's populated by blocking writes to an output stream. The output data is either
-+ * fully buffered (with {@link BufferedRequestBody}) or streamed (with {@link StreamedRequestBody}).
-+ * In either case the bytes of the body aren't known until the caller writes them to the output
-+ * stream.
-+ */
-+public abstract class OutputStreamRequestBody extends RequestBody {
+ import okhttp3.RequestBody;
+ import okio.BufferedSink;
+ import okio.Timeout;
+@@ -29,17 +31,19 @@
+  * stream.
+  */
+ public abstract class OutputStreamRequestBody extends RequestBody {
+-  abstract OutputStream outputStream();
+-  abstract Timeout timeout();
+-
+-  /**
+-   * Returns a new output stream that writes to {@code sink}. If {@code expectedContentLength} is
+-   * not -1, then exactly that many bytes must be written to the stream before it is closed.
+-   */
+-  static OutputStream newOutputStream(final long expectedContentLength, final BufferedSink sink) {
+-    return new OutputStream() {
+-      long bytesReceived;
+-      boolean closed;
 +  private Timeout timeout;
 +  private long expectedContentLength;
 +  private OutputStream outputStream;
@@ -828,40 +162,13 @@ index 000000000..602ca024b
 +    // exactly that many bytes to be written.
 +    this.outputStream = new OutputStream() {
 +      private long bytesReceived;
-+
-+      @Override public void write(int b) throws IOException {
-+        write(new byte[] {(byte) b}, 0, 1);
-+      }
-+
-+      @Override public void write(byte[] source, int offset, int byteCount) throws IOException {
-+        if (closed) throw new IOException("closed"); // Not IllegalStateException!
-+
-+        if (expectedContentLength != -1L && bytesReceived + byteCount > expectedContentLength) {
-+          throw new ProtocolException("expected " + expectedContentLength
-+              + " bytes but received " + bytesReceived + byteCount);
-+        }
-+
-+        bytesReceived += byteCount;
-+        sink.write(source, offset, byteCount);
-+      }
-+
-+      @Override public void flush() throws IOException {
-+        if (closed) return; // Weird, but consistent with historical behavior.
-+        sink.flush();
-+      }
-+
-+      @Override public void close() throws IOException {
-+        closed = true;
-+
-+        if (expectedContentLength != -1L && bytesReceived < expectedContentLength) {
-+          throw new ProtocolException("expected " + expectedContentLength
-+              + " bytes but received " + bytesReceived);
-+        }
-+
-+        sink.close();
-+      }
-+    };
-+  }
+ 
+       @Override public void write(int b) throws IOException {
+         write(new byte[] {(byte) b}, 0, 1);
+@@ -74,4 +78,28 @@ static OutputStream newOutputStream(final long expectedContentLength, final Buff
+       }
+     };
+   }
 +
 +  public final OutputStream outputStream() {
 +    return outputStream;
@@ -886,57 +193,60 @@ index 000000000..602ca024b
 +  public Request prepareToSendRequest(Request request) throws IOException {
 +    return request;
 +  }
-+}
+ }
 diff --git a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/StreamedRequestBody.java b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/StreamedRequestBody.java
-new file mode 100644
-index 000000000..128ad5516
---- /dev/null
+index defa3c8b4d..128ad55164 100755
+--- a/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/StreamedRequestBody.java
 +++ b/okhttp-urlconnection/src/main/java/okhttp3/internal/huc/StreamedRequestBody.java
-@@ -0,0 +1,42 @@
-+/*
-+ * Copyright (C) 2016 Square, Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *      http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package okhttp3.internal.huc;
-+
-+import java.io.IOException;
-+import okhttp3.internal.http.OneShotRequestBody;
-+import okhttp3.internal.io.Pipe;
-+import okio.Buffer;
-+import okio.BufferedSink;
-+import okio.Okio;
-+
+@@ -16,40 +16,21 @@
+ package okhttp3.internal.huc;
+ 
+ import java.io.IOException;
+-import java.io.OutputStream;
+-import okhttp3.MediaType;
+ import okhttp3.internal.http.OneShotRequestBody;
+ import okhttp3.internal.io.Pipe;
+ import okio.Buffer;
+ import okio.BufferedSink;
+ import okio.Okio;
+-import okio.Timeout;
+ 
 +/**
 + * This request body streams bytes from an application thread to an OkHttp dispatcher thread via a
 + * pipe. Because the data is not buffered it can only be transmitted once.
 + */
-+final class StreamedRequestBody extends OutputStreamRequestBody implements OneShotRequestBody {
+ final class StreamedRequestBody extends OutputStreamRequestBody implements OneShotRequestBody {
+-  final Pipe pipe = new Pipe(8192);
+-  final BufferedSink sink = Okio.buffer(pipe.sink);
+-  final long expectedContentLength;
+-  final OutputStream outputStream;
 +  private final Pipe pipe = new Pipe(8192);
-+
-+  StreamedRequestBody(long expectedContentLength) {
+ 
+   StreamedRequestBody(long expectedContentLength) {
+-    this.expectedContentLength = expectedContentLength;
+-    this.outputStream = newOutputStream(expectedContentLength, sink);
+-  }
+-
+-  @Override OutputStream outputStream() {
+-    return outputStream;
+-  }
+-
+-  @Override Timeout timeout() {
+-    return sink.timeout();
+-  }
+-
+-  @Override public MediaType contentType() {
+-    return null; // We let the caller provide this in a regular header.
+-  }
+-
+-  @Override public long contentLength() throws IOException {
+-    return expectedContentLength;
 +    initOutputStream(Okio.buffer(pipe.sink), expectedContentLength);
-+  }
-+
-+  @Override public void writeTo(BufferedSink sink) throws IOException {
-+    Buffer buffer = new Buffer();
-+    while (pipe.source.read(buffer, 8192) != -1L) {
-+      sink.write(buffer, buffer.size());
-+    }
-+  }
-+}
+   }
+ 
+   @Override public void writeTo(BufferedSink sink) throws IOException {
 diff --git a/okhttp-urlconnection/src/test/java/okhttp3/OkUrlFactoryTest.java b/okhttp-urlconnection/src/test/java/okhttp3/OkUrlFactoryTest.java
-index 985e545c7..5eb0f7e0f 100644
+index 985e545c7f..5eb0f7e0fc 100755
 --- a/okhttp-urlconnection/src/test/java/okhttp3/OkUrlFactoryTest.java
 +++ b/okhttp-urlconnection/src/test/java/okhttp3/OkUrlFactoryTest.java
 @@ -207,8 +207,7 @@ public void checkURLPermitted(URL url) throws IOException {
@@ -950,7 +260,7 @@ index 985e545c7..5eb0f7e0f 100644
    }
  
 diff --git a/okhttp-urlconnection/src/test/java/okhttp3/UrlConnectionCacheTest.java b/okhttp-urlconnection/src/test/java/okhttp3/UrlConnectionCacheTest.java
-index 693af6744..1665ae325 100644
+index 693af67443..1665ae325f 100755
 --- a/okhttp-urlconnection/src/test/java/okhttp3/UrlConnectionCacheTest.java
 +++ b/okhttp-urlconnection/src/test/java/okhttp3/UrlConnectionCacheTest.java
 @@ -174,6 +174,9 @@ private void assertCached(boolean shouldPut, int responseCode) throws Exception
@@ -963,105 +273,3 @@ index 693af6744..1665ae325 100644
      }
      server.enqueue(response);
  
-diff --git a/okhttp/src/main/java/okhttp3/RealCall.java b/okhttp/src/main/java/okhttp3/RealCall.java
-index ade741806..d984ff362 100644
---- a/okhttp/src/main/java/okhttp3/RealCall.java
-+++ b/okhttp/src/main/java/okhttp3/RealCall.java
-@@ -16,10 +16,12 @@
- package okhttp3;
- 
- import java.io.IOException;
-+import java.net.HttpRetryException;
- import java.net.ProtocolException;
- import okhttp3.internal.NamedRunnable;
- import okhttp3.internal.Platform;
- import okhttp3.internal.http.HttpEngine;
-+import okhttp3.internal.http.OneShotRequestBody;
- import okhttp3.internal.http.RequestException;
- import okhttp3.internal.http.RouteException;
- import okhttp3.internal.http.StreamAllocation;
-@@ -284,6 +286,10 @@ Response getResponse(Request request, boolean forWebSocket) throws IOException {
-         throw new ProtocolException("Too many follow-up requests: " + followUpCount);
-       }
- 
-+      if (followUp.body() instanceof OneShotRequestBody) {
-+        throw new HttpRetryException("Cannot retry streamed HTTP body", response.code());
-+      }
-+
-       if (!engine.sameConnection(followUp.url())) {
-         streamAllocation.release();
-         streamAllocation = null;
-diff --git a/okhttp/src/main/java/okhttp3/internal/http/HttpEngine.java b/okhttp/src/main/java/okhttp3/internal/http/HttpEngine.java
-index fb56a291f..6b8a3885f 100644
---- a/okhttp/src/main/java/okhttp3/internal/http/HttpEngine.java
-+++ b/okhttp/src/main/java/okhttp3/internal/http/HttpEngine.java
-@@ -997,8 +997,7 @@ public Request followUpRequest() throws IOException {
-         // 408's are rare in practice, but some servers like HAProxy use this response code. The
-         // spec says that we may repeat the request without modifications. Modern browsers also
-         // repeat the request (even non-idempotent ones.)
--        boolean retryableBody = requestBodyOut == null || requestBodyOut instanceof RetryableSink;
--        if (callerWritesRequestBody && !retryableBody) {
-+        if (userRequest.body() instanceof OneShotRequestBody) {
-           return null;
-         }
- 
-diff --git a/okhttp/src/main/java/okhttp3/internal/http/OneShotRequestBody.java b/okhttp/src/main/java/okhttp3/internal/http/OneShotRequestBody.java
-new file mode 100644
-index 000000000..365f968be
---- /dev/null
-+++ b/okhttp/src/main/java/okhttp3/internal/http/OneShotRequestBody.java
-@@ -0,0 +1,19 @@
-+/*
-+ * Copyright (C) 2016 Square, Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *      http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package okhttp3.internal.http;
-+
-+public interface OneShotRequestBody {
-+}
-diff --git a/okhttp/src/main/java/okhttp3/internal/io/Pipe.java b/okhttp/src/main/java/okhttp3/internal/io/Pipe.java
-index f1c30578c..82ba9048a 100644
---- a/okhttp/src/main/java/okhttp3/internal/io/Pipe.java
-+++ b/okhttp/src/main/java/okhttp3/internal/io/Pipe.java
-@@ -16,7 +16,7 @@
- package okhttp3.internal.io;
- 
- import java.io.IOException;
--import java.io.InterruptedIOException;
-+import java.net.SocketTimeoutException;
- import okio.Buffer;
- import okio.Sink;
- import okio.Source;
-@@ -136,7 +136,7 @@ public Pipe(long maxBufferSize) {
-   }
- 
-   /**
--   * Waits on {@code monitor} until it is notified. Throws {@link InterruptedIOException} if either
-+   * Waits on {@code monitor} until it is notified. Throws {@link SocketTimeoutException} if either
-    * the thread is interrupted or if {@code timeout} elapses before {@code monitor} is notified. The
-    * caller must be synchronized on {@code monitor}.
-    */
-@@ -172,10 +172,10 @@ static void waitUntilNotified(Object monitor, Timeout timeout) throws IOExceptio
- 
-       // Throw if the timeout elapsed before the monitor was notified.
-       if (elapsedNanos >= waitNanos) {
--        throw new InterruptedIOException("timeout");
-+        throw new SocketTimeoutException("timeout");
-       }
-     } catch (InterruptedException e) {
--      throw new InterruptedIOException("interrupted");
-+      throw new SocketTimeoutException("interrupted");
-     }
-   }
- }

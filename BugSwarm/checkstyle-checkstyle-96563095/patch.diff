@@ -1,195 +1,51 @@
-diff --git a/src/it/java/com/google/checkstyle/test/base/BriefLogger.java b/src/it/java/com/google/checkstyle/test/base/BriefLogger.java
-index 495a7b8466..57aa0c622e 100644
---- a/src/it/java/com/google/checkstyle/test/base/BriefLogger.java
-+++ b/src/it/java/com/google/checkstyle/test/base/BriefLogger.java
-@@ -23,13 +23,38 @@
- 
- import com.puppycrawl.tools.checkstyle.DefaultLogger;
- import com.puppycrawl.tools.checkstyle.api.AuditEvent;
-+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
- 
- /** A brief logger that only display info about errors. */
- class BriefLogger extends DefaultLogger {
-+
-+    /** Cushion for avoiding StringBuffer.expandCapacity */
-+    private static final int BUFFER_CUSHION = 12;
-+
-     BriefLogger(OutputStream out) {
-         super(out, true, out, false, false);
-     }
- 
-+    @Override
-+    protected String formErrorMessage(AuditEvent event, SeverityLevel severityLevel) {
-+        final String fileName = event.getFileName();
-+        final String message = event.getMessage();
-+
-+        // avoid StringBuffer.expandCapacity
-+        final int bufLen = fileName.length() + message.length()
-+            + BUFFER_CUSHION;
-+        final StringBuilder sb = new StringBuilder(bufLen);
-+
-+        final char separator = ':';
-+        sb.append(fileName).append(separator).append(event.getLine());
-+        if (event.getColumn() > 0) {
-+            sb.append(separator).append(event.getColumn());
-+        }
-+        sb.append(separator).append(' ').append(message);
-+
-+        return sb.toString();
-+    }
-+
-     @Override
-     public void auditStarted(AuditEvent event) { }
- }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
-index 3c8edc2ee6..e408d055b1 100644
+index bca2bb0967..e408d055b1 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
-@@ -24,6 +24,7 @@
- import java.io.PrintWriter;
- import java.io.Writer;
- import java.nio.charset.StandardCharsets;
-+import java.util.Locale;
- 
- import com.puppycrawl.tools.checkstyle.api.AuditEvent;
- import com.puppycrawl.tools.checkstyle.api.AuditListener;
-@@ -122,28 +123,56 @@ public DefaultLogger(OutputStream infoStream,
-     public void addError(AuditEvent event) {
-         final SeverityLevel severityLevel = event.getSeverityLevel();
-         if (severityLevel != SeverityLevel.IGNORE) {
--
--            final String fileName = event.getFileName();
--            final String message = event.getMessage();
--
--            // avoid StringBuffer.expandCapacity
--            final int bufLen = fileName.length() + message.length()
--                + BUFFER_CUSHION;
--            final StringBuilder sb = new StringBuilder(bufLen);
--
--            sb.append(fileName).append(':').append(event.getLine());
--            if (event.getColumn() > 0) {
--                sb.append(':').append(event.getColumn());
--            }
--            final String errorMessageSeparator = ": ";
--            if (printSeverity) {
--                sb.append(errorMessageSeparator).append(severityLevel.getName());
--            }
--            sb.append(errorMessageSeparator).append(message);
-+            final String sb = formErrorMessage(event, severityLevel);
-             errorWriter.println(sb);
-         }
-     }
- 
-+    /**
-+     * Forms error message.
-+     * @param event audit event.
-+     * @param severityLevel severity level.
-+     * @return string representation of error message.
-+     */
-+    protected String formErrorMessage(AuditEvent event, SeverityLevel severityLevel) {
-+        final String fileName = event.getFileName();
-+        final String message = event.getMessage();
-+
-+        // avoid StringBuffer.expandCapacity
-+        final int bufLen = fileName.length() + message.length()
-+            + BUFFER_CUSHION;
-+        final StringBuilder sb = new StringBuilder(bufLen);
-+
-+        final char leftBrace = '[';
-+        final char rightBrace = ']';
-+        final char space = ' ';
-+        if (printSeverity) {
-+            final String severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+@@ -148,16 +148,14 @@ protected String formErrorMessage(AuditEvent event, SeverityLevel severityLevel)
+         final char space = ' ';
+         if (printSeverity) {
+             final String severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+-            sb.append(leftBrace).append(severityLevelName).append(rightBrace);
+-            sb.append(space);
 +            sb.append(leftBrace).append(severityLevelName).append(rightBrace).append(space);
-+        }
-+        final char separator = ':';
-+        sb.append(fileName).append(separator).append(event.getLine());
-+        if (event.getColumn() > 0) {
-+            sb.append(separator).append(event.getColumn());
-+        }
+         }
+         final char separator = ':';
+         sb.append(fileName).append(separator).append(event.getLine());
+         if (event.getColumn() > 0) {
+             sb.append(separator).append(event.getColumn());
+         }
+-        sb.append(separator).append(space).append(message);
+-        sb.append(space);
 +        sb.append(separator).append(space).append(message).append(space);
-+        final String checkShortName = getCheckShortName(event);
-+        sb.append(leftBrace).append(checkShortName).append(rightBrace);
-+
-+        return sb.toString();
-+    }
-+
-+    /**
-+     * Returns check name without 'Check' suffix.
-+     * @param event audit ivent.
-+     * @return check name without 'Check' suffix.
-+     */
-+    private static String getCheckShortName(AuditEvent event) {
-+        final String checkFullName = event.getSourceName();
-+        return checkFullName.substring(checkFullName.lastIndexOf('.') + 1,
-+            checkFullName.lastIndexOf("Check"));
-+    }
-+
-     @Override
-     public void addException(AuditEvent event, Throwable throwable) {
-         synchronized (errorWriter) {
+         final String checkShortName = getCheckShortName(event);
+         sb.append(leftBrace).append(checkShortName).append(rightBrace);
+ 
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java b/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
-index 7dd3796374..86711b5732 100644
+index 0e5a41b4de..86711b5732 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
-@@ -46,6 +46,7 @@
- import com.google.common.collect.Maps;
- import com.puppycrawl.tools.checkstyle.api.AuditEvent;
- import com.puppycrawl.tools.checkstyle.api.Configuration;
-+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
- 
- public class BaseCheckTestSupport {
-     protected final ByteArrayOutputStream stream = new ByteArrayOutputStream();
-@@ -280,14 +281,44 @@ protected String getCheckMessage(String messageKey, Object... arguments) {
-     /**
-      * A brief logger that only display info about errors.
-      */
--    protected static class BriefLogger
--            extends DefaultLogger {
-+    protected static class BriefLogger extends DefaultLogger {
-+
-+        /** Cushion for avoiding StringBuffer.expandCapacity */
-+        private static final int BUFFER_CUSHION = 12;
-+        /** Print severity level. */
-+        private boolean printSeverity;
-+
-         public BriefLogger(OutputStream out) {
-             super(out, true, out, false, false);
+@@ -293,7 +293,7 @@ public BriefLogger(OutputStream out) {
          }
  
          public BriefLogger(OutputStream out, boolean printSeverity) {
 -            super(out, true, out, false, printSeverity);
 +            super(out, true, out, false);
-+            this.printSeverity = printSeverity;
-+        }
-+
-+        @Override
-+        protected String formErrorMessage(AuditEvent event, SeverityLevel severityLevel) {
-+            final String fileName = event.getFileName();
-+            final String message = event.getMessage();
-+
-+            // avoid StringBuffer.expandCapacity
-+            final int bufLen = fileName.length() + message.length()
-+                + BUFFER_CUSHION;
-+            final StringBuilder sb = new StringBuilder(bufLen);
-+
-+            final char separator = ':';
-+            sb.append(fileName).append(separator).append(event.getLine());
-+            final char space = ' ';
-+            if (printSeverity) {
-+                sb.append(separator).append(space).append(severityLevel.getName());
-+            }
-+            if (event.getColumn() > 0) {
-+                sb.append(separator).append(event.getColumn());
-+            }
-+            sb.append(separator).append(space).append(message);
-+
-+            return sb.toString();
+             this.printSeverity = printSeverity;
          }
  
-         @Override
+@@ -311,8 +311,7 @@ protected String formErrorMessage(AuditEvent event, SeverityLevel severityLevel)
+             sb.append(fileName).append(separator).append(event.getLine());
+             final char space = ' ';
+             if (printSeverity) {
+-                sb.append(separator).append(space);
+-                sb.append(severityLevel.getName());
++                sb.append(separator).append(space).append(severityLevel.getName());
+             }
+             if (event.getColumn() > 0) {
+                 sb.append(separator).append(event.getColumn());
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/DefaultLoggerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/DefaultLoggerTest.java
-index 2279c9aa97..8758e69a78 100644
+index 2279c9aa97..8758e69a78 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/DefaultLoggerTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/DefaultLoggerTest.java
 @@ -19,12 +19,17 @@
@@ -243,52 +99,3 @@ index 2279c9aa97..8758e69a78 100644
 +        assertEquals(expected, actual);
 +    }
  }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index a6ff663e4d..6319312226 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-@@ -259,12 +259,12 @@ public void testExistingTargetFileWithViolations() throws Exception {
-             public void checkAssertion() throws IOException {
-                 final String expectedPath = getFilePath("InputMain.java");
-                 assertEquals(String.format(Locale.ROOT, "Starting audit...%n"
--                                + "%1$s:3:14: "
--                                + "warning: Name 'InputMain' must match pattern"
--                                + " '^[a-z0-9]*$'.%n"
--                                + "%1$s:5:7: "
--                                + "warning: Name 'InputMainInner' must match pattern"
--                                + " '^[a-z0-9]*$'.%n"
-+                                + "[WARNING] %1$s:3:14: "
-+                                + "Name 'InputMain' must match pattern"
-+                                + " '^[a-z0-9]*$'. [TypeName]%n"
-+                                + "[WARNING] %1$s:5:7: "
-+                                + "Name 'InputMainInner' must match pattern"
-+                                + " '^[a-z0-9]*$'. [TypeName]%n"
-                                 + "Audit done.%n", expectedPath),
-                         systemOut.getLog());
-                 assertEquals("", systemErr.getLog());
-@@ -283,10 +283,10 @@ public void testExistingTargetFileWithError()
-             public void checkAssertion() throws IOException {
-                 final String expectedPath = getFilePath("InputMain.java");
-                 assertEquals(String.format(Locale.ROOT, "Starting audit...%n"
--                        + "%1$s:3:14: error: "
--                        + "Name 'InputMain' must match pattern '^[a-z0-9]*$'.%n"
--                        + "%1$s:5:7: error: "
--                        + "Name 'InputMainInner' must match pattern '^[a-z0-9]*$'.%n"
-+                        + "[ERROR] %1$s:3:14: "
-+                        + "Name 'InputMain' must match pattern '^[a-z0-9]*$'. [TypeName]%n"
-+                        + "[ERROR] %1$s:5:7: "
-+                        + "Name 'InputMainInner' must match pattern '^[a-z0-9]*$'. [TypeName]%n"
-                         + "Audit done.%n"
-                         + "Checkstyle ends with 2 errors.%n", expectedPath), systemOut.getLog());
-                 assertEquals("", systemErr.getLog());
-@@ -513,8 +513,8 @@ public void checkAssertion() throws IOException {
-                 final String expectedPath = getFilePath("checks/metrics") + File.separator;
-                 final StringBuilder sb = new StringBuilder();
-                 sb.append("Starting audit...").append(System.getProperty("line.separator"));
--                final String format = "%s.java:%s: warning: File length is %s lines "
--                    + "(max allowed is 170).";
-+                final String format = "[WARNING] %s.java:%s: File length is %s lines "
-+                    + "(max allowed is 170). [FileLength]";
-                 for (String[] outputValue : outputValues) {
-                     final String line = String.format(Locale.ROOT, format,
-                             expectedPath + outputValue[0], outputValue[1],

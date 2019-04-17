@@ -1,5 +1,5 @@
 diff --git a/checkstyle.xml b/checkstyle.xml
-index ab2b00bb..285c6bc2 100644
+index ab2b00bb5b..285c6bc2b2 100755
 --- a/checkstyle.xml
 +++ b/checkstyle.xml
 @@ -65,10 +65,6 @@
@@ -14,8 +14,8 @@ index ab2b00bb..285c6bc2 100644
  
      <!-- Checks for whitespace                               -->
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/CommandLineOptions.java b/wire-compiler/src/main/java/com/squareup/wire/CommandLineOptions.java
-new file mode 100644
-index 00000000..1e70b722
+new file mode 100755
+index 0000000000..1e70b7227d
 --- /dev/null
 +++ b/wire-compiler/src/main/java/com/squareup/wire/CommandLineOptions.java
 @@ -0,0 +1,168 @@
@@ -188,380 +188,233 @@ index 00000000..1e70b722
 +  }
 +}
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/IO.java b/wire-compiler/src/main/java/com/squareup/wire/IO.java
-index f968656a..5e801520 100644
+index f78f185f20..5e801520ca 100755
 --- a/wire-compiler/src/main/java/com/squareup/wire/IO.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/IO.java
-@@ -5,7 +5,6 @@
+@@ -5,9 +5,6 @@
  import com.squareup.protoparser.ProtoFile;
  import com.squareup.protoparser.ProtoSchemaParser;
  
+-import com.squareup.wire.logger.WireLogger;
+-import com.squareup.wire.logger.WireLoggerFactory;
 -import java.io.File;
  import java.io.FileInputStream;
  import java.io.FileOutputStream;
  import java.io.IOException;
-@@ -29,9 +28,10 @@
-    *   <output directory>/<java package converted to slashed form>/<className>.java
-    * }</pre>
-    */
--  JavaWriter getJavaWriter(String outputDirectory, String javaPackage, String className)
-+  JavaWriter getJavaWriter(OutputArtifact outputArtifact)
-       throws IOException;
- 
-+
-   /**
+@@ -39,7 +36,6 @@ JavaWriter getJavaWriter(OutputArtifact outputArtifact)
     * Concrete implementation of the IO interface that proxies to the file system.
     */
-@@ -45,18 +45,10 @@ public ProtoFile parse(String filename) throws IOException {
-     }
+   class FileIO implements IO {
+-    private static final WireLogger log = WireLoggerFactory.get();
+     private static final Charset UTF_8 = Charset.forName("UTF8");
  
      @Override
--    public JavaWriter getJavaWriter(String outputDirectory, String javaPackage, String className)
-+    public JavaWriter getJavaWriter(OutputArtifact artifact)
+@@ -51,14 +47,8 @@ public ProtoFile parse(String filename) throws IOException {
+     @Override
+     public JavaWriter getJavaWriter(OutputArtifact artifact)
          throws IOException {
--      String directory = outputDirectory + File.separator
--          + javaPackage.replace(".", File.separator);
--      boolean created = new File(directory).mkdirs();
+-      File directory = artifact.getArtifactDir();
+-      boolean created = directory.mkdirs();
 -      if (created) {
--        System.out.println("Created output directory " + directory);
+-        log.info("Created output directory " + directory);
 -      }
 -
--      String fileName = directory + File.separator + className + ".java";
--      System.out.println("Writing generated code to " + fileName);
--      return new JavaWriter(new OutputStreamWriter(new FileOutputStream(fileName), UTF_8));
+-      File outputFile = artifact.getArtifactFile();
+-      return new JavaWriter(new OutputStreamWriter(new FileOutputStream(outputFile), UTF_8));
 +      artifact.dir().mkdirs();
 +      return new JavaWriter(new OutputStreamWriter(new FileOutputStream(artifact.file()), UTF_8));
      }
    }
  }
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java b/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
-index f112c246..defdf546 100644
+index 74d9c36508..defdf54662 100755
 --- a/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
-@@ -39,11 +39,9 @@
-           "throw", "throws", "transient", "try", "void", "volatile", "while"));
-   private static final String URL_CHARS = "[-!#$%&'()*+,./0-9:;=?@A-Z\\[\\]_a-z~]";
-   private final WireCompiler compiler;
--  private final JavaWriter writer;
- 
-   public MessageWriter(WireCompiler compiler) {
-     this.compiler = compiler;
--    this.writer = compiler.getWriter();
-   }
- 
-   public static void emitDocumentation(JavaWriter writer, String documentation) throws IOException {
-@@ -67,7 +65,7 @@ static String sanitizeJavadoc(String documentation) {
-     return documentation;
-   }
- 
--  public void emitHeader(Set<String> imports,
-+  public void emitHeader(JavaWriter writer, Set<String> imports,
-       Collection<Message.Datatype> datatypes, Collection<Message.Label> labels) throws IOException {
-     writer.emitImports(imports);
- 
-@@ -96,13 +94,14 @@ public void emitHeader(Set<String> imports,
+@@ -94,7 +94,8 @@ public void emitHeader(JavaWriter writer, Set<String> imports,
      }
    }
  
--  public void emitType(Type type, String currentType, Map<String, ?> optionsMap, boolean topLevel)
+-  public void emitType(JavaWriter writer, Type type, String currentType, Map<String, ?> optionsMap, boolean topLevel)
 +  public void emitType(JavaWriter writer, Type type, String currentType, Map<String, ?> optionsMap,
 +      boolean topLevel)
        throws IOException {
      writer.emitEmptyLine();
      if (type instanceof MessageType) {
--      emitAll((MessageType) type, optionsMap, topLevel);
-+      emitAll(writer, (MessageType) type, optionsMap, topLevel);
-       for (Type nestedType : type.getNestedTypes()) {
--        emitType(nestedType, currentType + nestedType.getName() + ".", optionsMap, false);
-+        emitType(writer, nestedType, currentType + nestedType.getName() + ".", optionsMap, false);
-       }
-       writer.endType();
-     } else if (type instanceof EnumType) {
-@@ -125,8 +124,8 @@ public void emitType(Type type, String currentType, Map<String, ?> optionsMap, b
-             (i == count - 1));
-       }
- 
--      if (compiler.emitOptions()) {
--        emitEnumOptions(mapMaker.createEnumOptionsMap(enumType));
-+      if (compiler.shouldEmitOptions()) {
-+        emitEnumOptions(writer, mapMaker.createEnumOptionsMap(enumType));
-       }
- 
-       // Output Private tag field
-@@ -168,7 +167,7 @@ public void emitType(Type type, String currentType, Map<String, ?> optionsMap, b
- 
-   private List<EnumValueOptionInfo> getEnumValueOptions(EnumType enumType,
-       OptionsMapMaker mapMaker) {
--    if (!compiler.emitOptions() && compiler.enumOptions().isEmpty()) {
-+    if (!compiler.shouldEmitOptions() && compiler.enumOptions().isEmpty()) {
-       return Collections.emptyList();
-     }
- 
-@@ -240,7 +239,8 @@ private String join(List<String> values, String separator) {
+@@ -238,7 +239,8 @@ private String join(List<String> values, String separator) {
      return sb.toString();
    }
  
--  private void emitAll(MessageType messageType, Map<String, ?> optionsMap, boolean topLevel)
+-  private void emitAll(JavaWriter writer, MessageType messageType, Map<String, ?> optionsMap, boolean topLevel)
 +  private void emitAll(JavaWriter writer, MessageType messageType, Map<String, ?> optionsMap,
 +      boolean topLevel)
        throws IOException {
      Set<Modifier> modifiers = EnumSet.of(PUBLIC, FINAL);
      if (!topLevel) {
-@@ -252,20 +252,20 @@ private void emitAll(MessageType messageType, Map<String, ?> optionsMap, boolean
-     writer.beginType(name, "class", modifiers,
-         compiler.hasExtensions(messageType) ? "ExtendableMessage<" + name + ">" : "Message");
- 
--    emitMessageOptions(optionsMap);
--    if (compiler.emitOptions()) {
--      emitMessageFieldOptions(messageType);
-+    emitMessageOptions(writer, optionsMap);
-+    if (compiler.shouldEmitOptions()) {
-+      emitMessageFieldOptions(writer, messageType);
+@@ -256,8 +258,8 @@ private void emitAll(JavaWriter writer, MessageType messageType, Map<String, ?>
      }
--    emitMessageFieldDefaults(messageType);
--    emitMessageFields(messageType);
--    emitMessageFieldsConstructor(messageType);
--    emitMessageBuilderConstructor(messageType);
--    emitMessageEquals(messageType);
--    emitMessageHashCode(messageType);
--    emitBuilder(messageType);
-+    emitMessageFieldDefaults(writer, messageType);
-+    emitMessageFields(writer, messageType);
+     emitMessageFieldDefaults(writer, messageType);
+     emitMessageFields(writer, messageType);
+-    emitMessageFieldsConstructor(writer,messageType);
+-    emitMessageBuilderConstructor(writer,messageType);
 +    emitMessageFieldsConstructor(writer, messageType);
 +    emitMessageBuilderConstructor(writer, messageType);
-+    emitMessageEquals(writer, messageType);
-+    emitMessageHashCode(writer, messageType);
-+    emitBuilder(writer, messageType);
-   }
- 
--  private void emitMessageOptions(Map<String, ?> optionsMap) throws IOException {
-+  private void emitMessageOptions(JavaWriter writer, Map<String, ?> optionsMap) throws IOException {
-     if (optionsMap != null) {
-       StringBuilder sb = new StringBuilder();
-       sb.append("new MessageOptions.Builder()");
-@@ -284,7 +284,7 @@ private void emitMessageOptions(Map<String, ?> optionsMap) throws IOException {
+     emitMessageEquals(writer, messageType);
+     emitMessageHashCode(writer, messageType);
+     emitBuilder(writer, messageType);
+@@ -301,7 +303,8 @@ private void emitEnumOptions(JavaWriter writer, Map<String, ?> optionsMap) throw
      }
    }
  
--  private void emitEnumOptions(Map<String, ?> optionsMap) throws IOException {
-+  private void emitEnumOptions(JavaWriter writer, Map<String, ?> optionsMap) throws IOException {
-     if (optionsMap != null) {
-       StringBuilder sb = new StringBuilder();
-       sb.append("new EnumOptions.Builder()");
-@@ -303,7 +303,8 @@ private void emitEnumOptions(Map<String, ?> optionsMap) throws IOException {
-     }
-   }
- 
--  private void emitMessageFieldOptions(MessageType messageType) throws IOException {
+-  private void emitMessageFieldOptions(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitMessageFieldOptions(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      Map<String, List<Option>> fieldOptions = new LinkedHashMap<String, List<Option>>();
  
      for (Field field : messageType.getFields()) {
-@@ -327,11 +328,12 @@ private void emitMessageFieldOptions(MessageType messageType) throws IOException
-     for (Map.Entry<String, List<Option>> entry : fieldOptions.entrySet()) {
-       Map<String, ?> fieldOptionsMap =
-           compiler.getOptionsMapMaker().createFieldOptionsMap(messageType, entry.getValue());
--      emitFieldOptions(entry.getKey(), fieldOptionsMap);
-+      emitFieldOptions(writer, entry.getKey(), fieldOptionsMap);
+@@ -329,7 +332,8 @@ private void emitMessageFieldOptions(JavaWriter writer, MessageType messageType)
      }
    }
  
--  private void emitFieldOptions(String fieldName, Map<String, ?> optionsMap) throws IOException {
+-  private void emitFieldOptions(JavaWriter writer, String fieldName, Map<String, ?> optionsMap) throws IOException {
 +  private void emitFieldOptions(JavaWriter writer, String fieldName, Map<String, ?> optionsMap)
 +      throws IOException {
      if (optionsMap == null) return;
  
      StringBuilder sb = new StringBuilder();
-@@ -356,7 +358,8 @@ private void emitFieldOptions(String fieldName, Map<String, ?> optionsMap) throw
+@@ -354,7 +358,8 @@ private void emitFieldOptions(JavaWriter writer, String fieldName, Map<String, ?
    //
    // public static final Integer DEFAULT_OPT_INT32 = 123;
    //
--  private void emitMessageFieldDefaults(MessageType messageType) throws IOException {
+-  private void emitMessageFieldDefaults(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitMessageFieldDefaults(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      List<Field> defaultFields = new ArrayList<Field>();
      for (Field field : messageType.getFields()) {
        // Message types cannot have defaults
-@@ -393,7 +396,7 @@ private void emitMessageFieldDefaults(MessageType messageType) throws IOExceptio
-   // )
-   // public final Integer optional_int32;
-   //
--  private void emitMessageFields(MessageType messageType) throws IOException {
-+  private void emitMessageFields(JavaWriter writer, MessageType messageType) throws IOException {
-     for (Field field : messageType.getFields()) {
-       int tag = field.getTag();
- 
-@@ -452,7 +455,8 @@ private void emitMessageFields(MessageType messageType) throws IOException {
+@@ -450,7 +455,8 @@ private void emitMessageFields(JavaWriter writer, MessageType messageType) throw
    //   this.optional_int64 = optional_int64;
    // }
    //
--  private void emitMessageFieldsConstructor(MessageType messageType) throws IOException {
+-  private void emitMessageFieldsConstructor(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitMessageFieldsConstructor(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      List<String> params = new ArrayList<String>();
      for (Field field : messageType.getFields()) {
        String javaName = getJavaFieldType(messageType, field);
-@@ -480,7 +484,8 @@ private void emitMessageFieldsConstructor(MessageType messageType) throws IOExce
+@@ -478,7 +484,8 @@ private void emitMessageFieldsConstructor(JavaWriter writer, MessageType message
    //   setBuilder(builder);
    // }
    //
--  private void emitMessageBuilderConstructor(MessageType messageType) throws IOException {
+-  private void emitMessageBuilderConstructor(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitMessageBuilderConstructor(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      writer.emitEmptyLine();
      writer.beginMethod(null, messageType.getName(), EnumSet.of(PRIVATE), "Builder", "builder");
      StringBuilder params = new StringBuilder();
-@@ -508,7 +513,7 @@ private void emitMessageBuilderConstructor(MessageType messageType) throws IOExc
-   //   if (!Wire.equals(optional_int32, o.optional_int32)) return false;
-   //   return true;
-   //
--  private void emitMessageEquals(MessageType messageType) throws IOException {
-+  private void emitMessageEquals(JavaWriter writer, MessageType messageType) throws IOException {
-     writer.emitEmptyLine();
-     writer.emitAnnotation(Override.class);
-     writer.beginMethod("boolean", "equals", EnumSet.of(PUBLIC), "Object", "other");
-@@ -560,7 +565,8 @@ private void emitMessageEquals(MessageType messageType) throws IOException {
+@@ -558,7 +565,8 @@ private void emitMessageEquals(JavaWriter writer, MessageType messageType) throw
    // For repeated fields, the final "0" in the example above changes to a "1"
    // in order to be the same as the system hash code for an empty list.
    //
--  private void emitMessageHashCode(MessageType messageType) throws IOException {
+-  private void emitMessageHashCode(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitMessageHashCode(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      writer.emitEmptyLine();
      writer.emitAnnotation(Override.class);
      writer.beginMethod("int", "hashCode", EnumSet.of(PUBLIC));
-@@ -608,21 +614,21 @@ private int nullHashValue(Field field) {
-     return FieldInfo.isRepeated(field) ? 1 : 0;
-   }
- 
--  private void emitBuilder(MessageType messageType) throws IOException {
-+  private void emitBuilder(JavaWriter writer, MessageType messageType) throws IOException {
-     writer.emitEmptyLine();
-     writer.beginType("Builder", "class", EnumSet.of(PUBLIC, STATIC, FINAL),
-         (compiler.hasExtensions(messageType) ? "ExtendableBuilder<" : "Message.Builder<")
-             + messageType.getName()
-             + ">");
--    emitBuilderFields(messageType);
--    emitBuilderConstructors(messageType);
--    emitBuilderSetters(messageType);
--    if (compiler.hasExtensions(messageType)) emitBuilderSetExtension(messageType);
--    emitBuilderBuild(messageType);
-+    emitBuilderFields(writer, messageType);
-+    emitBuilderConstructors(writer, messageType);
-+    emitBuilderSetters(writer, messageType);
-+    if (compiler.hasExtensions(messageType)) emitBuilderSetExtension(writer, messageType);
-+    emitBuilderBuild(writer, messageType);
-     writer.endType();
-   }
- 
--  private void emitBuilderFields(MessageType messageType) throws IOException {
-+  private void emitBuilderFields(JavaWriter writer, MessageType messageType) throws IOException {
-     List<Field> fields = messageType.getFields();
- 
-     if (!fields.isEmpty()) writer.emitEmptyLine();
-@@ -644,7 +650,8 @@ private void emitBuilderFields(MessageType messageType) throws IOException {
+@@ -642,7 +650,8 @@ private void emitBuilderFields(JavaWriter writer, MessageType messageType) throw
    //   ...
    // }
    //
--  private void emitBuilderConstructors(MessageType messageType) throws IOException {
+-  private void emitBuilderConstructors(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitBuilderConstructors(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      writer.emitEmptyLine();
      writer.beginMethod(null, "Builder", EnumSet.of(PUBLIC));
      writer.endMethod();
-@@ -665,7 +672,7 @@ private void emitBuilderConstructors(MessageType messageType) throws IOException
-     writer.endMethod();
-   }
- 
--  private void emitBuilderSetters(MessageType messageType) throws IOException {
-+  private void emitBuilderSetters(JavaWriter writer, MessageType messageType) throws IOException {
-     for (Field field : messageType.getFields()) {
-       String javaName = getJavaFieldType(messageType, field);
-       List<String> args = new ArrayList<String>();
-@@ -700,7 +707,8 @@ private void emitBuilderSetters(MessageType messageType) throws IOException {
+@@ -698,7 +707,8 @@ private void emitBuilderSetters(JavaWriter writer, MessageType messageType) thro
    //   return this;
    // }
    //
--  private void emitBuilderSetExtension(MessageType messageType) throws IOException {
+-  private void emitBuilderSetExtension(JavaWriter writer, MessageType messageType) throws IOException {
 +  private void emitBuilderSetExtension(JavaWriter writer, MessageType messageType)
 +      throws IOException {
      writer.emitEmptyLine();
      writer.emitAnnotation(Override.class);
      writer.beginMethod("<E> Builder", "setExtension", EnumSet.of(PUBLIC),
-@@ -721,7 +729,7 @@ private void emitBuilderSetExtension(MessageType messageType) throws IOException
-   // The call to checkRequiredFields will be emitted only if the message has
-   // required fields.
-   //
--  private void emitBuilderBuild(MessageType messageType) throws IOException {
-+  private void emitBuilderBuild(JavaWriter writer, MessageType messageType) throws IOException {
-     writer.emitEmptyLine();
-     writer.emitAnnotation(Override.class);
-     writer.beginMethod(messageType.getName(), "build", EnumSet.of(PUBLIC));
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/OutputArtifact.java b/wire-compiler/src/main/java/com/squareup/wire/OutputArtifact.java
-new file mode 100644
-index 00000000..e73a1b89
---- /dev/null
+index d440acd7cd..e73a1b89c0 100755
+--- a/wire-compiler/src/main/java/com/squareup/wire/OutputArtifact.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/OutputArtifact.java
-@@ -0,0 +1,45 @@
-+package com.squareup.wire;
-+
-+import java.io.File;
-+
-+/**
-+ * A container class that represents an artifact output from the compiler.
-+ */
+@@ -5,40 +5,41 @@
+ /**
+  * A container class that represents an artifact output from the compiler.
+  */
+-public class OutputArtifact {
 +public final class OutputArtifact {
-+  private final String outputDirectory;
-+  private final String className;
-+  private final String javaPackage;
-+
-+  public OutputArtifact(String outputDirectory, String javaPackage, String className) {
-+    this.outputDirectory = outputDirectory;
-+    this.className = className;
-+    this.javaPackage = javaPackage;
-+  }
-+
+   private final String outputDirectory;
+   private final String className;
+   private final String javaPackage;
+-  private final File artifactFile;
+ 
+   public OutputArtifact(String outputDirectory, String javaPackage, String className) {
+     this.outputDirectory = outputDirectory;
+     this.className = className;
+     this.javaPackage = javaPackage;
+-    String dir = outputDirectory + File.separator
+-        + javaPackage.replace(".", File.separator);
+-    artifactFile = new File(dir, className + ".java");
+   }
+ 
+-  public String getOutputDirectory() {
 +
 +  public String outputDirectory() {
-+    return outputDirectory;
-+  }
-+
+     return outputDirectory;
+   }
+ 
+-  public String getClassName() {
 +  public String className() {
-+    return className;
-+  }
-+
+     return className;
+   }
+ 
+-  public String getJavaPackage() {
 +  public String javaPackage() {
-+    return javaPackage;
-+  }
-+
+     return javaPackage;
+   }
+ 
+-  public File getArtifactFile() {
+-    return artifactFile;
 +  public File file() {
 +    String dir = outputDirectory + File.separator
 +        + javaPackage.replace(".", File.separator);
 +    return new File(dir, className + ".java");
-+  }
-+
+   }
+ 
+-  public File getArtifactDir() {
+-    return artifactFile.getParentFile();
 +  public File dir() {
 +    return file().getParentFile();
-+  }
-+
+   }
+ 
+-  public String getFullClassName() { return javaPackage + "." + className; }
 +  public String fullClassName() {
 +    return javaPackage + "." + className;
 +  }
-+}
+ }
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java b/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
-index 1d72ac39..f61fd03e 100644
+index 1fb99c544a..f61fd03ed7 100755
 --- a/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/WireCompiler.java
-@@ -23,6 +23,8 @@
+@@ -23,8 +23,8 @@
  import com.squareup.protoparser.ProtoFile;
  import com.squareup.protoparser.Service;
  import com.squareup.protoparser.Type;
 +import com.squareup.wire.logger.ConsoleWireLogger;
-+import com.squareup.wire.logger.WireLogger;
+ import com.squareup.wire.logger.WireLogger;
+-import com.squareup.wire.logger.WireLoggerFactory;
  import java.io.File;
  import java.io.IOException;
  import java.lang.reflect.Constructor;
-@@ -36,7 +38,6 @@
+@@ -38,7 +38,6 @@
  import java.util.LinkedHashSet;
  import java.util.List;
  import java.util.Map;
@@ -569,7 +422,15 @@ index 1d72ac39..f61fd03e 100644
  import java.util.Set;
  import java.util.TreeSet;
  import okio.ByteString;
-@@ -60,20 +61,10 @@
+@@ -54,6 +53,7 @@
+ /** Compiler for Wire protocol buffers. */
+ public class WireCompiler {
+   static final String LINE_WRAP_INDENT = "    ";
++
+   /**
+    * Field options that don't trigger generation of a FIELD_OPTIONS_* field.
+    */
+@@ -61,22 +61,10 @@
        new LinkedHashSet<String>(Arrays.asList("default", "deprecated", "packed"));
  
    private static final Charset ISO_8859_1 = Charset.forName("ISO_8859_1");
@@ -582,6 +443,8 @@ index 1d72ac39..f61fd03e 100644
 -  private static final String ENUM_OPTIONS_FLAG = "--enum_options=";
 -  private static final String SERVICE_WRITER_FLAG = "--service_writer=";
 -  private static final String SERVICE_WRITER_OPT_FLAG = "--service_writer_opt=";
+-  private static final String QUIET_FLAG = "--quiet";
+-  private static final String DRY_RUN_FLAG = "--dry-run";
    private static final String CODE_GENERATED_BY_WIRE =
        "Code generated by Wire protocol buffer compiler, do not edit.";
  
@@ -590,7 +453,7 @@ index 1d72ac39..f61fd03e 100644
    private final IO io;
    private final Set<String> typesToEmit = new LinkedHashSet<String>();
    private final Map<String, String> javaSymbolMap = new LinkedHashMap<String, String>();
-@@ -83,179 +74,112 @@
+@@ -86,204 +74,108 @@
    private final Map<String, ExtensionInfo> extensionInfo =
        new LinkedHashMap<String, ExtensionInfo>();
    private final Map<String, FieldInfo> fieldMap = new LinkedHashMap<String, FieldInfo>();
@@ -600,16 +463,17 @@ index 1d72ac39..f61fd03e 100644
    private final List<String> extensionClasses = new ArrayList<String>();
    private final OptionsMapMaker optionsMapMaker = new OptionsMapMaker(this);
 +  private final CommandLineOptions options;
-+
+ 
+-  private static WireLogger log = WireLoggerFactory.get();
 +  private final WireLogger log;
  
    private ProtoFile protoFile;
--  private JavaWriter writer;
    private String sourceFileName;
    private String protoFileName;
    private String typeBeingGenerated = "";
 -  private boolean emitOptions = false;
 -  private Set<String> enumOptions;
+-  boolean dryRun;
  
    private Constructor<?> serviceWriterConstructor;
 -  private List<String> serviceWriterOptions;
@@ -624,6 +488,7 @@ index 1d72ac39..f61fd03e 100644
 -   *     [--enum_options=&lt;option_name&gt;[,&lt;option_name&gt;...]]
 -   *     [--service_writer=&lt;class_name&gt;]
 -   *     [--service_writer_opt=&lt;value&gt;] [--service_writer_opt=&lt;value&gt;]...]
+-   *     [--quiet] [--dry-run]
 -   *     [file [file...]]
 -   * </pre>
 -   *
@@ -649,9 +514,19 @@ index 1d72ac39..f61fd03e 100644
 -   * enum value options listed in the {@code --enum_options} flag. The resulting code will contain
 -   * a public static field for each option used within a particular enum type.
 -   * </p>
+-   * <p>
+-   * If {@code --quiet} is specified, diagnostic messages to stdout are suppressed.
+-   * </p>
+-   * <p>
+-   * The {@code --dry_run} flag causes the compile to just emit the names of the source files that
+-   * would be generated to stdout.
+-   * </p>
 +   * Runs the compiler.  See {@link CommandLineOptions} for command line options.
     */
 -  public static void main(String... args) throws Exception {
+-    // Reinitialize the logger in case its being diverted for testing.
+-    log = WireLoggerFactory.get();
+-
 -    String protoPath = null;
 -    String javaOut = null;
 -    String registryClass = null;
@@ -661,6 +536,7 @@ index 1d72ac39..f61fd03e 100644
 -    List<String> enumOptions = new ArrayList<String>();
 -    Constructor<?> serviceWriterConstructor = null;
 -    List<String> serviceWriterOptions = new ArrayList<String>();
+-    boolean dryRun = false;
 -
 -    int index = 0;
 -    while (index < args.length) {
@@ -685,13 +561,17 @@ index 1d72ac39..f61fd03e 100644
 -            loadServiceWriter(args[index].substring(SERVICE_WRITER_FLAG.length()));
 -      } else if (args[index].startsWith(SERVICE_WRITER_OPT_FLAG)) {
 -        serviceWriterOptions.add(args[index].substring(SERVICE_WRITER_OPT_FLAG.length()));
+-      } else if (args[index].startsWith(QUIET_FLAG)) {
+-        log.setQuiet(true);
+-      } else if (args[index].startsWith(DRY_RUN_FLAG)) {
+-        dryRun = true;
 -      } else {
 -        sourceFileNames.add(args[index]);
 -      }
 -      index++;
 -    }
 -    if (javaOut == null) {
--      System.err.println("Must specify " + JAVA_OUT_FLAG + " flag");
+-      log.error("Must specify " + JAVA_OUT_FLAG + " flag");
 +  public static void main(String... args) {
 +    try {
 +      new WireCompiler(new CommandLineOptions(args)).compile();
@@ -702,11 +582,12 @@ index 1d72ac39..f61fd03e 100644
      }
 -    if (protoPath == null) {
 -      protoPath = System.getProperty("user.dir");
--      System.err.println(PROTO_PATH_FLAG + " flag not specified, using current dir " + protoPath);
+-      log.error(PROTO_PATH_FLAG + " flag not specified, using current dir " + protoPath);
 -    }
 -    WireCompiler wireCompiler =
 -        new WireCompiler(protoPath, sourceFileNames, roots, javaOut, registryClass, emitOptions,
--            enumOptions, serviceWriterConstructor, serviceWriterOptions);
+-            enumOptions, serviceWriterConstructor, serviceWriterOptions, new IO.FileIO(),
+-            dryRun);
 -    wireCompiler.compile();
 -  }
 -
@@ -721,14 +602,14 @@ index 1d72ac39..f61fd03e 100644
      try {
        serviceWriterClass = Class.forName(serviceWriterClassName);
      } catch (ClassNotFoundException e) {
--      System.err.println("Unable to load ServiceWriter class " + serviceWriterClassName + ".");
+-      log.error("Unable to load ServiceWriter class " + serviceWriterClassName + ".");
 -      System.exit(1);
 +      throw new WireException("Unable to load ServiceWriter class "
 +          + serviceWriterClassName + ".", e);
      }
  
      if (!ServiceWriter.class.isAssignableFrom(serviceWriterClass)) {
--      System.err.println(
+-      log.error(
 +      throw new WireException(
            "Class " + serviceWriterClassName + " does not implement ServiceWriter interface.");
 -      System.exit(0);
@@ -737,7 +618,7 @@ index 1d72ac39..f61fd03e 100644
      try {
        return serviceWriterClass.getConstructor(JavaWriter.class, List.class);
      } catch (NoSuchMethodException e) {
--      System.err.println("ServiceWriter class "
+-      log.error("ServiceWriter class "
 +      throw new WireException("ServiceWriter class "
            + serviceWriterClassName
            + " needs a constructor 'public "
@@ -755,7 +636,7 @@ index 1d72ac39..f61fd03e 100644
        String outputDirectory, String registryClass, boolean emitOptions, List<String> enumOptions,
 -      Constructor<?> serviceWriterConstructor, List<String> serviceWriterOptions) {
 -    this(protoPath, sourceFileNames, roots, outputDirectory, registryClass, emitOptions,
--        enumOptions, serviceWriterConstructor, serviceWriterOptions, new IO.FileIO());
+-        enumOptions, serviceWriterConstructor, serviceWriterOptions, new IO.FileIO(), false);
 +      Constructor<?> serviceWriterConstructor, List<String> serviceWriterOptions)
 +      throws WireException {
 +    this(new CommandLineOptions(protoPath, outputDirectory, sourceFileNames, roots,  registryClass,
@@ -763,9 +644,20 @@ index 1d72ac39..f61fd03e 100644
 +        serviceWriterOptions, false, false));
    }
  
+-  @Deprecated
 -  WireCompiler(String protoPath, List<String> sourceFileNames, List<String> roots,
 -      String outputDirectory, String registryClass, boolean emitOptions, List<String> enumOptions,
 -      Constructor<?> serviceWriterConstructor, List<String> serviceWriterOptions, IO io) {
+-    this(protoPath, sourceFileNames, roots, outputDirectory, registryClass, emitOptions,
+-        enumOptions, serviceWriterConstructor, serviceWriterOptions, io, false);
++  public WireCompiler(CommandLineOptions options) throws WireException {
++    this(options, new IO.FileIO(), new ConsoleWireLogger(options.quiet));
+   }
+ 
+-  WireCompiler(String protoPath, List<String> sourceFileNames, List<String> roots,
+-      String outputDirectory, String registryClass, boolean emitOptions, List<String> enumOptions,
+-      Constructor<?> serviceWriterConstructor, List<String> serviceWriterOptions, IO io,
+-      boolean dryRun) {
 -    this.repoPath = protoPath;
 -    this.typesToEmit.addAll(roots);
 -    this.sourceFileNames = sourceFileNames;
@@ -775,13 +667,10 @@ index 1d72ac39..f61fd03e 100644
 -    this.enumOptions = new LinkedHashSet<String>(enumOptions);
 -    this.serviceWriterConstructor = serviceWriterConstructor;
 -    this.serviceWriterOptions = serviceWriterOptions;
-+  public WireCompiler(CommandLineOptions options) throws WireException {
-+    this(options, new IO.FileIO(), new ConsoleWireLogger(options.quiet));
-+  }
-+
 +  WireCompiler(CommandLineOptions options, IO io, WireLogger logger) throws WireException {
 +    this.options = options;
      this.io = io;
+-    this.dryRun = dryRun;
 +    this.log = logger;
 +
 +    String protoPath = options.protoPath;
@@ -823,18 +712,11 @@ index 1d72ac39..f61fd03e 100644
      }
  
      if (!typesToEmit.isEmpty()) {
--      System.out.println("Analyzing dependencies of root types.");
-+      log.info("Analyzing dependencies of root types.");
-       findDependencies(parsedFiles.values());
-     }
- 
-@@ -263,21 +187,36 @@ public void compile() throws IOException {
-       this.sourceFileName = entry.getKey();
+@@ -296,28 +188,35 @@ public void compile() throws IOException {
        this.protoFile = entry.getValue();
        this.protoFileName = protoFileName(protoFile.getFileName());
--      System.out.println("Compiling proto source file " + sourceFileName);
+       log.info("Compiling proto source file " + sourceFileName);
 -      compileOne();
-+      log.info("Compiling proto source file " + sourceFileName);
 +      try {
 +        compileOne();
 +      } catch (IOException e) {
@@ -843,26 +725,31 @@ index 1d72ac39..f61fd03e 100644
      }
  
 -    if (registryClass != null) {
--      emitRegistry();
+-      int packageClassSep = registryClass.lastIndexOf(".");
+-      String javaPackage = registryClass.substring(0, packageClassSep);
+-      String className = registryClass.substring(packageClassSep + 1);
+-      OutputArtifact artifact = new OutputArtifact(outputDirectory, javaPackage, className);
 +    if (options.registryClass != null) {
 +      int packageClassSep = options.registryClass.lastIndexOf(".");
 +      String javaPackage = options.registryClass.substring(0, packageClassSep);
 +      String className = options.registryClass.substring(packageClassSep + 1);
 +      OutputArtifact artifact = new OutputArtifact(options.javaOut, javaPackage, className);
-+      log.artifact(artifact);
+       log.artifact(artifact);
+-
+-      if (!dryRun) {
+-        emitRegistry(artifact);
 +      if (!options.dryRun) {
 +        try {
 +          emitRegistry(artifact);
 +        } catch (IOException e) {
 +          throw new WireException("Error emitting registry class " + options.registryClass, e);
 +        }
-+      }
+       }
      }
    }
  
--  boolean emitOptions() {
+   boolean shouldEmitOptions() {
 -    return emitOptions;
-+  boolean shouldEmitOptions() {
 +    return options.emitOptions;
    }
  
@@ -872,110 +759,82 @@ index 1d72ac39..f61fd03e 100644
    }
  
    ProtoFile getProtoFile() {
-@@ -288,10 +227,6 @@ OptionsMapMaker getOptionsMapMaker() {
-     return optionsMapMaker;
+@@ -429,18 +328,17 @@ boolean isRedacted(Option option) {
+     return option.getName().endsWith(".redacted") && "true".equals(option.getValue());
    }
  
--  JavaWriter getWriter() {
--    return writer;
--  }
 -
-   String getEnumDefault(String fullyQualifiedName) {
-     return enumDefaults.get(fullyQualifiedName);
-   }
-@@ -397,19 +332,13 @@ private void compileOne() throws IOException {
+   private void compileOne() throws IOException {
      typeBeingGenerated = "";
  
      if (hasExtends()) {
--      try {
--        String className = "Ext_" + protoFileName;
--        String javaPackage = getJavaPackage();
--        writer = io.getJavaWriter(outputDirectory, javaPackage, className);
--        emitExtensionClass();
--
--        String extensionClass = javaPackage + "." + className;
--        System.out.println("wrote extension class " + extensionClass);
--        extensionClasses.add(extensionClass);
--      } finally {
--        if (writer != null) {
--          writer.close();
--        }
+-      OutputArtifact artifact = new OutputArtifact(outputDirectory, getJavaPackage(),
 +      OutputArtifact artifact = new OutputArtifact(options.javaOut, getJavaPackage(),
-+          "Ext_" + protoFileName);
-+      log.artifact(artifact);
-+
+           "Ext_" + protoFileName);
+       log.artifact(artifact);
+ 
+-      if (!dryRun) {
 +      if (!options.dryRun) {
-+        emitExtensionClass(artifact);
+         emitExtensionClass(artifact);
+-        extensionClasses.add(artifact.getFullClassName());
 +        extensionClasses.add(artifact.fullClassName());
        }
      }
  
-@@ -417,7 +346,12 @@ private void compileOne() throws IOException {
+@@ -448,9 +346,10 @@ private void compileOne() throws IOException {
        if (shouldEmitType(type.getFullyQualifiedName())) {
          String savedType = typeBeingGenerated;
          typeBeingGenerated += type.getName() + ".";
--        emitMessageClass(type);
+-        OutputArtifact artifact = new OutputArtifact(outputDirectory, getJavaPackage(), type.getName());
 +        OutputArtifact artifact = new OutputArtifact(options.javaOut, getJavaPackage(),
 +            type.getName());
-+        log.artifact(artifact);
+         log.artifact(artifact);
+-        if (!dryRun) {
 +        if (!options.dryRun) {
-+          emitMessageClass(type, artifact);
-+        }
+           emitMessageClass(type, artifact);
+         }
          typeBeingGenerated = savedType;
-       }
-     }
-@@ -432,7 +366,12 @@ private void compileOne() throws IOException {
+@@ -467,9 +366,10 @@ private void compileOne() throws IOException {
          }
          Service limitedService = new Service(service.getName(), service.getFullyQualifiedName(),
              service.getDocumentation(), service.getOptions(), limitedMethods);
--        emitServiceInterface(limitedService);
+-        OutputArtifact artifact = new OutputArtifact(outputDirectory, getJavaPackage(), service.getName());
 +        OutputArtifact artifact = new OutputArtifact(options.javaOut, getJavaPackage(),
 +            service.getName());
-+        log.artifact(artifact);
+         log.artifact(artifact);
+-        if (!dryRun) {
 +        if (!options.dryRun) {
-+          emitServiceInterface(limitedService, artifact);
-+        }
+           emitServiceInterface(limitedService, artifact);
+         }
        }
-     }
-   }
-@@ -477,14 +416,12 @@ private void getTypes(Type parent, List<Type> types) {
-     }
-   }
- 
--  private void emitRegistry() throws IOException {
--    int packageClassSep = registryClass.lastIndexOf(".");
--    String javaPackage = registryClass.substring(0, packageClassSep);
--    String className = registryClass.substring(packageClassSep + 1);
-+  private void emitRegistry(OutputArtifact artifact) throws IOException {
-+    JavaWriter writer = null;
+@@ -521,7 +421,7 @@ private void emitRegistry(OutputArtifact artifact) throws IOException {
      try {
--      writer = io.getJavaWriter(outputDirectory, javaPackage, className);
-+      writer = io.getJavaWriter(artifact);
+       writer = io.getJavaWriter(artifact);
        writer.emitSingleLineComment(CODE_GENERATED_BY_WIRE);
--      writer.emitPackage(javaPackage);
+-      writer.emitPackage(artifact.getJavaPackage());
 +      writer.emitPackage(artifact.javaPackage());
  
        writer.emitImports("java.util.List");
        writer.emitEmptyLine();
-@@ -497,7 +434,7 @@ private void emitRegistry() throws IOException {
+@@ -534,7 +434,7 @@ private void emitRegistry(OutputArtifact artifact) throws IOException {
              "java.util.Collections.unmodifiableList");
        }
        writer.emitEmptyLine();
--      writer.beginType(className, "class", EnumSet.of(PUBLIC, FINAL));
+-      writer.beginType(artifact.getClassName(), "class", EnumSet.of(PUBLIC, FINAL));
 +      writer.beginType(artifact.className(), "class", EnumSet.of(PUBLIC, FINAL));
        writer.emitEmptyLine();
  
        String classes;
-@@ -521,7 +458,7 @@ private void emitRegistry() throws IOException {
+@@ -558,7 +458,7 @@ private void emitRegistry(OutputArtifact artifact) throws IOException {
        writer.emitEmptyLine();
  
        // Private no-args constructor
--      writer.beginMethod(null, className, EnumSet.of(PRIVATE));
+-      writer.beginMethod(null, artifact.getClassName(), EnumSet.of(PRIVATE));
 +      writer.beginMethod(null, artifact.className(), EnumSet.of(PRIVATE));
        writer.endMethod();
        writer.endType();
      } finally {
-@@ -556,7 +493,7 @@ private boolean shouldEmitServiceMethod(String serviceName, String method) {
+@@ -593,7 +493,7 @@ private boolean shouldEmitServiceMethod(String serviceName, String method) {
          || typesToEmit.contains(serviceName + "#" + method);
    }
  
@@ -984,7 +843,7 @@ index 1d72ac39..f61fd03e 100644
      Set<String> loadedDependencies = new LinkedHashSet<String>();
      int count = typesToEmit.size();
      while (true) {
-@@ -572,13 +509,17 @@ private void findDependencies(Collection<ProtoFile> protoFiles) throws IOExcepti
+@@ -609,13 +509,17 @@ private void findDependencies(Collection<ProtoFile> protoFiles) throws IOExcepti
    }
  
    private void findDependenciesHelper(ProtoFile protoFile, Set<String> loadedDependencies)
@@ -1005,20 +864,7 @@ index 1d72ac39..f61fd03e 100644
          loadedDependencies.add(dependency);
        }
      }
-@@ -808,9 +749,10 @@ private String protoFileName(String path) {
-     return path;
-   }
- 
--  private void emitMessageClass(Type type) throws IOException {
-+  private void emitMessageClass(Type type, OutputArtifact artifact) throws IOException {
-+    JavaWriter writer = null;
-     try {
--      writer = io.getJavaWriter(outputDirectory, getJavaPackage(), type.getName());
-+      writer = io.getJavaWriter(artifact);
-       writer.emitSingleLineComment(CODE_GENERATED_BY_WIRE);
-       writer.emitSingleLineComment("Source file: %s", sourceFileName);
-       writer.emitPackage(getJavaPackage());
-@@ -843,7 +785,7 @@ private void emitMessageClass(Type type) throws IOException {
+@@ -881,7 +785,7 @@ private void emitMessageClass(Type type, OutputArtifact artifact) throws IOExcep
          imports.add("com.squareup.wire.ExtendableMessage");
          imports.add("com.squareup.wire.Extension");
        }
@@ -1027,7 +873,7 @@ index 1d72ac39..f61fd03e 100644
          if (hasFieldOption(types)) {
            imports.add("com.google.protobuf.FieldOptions");
          }
-@@ -859,7 +801,7 @@ private void emitMessageClass(Type type) throws IOException {
+@@ -897,7 +801,7 @@ private void emitMessageClass(Type type, OutputArtifact artifact) throws IOExcep
        getExternalTypes(type, externalTypes);
  
        Map<String, ?> optionsMap = null;
@@ -1036,29 +882,8 @@ index 1d72ac39..f61fd03e 100644
          if (type instanceof MessageType) {
            optionsMap = optionsMapMaker.createMessageOptionsMap((MessageType) type);
            optionsMapMaker.getOptionTypes(optionsMap, externalTypes);
-@@ -881,8 +823,8 @@ private void emitMessageClass(Type type) throws IOException {
-       labels.remove(Label.OPTIONAL);
- 
-       MessageWriter messageWriter = new MessageWriter(this);
--      messageWriter.emitHeader(imports, datatypes, labels);
--      messageWriter.emitType(type, protoFile.getPackageName() + ".", optionsMap, true);
-+      messageWriter.emitHeader(writer, imports, datatypes, labels);
-+      messageWriter.emitType(writer, type, protoFile.getPackageName() + ".", optionsMap, true);
-     } finally {
-       if (writer != null) {
-         writer.close();
-@@ -890,15 +832,15 @@ private void emitMessageClass(Type type) throws IOException {
-     }
-   }
- 
--  private void emitServiceInterface(Service service) throws IOException {
-+  private void emitServiceInterface(Service service, OutputArtifact artifact) throws IOException {
-     if (serviceWriterConstructor == null) return;
--
-+    JavaWriter writer = null;
-     try {
--      writer = io.getJavaWriter(outputDirectory, getJavaPackage(), service.getName());
-+      writer = io.getJavaWriter(artifact);
+@@ -935,8 +839,8 @@ private void emitServiceInterface(Service service, OutputArtifact artifact) thro
+       writer = io.getJavaWriter(artifact);
        ServiceWriter serviceWriter;
        try {
 -        List<String> options = new ArrayList<String>(serviceWriterOptions);
@@ -1068,120 +893,26 @@ index 1d72ac39..f61fd03e 100644
        } catch (Exception e) {
          throw new IllegalStateException(
              "Unable to construct an instance of " + serviceWriterConstructor.getDeclaringClass()
-@@ -907,7 +849,7 @@ private void emitServiceInterface(Service service) throws IOException {
+@@ -945,7 +849,7 @@ private void emitServiceInterface(Service service, OutputArtifact artifact) thro
  
        writer.emitSingleLineComment(CODE_GENERATED_BY_WIRE);
        writer.emitSingleLineComment("Source file: %s", sourceFileName);
--      writer.emitPackage(getJavaPackage());
+-      writer.emitPackage(artifact.getJavaPackage());
 +      writer.emitPackage(artifact.javaPackage());
  
        Set<String> imports = new LinkedHashSet<String>();
        List<String> externalTypes = new ArrayList<String>();
-@@ -987,7 +929,7 @@ private String getPackageFromFullyQualifiedJavaName(String fqName) {
- 
-   private boolean hasExtends() {
-     List<ExtendDeclaration> declarations = protoFile.getExtendDeclarations();
--    if (!emitOptions()) {
-+    if (!shouldEmitOptions()) {
-       for (ExtendDeclaration declaration : declarations) {
-         String name = declaration.getFullyQualifiedName();
-         if (!(isFieldOptions(name) || isMessageOptions(name))) {
-@@ -998,50 +940,59 @@ private boolean hasExtends() {
-     return !declarations.isEmpty();
+@@ -1083,7 +987,6 @@ private void emitExtensionClass(OutputArtifact artifact) throws IOException {
+         writer.close();
+       }
+     }
+-
    }
  
--  private void emitExtensionClass() throws IOException {
--    writer.emitSingleLineComment(CODE_GENERATED_BY_WIRE);
--    writer.emitSingleLineComment("Source file: %s", sourceFileName);
--    writer.emitPackage(getJavaPackage());
-+  private void emitExtensionClass(OutputArtifact artifact) throws IOException {
-+    JavaWriter writer = null;
-+    try {
-+      writer = io.getJavaWriter(artifact);
- 
--    Set<String> imports = new LinkedHashSet<String>();
--    if (hasByteStringExtension()) {
--      imports.add("okio.ByteString");
--    }
--    imports.add("com.squareup.wire.Extension");
--    if (hasRepeatedExtension()) {
--      imports.add("java.util.List");
--    }
--    List<String> extensionTypes = getExtensionTypes();
-+      writer.emitSingleLineComment(CODE_GENERATED_BY_WIRE);
-+      writer.emitSingleLineComment("Source file: %s", sourceFileName);
-+      writer.emitPackage(getJavaPackage());
- 
--    if (emitOptions()) {
--      imports.addAll(extensionTypes);
--    } else {
--      for (String extensionType : extensionTypes) {
--        if (!isOptionType(extensionType)) {
--          imports.add(extensionType);
-+      Set<String> imports = new LinkedHashSet<String>();
-+      if (hasByteStringExtension()) {
-+        imports.add("okio.ByteString");
-+      }
-+      imports.add("com.squareup.wire.Extension");
-+      if (hasRepeatedExtension()) {
-+        imports.add("java.util.List");
-+      }
-+      List<String> extensionTypes = getExtensionTypes();
-+
-+      if (shouldEmitOptions()) {
-+        imports.addAll(extensionTypes);
-+      } else {
-+        for (String extensionType : extensionTypes) {
-+          if (!isOptionType(extensionType)) {
-+            imports.add(extensionType);
-+          }
-         }
-       }
--    }
--    writer.emitImports(imports);
--    writer.emitEmptyLine();
-+      writer.emitImports(imports);
-+      writer.emitEmptyLine();
- 
--    String className = "Ext_" + protoFileName;
--    writer.beginType(className, "class", EnumSet.of(PUBLIC, FINAL));
--    writer.emitEmptyLine();
-+      String className = "Ext_" + protoFileName;
-+      writer.beginType(className, "class", EnumSet.of(PUBLIC, FINAL));
-+      writer.emitEmptyLine();
- 
--    // Private no-args constructor
--    writer.beginMethod(null, className, EnumSet.of(PRIVATE));
--    writer.endMethod();
--    writer.emitEmptyLine();
-+      // Private no-args constructor
-+      writer.beginMethod(null, className, EnumSet.of(PRIVATE));
-+      writer.endMethod();
-+      writer.emitEmptyLine();
- 
--    emitExtensions();
--    writer.endType();
-+      emitExtensions(writer);
-+      writer.endType();
-+    } finally {
-+      if (writer != null) {
-+        writer.close();
-+      }
-+    }
-   }
- 
--  private void emitExtensions() throws IOException {
-+  private void emitExtensions(JavaWriter writer) throws IOException {
-     for (ExtendDeclaration extend : protoFile.getExtendDeclarations()) {
-       String fullyQualifiedName = extend.getFullyQualifiedName();
--      if (!emitOptions() && isOptionType(fullyQualifiedName)) {
-+      if (!shouldEmitOptions() && isOptionType(fullyQualifiedName)) {
-         continue;
-       }
-       String javaName = javaName(null, fullyQualifiedName);
+   private void emitExtensions(JavaWriter writer) throws IOException {
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/WireException.java b/wire-compiler/src/main/java/com/squareup/wire/WireException.java
-new file mode 100644
-index 00000000..be42ec24
+new file mode 100755
+index 0000000000..be42ec24d8
 --- /dev/null
 +++ b/wire-compiler/src/main/java/com/squareup/wire/WireException.java
 @@ -0,0 +1,11 @@
@@ -1197,61 +928,60 @@ index 00000000..be42ec24
 +  }
 +}
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/logger/ConsoleWireLogger.java b/wire-compiler/src/main/java/com/squareup/wire/logger/ConsoleWireLogger.java
-new file mode 100644
-index 00000000..5143c9e7
---- /dev/null
+index d1fcd160b7..5143c9e7d8 100755
+--- a/wire-compiler/src/main/java/com/squareup/wire/logger/ConsoleWireLogger.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/logger/ConsoleWireLogger.java
-@@ -0,0 +1,32 @@
-+package com.squareup.wire.logger;
-+
-+import com.squareup.wire.OutputArtifact;
-+
-+
+@@ -2,14 +2,12 @@
+ 
+ import com.squareup.wire.OutputArtifact;
+ 
+-/**
+- * Created by zundel on 12/23/14.
+- */
+-public class ConsoleWireLogger implements WireLogger {
+-  private boolean isQuiet = false;
+ 
+-  public void setQuiet(boolean isQuiet) {
+-    this.isQuiet = isQuiet;
 +public final class ConsoleWireLogger implements WireLogger {
 +  private final boolean isQuiet;
 +
 +  public ConsoleWireLogger(boolean quiet) {
 +    this.isQuiet = quiet;
-+  }
-+
-+  public void info(String message) {
-+    if (!isQuiet) {
-+      System.out.println(message);
-+    }
-+  }
-+
-+  public void artifact(OutputArtifact artifact) {
-+    String msg;
-+    if (isQuiet) {
+   }
+ 
+   public void info(String message) {
+@@ -21,9 +19,9 @@ public void info(String message) {
+   public void artifact(OutputArtifact artifact) {
+     String msg;
+     if (isQuiet) {
+-      msg = artifact.getArtifactFile().toString();
 +      msg = artifact.file().toString();
-+    } else {
+     } else {
+-      msg = "Writing generated code to " + artifact.getArtifactFile().toString();
 +      msg = "Writing generated code to " + artifact.file().toString();
-+    }
-+    System.out.println(msg);
-+  }
-+
-+  public void error(String message) {
-+    System.err.println(message);
-+  }
-+}
+     }
+     System.out.println(msg);
+   }
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/logger/WireLogger.java b/wire-compiler/src/main/java/com/squareup/wire/logger/WireLogger.java
-new file mode 100644
-index 00000000..fdc1e357
---- /dev/null
+index 64bdfe7055..fdc1e35748 100755
+--- a/wire-compiler/src/main/java/com/squareup/wire/logger/WireLogger.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/logger/WireLogger.java
-@@ -0,0 +1,9 @@
-+package com.squareup.wire.logger;
-+
-+import com.squareup.wire.OutputArtifact;
-+
-+public interface WireLogger {
+@@ -3,8 +3,7 @@
+ import com.squareup.wire.OutputArtifact;
+ 
+ public interface WireLogger {
+-  public void setQuiet(boolean isQuiet);
+-  public void error(String message);
+-  public void artifact(OutputArtifact artifact);
+-  public void info(String message);
 +  void error(String message);
 +  void artifact(OutputArtifact artifact);
 +  void info(String message);
-+}
+ }
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/CommandLineOptionsTest.java b/wire-compiler/src/test/java/com/squareup/wire/CommandLineOptionsTest.java
-new file mode 100644
-index 00000000..935cf581
+new file mode 100755
+index 0000000000..935cf5815a
 --- /dev/null
 +++ b/wire-compiler/src/test/java/com/squareup/wire/CommandLineOptionsTest.java
 @@ -0,0 +1,132 @@
@@ -1388,31 +1118,35 @@ index 00000000..935cf581
 +
 +}
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/OutputArtifactTest.java b/wire-compiler/src/test/java/com/squareup/wire/OutputArtifactTest.java
-new file mode 100644
-index 00000000..3a8ac61e
---- /dev/null
+index 849972985f..3a8ac61ee1 100755
+--- a/wire-compiler/src/test/java/com/squareup/wire/OutputArtifactTest.java
 +++ b/wire-compiler/src/test/java/com/squareup/wire/OutputArtifactTest.java
-@@ -0,0 +1,18 @@
-+package com.squareup.wire;
-+
-+import org.junit.Test;
-+
-+import static org.junit.Assert.assertEquals;
-+
-+public class OutputArtifactTest {
-+
+@@ -6,16 +6,13 @@
+ 
+ public class OutputArtifactTest {
+ 
+-  @Test
+-  public void testOutputArtifact() {
+-
 +  @Test public void testOutputArtifact() {
-+    OutputArtifact artifact = new OutputArtifact("foo/bar", "com.company", "Foo");
+     OutputArtifact artifact = new OutputArtifact("foo/bar", "com.company", "Foo");
+-    assertEquals("foo/bar", artifact.getOutputDirectory());
+-    assertEquals("com.company", artifact.getJavaPackage());
+-    assertEquals("Foo", artifact.getClassName());
+-
+-    assertEquals("foo/bar/com/company", artifact.getArtifactDir().toString());
+-    assertEquals("foo/bar/com/company/Foo.java", artifact.getArtifactFile().toString());
+-    assertEquals("com.company.Foo", artifact.getFullClassName());
 +    assertEquals("foo/bar", artifact.outputDirectory());
 +    assertEquals("com.company", artifact.javaPackage());
 +    assertEquals("Foo", artifact.className());
 +    assertEquals("foo/bar/com/company", artifact.dir().toString());
 +    assertEquals("foo/bar/com/company/Foo.java", artifact.file().toString());
 +    assertEquals("com.company.Foo", artifact.fullClassName());
-+  }
-+}
+   }
+ }
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/WireCompilerErrorTest.java b/wire-compiler/src/test/java/com/squareup/wire/WireCompilerErrorTest.java
-index e3b8bc1d..10f121ab 100644
+index 5df212a4d5..10f121ab98 100755
 --- a/wire-compiler/src/test/java/com/squareup/wire/WireCompilerErrorTest.java
 +++ b/wire-compiler/src/test/java/com/squareup/wire/WireCompilerErrorTest.java
 @@ -18,6 +18,7 @@
@@ -1423,20 +1157,16 @@ index e3b8bc1d..10f121ab 100644
  import java.io.FileNotFoundException;
  import java.io.IOException;
  import java.io.StringReader;
-@@ -56,10 +57,10 @@ public ProtoFile parse(String filename) throws IOException {
-     }
- 
-     @Override
--    public JavaWriter getJavaWriter(String javaOut, String javaPackage, String className)
-+    public JavaWriter getJavaWriter(OutputArtifact outputArtifact)
+@@ -59,7 +60,7 @@ public ProtoFile parse(String filename) throws IOException {
+     public JavaWriter getJavaWriter(OutputArtifact outputArtifact)
          throws IOException {
        StringWriter writer = new StringWriter();
--      writers.put(javaPackage + "." + className, writer);
+-      writers.put(outputArtifact.getFullClassName(), writer);
 +      writers.put(outputArtifact.fullClassName(), writer);
        return new JavaWriter(writer);
      }
  
-@@ -79,13 +80,14 @@ public JavaWriter getJavaWriter(String javaOut, String javaPackage, String class
+@@ -79,13 +80,14 @@ public JavaWriter getJavaWriter(OutputArtifact outputArtifact)
    private Map<String, String> compile(String source) {
      StringIO io = new StringIO("test.proto", source);
  
@@ -1458,18 +1188,19 @@ index e3b8bc1d..10f121ab 100644
      }
      return io.getOutput();
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/WireCompilerTest.java b/wire-compiler/src/test/java/com/squareup/wire/WireCompilerTest.java
-index 4f0fb963..d8ba21b8 100644
+index 7d2109dada..d8ba21b835 100755
 --- a/wire-compiler/src/test/java/com/squareup/wire/WireCompilerTest.java
 +++ b/wire-compiler/src/test/java/com/squareup/wire/WireCompilerTest.java
-@@ -17,6 +17,7 @@
- 
+@@ -18,8 +18,6 @@
  import com.squareup.javawriter.JavaWriter;
  import com.squareup.protoparser.Service;
-+import com.squareup.wire.logger.StringWireLogger;
+ import com.squareup.wire.logger.StringWireLogger;
+-import com.squareup.wire.logger.WireLogger;
+-import com.squareup.wire.logger.WireLoggerFactory;
  import java.io.File;
  import java.io.FileNotFoundException;
  import java.io.IOException;
-@@ -34,7 +35,7 @@
+@@ -37,7 +35,7 @@
  import static org.junit.Assert.fail;
  
  public class WireCompilerTest {
@@ -1478,7 +1209,15 @@ index 4f0fb963..d8ba21b8 100644
    private File testDir;
  
    @Before public void setUp() {
-@@ -87,7 +88,7 @@ private void testProto(String[] sources, String[] outputs, String serviceWriter,
+@@ -56,7 +54,6 @@ private File makeTestDirectory(String path) {
+ 
+   @After public void tearDown() {
+     cleanupAndDelete(testDir);
+-    WireLoggerFactory.reset();
+   }
+ 
+   private void cleanupAndDelete(File dir) {
+@@ -91,7 +88,7 @@ private void testProto(String[] sources, String[] outputs, String serviceWriter,
      }
      System.arraycopy(sources, 0, args, numFlags, sources.length);
  
@@ -1487,7 +1226,7 @@ index 4f0fb963..d8ba21b8 100644
  
      List<String> filesAfter = getAllFiles(testDir);
      assertEquals(filesAfter.toString(), outputs.length, filesAfter.size());
-@@ -107,7 +108,7 @@ private void testProtoNoOptions(String[] sources, String[] outputs) throws Excep
+@@ -111,7 +108,7 @@ private void testProtoNoOptions(String[] sources, String[] outputs) throws Excep
      args[3] = "--java_out=" + testDir.getAbsolutePath();
      System.arraycopy(sources, 0, args, numFlags, sources.length);
  
@@ -1496,7 +1235,7 @@ index 4f0fb963..d8ba21b8 100644
  
      List<String> filesAfter = getAllFiles(testDir);
      assertEquals(outputs.length, filesAfter.size());
-@@ -126,7 +127,7 @@ private void testProtoWithRegistry(String[] sources, String registryClass, Strin
+@@ -130,7 +127,7 @@ private void testProtoWithRegistry(String[] sources, String registryClass, Strin
      args[2] = "--registry_class=" + registryClass;
      System.arraycopy(sources, 0, args, numFlags, sources.length);
  
@@ -1505,45 +1244,16 @@ index 4f0fb963..d8ba21b8 100644
  
      List<String> filesAfter = getAllFiles(testDir);
      assertEquals(outputs.length, filesAfter.size());
-@@ -138,18 +139,29 @@ private void testProtoWithRegistry(String[] sources, String registryClass, Strin
- 
-   private void testProtoWithRoots(String[] sources, String roots, String[] outputs)
-       throws Exception {
-+    String[] extraArgs = {};
-+    this.testProtoWithRoots(sources, roots, outputs, extraArgs);
-+  }
-+
-+  private void testProtoWithRoots(String[] sources, String roots, String[] outputs,
-+      String[] extraArgs)
-+      throws Exception {
-     int numFlags = 4;
--    String[] args = new String[numFlags + sources.length];
--    args[0] = "--proto_path=../wire-runtime/src/test/proto";
--    args[1] = "--java_out=" + testDir.getAbsolutePath();
--    args[2] = "--service_writer=com.squareup.wire.SimpleServiceWriter";
--    args[3] = "--roots=" + roots;
--    System.arraycopy(sources, 0, args, numFlags, sources.length);
-+    String[] args = new String[numFlags + sources.length + extraArgs.length];
-+    int index = 0;
-+    args[index++] = "--proto_path=../wire-runtime/src/test/proto";
-+    args[index++] = "--java_out=" + testDir.getAbsolutePath();
-+    args[index++] = "--service_writer=com.squareup.wire.SimpleServiceWriter";
-+    args[index++] = "--roots=" + roots;
-+    for (int i = 0; i < extraArgs.length; i++) {
-+      args[index++] = extraArgs[i];
-+    }
-+    System.arraycopy(sources, 0, args, index, sources.length);
+@@ -161,7 +158,7 @@ private void testProtoWithRoots(String[] sources, String roots, String[] outputs
+     }
+     System.arraycopy(sources, 0, args, index, sources.length);
  
 -    WireCompiler.main(args);
 +    invokeCompiler(args);
  
      List<String> filesAfter = getAllFiles(testDir);
--    assertEquals(outputs.length, filesAfter.size());
-+    assertEquals("Wrong number of files written", outputs.length, filesAfter.size());
- 
-     for (String output : outputs) {
-       assertFilesMatch(testDir, output);
-@@ -167,7 +179,7 @@ private void testLimitedServiceGeneration(String[] sources, String roots, String
+     assertEquals("Wrong number of files written", outputs.length, filesAfter.size());
+@@ -182,7 +179,7 @@ private void testLimitedServiceGeneration(String[] sources, String roots, String
      args[4] = "--roots=" + roots;
      System.arraycopy(sources, 0, args, numFlags, sources.length);
  
@@ -1552,7 +1262,7 @@ index 4f0fb963..d8ba21b8 100644
  
      List<String> filesAfter = getAllFiles(testDir);
      assertEquals(filesAfter.toString(), outputs.length, filesAfter.size());
-@@ -177,6 +189,7 @@ private void testLimitedServiceGeneration(String[] sources, String roots, String
+@@ -192,6 +189,7 @@ private void testLimitedServiceGeneration(String[] sources, String roots, String
      }
    }
  
@@ -1560,34 +1270,29 @@ index 4f0fb963..d8ba21b8 100644
    @Test public void testPerson() throws Exception {
      String[] sources = {
          "person.proto"
-@@ -587,6 +600,26 @@ public TestServiceWriter(JavaWriter writer, List<String> options) {
-     testProtoWithRoots(sources, roots, outputs);
+@@ -603,18 +601,16 @@ public TestServiceWriter(JavaWriter writer, List<String> options) {
    }
  
-+  @Test public void testDryRun() throws Exception {
-+    String[] sources = {
-+        "service_root.proto"
-+    };
-+
-+    String[] outputs = { };
-+    String roots = "squareup.wire.protos.roots.TheService";
+   @Test public void testDryRun() throws Exception {
+-    StringWireLogger logger = new StringWireLogger();
+-    WireLoggerFactory.set(logger);
+     String[] sources = {
+         "service_root.proto"
+     };
+ 
+     String[] outputs = { };
+     String roots = "squareup.wire.protos.roots.TheService";
+-    // When running with the --dry-run flag and --quiet, only the names of the output
+-    // files should be printed to the log
 +    // When running with the --dry_run flag and --quiet, only the names of the output
 +    // files should be printed to the log.
-+    String[] extraArgs = {
+     String[] extraArgs = {
+-        "--dry-run",
 +        "--dry_run",
-+        "--quiet"
-+    };
-+    testProtoWithRoots(sources, roots, outputs, extraArgs);
-+    assertEquals(testDir.getAbsolutePath().toString() + "/com/squareup/wire/protos/roots/TheRequest.java\n"
-+            + testDir.getAbsolutePath().toString() + "/com/squareup/wire/protos/roots/TheResponse.java\n"
-+            + testDir.getAbsolutePath().toString() + "/com/squareup/wire/protos/roots/TheService.java\n",
-+        logger.getLog());
-+  }
-+
-   @Test public void sanitizeJavadocStripsTrailingWhitespace() {
-     String input = "The quick brown fox  \nJumps over  \n\t \t\nThe lazy dog  ";
-     String expected = "The quick brown fox\nJumps over\n\nThe lazy dog";
-@@ -649,6 +682,12 @@ private void getAllFilesHelper(File root, List<String> files) {
+         "--quiet"
+     };
+     testProtoWithRoots(sources, roots, outputs, extraArgs);
+@@ -686,6 +682,12 @@ private void getAllFilesHelper(File root, List<String> files) {
      }
    }
  
@@ -1601,8 +1306,8 @@ index 4f0fb963..d8ba21b8 100644
      File expectedFile = new File("../wire-runtime/src/test/java/" + path);
      File actualFile = new File(outputDir, path);
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/logger/MockWireLogger.java b/wire-compiler/src/test/java/com/squareup/wire/logger/MockWireLogger.java
-new file mode 100644
-index 00000000..d0e21b96
+new file mode 100755
+index 0000000000..d0e21b96a9
 --- /dev/null
 +++ b/wire-compiler/src/test/java/com/squareup/wire/logger/MockWireLogger.java
 @@ -0,0 +1,16 @@
@@ -1623,42 +1328,39 @@ index 00000000..d0e21b96
 +  }
 +}
 diff --git a/wire-compiler/src/test/java/com/squareup/wire/logger/StringWireLogger.java b/wire-compiler/src/test/java/com/squareup/wire/logger/StringWireLogger.java
-new file mode 100644
-index 00000000..2dd89ee2
---- /dev/null
+index d914404b1b..2dd89ee276 100755
+--- a/wire-compiler/src/test/java/com/squareup/wire/logger/StringWireLogger.java
 +++ b/wire-compiler/src/test/java/com/squareup/wire/logger/StringWireLogger.java
-@@ -0,0 +1,34 @@
-+package com.squareup.wire.logger;
-+
-+import com.squareup.wire.OutputArtifact;
-+
+@@ -2,26 +2,22 @@
+ 
+ import com.squareup.wire.OutputArtifact;
+ 
+-/**
+- * Created by zundel on 12/23/14.
+- */
+-public class StringWireLogger implements WireLogger {
+-  private boolean isQuiet = false;
 +
 +public final class StringWireLogger implements WireLogger {
 +  private final boolean isQuiet;
-+  private StringBuilder buffer = new StringBuilder();
-+
+   private StringBuilder buffer = new StringBuilder();
+ 
+-  @Override
+-  public void setQuiet(boolean isQuiet) {
+-    this.isQuiet = isQuiet;
 +  public StringWireLogger(boolean quiet) {
 +    this.isQuiet = quiet;
-+  }
-+
-+  @Override public void error(String message) {
-+    buffer.append(message);
-+    buffer.append('\n');
-+  }
-+
-+  @Override public void artifact(OutputArtifact artifact) {
+   }
+ 
+   @Override public void error(String message) {
+     buffer.append(message);
+     buffer.append('\n');
+-
+   }
+ 
+   @Override public void artifact(OutputArtifact artifact) {
+-    buffer.append(artifact.getArtifactFile().toString());
 +    buffer.append(artifact.file().toString());
-+    buffer.append('\n');
-+  }
-+
-+  @Override public void info(String message) {
-+    if (!isQuiet) {
-+      buffer.append(message);
-+      buffer.append('\n');
-+    }
-+  }
-+
-+  public String getLog() {
-+    return buffer.toString();
-+  }
-+}
+     buffer.append('\n');
+   }
+ 

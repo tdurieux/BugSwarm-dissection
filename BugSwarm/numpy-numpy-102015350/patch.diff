@@ -1,63 +1,25 @@
 diff --git a/numpy/core/fromnumeric.py b/numpy/core/fromnumeric.py
-index 67d2c5b4893..1bb9738fbdd 100644
+index 509da483de..1bb9738fbd 100755
 --- a/numpy/core/fromnumeric.py
 +++ b/numpy/core/fromnumeric.py
-@@ -445,7 +445,13 @@ def put(a, ind, v, mode='raise'):
+@@ -445,11 +445,13 @@ def put(a, ind, v, mode='raise'):
      array([ 0,  1,  2,  3, -5])
  
      """
--    return a.put(ind, v, mode)
+-    if not isinstance(a, np.ndarray):
 +    try:
 +        put = a.put
 +    except AttributeError:
-+        raise TypeError("argument 1 must be numpy.ndarray, "
-+                        "not {name}".format(name=type(a).__name__))
-+
+         raise TypeError("argument 1 must be numpy.ndarray, "
+                         "not {name}".format(name=type(a).__name__))
+ 
+-    return a.put(ind, v, mode)
 +    return put(ind, v, mode)
  
  
  def swapaxes(a, axis1, axis2):
-diff --git a/numpy/lib/function_base.py b/numpy/lib/function_base.py
-index 9bc128f92db..844c069c0bf 100644
---- a/numpy/lib/function_base.py
-+++ b/numpy/lib/function_base.py
-@@ -1779,7 +1779,7 @@ def place(arr, mask, vals):
- 
-     Parameters
-     ----------
--    arr : array_like
-+    arr : ndarray
-         Array to put data into.
-     mask : array_like
-         Boolean mask array. Must have the same size as `a`.
-@@ -1801,6 +1801,10 @@ def place(arr, mask, vals):
-            [44, 55, 44]])
- 
-     """
-+    if not isinstance(arr, np.ndarray):
-+        raise TypeError("argument 1 must be numpy.ndarray, "
-+                        "not {name}".format(name=type(arr).__name__))
-+
-     return _insert(arr, mask, vals)
- 
- 
-diff --git a/numpy/lib/tests/test_function_base.py b/numpy/lib/tests/test_function_base.py
-index a5ac78e3371..88a590517f0 100644
---- a/numpy/lib/tests/test_function_base.py
-+++ b/numpy/lib/tests/test_function_base.py
-@@ -674,6 +674,10 @@ def test_basic(self):
-         assert_array_equal(b, [3, 2, 2, 3, 3])
- 
-     def test_place(self):
-+        # Make sure that non-np.ndarray objects
-+        # raise an error instead of doing nothing
-+        assert_raises(TypeError, place, [1, 2, 3], [True, False], [0, 1])
-+
-         a = np.array([1, 4, 3, 2, 5, 8, 7])
-         place(a, [0, 1, 0, 1, 0, 1, 0], [2, 4, 6])
-         assert_array_equal(a, [1, 2, 3, 4, 5, 6, 7])
 diff --git a/numpy/lib/tests/test_regression.py b/numpy/lib/tests/test_regression.py
-index 00fa3f195a5..ee50dcfa4e6 100644
+index 00fa3f195a..ee50dcfa4e 100755
 --- a/numpy/lib/tests/test_regression.py
 +++ b/numpy/lib/tests/test_regression.py
 @@ -85,10 +85,6 @@ def test_poly_eq(self, level=rlevel):

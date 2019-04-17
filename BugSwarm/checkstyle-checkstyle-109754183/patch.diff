@@ -1,5 +1,5 @@
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheck.java
-index 76dfc472b7..0701a37b92 100644
+index 76dfc472b7..0701a37b92 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheck.java
 @@ -70,6 +70,30 @@
@@ -60,38 +60,8 @@ index 76dfc472b7..0701a37b92 100644
              log(ast.getLineNo(), MSG_KEY_ANNOTATION_MISSING_DEPRECATED);
          }
      }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheck.java
-index 969f93acf0..fdaac63002 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheck.java
-@@ -40,7 +40,8 @@
-  * LITERAL_IF},  {@link TokenTypes#LITERAL_SWITCH LITERAL_SWITCH},  {@link
-  * TokenTypes#LITERAL_SYNCHRONIZED LITERAL_SYNCHRONIZED},  {@link
-  * TokenTypes#LITERAL_TRY LITERAL_TRY},  {@link TokenTypes#LITERAL_WHILE
-- * LITERAL_WHILE},  {@link TokenTypes#STATIC_INIT STATIC_INIT}.
-+ * LITERAL_WHILE},  {@link TokenTypes#STATIC_INIT STATIC_INIT},
-+ * {@link TokenTypes#LAMBDA LAMBDA}.
-  * </p>
-  *
-  * <p>
-@@ -167,6 +168,7 @@ public void setIgnoreEnums(boolean ignoreEnums) {
-             TokenTypes.LITERAL_FOR,
-             TokenTypes.STATIC_INIT,
-             TokenTypes.OBJBLOCK,
-+            TokenTypes.LAMBDA,
-         };
-     }
- 
-@@ -208,6 +210,7 @@ public void visitToken(DetailAST ast) {
-             case TokenTypes.LITERAL_DO:
-             case TokenTypes.LITERAL_IF:
-             case TokenTypes.STATIC_INIT:
-+            case TokenTypes.LAMBDA:
-                 startToken = ast;
-                 brace = ast.findFirstToken(TokenTypes.SLIST);
-                 break;
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ListToTreeSelectionModelWrapper.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ListToTreeSelectionModelWrapper.java
-index e373174cb9..cfbebbb628 100644
+index e373174cb9..cfbebbb628 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ListToTreeSelectionModelWrapper.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ListToTreeSelectionModelWrapper.java
 @@ -60,7 +60,7 @@ public void valueChanged(ListSelectionEvent event) {
@@ -104,7 +74,7 @@ index e373174cb9..cfbebbb628 100644
      }
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTableModel.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTableModel.java
-index 812243a5f8..87867a9463 100644
+index 812243a5f8..87867a9463 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTableModel.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTableModel.java
 @@ -53,7 +53,7 @@ public ParseTreeTableModel(DetailAST parseTree) {
@@ -126,7 +96,7 @@ index 812243a5f8..87867a9463 100644
                                    Object... children) {
          // Guaranteed to return a non-null array
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePModel.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePModel.java
-index cc181c5d27..feb09100e4 100644
+index cc181c5d27..feb09100e4 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePModel.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePModel.java
 @@ -64,7 +64,7 @@ private static DetailAST createArtificialTreeRoot() {
@@ -139,7 +109,7 @@ index cc181c5d27..feb09100e4 100644
      }
  
 diff --git a/src/site/site.xml b/src/site/site.xml
-index ac6890b750..7ad5428e3a 100644
+index ac6890b750..7ad5428e3a 100755
 --- a/src/site/site.xml
 +++ b/src/site/site.xml
 @@ -92,6 +92,7 @@
@@ -151,7 +121,7 @@ index ac6890b750..7ad5428e3a 100644
          <item name="Writing Listeners" href="writinglisteners.html"/>
        </item>
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
-index fda0cdeab7..956b17ebb3 100644
+index fda0cdeab7..956b17ebb3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
 @@ -169,4 +169,17 @@ public void testEmptyJavadocLine() throws Exception {
@@ -172,88 +142,30 @@ index fda0cdeab7..956b17ebb3 100644
 +        verify(checkConfig, getPath("InputMissingDeprecatedSkipNoJavadoc.java"), expected);
 +    }
  }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheckTest.java
-index 35a6dafad4..547baf4b96 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheckTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/LeftCurlyCheckTest.java
-@@ -51,6 +51,12 @@ protected String getPath(String filename) throws IOException {
-                 + "blocks" + File.separator + filename);
-     }
- 
-+    @Override
-+    protected String getNonCompilablePath(String filename) throws IOException {
-+        return super.getNonCompilablePath("checks" + File.separator
-+                + "blocks" + File.separator + filename);
-+    }
-+
-     /* Additional test for jacoco, since valueOf()
-      * is generated by javac and jacoco reports that
-      * valueOf() is uncovered.
-@@ -280,6 +286,28 @@ public void testIgnoreEnumsOptionFalse() throws Exception {
-         verify(checkConfig, getPath("InputLeftCurlyEnums.java"), expectedWhileFalse);
-     }
- 
-+    @Test
-+    public void testDefaultLambda() throws Exception {
-+        final String[] expected = {
-+            "5:1: " + getCheckMessage(MSG_KEY_LINE_PREVIOUS, "{", 1),
-+            "12:32: " + getCheckMessage(MSG_KEY_LINE_BREAK_AFTER, "{", 32),
-+            "15:5: " + getCheckMessage(MSG_KEY_LINE_PREVIOUS, "{", 5),
-+        };
-+        verify(checkConfig, getNonCompilablePath("InputLeftCurlyNewLineOptionWithLambda.java"),
-+                expected);
-+    }
-+
-+    @Test
-+    public void testNewLineOptionWithLambda() throws Exception {
-+        checkConfig.addAttribute("option", LeftCurlyOption.NL.toString());
-+        final String[] expected = {
-+            "6:32: " + getCheckMessage(MSG_KEY_LINE_NEW, "{", 32),
-+            "12:32: " + getCheckMessage(MSG_KEY_LINE_NEW, "{", 32),
-+        };
-+        verify(checkConfig, getNonCompilablePath("InputLeftCurlyNewLineOptionWithLambda.java"),
-+                expected);
-+    }
-+
-     @Test
-     public void testGetAcceptableTokens() {
-         final LeftCurlyCheck check = new LeftCurlyCheck();
-@@ -303,7 +331,8 @@ public void testGetAcceptableTokens() {
-             TokenTypes.LITERAL_ELSE,
-             TokenTypes.LITERAL_FOR,
-             TokenTypes.STATIC_INIT,
--            TokenTypes.OBJBLOCK, };
-+            TokenTypes.OBJBLOCK,
-+            TokenTypes.LAMBDA, };
-         assertArrayEquals(expected, actual);
-     }
- 
 diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyNewLineOptionWithLambda.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyNewLineOptionWithLambda.java
-new file mode 100644
-index 0000000000..8ce0e26fbb
---- /dev/null
+index de6aba0a77..8ce0e26fbb 100755
+--- a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyNewLineOptionWithLambda.java
 +++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyNewLineOptionWithLambda.java
-@@ -0,0 +1,18 @@
-+//Compilable with Java8
-+package com.puppycrawl.tools.checkstyle.checks.blocks;
-+
-+public class InputLeftCurlyNewLineOptionWithLambda
-+{
-+    static Runnable r1 = () -> {
-+        System.out.println("Hello world one!");
+@@ -5,14 +5,14 @@
+ {
+     static Runnable r1 = () -> {
+         System.out.println("Hello world one!");
+-    }
 +    };
-+
-+    static Runnable r2 = () -> System.out.println("Hello world two!");
-+
+ 
+     static Runnable r2 = () -> System.out.println("Hello world two!");
+ 
+-    static Runnable r3 = () -> {System.out.println("Hello world two!")};
 +    static Runnable r3 = () -> {System.out.println("Hello world two!");};
-+
-+    static Runnable r4 = () ->
-+    {
-+        System.out.println("Hello world one!");
+ 
+     static Runnable r4 = () ->
+     {
+         System.out.println("Hello world one!");
+-    }
 +    };
-+}
+ }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/annotation/InputMissingDeprecatedSkipNoJavadoc.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/annotation/InputMissingDeprecatedSkipNoJavadoc.java
-new file mode 100644
+new file mode 100755
 index 0000000000..971576a59b
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/annotation/InputMissingDeprecatedSkipNoJavadoc.java
@@ -286,7 +198,7 @@ index 0000000000..971576a59b
 +    public static final int MY_CONST4 = 345678;
 +}
 diff --git a/src/xdocs/config_annotation.xml b/src/xdocs/config_annotation.xml
-index e97e405451..0176a311c2 100644
+index e97e405451..0176a311c2 100755
 --- a/src/xdocs/config_annotation.xml
 +++ b/src/xdocs/config_annotation.xml
 @@ -313,9 +313,45 @@ public String getNameIfPresent() { ... }
@@ -336,32 +248,8 @@ index e97e405451..0176a311c2 100644
          </source>
        </subsection>
  
-diff --git a/src/xdocs/config_blocks.xml b/src/xdocs/config_blocks.xml
-index a36913e07e..0baf3edfca 100644
---- a/src/xdocs/config_blocks.xml
-+++ b/src/xdocs/config_blocks.xml
-@@ -471,7 +471,8 @@ try {
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LITERAL_ELSE">LITERAL_ELSE</a>,
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LITERAL_FOR">LITERAL_FOR</a>,
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#STATIC_INIT">STATIC_INIT</a>,
--              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#OBJBLOCK">OBJBLOCK</a>.
-+              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#OBJBLOCK">OBJBLOCK</a>,
-+              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LAMBDA">LAMBDA</a>.
-             </td>
- 
-             <td>
-@@ -493,7 +494,8 @@ try {
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LITERAL_ELSE">LITERAL_ELSE</a>,
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LITERAL_FOR">LITERAL_FOR</a>,
-               <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#STATIC_INIT">STATIC_INIT</a>,
--              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#OBJBLOCK">OBJBLOCK</a>.
-+              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#OBJBLOCK">OBJBLOCK</a>,
-+              <a href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LAMBDA">LAMBDA</a>.
-             </td>
-           </tr>
-         </table>
 diff --git a/src/xdocs/extending.xml b/src/xdocs/extending.xml
-index 3cfdeeb49b..3e1580ccb7 100644
+index 3cfdeeb49b..3e1580ccb7 100755
 --- a/src/xdocs/extending.xml
 +++ b/src/xdocs/extending.xml
 @@ -21,7 +21,8 @@
@@ -375,7 +263,7 @@ index 3cfdeeb49b..3e1580ccb7 100644
          <li><a href="writinglisteners.html">Writing listeners</a>.</li>
        </ul>
 diff --git a/src/xdocs/writingjavadocchecks.xml.vm b/src/xdocs/writingjavadocchecks.xml.vm
-new file mode 100644
+new file mode 100755
 index 0000000000..148119a271
 --- /dev/null
 +++ b/src/xdocs/writingjavadocchecks.xml.vm

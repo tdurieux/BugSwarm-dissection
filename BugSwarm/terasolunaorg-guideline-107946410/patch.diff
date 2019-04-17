@@ -1,5 +1,5 @@
 diff --git a/source/Overview/FrameworkStack.rst b/source/Overview/FrameworkStack.rst
-index 062dc19..e2ae1ac 100755
+index 062dc191aa..e2ae1acb7b 100755
 --- a/source/Overview/FrameworkStack.rst
 +++ b/source/Overview/FrameworkStack.rst
 @@ -623,38 +623,54 @@ version 5.0.1.RELEASEで利用するOSSの一覧を以下に示す。
@@ -168,13 +168,13 @@ index 062dc19..e2ae1ac 100755
  
  .. raw:: latex
 diff --git a/source/Overview/images_FrameworkStack/FrameworkStackProjectDependencies.png b/source/Overview/images_FrameworkStack/FrameworkStackProjectDependencies.png
-index 06cce68..0acd3cf 100755
+index 06cce68e86..0acd3cf76e 100755
 Binary files a/source/Overview/images_FrameworkStack/FrameworkStackProjectDependencies.png and b/source/Overview/images_FrameworkStack/FrameworkStackProjectDependencies.png differ
 diff --git a/source/Overview/images_FrameworkStack/materialFrameworkStack.pptx b/source/Overview/images_FrameworkStack/materialFrameworkStack.pptx
-index bec1b68..53d95cd 100755
+index bec1b68858..53d95cd54c 100755
 Binary files a/source/Overview/images_FrameworkStack/materialFrameworkStack.pptx and b/source/Overview/images_FrameworkStack/materialFrameworkStack.pptx differ
 diff --git a/source/Security/SecureLoginDemo.rst b/source/Security/SecureLoginDemo.rst
-index f2b29ee..b4a5bbc 100755
+index f2b29ee30d..b4a5bbc1b6 100755
 --- a/source/Security/SecureLoginDemo.rst
 +++ b/source/Security/SecureLoginDemo.rst
 @@ -1,4 +1,4 @@
@@ -638,16 +638,16 @@ index f2b29ee..b4a5bbc 100755
  
      .. code-block:: java
  
-@@ -651,6 +654,9 @@ ER図
+@@ -650,6 +653,9 @@ ER図
+        @Transactional
         public class AccountSharedServiceImpl implements AccountSharedService {
  
-            @Inject
++           @Inject
 +           ClassicDateFactory dateFactory;
 +
-+           @Inject
+            @Inject
             PasswordHistorySharedService passwordHistorySharedService;
  
-            @Inject
 @@ -665,7 +671,7 @@ ER図
                 String password = passwordEncoder.encode(rawPassword);
                 boolean result = accountRepository.updatePassword(username, password); // (2)
@@ -675,13 +675,14 @@ index f2b29ee..b4a5bbc 100755
  
    .. code-block:: java
  
-@@ -711,10 +717,13 @@ ER図
+@@ -710,11 +716,14 @@ ER図
+      @Transactional
       public class AccountSharedServiceImpl implements AccountSharedService {
  
-          @Inject
++         @Inject
 +         ClassicDateFactory dateFactory;
 +
-+         @Inject
+          @Inject
           PasswordHistorySharedService passwordHistorySharedService;
  
 -         @Value("${security.passwordLifeTime}") // (1)
@@ -1283,13 +1284,14 @@ index f2b29ee..b4a5bbc 100755
               <![CDATA[
                    SELECT
                        username,
-@@ -1803,8 +1872,14 @@ ER図
+@@ -1802,9 +1871,15 @@ ER図
+ 
             // omitted
  
-            @Inject
++           @Inject
 +           ClassicDateFactory dateFactory;
 +           
-+           @Inject
+            @Inject
             FailedAuthenticationRepository failedAuthenticationRepository;
  
 +           @Inject
@@ -1370,13 +1372,14 @@ index f2b29ee..b4a5bbc 100755
  
  * ロックアウト状態の判定
  
-@@ -1892,10 +1981,13 @@ ER図
+@@ -1891,11 +1980,14 @@ ER図
+ 
           // omitted
  
-          @Inject
++         @Inject
 +         ClassicDateFactory dateFactory;
 +
-+         @Inject
+          @Inject
           AuthenticationEventSharedService authenticationEventSharedService;
  
 -         @Value("${security.lockingDuration}") // (1)
@@ -2108,7 +2111,7 @@ index f2b29ee..b4a5bbc 100755
  
      .. code-block:: java
  
-@@ -2969,10 +3154,13 @@ ER図
+@@ -2969,9 +3154,12 @@ ER図
         // omitted
  
         @Service
@@ -2116,13 +2119,12 @@ index f2b29ee..b4a5bbc 100755
 +       @Transactional
         public class PasswordReissueServiceImpl implements PasswordReissueService {
  
-            @Inject
++           @Inject
 +           ClassicDateFactory dateFactory;
 +
-+           @Inject
+            @Inject
             PasswordReissueInfoRepository passwordReissueInfoRepository;
  
-            @Inject
 @@ -2984,44 +3172,42 @@ ER図
             @Inject
             PasswordGenerator passwordGenerator; // (1)
@@ -2320,16 +2322,17 @@ index f2b29ee..b4a5bbc 100755
  
    * Serviceの実装
  
-@@ -3181,29 +3365,30 @@ ER図
+@@ -3180,6 +3364,9 @@ ER図
+        @Transactional
         public class PasswordReissueServiceImpl implements PasswordReissueService {
  
-            @Inject
++           @Inject
 +           ClassicDateFactory dateFactory;
 +
-+           @Inject
+            @Inject
             PasswordReissueInfoRepository passwordReissueInfoRepository;
  
-            // omitted
+@@ -3187,23 +3374,21 @@ ER図
  
             @Override
             @Transactional(readOnly = true)
@@ -2403,16 +2406,16 @@ index f2b29ee..b4a5bbc 100755
  
    * Serviceの実装
  
-@@ -3316,6 +3498,9 @@ ER図
+@@ -3315,6 +3497,9 @@ ER図
+        @Transactional
         public class PasswordReissueServiceImpl implements PasswordReissueService {
  
-            @Inject
++           @Inject
 +           PasswordReissueFailureSharedService passwordReissueFailureSharedService;
 +
-+           @Inject
+            @Inject
             PasswordReissueInfoRepository passwordReissueInfoRepository;
  
-            @Inject
 @@ -3329,17 +3514,14 @@ ER図
             @Override
             public boolean resetPassword(String username, String token, String secret,
@@ -2689,16 +2692,16 @@ index f2b29ee..b4a5bbc 100755
  
  * パスワード再発行失敗イベントエンティティの保存
  
-@@ -3988,6 +4153,9 @@ ER図
+@@ -3987,6 +4152,9 @@ ER図
+      public class PasswordReissueFailureSharedServiceImpl implements
               PasswordReissueFailureSharedService {
  
-          @Inject
++         @Inject
 +         ClassicDateFactory dateFactory;
 +
-+         @Inject
+          @Inject
           FailedPasswordReissueRepository failedPasswordReissueRepository;
  
-          // omitted
 @@ -3997,11 +4165,8 @@ ER図
           public void resetFailure(String username, String token) {
               FailedPasswordReissue event = new FailedPasswordReissue(); // (2)
@@ -2854,8 +2857,8 @@ index f2b29ee..b4a5bbc 100755
  
     // omitted
 diff --git a/source/Security/images/SecureLogin_ER.png b/source/Security/images/SecureLogin_ER.png
-index bfb103d..10a1ecd 100755
+index bfb103d348..10a1ecda3d 100755
 Binary files a/source/Security/images/SecureLogin_ER.png and b/source/Security/images/SecureLogin_ER.png differ
 diff --git a/source/Security/images_SecureLoginDemo/graph.asta b/source/Security/images_SecureLoginDemo/graph.asta
-index 412ad7a..5ada757 100755
+index 412ad7a0d0..5ada7579cc 100755
 Binary files a/source/Security/images_SecureLoginDemo/graph.asta and b/source/Security/images_SecureLoginDemo/graph.asta differ

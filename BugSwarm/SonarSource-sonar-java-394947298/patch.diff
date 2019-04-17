@@ -1,5 +1,5 @@
 diff --git a/java-checks/pom.xml b/java-checks/pom.xml
-index 8e75a005fe..80fd1c2ab6 100644
+index 8e75a005fe..80fd1c2ab6 100755
 --- a/java-checks/pom.xml
 +++ b/java-checks/pom.xml
 @@ -146,6 +146,11 @@
@@ -26,256 +26,60 @@ index 8e75a005fe..80fd1c2ab6 100644
                  <artifactItem>
                    <groupId>com.google.guava</groupId>
                    <artifactId>guava</artifactId>
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-index 79a44802fa..9731a7f630 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-@@ -64,6 +64,7 @@
- import org.sonar.java.checks.serialization.SerializableFieldInSerializableClassCheck;
- import org.sonar.java.checks.serialization.SerializableObjectInSessionCheck;
- import org.sonar.java.checks.serialization.SerializableSuperConstructorCheck;
-+import org.sonar.java.checks.spring.PersistentEntityUsedAsRequestParameterCheck;
- import org.sonar.java.checks.spring.RequestMappingMethodPublicCheck;
- import org.sonar.java.checks.spring.SpringAutoConfigurationCheck;
- import org.sonar.java.checks.spring.SpringComponentWithNonAutowiredMembersCheck;
-@@ -541,6 +542,7 @@ private CheckList() {
-       .add(SpringScanDefaultPackageCheck.class)
-       .add(SpringSecurityDebugModeCheck.class)
-       .add(SpringSecurityDisableCSRFCheck.class)
-+      .add(PersistentEntityUsedAsRequestParameterCheck.class)
-       .add(RequestMappingMethodPublicCheck.class)
-       .add(BooleanGratuitousExpressionsCheck.class)
-       .add(AllBranchesAreIdenticalCheck.class)
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java b/java-checks/src/main/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
-new file mode 100644
-index 0000000000..8c8dd6989b
---- /dev/null
+index f34c6349c6..8c8dd6989b 100755
+--- a/java-checks/src/main/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
-@@ -0,0 +1,75 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks.spring;
-+
-+import java.util.Arrays;
-+import java.util.Collections;
-+import java.util.List;
-+import org.sonar.check.Rule;
-+import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
-+import org.sonar.plugins.java.api.semantic.Symbol;
-+import org.sonar.plugins.java.api.tree.MethodTree;
-+import org.sonar.plugins.java.api.tree.Tree;
-+import org.sonar.plugins.java.api.tree.VariableTree;
-+
+@@ -29,7 +29,7 @@
+ import org.sonar.plugins.java.api.tree.Tree;
+ import org.sonar.plugins.java.api.tree.VariableTree;
+ 
+-@Rule(key = "S3751")
 +@Rule(key = "S4684")
-+public class PersistentEntityUsedAsRequestParameterCheck extends IssuableSubscriptionVisitor {
-+
-+  @Override
-+  public List<Tree.Kind> nodesToVisit() {
-+    return Collections.singletonList(Tree.Kind.METHOD);
-+  }
-+
-+  private static final List<String> REQUEST_ANNOTATIONS = Arrays.asList(
-+    "org.springframework.web.bind.annotation.RequestMapping",
-+    "org.springframework.web.bind.annotation.GetMapping",
-+    "org.springframework.web.bind.annotation.PostMapping",
-+    "org.springframework.web.bind.annotation.PutMapping",
-+    "org.springframework.web.bind.annotation.DeleteMapping",
+ public class PersistentEntityUsedAsRequestParameterCheck extends IssuableSubscriptionVisitor {
+ 
+   @Override
+@@ -43,8 +43,11 @@
+     "org.springframework.web.bind.annotation.PostMapping",
+     "org.springframework.web.bind.annotation.PutMapping",
+     "org.springframework.web.bind.annotation.DeleteMapping",
+-    "org.springframework.web.bind.annotation.PatchMapping"
+-  );
 +    "org.springframework.web.bind.annotation.PatchMapping");
 +
 +  private static final List<String> ENTITY_ANNOTATIONS = Arrays.asList(
 +    "javax.persistence.Entity",
 +    "org.springframework.data.mongodb.core.mapping.Document");
-+
-+  @Override
-+  public void visitNode(Tree tree) {
-+    if (!hasSemantic()) {
-+      return;
-+    }
-+
-+    MethodTree methodTree = (MethodTree) tree;
-+    Symbol.MethodSymbol methodSymbol = methodTree.symbol();
-+
-+    if (isRequestMappingAnnotated(methodSymbol)) {
-+      methodTree.parameters().stream()
-+        .filter(PersistentEntityUsedAsRequestParameterCheck::isPersistentEntity)
-+        .forEach(p -> reportIssue(p.simpleName(), "Replace this persistent entity with a simple POJO or DTO object."));
-+    }
-+  }
-+
-+  private static boolean isRequestMappingAnnotated(Symbol.MethodSymbol methodSymbol) {
-+    return REQUEST_ANNOTATIONS.stream().anyMatch(methodSymbol.metadata()::isAnnotatedWith);
-+  }
-+
-+  private static boolean isPersistentEntity(VariableTree variableTree) {
+ 
+   @Override
+   public void visitNode(Tree tree) {
+@@ -67,6 +70,6 @@ private static boolean isRequestMappingAnnotated(Symbol.MethodSymbol methodSymbo
+   }
+ 
+   private static boolean isPersistentEntity(VariableTree variableTree) {
+-    return false;
 +    return ENTITY_ANNOTATIONS.stream().anyMatch(variableTree.type().symbolType().symbol().metadata()::isAnnotatedWith);
-+  }
-+}
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.html
-new file mode 100644
-index 0000000000..5f5d346b55
---- /dev/null
-+++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.html
-@@ -0,0 +1,85 @@
-+<p>On one side, Spring MVC automatically bind request parameters to beans declared as arguments of methods annotated with
-+<code>@RequestMapping</code>. Because of this automatic binding feature, it's possible to feed some unexpected fields on the arguments of the
-+<code>@RequestMapping</code> annotated methods. </p>
-+<p>On the other end, persistent objects (<code>@Entity</code>) are linked to the underlying database and updated automatically by a persistence
-+framework, such as Hibernate or JPA.</p>
-+<p>These two facts combined together can lead to malicious attack: if a persistent object is used as an argument of a method annotated with
-+<code>@RequestMapping</code>, it's possible from a specially crafted user input, to change the content of unexpected fields into the database.</p>
-+<p>For this reason, using <code>@Entity</code> objects as arguments of methods annotated with <code>@RequestMapping</code> should be avoided.</p>
-+<p>In addition to <code>@RequestMapping</code>, this rule also considers the annotations introduced in Spring Framework 4.3: <code>@GetMapping</code>,
-+<code>@PostMapping</code>, <code>@PutMapping</code>, <code>@DeleteMapping</code>, <code>@PatchMapping</code>.</p>
-+<h2>Noncompliant Code Example</h2>
-+<pre>
-+import javax.persistence.Entity;
-+
-+@Entity
-+public class Wish {
-+  Long productId;
-+  Long quantity;
-+  Client client;
-+}
-+
-+@Entity
-+public class Client {
-+  String clientId;
-+  String name;
-+  String password;
-+}
-+
-+import org.springframework.stereotype.Controller;
-+import org.springframework.web.bind.annotation.RequestMapping;
-+
-+@Controller
-+public class WishListController {
-+
-+  @PostMapping(path = "/saveForLater")
-+  public String saveForLater(Wish wish) {
-+    session.save(wish);
-+  }
-+
-+  @RequestMapping(path = "/saveForLater", method = RequestMethod.POST)
-+  public String saveForLater(Wish wish) {
-+    session.save(wish);
-+  }
-+}
-+</pre>
-+<h2>Compliant Solution</h2>
-+<pre>
-+public class WishDTO {
-+  Long productId;
-+  Long quantity;
-+  Long clientId;
-+}
-+
-+import org.springframework.stereotype.Controller;
-+import org.springframework.web.bind.annotation.RequestMapping;
-+
-+@Controller
-+public class PurchaseOrderController {
-+
-+  @PostMapping(path = "/saveForLater")
-+  public String saveForLater(WishDTO wish) {
-+    Wish persistentWish = new Wish();
-+    // do the mapping between "wish" and "persistentWish"
-+    [...]
-+    session.save(persistentWish);
-+  }
-+
-+  @RequestMapping(path = "/saveForLater", method = RequestMethod.POST)
-+  public String saveForLater(WishDTO wish) {
-+    Wish persistentWish = new Wish();
-+    // do the mapping between "wish" and "persistentWish"
-+    [...]
-+    session.save(persistentWish);
-+  }
-+}
-+</pre>
-+<h2>See</h2>
-+<ul>
-+  <li> <a href="http://cwe.mitre.org/data/definitions/915.html">MITRE, CWE-915</a> - Improperly Controlled Modification of Dynamically-Determined
-+  Object Attributes </li>
-+  <li> OWASP Top 10 2017 Category A5 - Broken Access Control </li>
-+  <li> <a href="https://o2platform.files.wordpress.com/2011/07/ounce_springframework_vulnerabilities.pdf">Two Security Vulnerabilities in the Spring
-+  Framework’s MVC by Ryan Berg and Dinis Cruz</a> </li>
-+</ul>
-+
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.json
-new file mode 100644
-index 0000000000..5a1ab61678
---- /dev/null
-+++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4684_java.json
-@@ -0,0 +1,20 @@
-+{
-+  "title": "Persistent entities should not be used as arguments of \"@RequestMapping\" methods",
-+  "type": "VULNERABILITY",
-+  "status": "ready",
-+  "remediation": {
-+    "func": "Constant\/Issue",
-+    "constantCost": "10min"
-+  },
-+  "tags": [
-+    "cwe",
-+    "spring"
-+  ],
-+  "standards": [
-+    "CWE"
-+  ],
-+  "defaultSeverity": "Critical",
-+  "ruleSpecification": "RSPEC-4684",
-+  "sqKey": "S4684",
-+  "scope": "Main"
-+}
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
-index 53da947249..070a686447 100644
---- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
-+++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
-@@ -320,6 +320,7 @@
-     "S4507",
-     "S4524",
-     "S4602",
--    "S4635"
-+    "S4635",
-+    "S4684"
-   ]
+   }
  }
 diff --git a/java-checks/src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java b/java-checks/src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
-new file mode 100644
-index 0000000000..7301d3a08d
---- /dev/null
+index e6243c2dd4..7301d3a08d 100755
+--- a/java-checks/src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
 +++ b/java-checks/src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java
-@@ -0,0 +1,80 @@
-+import javax.persistence.Entity;
+@@ -1,25 +1,64 @@
+ import javax.persistence.Entity;
 +import org.springframework.data.mongodb.core.mapping.Document;
 +import org.springframework.stereotype.Component;
-+import org.springframework.stereotype.Controller;
+ import org.springframework.stereotype.Controller;
 +import org.springframework.web.bind.annotation.DeleteMapping;
 +import org.springframework.web.bind.annotation.GetMapping;
 +import org.springframework.web.bind.annotation.PatchMapping;
-+import org.springframework.web.bind.annotation.PostMapping;
+ import org.springframework.web.bind.annotation.PostMapping;
 +import org.springframework.web.bind.annotation.PutMapping;
-+import org.springframework.web.bind.annotation.RequestMapping;
-+
-+@Entity
-+public class Foo {
+ import org.springframework.web.bind.annotation.RequestMapping;
+ 
+ @Entity
+ public class Foo {
+-  String foo;
 +}
 +
 +@Document
@@ -287,23 +91,28 @@ index 0000000000..7301d3a08d
 +
 +@Component
 +public class Baz {
-+}
-+
-+@Controller
-+class FooController {
-+
+ }
+ 
+ @Controller
+ class FooController {
+ 
+-  @PostMapping(path = "/foo1")
+-  public void foo1(Foo foo) { // Noncompliant
 +  @RequestMapping(path = "/foo", method = RequestMethod.POST)
 +  public void foo1(Foo foo) { // Noncompliant [[sc=24;ec=27]] {{Replace this persistent entity with a simple POJO or DTO object.}}
 +  }
 +
 +  @GetMapping
 +  public void foo2(Foo foo) { // Noncompliant
-+  }
-+
+   }
+ 
+-  @RequestMapping(path = "/foo2", method = RequestMethod.POST)
+-  public void foo2(Foo foo) {  // Noncompliant
 +  @PostMapping
 +  public void foo3(Foo foo) { // Noncompliant
-+  }
-+
+   }
+ 
+-  @PostMapping(path = "/ok1")
 +  @PutMapping
 +  public void foo4(Foo foo) { // Noncompliant
 +  }
@@ -324,67 +133,53 @@ index 0000000000..7301d3a08d
 +  }
 +
 +  @PostMapping
-+  public Foo ok1(String s) {
-+    Foo foo = new Foo();
-+    return foo; // it is ok to return
-+  }
-+
-+  public void ok2(Foo foo) {
-+  }
-+
+   public Foo ok1(String s) {
+     Foo foo = new Foo();
+     return foo; // it is ok to return
+@@ -27,20 +66,15 @@ public Foo ok1(String s) {
+ 
+   public void ok2(Foo foo) {
+   }
+-}
+ 
+-public class Bar {
+-  String bar;
+-}
+-
+-@Controller
+-class BarController {
 +  public void ok3(Doc doc) {
 +  }
-+
+ 
+-  @PostMapping(path = "/bar1")
+-  public void bar1(Bar bar) {
 +  @PostMapping
 +  public void ok4(Bar bar, Baz baz) {
-+  }
-+
+   }
+ 
+-  @RequestMapping(path = "/bar2", method = RequestMethod.POST)
+-  public void bar2(Bar bar) {
 +  @DeleteMapping
 +  public void ok5(Bar bar) {
-+  }
-+}
+   }
+ }
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheckTest.java
-new file mode 100644
-index 0000000000..2713120a88
---- /dev/null
+index 00c66f7774..2713120a88 100755
+--- a/java-checks/src/test/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheckTest.java
 +++ b/java-checks/src/test/java/org/sonar/java/checks/spring/PersistentEntityUsedAsRequestParameterCheckTest.java
-@@ -0,0 +1,34 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks.spring;
-+
-+import org.junit.Test;
-+import org.sonar.java.checks.verifier.JavaCheckVerifier;
-+
-+public class PersistentEntityUsedAsRequestParameterCheckTest {
-+
-+  @Test
-+  public void test() {
-+    JavaCheckVerifier.verify("src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java",
+@@ -27,8 +27,8 @@
+   @Test
+   public void test() {
+     JavaCheckVerifier.verify("src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java",
+-        new PersistentEntityUsedAsRequestParameterCheck());
 +      new PersistentEntityUsedAsRequestParameterCheck());
-+    JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java",
+     JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/spring/PersistentEntityUsedAsRequestParameterCheck.java",
+-        new PersistentEntityUsedAsRequestParameterCheck());
 +      new PersistentEntityUsedAsRequestParameterCheck());
-+  }
-+}
+   }
+ }
 diff --git a/sonar-java-plugin/pom.xml b/sonar-java-plugin/pom.xml
-index 18433a76d1..fb87cdc633 100644
+index 18433a76d1..fb87cdc633 100755
 --- a/sonar-java-plugin/pom.xml
 +++ b/sonar-java-plugin/pom.xml
 @@ -107,7 +107,7 @@

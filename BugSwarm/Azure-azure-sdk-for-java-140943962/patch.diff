@@ -1,54 +1,5 @@
-diff --git a/.travis.yml b/.travis.yml
-index 3f93be05f4..523e632dcb 100644
---- a/.travis.yml
-+++ b/.travis.yml
-@@ -7,3 +7,4 @@ jdk:
- script:
-   - mvn install -DskipTests=true
-   - mvn -pl !azure-batch,!azure-mgmt-website checkstyle:check
-+  - mvn package javadoc:aggregate -DskipTests=true
-diff --git a/azure-batch/src/main/java/com/microsoft/azure/batch/CreateTasksTerminatedException.java b/azure-batch/src/main/java/com/microsoft/azure/batch/CreateTasksTerminatedException.java
-index 994d547390..8ad4a20bb8 100644
---- a/azure-batch/src/main/java/com/microsoft/azure/batch/CreateTasksTerminatedException.java
-+++ b/azure-batch/src/main/java/com/microsoft/azure/batch/CreateTasksTerminatedException.java
-@@ -12,12 +12,17 @@
- 
- import java.util.List;
- 
-+/**
-+ * CreateTasksTerminatedException.
-+ */
- public class CreateTasksTerminatedException extends BatchErrorException {
- 
-     /**
-      * Initializes a new instance of the CreateTasksTerminatedException class.
-      *
--     * @param message The exception message.
-+     * @param message the exception message
-+     * @param failureTasks the list of failed tasks
-+     * @param pendingList the list of pending tasks
-      */
-     public CreateTasksTerminatedException(final String message, List<TaskAddResult> failureTasks, List<TaskAddParameter> pendingList) {
-         super(message);
-@@ -31,10 +36,16 @@ public CreateTasksTerminatedException(final String message, List<TaskAddResult>
- 
-     private List<TaskAddParameter> pendingTaskList;
- 
-+    /**
-+     * @return the list of failed tasks
-+     */
-     public List<TaskAddResult> getFailureTasks() {
-         return failureTasks;
-     }
- 
-+    /**
-+     * @return the list of pending tasks
-+     */
-     public List<TaskAddParameter> getPendingTaskList() {
-         return pendingTaskList;
-     }
 diff --git a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsAccountOperationsTests.java b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsAccountOperationsTests.java
-index 1a2af51670..83f1614c63 100644
+index 1a2af51670..83f1614c63 100755
 --- a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsAccountOperationsTests.java
 +++ b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsAccountOperationsTests.java
 @@ -9,10 +9,10 @@
@@ -67,7 +18,7 @@ index 1a2af51670..83f1614c63 100644
  import org.junit.Assert;
  import org.junit.BeforeClass;
 diff --git a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsCatalogOperationsTests.java b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsCatalogOperationsTests.java
-index 0c6289f4b2..4854840c78 100644
+index 0c6289f4b2..4854840c78 100755
 --- a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsCatalogOperationsTests.java
 +++ b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsCatalogOperationsTests.java
 @@ -13,7 +13,7 @@
@@ -80,7 +31,7 @@ index 0c6289f4b2..4854840c78 100644
  import org.junit.Assert;
  import org.junit.BeforeClass;
 diff --git a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsJobOperationsTests.java b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsJobOperationsTests.java
-index 5766386f2c..697f5c327a 100644
+index 5766386f2c..697f5c327a 100755
 --- a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsJobOperationsTests.java
 +++ b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsJobOperationsTests.java
 @@ -9,7 +9,7 @@
@@ -93,7 +44,7 @@ index 5766386f2c..697f5c327a 100644
  import org.junit.Assert;
  import org.junit.BeforeClass;
 diff --git a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsManagementTestBase.java b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsManagementTestBase.java
-index 6879d0d9df..121b792a69 100644
+index 6879d0d9df..121b792a69 100755
 --- a/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsManagementTestBase.java
 +++ b/azure-mgmt-datalake-analytics/src/test/java/com/microsoft/azure/management/datalake/analytics/DataLakeAnalyticsManagementTestBase.java
 @@ -11,8 +11,8 @@
@@ -108,7 +59,7 @@ index 6879d0d9df..121b792a69 100644
  import com.microsoft.azure.RestClient;
  import org.junit.Assert;
 diff --git a/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/DataLakeUploaderTestBase.java b/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/DataLakeUploaderTestBase.java
-index 488e6e79b2..876c325c15 100644
+index 488e6e79b2..876c325c15 100755
 --- a/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/DataLakeUploaderTestBase.java
 +++ b/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/DataLakeUploaderTestBase.java
 @@ -6,13 +6,11 @@
@@ -128,7 +79,7 @@ index 488e6e79b2..876c325c15 100644
  import okhttp3.logging.HttpLoggingInterceptor;
  import retrofit2.Retrofit;
 diff --git a/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/PerformanceUploadTests.java b/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/PerformanceUploadTests.java
-index 4db68bcf9b..6747b4cc39 100644
+index 4db68bcf9b..6747b4cc39 100755
 --- a/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/PerformanceUploadTests.java
 +++ b/azure-mgmt-datalake-store-uploader/src/test/java/com/microsoft/azure/management/datalake/store/uploader/PerformanceUploadTests.java
 @@ -8,7 +8,7 @@
@@ -141,7 +92,7 @@ index 4db68bcf9b..6747b4cc39 100644
  import org.junit.BeforeClass;
  import org.junit.Test;
 diff --git a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreAccountOperationsTests.java b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreAccountOperationsTests.java
-index 433e15ce82..966b524175 100644
+index 433e15ce82..966b524175 100755
 --- a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreAccountOperationsTests.java
 +++ b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreAccountOperationsTests.java
 @@ -2,7 +2,7 @@
@@ -154,7 +105,7 @@ index 433e15ce82..966b524175 100644
  import org.junit.Assert;
  import org.junit.BeforeClass;
 diff --git a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreFilesystemOperationsTests.java b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreFilesystemOperationsTests.java
-index 5331d5eb70..c81e80b2d7 100644
+index 5331d5eb70..c81e80b2d7 100755
 --- a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreFilesystemOperationsTests.java
 +++ b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreFilesystemOperationsTests.java
 @@ -8,7 +8,7 @@
@@ -167,7 +118,7 @@ index 5331d5eb70..c81e80b2d7 100644
  import org.junit.AfterClass;
  import org.junit.Assert;
 diff --git a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreManagementTestBase.java b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreManagementTestBase.java
-index 6af2353d2c..7b91a0b746 100644
+index 6af2353d2c..7b91a0b746 100755
 --- a/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreManagementTestBase.java
 +++ b/azure-mgmt-datalake-store/src/test/java/com/microsoft/azure/management/datalake/store/DataLakeStoreManagementTestBase.java
 @@ -4,7 +4,7 @@
@@ -180,7 +131,7 @@ index 6af2353d2c..7b91a0b746 100644
  import okhttp3.logging.HttpLoggingInterceptor;
  
 diff --git a/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/SubscriptionsTests.java b/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/SubscriptionsTests.java
-new file mode 100644
+new file mode 100755
 index 0000000000..bc8b8cc288
 --- /dev/null
 +++ b/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/SubscriptionsTests.java
@@ -219,7 +170,7 @@ index 0000000000..bc8b8cc288
 +    }
 +}
 diff --git a/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/TenantsTests.java b/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/TenantsTests.java
-new file mode 100644
+new file mode 100755
 index 0000000000..bb99c81a63
 --- /dev/null
 +++ b/azure-mgmt-resources/src/test/java/com/microsoft/azure/management/resources/TenantsTests.java
@@ -257,311 +208,3 @@ index 0000000000..bb99c81a63
 +        Assert.assertTrue(tenants.size() > 0);
 +    }
 +}
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ListVirtualMachineImages.java b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ListVirtualMachineImages.java
-index 264261df28..ec4dace685 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ListVirtualMachineImages.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ListVirtualMachineImages.java
-@@ -35,7 +35,7 @@ public static void main(String[] args) {
-             //=================================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageAvailabilitySet.java b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageAvailabilitySet.java
-index 0e0fcff8ac..ce83f62d1f 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageAvailabilitySet.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageAvailabilitySet.java
-@@ -54,7 +54,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageVirtualMachine.java b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageVirtualMachine.java
-index 2f5f8a0cc2..59d11ff1d9 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageVirtualMachine.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/compute/samples/ManageVirtualMachine.java
-@@ -56,7 +56,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageIPAddress.java b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageIPAddress.java
-index ab31d43ae9..eeb52671b9 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageIPAddress.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageIPAddress.java
-@@ -50,7 +50,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkInterface.java b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkInterface.java
-index 7e56175e31..e88613cca4 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkInterface.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkInterface.java
-@@ -56,7 +56,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkSecurityGroup.java b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkSecurityGroup.java
-index d63d3a1f6b..591e5d6aef 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkSecurityGroup.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageNetworkSecurityGroup.java
-@@ -61,7 +61,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageVirtualNetwork.java b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageVirtualNetwork.java
-index eaadccec05..88a24aaef8 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageVirtualNetwork.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/network/samples/ManageVirtualNetwork.java
-@@ -24,10 +24,10 @@
- 
- /**
-  * Azure Network sample for managing virtual networks -
-- *  - Create a virtual network
-  *  - Create a virtual network with Subnets
-  *  - Update a virtual network
-  *  - Create virtual machines in the virtual network subnets
-+ *  - Create another virtual network
-  *  - List virtual networks
-  *  - Delete a virtual network.
-  */
-@@ -41,10 +41,10 @@
-     public static void main(String[] args) {
-         final String vnetName1 = ResourceNamer.randomResourceName("vnet1", 20);
-         final String vnetName2 = ResourceNamer.randomResourceName("vnet2", 20);
--        final String vnet2FrontEndSubnetName = "frontend";
--        final String vnet2BackEndSubnetName = "backend";
--        final String vnet2FrontEndSubnetNsgName = "frontendnsg";
--        final String vnet2BackEndSubnetNsgName = "backendnsg";
-+        final String vnet1FrontEndSubnetName = "frontend";
-+        final String vnet1BackEndSubnetName = "backend";
-+        final String vnet1FrontEndSubnetNsgName = "frontendnsg";
-+        final String vnet1BackEndSubnetNsgName = "backendnsg";
-         final String frontEndVMName = ResourceNamer.randomResourceName("fevm", 24);
-         final String backEndVMName = ResourceNamer.randomResourceName("bevm", 24);
-         final String publicIpAddressLeafDNSForFrontEndVM = ResourceNamer.randomResourceName("pip1", 24);
-@@ -58,7 +58,7 @@ public static void main(String[] args) {
-             //=============================================================
-             // Authenticate
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-@@ -70,20 +70,6 @@ public static void main(String[] args) {
-             System.out.println("Selected subscription: " + azure.subscriptionId());
-             try {
- 
--                //============================================================
--                // Create a virtual network with default address-space and one default subnet
--
--                System.out.println("Creating virtual network #1...");
--
--                Network virtualNetwork1 = azure.networks()
--                        .define(vnetName1)
--                        .withRegion(Region.US_EAST)
--                        .withNewResourceGroup(rgName)
--                        .create();
--
--                System.out.println("Created a virtual network");
--                // Print the virtual network details
--                Utils.print(virtualNetwork1);
- 
-                 //============================================================
-                 // Create a virtual network with specific address-space and two subnet
-@@ -93,7 +79,7 @@ public static void main(String[] args) {
-                 System.out.println("Creating a network security group for virtual network backend subnet...");
- 
-                 NetworkSecurityGroup backEndSubnetNsg = azure.networkSecurityGroups()
--                        .define(vnet2BackEndSubnetNsgName)
-+                        .define(vnet1BackEndSubnetNsgName)
-                         .withRegion(Region.US_EAST)
-                         .withExistingResourceGroup(rgName)
-                         .defineRule("DenyInternetInComing")
-@@ -121,15 +107,15 @@ public static void main(String[] args) {
-                 // Create the virtual network with frontend and backend subnets, with
-                 // network security group rule applied to backend subnet]
- 
--                System.out.println("Creating virtual network #2...");
-+                System.out.println("Creating virtual network #1...");
- 
--                Network virtualNetwork2 = azure.networks()
--                        .define(vnetName2)
-+                Network virtualNetwork1 = azure.networks()
-+                        .define(vnetName1)
-                         .withRegion(Region.US_EAST)
-                         .withExistingResourceGroup(rgName)
-                         .withAddressSpace("192.168.0.0/16")
--                        .withSubnet(vnet2FrontEndSubnetName, "192.168.1.0/24")
--                        .defineSubnet(vnet2BackEndSubnetName)
-+                        .withSubnet(vnet1FrontEndSubnetName, "192.168.1.0/24")
-+                        .defineSubnet(vnet1BackEndSubnetName)
-                             .withAddressPrefix("192.168.2.0/24")
-                             .withExistingNetworkSecurityGroup(backEndSubnetNsg)
-                             .attach()
-@@ -137,7 +123,8 @@ public static void main(String[] args) {
- 
-                 System.out.println("Created a virtual network");
-                 // Print the virtual network details
--                Utils.print(virtualNetwork2);
-+                Utils.print(virtualNetwork1);
-+
- 
-                 //============================================================
-                 // Update a virtual network
-@@ -147,7 +134,7 @@ public static void main(String[] args) {
-                 System.out.println("Creating a network security group for virtual network backend subnet...");
- 
-                 NetworkSecurityGroup frontEndSubnetNsg = azure.networkSecurityGroups()
--                        .define(vnet2FrontEndSubnetNsgName)
-+                        .define(vnet1FrontEndSubnetNsgName)
-                         .withRegion(Region.US_EAST)
-                         .withExistingResourceGroup(rgName)
-                         .defineRule("AllowHttpInComing")
-@@ -176,15 +163,16 @@ public static void main(String[] args) {
- 
-                 System.out.println("Associating network security group rule to frontend subnet");
- 
--                virtualNetwork2.update()
--                        .updateSubnet(vnet2FrontEndSubnetName)
-+                virtualNetwork1.update()
-+                        .updateSubnet(vnet1FrontEndSubnetName)
-                             .withExistingNetworkSecurityGroup(frontEndSubnetNsg)
-                             .parent()
-                         .apply();
- 
-                 System.out.println("Network security group rule associated with the frontend subnet");
-                 // Print the virtual network details
--                Utils.print(virtualNetwork2);
-+                Utils.print(virtualNetwork1);
-+
- 
-                 //============================================================
-                 // Create a virtual machine in each subnet
-@@ -198,8 +186,8 @@ public static void main(String[] args) {
-                 VirtualMachine frontEndVM = azure.virtualMachines().define(frontEndVMName)
-                         .withRegion(Region.US_EAST)
-                         .withExistingResourceGroup(rgName)
--                        .withExistingPrimaryNetwork(virtualNetwork2)
--                        .withSubnet(vnet2FrontEndSubnetName)
-+                        .withExistingPrimaryNetwork(virtualNetwork1)
-+                        .withSubnet(vnet1FrontEndSubnetName)
-                         .withPrimaryPrivateIpAddressDynamic()
-                         .withNewPrimaryPublicIpAddress(publicIpAddressLeafDNSForFrontEndVM)
-                         .withPopularLinuxImage(KnownLinuxVirtualMachineImage.UBUNTU_SERVER_16_04_LTS)
-@@ -224,8 +212,8 @@ public static void main(String[] args) {
-                 VirtualMachine backEndVM = azure.virtualMachines().define(backEndVMName)
-                         .withRegion(Region.US_EAST)
-                         .withExistingResourceGroup(rgName)
--                        .withExistingPrimaryNetwork(virtualNetwork2)
--                        .withSubnet(vnet2BackEndSubnetName)
-+                        .withExistingPrimaryNetwork(virtualNetwork1)
-+                        .withSubnet(vnet1BackEndSubnetName)
-                         .withPrimaryPrivateIpAddressDynamic()
-                         .withoutPrimaryPublicIpAddress()
-                         .withPopularLinuxImage(KnownLinuxVirtualMachineImage.UBUNTU_SERVER_16_04_LTS)
-@@ -240,6 +228,23 @@ public static void main(String[] args) {
-                 // Print virtual machine details
-                 Utils.print(backEndVM);
- 
-+
-+                //============================================================
-+                // Create a virtual network with default address-space and one default subnet
-+
-+                System.out.println("Creating virtual network #2...");
-+
-+                Network virtualNetwork2 = azure.networks()
-+                        .define(vnetName2)
-+                        .withRegion(Region.US_EAST)
-+                        .withNewResourceGroup(rgName)
-+                        .create();
-+
-+                System.out.println("Created a virtual network");
-+                // Print the virtual network details
-+                Utils.print(virtualNetwork2);
-+
-+
-                 //============================================================
-                 // List virtual networks
- 
-@@ -247,10 +252,11 @@ public static void main(String[] args) {
-                     Utils.print(virtualNetwork);
-                 }
- 
-+
-                 //============================================================
-                 // Delete a virtual network
-                 System.out.println("Deleting the virtual network");
--                azure.networks().delete(virtualNetwork1.id());
-+                azure.networks().delete(virtualNetwork2.id());
-                 System.out.println("Deleted the virtual network");
-             } catch (Exception e) {
-                 System.err.println(e.getMessage());
-diff --git a/azure-samples/src/main/java/com/microsoft/azure/management/storage/samples/ManageStorageAccount.java b/azure-samples/src/main/java/com/microsoft/azure/management/storage/samples/ManageStorageAccount.java
-index a501380906..2407103137 100644
---- a/azure-samples/src/main/java/com/microsoft/azure/management/storage/samples/ManageStorageAccount.java
-+++ b/azure-samples/src/main/java/com/microsoft/azure/management/storage/samples/ManageStorageAccount.java
-@@ -41,7 +41,7 @@ public static void main(String[] args) {
- 
-         try {
- 
--            final File credFile = new File("my.azureauth");
-+            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
- 
-             Azure azure = Azure
-                     .configure()
-diff --git a/azure/src/test/java/com/microsoft/azure/TestVirtualMachineSsh.java b/azure/src/test/java/com/microsoft/azure/TestVirtualMachineSsh.java
-index b6bdf8d603..a9897d3b60 100644
---- a/azure/src/test/java/com/microsoft/azure/TestVirtualMachineSsh.java
-+++ b/azure/src/test/java/com/microsoft/azure/TestVirtualMachineSsh.java
-@@ -51,6 +51,9 @@ public VirtualMachine createResource(VirtualMachines virtualMachines) throws Exc
-         }finally {
-             if(session != null) {session.disconnect();}
-         }
-+
-+        Assert.assertNotNull(vm.inner().osProfile().linuxConfiguration().ssh());
-+        Assert.assertTrue(vm.inner().osProfile().linuxConfiguration().ssh().publicKeys().size() > 0);
-         return vm;
-     }
- 
-diff --git a/runtimes/client-runtime/src/main/java/com/microsoft/rest/ServiceClient.java b/runtimes/client-runtime/src/main/java/com/microsoft/rest/ServiceClient.java
-index 8311a243de..5d6f0f8503 100644
---- a/runtimes/client-runtime/src/main/java/com/microsoft/rest/ServiceClient.java
-+++ b/runtimes/client-runtime/src/main/java/com/microsoft/rest/ServiceClient.java
-@@ -40,6 +40,9 @@ protected ServiceClient(String baseUrl) {
-     /**
-      * Initializes a new instance of the ServiceClient class.
-      *
-+     * @param baseUrl the service base uri
-+     * @param clientBuilder the http client builder
-+     * @param restBuilder the retrofit rest client builder
-      */
-     protected ServiceClient(String baseUrl, OkHttpClient.Builder clientBuilder, Retrofit.Builder restBuilder) {
-         if (clientBuilder == null) {

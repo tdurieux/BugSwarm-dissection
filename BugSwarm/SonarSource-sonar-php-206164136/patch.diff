@@ -1,47 +1,5 @@
-diff --git a/sonar-php-plugin/src/main/java/org/sonar/plugins/php/phpunit/xml/TestCase.java b/sonar-php-plugin/src/main/java/org/sonar/plugins/php/phpunit/xml/TestCase.java
-index c8ad79361..46687f434 100644
---- a/sonar-php-plugin/src/main/java/org/sonar/plugins/php/phpunit/xml/TestCase.java
-+++ b/sonar-php-plugin/src/main/java/org/sonar/plugins/php/phpunit/xml/TestCase.java
-@@ -25,6 +25,7 @@
- import org.apache.commons.lang.StringUtils;
- import org.apache.commons.lang.builder.ToStringBuilder;
- import org.sonar.api.internal.google.common.annotations.VisibleForTesting;
-+import org.sonar.plugins.php.api.Php;
- 
- @XStreamAlias("testcase")
- public final class TestCase {
-@@ -50,6 +51,9 @@
-   @XStreamAlias("failure")
-   private String failure;
- 
-+  @XStreamAlias("skipped")
-+  private String skipped;
-+
-   @XStreamOmitField
-   private String status;
- 
-@@ -68,6 +72,9 @@ public TestCase(String status) {
-     if(STATUS_FAILURE.equals(status)) {
-       this.failure = STATUS_FAILURE;
-     }
-+    if(STATUS_SKIPPED.equals(status)) {
-+      this.skipped = STATUS_SKIPPED;
-+    }
-     this.status = status;
-   }
- 
-@@ -78,6 +85,9 @@ public String getStatus() {
-     if (StringUtils.isNotBlank(failure)) {
-       return STATUS_FAILURE;
-     }
-+    if (skipped != null) {
-+      return STATUS_SKIPPED;
-+    }
-     if (StringUtils.isBlank(status)) {
-       return STATUS_OK;
-     }
 diff --git a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
-index 58ddd7b90..9eb68f518 100644
+index 58ddd7b90a..9eb68f5180 100755
 --- a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
 +++ b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/PHPSensorTest.java
 @@ -374,7 +374,7 @@ public void should_disable_unnecessary_features_for_sonarlint() throws Exception
@@ -54,7 +12,7 @@ index 58ddd7b90..9eb68f518 100644
        .setType(InputFile.Type.TEST)
        .setLanguage(Php.KEY);
 diff --git a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/JUnitLogParserForPhpUnitTest.java b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/JUnitLogParserForPhpUnitTest.java
-index 3f5159aba..2f7b427ac 100644
+index 3f5159abab..2f7b427ac1 100755
 --- a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/JUnitLogParserForPhpUnitTest.java
 +++ b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/JUnitLogParserForPhpUnitTest.java
 @@ -57,6 +57,6 @@ public void shouldThrowAnExceptionWhenReportDoesNotExist() throws Exception {
@@ -64,23 +22,4 @@ index 3f5159aba..2f7b427ac 100644
 -    
 +    assertThat(suites.arrangeSuitesIntoTestFileReports().size()).isEqualTo(8);
    }
- }
-diff --git a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/PhpUnitTestResultImporterTest.java b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/PhpUnitTestResultImporterTest.java
-index 95f02fae8..110579ec0 100644
---- a/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/PhpUnitTestResultImporterTest.java
-+++ b/sonar-php-plugin/src/test/java/org/sonar/plugins/php/phpunit/PhpUnitTestResultImporterTest.java
-@@ -66,12 +66,12 @@ public void shouldGenerateTestsMeasures() {
-     PhpTestUtils.assertMeasure(context, appTest, CoreMetrics.TEST_EXECUTION_TIME, 0L);
-     PhpTestUtils.assertMeasure(context, appTest, CoreMetrics.TEST_SUCCESS_DENSITY, 100.00);
- 
--    PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TESTS, 1);
-+    PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TESTS, 0);
-     PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TEST_FAILURES, 0);
-     PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TEST_ERRORS, 0);
-     PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.SKIPPED_TESTS, 1);
-     PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TEST_EXECUTION_TIME, 0L);
--    PhpTestUtils.assertMeasure(context, appSkipTest, CoreMetrics.TEST_SUCCESS_DENSITY, 100.00);
-+    PhpTestUtils.assertNoMeasure(context, appSkipTest, CoreMetrics.TEST_SUCCESS_DENSITY);
-   }
- 
  }

@@ -1,29 +1,8 @@
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-index 79a44802fa..f150b0b37e 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-@@ -66,6 +66,7 @@
- import org.sonar.java.checks.serialization.SerializableSuperConstructorCheck;
- import org.sonar.java.checks.spring.RequestMappingMethodPublicCheck;
- import org.sonar.java.checks.spring.SpringAutoConfigurationCheck;
-+import org.sonar.java.checks.spring.SpringComponentScanCheck;
- import org.sonar.java.checks.spring.SpringComponentWithNonAutowiredMembersCheck;
- import org.sonar.java.checks.spring.SpringComponentWithWrongScopeCheck;
- import org.sonar.java.checks.spring.SpringComposedRequestMappingCheck;
-@@ -533,6 +534,7 @@ private CheckList() {
-       .add(StaticFieldUpdateInConstructorCheck.class)
-       .add(NestedTernaryOperatorsCheck.class)
-       .add(SpringAutoConfigurationCheck.class)
-+      .add(SpringComponentScanCheck.class)
-       .add(SpringComponentWithNonAutowiredMembersCheck.class)
-       .add(SpringConfigurationWithAutowiredFieldsCheck.class)
-       .add(SpringComponentWithWrongScopeCheck.class)
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/spring/SpringComponentScanCheck.java b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringComponentScanCheck.java
-new file mode 100644
-index 0000000000..8c1ee983a5
---- /dev/null
+index 14908a35c7..8c1ee983a5 100755
+--- a/java-checks/src/main/java/org/sonar/java/checks/spring/SpringComponentScanCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/spring/SpringComponentScanCheck.java
-@@ -0,0 +1,48 @@
+@@ -1,3 +1,22 @@
 +/*
 + * SonarQube Java
 + * Copyright (C) 2012-2018 SonarSource SA
@@ -43,145 +22,14 @@ index 0000000000..8c1ee983a5
 + * along with this program; if not, write to the Free Software Foundation,
 + * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 + */
-+package org.sonar.java.checks.spring;
-+
-+import java.util.Collections;
-+import java.util.List;
-+import org.sonar.check.Rule;
-+import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
-+import org.sonar.plugins.java.api.semantic.Type;
-+import org.sonar.plugins.java.api.tree.AnnotationTree;
-+import org.sonar.plugins.java.api.tree.Tree;
-+
-+@Rule(key = "S4603")
-+public class SpringComponentScanCheck extends IssuableSubscriptionVisitor {
-+
-+  @Override
-+  public List<Tree.Kind> nodesToVisit() {
-+    return Collections.singletonList(Tree.Kind.ANNOTATION);
-+  }
-+
-+  @Override
-+  public void visitNode(Tree tree) {
-+    AnnotationTree annotation = (AnnotationTree) tree;
-+    Type type = annotation.symbolType();
-+    if (type.is("org.springframework.context.annotation.ComponentScan") ||
-+      type.is("org.springframework.boot.autoconfigure.SpringBootApplication")) {
-+      reportIssue(annotation.annotationType(), "Consider replacing \"@" + type.name() +
-+        "\" by a list of beans imported with @Import to speed-up the start-up of the application.");
-+    }
-+  }
-+}
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.html
-new file mode 100644
-index 0000000000..d51773cdf9
---- /dev/null
-+++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.html
-@@ -0,0 +1,41 @@
-+<p><code>@ComponentScan</code> is used to find which Spring <code>@Component</code> beans (<code>@Service</code> or <code>@Repository</code> or
-+<code>Controller</code>) are available in the classpath so they can be used in the application context. This is a convenient feature especially when
-+you begin a new project but it comes with the drawback of slowing down the application start-up time especially when the application becomes bigger
-+(ie: it references a large JAR file, or it references a significant number of JAR files, or the base-package refers to a large amount of .class
-+files).</p>
-+<p><code>@ComponentScan</code> should be replaced by an implicit list of Spring beans loaded by <code>@Import</code>.</p>
-+<p>The interface <code>@SpringBootApplication</code> is also considered by this rule because it is annotated with <code>@ComponentScan</code>.</p>
-+<h2>Noncompliant Code Example</h2>
-+<pre>
-+@ComponentScan
-+public class MyApplication {
-+...
-+}
-+
-+@SpringBootApplication
-+public class MyApplication {
-+...
-+}
-+</pre>
-+<h2>Compliant Solution</h2>
-+<pre>
-+@Configuration
-+@Import({
-+        DispatcherServletAutoConfiguration.class,
-+        ErrorMvcAutoConfiguration.class,
-+        HttpEncodingAutoConfiguration.class,
-+        HttpMessageConvertersAutoConfiguration.class,
-+        MultipartAutoConfiguration.class,
-+        ServerPropertiesAutoConfiguration.class,
-+        PropertyPlaceholderAutoConfiguration.class,
-+        WebMvcAutoConfiguration.class
-+})
-+public class MyApplication {
-+...
-+}
-+</pre>
-+<h2>See</h2>
-+<ul>
-+  <li> <a href="https://cloud.google.com/appengine/articles/spring_optimization">Optimizing Spring Framework for App Engine Applications</a> </li>
-+</ul>
-+
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.json
-new file mode 100644
-index 0000000000..a46d97105d
---- /dev/null
-+++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4603_java.json
-@@ -0,0 +1,17 @@
-+{
-+  "title": "\"@Import\"s should be preferred to \"@ComponentScan\"s",
-+  "type": "CODE_SMELL",
-+  "status": "ready",
-+  "remediation": {
-+    "func": "Constant\/Issue",
-+    "constantCost": "30min"
-+  },
-+  "tags": [
-+    "spring",
-+    "performance"
-+  ],
-+  "defaultSeverity": "Major",
-+  "ruleSpecification": "RSPEC-4603",
-+  "sqKey": "S4603",
-+  "scope": "Main"
-+}
-diff --git a/java-checks/src/test/files/checks/spring/SpringComponentScanCheck.java b/java-checks/src/test/files/checks/spring/SpringComponentScanCheck.java
-new file mode 100644
-index 0000000000..946e5dbbf8
---- /dev/null
-+++ b/java-checks/src/test/files/checks/spring/SpringComponentScanCheck.java
-@@ -0,0 +1,28 @@
-+import org.springframework.context.annotation.ComponentScan;
-+import org.springframework.context.annotation.Configuration;
-+import org.springframework.stereotype.Controller;
-+import org.springframework.context.annotation.Import;
-+import org.springframework.boot.autoconfigure.SpringBootApplication;
-+
-+@ComponentScan(basePackages = "com.myapp") // Noncompliant [[sc=2;ec=15]] {{Consider replacing "@ComponentScan" by a list of beans imported with @Import to speed-up the start-up of the application.}}
-+public class MyFirstApp {
-+}
-+
-+@SpringBootApplication(scanBasePackages = "com.myapp") // Noncompliant
-+class MySecondApp {
-+}
-+
-+@SpringBootApplication // Noncompliant
-+class MyThirdApp {
-+}
-+
-+@Configuration
-+@Import({
-+  MyController.class
-+})
-+class MyFinalApp {
-+}
-+
-+@Controller
-+class MyController {
-+}
+ package org.sonar.java.checks.spring;
+ 
+ import java.util.Collections;
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/spring/SpringComponentScanCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringComponentScanCheckTest.java
-new file mode 100644
-index 0000000000..3dfb5ff7b2
---- /dev/null
+index 421d9a5d3d..3dfb5ff7b2 100755
+--- a/java-checks/src/test/java/org/sonar/java/checks/spring/SpringComponentScanCheckTest.java
 +++ b/java-checks/src/test/java/org/sonar/java/checks/spring/SpringComponentScanCheckTest.java
-@@ -0,0 +1,33 @@
+@@ -1,3 +1,22 @@
 +/*
 + * SonarQube Java
 + * Copyright (C) 2012-2018 SonarSource SA
@@ -201,17 +49,6 @@ index 0000000000..3dfb5ff7b2
 + * along with this program; if not, write to the Free Software Foundation,
 + * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 + */
-+package org.sonar.java.checks.spring;
-+
-+import org.junit.Test;
-+import org.sonar.java.checks.verifier.JavaCheckVerifier;
-+
-+public class SpringComponentScanCheckTest {
-+
-+  @Test
-+  public void test() {
-+    JavaCheckVerifier.verify("src/test/files/checks/spring/SpringComponentScanCheck.java", new SpringComponentScanCheck());
-+    JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/spring/SpringComponentScanCheck.java", new SpringComponentScanCheck());
-+  }
-+
-+}
+ package org.sonar.java.checks.spring;
+ 
+ import org.junit.Test;

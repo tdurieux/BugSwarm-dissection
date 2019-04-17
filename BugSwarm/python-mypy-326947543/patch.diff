@@ -1,118 +1,39 @@
 diff --git a/test-data/unit/check-classes.test b/test-data/unit/check-classes.test
-index ba623eedc0..e543c22a15 100644
+index ea55b40e91..e543c22a15 100755
 --- a/test-data/unit/check-classes.test
 +++ b/test-data/unit/check-classes.test
-@@ -121,17 +121,25 @@ A().f = None # E: Cannot assign to a method
- 
- [case testReferToInvalidAttribute]
- 
-+class A:
-+    def __init__(self) -> None:
-+        self.x = object()
+@@ -124,17 +124,20 @@ A().f = None # E: Cannot assign to a method
+ class A:
+     def __init__(self) -> None:
+         self.x = object()
+-a = None # type: A
 +a: A
-+a.y  # E: "A" has no attribute "y"
-+a.y = object()  # E: "A" has no attribute "y"
-+a.x
-+a.x = object()
-+
+ a.y  # E: "A" has no attribute "y"
+ a.y = object()  # E: "A" has no attribute "y"
+ a.x
+ a.x = object()
+ 
+-[case testInferAttributeUnannotatedInit]
 +[case testReferToInvalidAttributeUnannotatedInit]
  class A:
      def __init__(self):
          self.x = object()
--a = None # type: A
--a.y
--a.y = object()
-+
+ 
 +a: A
 +a.y  # E: "A" has no attribute "y"
 +a.y = object()  # E: "A" has no attribute "y"
  a.x
  a.x = object()
--[out]
--main:6: error: "A" has no attribute "y"
--main:7: error: "A" has no attribute "y"
- 
- [case testArgumentTypeInference]
- 
-diff --git a/test-data/unit/check-inference.test b/test-data/unit/check-inference.test
-index a904cacd57..c9bb0fdb05 100644
---- a/test-data/unit/check-inference.test
-+++ b/test-data/unit/check-inference.test
-@@ -1403,10 +1403,15 @@ b[{}] = 1
- 
- [case testInferDictInitializedToEmptyAndUpdatedFromMethod]
- map = {}
-+def add() -> None:
-+    map[1] = 2
-+[builtins fixtures/dict.pyi]
-+
-+[case testInferDictInitializedToEmptyAndUpdatedFromMethodUnannotated]
-+map = {}
- def add():
-     map[1] = 2
- [builtins fixtures/dict.pyi]
--[out]
- 
- [case testSpecialCaseEmptyListInitialization]
- def f(blocks: Any): # E: Name 'Any' is not defined
-@@ -1959,7 +1964,7 @@ class C:
- 
- if bool():
-     f()
--    1 + '' # E: Unsupported left operand type for + ("int")
-+    1() # E: "int" not callable
- [builtins fixtures/list.pyi]
- [out]
- 
-@@ -1976,7 +1981,7 @@ class C:
- 
- if bool():
-     f()
--    1 + '' # E: Unsupported left operand type for + ("int")
-+    1() # E: "int" not callable
- [builtins fixtures/list.pyi]
- [out]
- 
-@@ -1992,6 +1997,6 @@ class C:
- 
- if bool():
-     f([])
--    1 + '' # E: Unsupported left operand type for + ("int")
-+    1() # E: "int" not callable
- [builtins fixtures/list.pyi]
- [out]
-diff --git a/test-data/unit/check-modules.test b/test-data/unit/check-modules.test
-index f3104c6f27..d8492dad04 100644
---- a/test-data/unit/check-modules.test
-+++ b/test-data/unit/check-modules.test
-@@ -1312,9 +1312,14 @@ class A:
-     def f(self) -> str: return 'foo'
- class B(A):
-     def f(self) -> str: return self.x
--    def initialize(self): self.x = 'bar'
--[out]
-+    def initialize(self) -> None: self.x = 'bar'
- 
-+[case testDeferredClassContextUnannotated]
-+class A:
-+    def f(self) -> str: return 'foo'
-+class B(A):
-+    def f(self) -> str: return self.x
-+    def initialize(self): self.x = 'bar'
- 
- -- Scripts and __main__
  
 diff --git a/test-data/unit/check-statements.test b/test-data/unit/check-statements.test
-index cd38fc02f3..41d31e6877 100644
+index 4c25e02ad6..41d31e6877 100755
 --- a/test-data/unit/check-statements.test
 +++ b/test-data/unit/check-statements.test
-@@ -353,12 +353,12 @@ a @= 1  # E: Argument 1 to "__imatmul__" of "A" has incompatible type "int"; exp
- 
+@@ -354,11 +354,11 @@ a @= 1  # E: Argument 1 to "__imatmul__" of "A" has incompatible type "int"; exp
  [case testInplaceSetitem]
  class A(object):
--    def __init__(self):
+     def __init__(self) -> None:
 -        self.a = 0
-+    def __init__(self) -> None:
 +        self.a = [1]
  
      def __iadd__(self, a):

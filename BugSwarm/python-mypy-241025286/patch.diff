@@ -1,5 +1,5 @@
 diff --git a/mypy/main.py b/mypy/main.py
-index e772e871b3..5d14522b33 100644
+index 01106f90ef..5d14522b33 100755
 --- a/mypy/main.py
 +++ b/mypy/main.py
 @@ -8,7 +8,7 @@
@@ -11,57 +11,20 @@ index e772e871b3..5d14522b33 100644
  
  from mypy import build
  from mypy import defaults
-@@ -100,6 +100,24 @@ def type_check_only(sources: List[BuildSource], bin_dir: str, options: Options,
-                        plugin=plugin)
- 
- 
-+disallow_any_options = ['unimported']
-+
-+
-+def disallow_any_argument_type(raw_options: str) -> List[str]:
-+    if not raw_options:
-+        # empty string disables all options
-+        return []
-+    flag_options = [o.strip() for o in raw_options.split(',')]
-+    for option in flag_options:
-+        if option not in disallow_any_options:
-+            formatted_valid_options = ', '.join(
-+                "'{}'".format(o) for o in disallow_any_options)
-+            message = "Invalid '--disallow-any' option '{}' (valid options are: {}).".format(
-+                option, formatted_valid_options)
-+            raise argparse.ArgumentError(None, message)
-+    return flag_options
-+
-+
- FOOTER = """environment variables:
- MYPYPATH     additional module search path"""
- 
-@@ -175,21 +193,32 @@ def invert_flag_name(flag: str) -> str:
+@@ -193,21 +193,32 @@ def invert_flag_name(flag: str) -> str:
      return '--no-{}'.format(flag[2:])
  
  
 -def load_plugin(prefix: str, name: str, location: str) -> Optional[Class[Plugin]]:
 +def load_plugin(prefix: str, name: str, location: str,
 +                python_version: Tuple[int, int]) -> Optional[Plugin]:
-+    try:
-+        mod = __import__(location)
-+    except BaseException as err:
-+        print("%s: Error importing plugin module %s: %s" %
-+              (prefix, location, err), file=sys.stderr)
-+        return None
-+    try:
-+        register = getattr(mod, 'register_plugin')
-+    except AttributeError:
-+        print("%s: Could not find %s.register_plugin" %
-+              (prefix, location), file=sys.stderr)
-+        return None
      try:
 -        obj = locate(location)
-+        plugin = register(python_version)
++        mod = __import__(location)
      except BaseException as err:
 -        print("%s: Error finding plugin %s at %s: %s" %
 -              (prefix, name, location, err), file=sys.stderr)
-+        print("%s: Error calling %s.register_plugin: %s" %
++        print("%s: Error importing plugin module %s: %s" %
 +              (prefix, location, err), file=sys.stderr)
          return None
 -    if obj is None:
@@ -70,6 +33,18 @@ index e772e871b3..5d14522b33 100644
 -    elif not callable(obj):
 -        print("%s: Hook %s at %s is not callable" %
 -              (prefix, name, location), file=sys.stderr)
++    try:
++        register = getattr(mod, 'register_plugin')
++    except AttributeError:
++        print("%s: Could not find %s.register_plugin" %
++              (prefix, location), file=sys.stderr)
++        return None
++    try:
++        plugin = register(python_version)
++    except BaseException as err:
++        print("%s: Error calling %s.register_plugin: %s" %
++              (prefix, location, err), file=sys.stderr)
++        return None
 +
 +    if not isinstance(plugin, Plugin):
 +        print("%s: Result of calling %s.register_plugin is not a plugin: %r" %
@@ -80,25 +55,7 @@ index e772e871b3..5d14522b33 100644
  
  
  def process_options(args: List[str],
-@@ -228,17 +257,6 @@ def add_invertible_flag(flag: str,
-             strict_flag_names.append(flag)
-             strict_flag_assignments.append((dest, not default))
- 
--    def disallow_any_argument_type(raw_options: str) -> List[str]:
--        flag_options = raw_options.split(',')
--        for option in flag_options:
--            if option not in disallow_any_options:
--                formatted_valid_options = ', '.join(
--                    "'{}'".format(o) for o in disallow_any_options)
--                message = "Invalid '--disallow-any' option '{}' (valid options are: {}).".format(
--                    option, formatted_valid_options)
--                raise argparse.ArgumentError(None, message)
--        return flag_options
--
-     # Unless otherwise specified, arguments will be parsed directly onto an
-     # Options object.  Options that require further processing should have
-     # their `dest` prefixed with `special-opts:`, which will cause them to be
-@@ -477,13 +495,13 @@ def disallow_any_argument_type(raw_options: str) -> List[str]:
+@@ -484,13 +495,13 @@ def add_invertible_flag(flag: str,
          options.incremental = True
  
      # Load plugins
@@ -115,15 +72,7 @@ index e772e871b3..5d14522b33 100644
      plugin_manager = PluginManager(options.python_version, plugins)
  
      # Set target.
-@@ -632,6 +650,7 @@ def get_init_file(dir: str) -> Optional[str]:
-     'custom_typeshed_dir': str,
-     'mypy_path': lambda s: [p.strip() for p in re.split('[,:]', s)],
-     'junit_xml': str,
-+    'disallow_any': disallow_any_argument_type,
-     # These two are for backwards compatibility
-     'silent_imports': bool,
-     'almost_silent': bool,
-@@ -727,7 +746,7 @@ def parse_section(prefix: str, template: Options,
+@@ -735,7 +746,7 @@ def parse_section(prefix: str, template: Options,
          key = key.replace('-', '_')
          if key.startswith('plugins.'):
              dv = section.get(key)
@@ -133,7 +82,7 @@ index e772e871b3..5d14522b33 100644
              continue
          elif key in config_types:
 diff --git a/mypy/plugin.py b/mypy/plugin.py
-index 0838039835..b4aadecd31 100644
+index 0838039835..b4aadecd31 100755
 --- a/mypy/plugin.py
 +++ b/mypy/plugin.py
 @@ -1,4 +1,4 @@
@@ -155,36 +104,3 @@ index 0838039835..b4aadecd31 100644
          self._function_hooks = {}  # type: Dict[str, Optional[FunctionHook]]
          self._method_signature_hooks = {}  # type: Dict[str, Optional[MethodSignatureHook]]
          self._method_hooks = {}  # type: Dict[str, Optional[MethodHook]]
-diff --git a/test-data/unit/cmdline.test b/test-data/unit/cmdline.test
-index a9ba3c2895..118a7c0f54 100644
---- a/test-data/unit/cmdline.test
-+++ b/test-data/unit/cmdline.test
-@@ -583,3 +583,28 @@ python_version = 3.3
- [[mypy]
- python_version = 3.6
- [out]
-+
-+[case testDisallowAnyUnimported]
-+# cmd: mypy main.py
-+[file mypy.ini]
-+[[mypy]
-+disallow_any = unimported
-+ignore_missing_imports = True
-+[file main.py]
-+from unreal import F
-+
-+def f(x: F) -> None: pass
-+[out]
-+main.py:3: error: Argument 1 to "f" becomes "Any" due to an unfollowed import
-+
-+[case testDisallowAnyEmpty]
-+# cmd: mypy main.py
-+[file mypy.ini]
-+[[mypy]
-+disallow_any =
-+ignore_missing_imports = True
-+[file main.py]
-+from unreal import F
-+
-+def f(x: F) -> None: pass
-+[out]

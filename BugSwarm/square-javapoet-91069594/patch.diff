@@ -1,35 +1,13 @@
 diff --git a/src/test/java/com/squareup/javapoet/JavaFileTest.java b/src/test/java/com/squareup/javapoet/JavaFileTest.java
-index 2d9375fe..632735a6 100644
+index 4346ba2b43..632735a6e3 100755
 --- a/src/test/java/com/squareup/javapoet/JavaFileTest.java
 +++ b/src/test/java/com/squareup/javapoet/JavaFileTest.java
-@@ -249,6 +249,30 @@
-         + "}\n");
-   }
- 
-+  /** https://github.com/square/javapoet/issues/366 */
-+  @Test public void annotationIsNestedClass() throws Exception {
-+    String source = JavaFile.builder("com.squareup.tacos",
-+        TypeSpec.classBuilder("TestComponent")
-+            .addAnnotation(ClassName.get("dagger", "Component"))
-+            .addType(TypeSpec.classBuilder("Builder")
-+                .addAnnotation(ClassName.get("dagger", "Component", "Builder"))
-+                .build())
-+            .build())
-+        .build()
-+        .toString();
-+    assertThat(source).isEqualTo(""
-+        + "package com.squareup.tacos;\n"
-+        + "\n"
-+        + "import dagger.Component;\n"
-+        + "\n"
-+        + "@Component\n"
-+        + "class TestComponent {\n"
-+        + "  @Component.Builder\n"
-+        + "  class Builder {\n"
-+        + "  }\n"
-+        + "}\n");
-+  }
-+
-   @Test public void defaultPackage() throws Exception {
-     String source = JavaFile.builder("",
-         TypeSpec.classBuilder("HelloWorld")
+@@ -241,7 +241,7 @@
+     assertThat(source).isEqualTo(""
+         + "package com.squareup.tacos;\n"
+         + "\n"
+-        + "import dagger.Component;\n"
++        + "import com.squareup.wire.Message;\n"
+         + "\n"
+         + "class Taco extends Message {\n"
+         + "  class Builder extends Message.Builder {\n"

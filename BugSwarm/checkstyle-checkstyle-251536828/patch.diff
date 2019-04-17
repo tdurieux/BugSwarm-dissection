@@ -1,5 +1,5 @@
 diff --git a/.gitattributes b/.gitattributes
-index 0f971e95d3..36b9bd7eff 100644
+index 0f971e95d3..36b9bd7eff 100755
 --- a/.gitattributes
 +++ b/.gitattributes
 @@ -1,3 +1,4 @@
@@ -10,7 +10,7 @@ index 0f971e95d3..36b9bd7eff 100644
  /src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrAtEndOfFile.java -text
 +/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineCrAtEndOfFile.java -text
 diff --git a/config/checkstyle_non_main_files_suppressions.xml b/config/checkstyle_non_main_files_suppressions.xml
-index cb9dd4c9cd..41284ac9a6 100644
+index cb9dd4c9cd..41284ac9a6 100755
 --- a/config/checkstyle_non_main_files_suppressions.xml
 +++ b/config/checkstyle_non_main_files_suppressions.xml
 @@ -20,6 +20,6 @@
@@ -22,7 +22,7 @@ index cb9dd4c9cd..41284ac9a6 100644
      <suppress checks="NewlineAtEndOfFile" files="[\\/]test[\\/].*[\\/]grammars[\\/]InputRegressionEmptyAst\.txt"/>
  </suppressions>
 diff --git a/pom.xml b/pom.xml
-index 851010c99a..2276f693b9 100644
+index 851010c99a..2276f693b9 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -2032,7 +2032,24 @@
@@ -143,7 +143,7 @@ index 851010c99a..2276f693b9 100644
                <timeoutConstant>${pitest.plugin.timeout.constant}</timeoutConstant>
                <threads>${pitest.plugin.threads}</threads>
 diff --git a/shippable.yml b/shippable.yml
-index f55eb1415a..5529732b05 100644
+index f55eb1415a..5529732b05 100755
 --- a/shippable.yml
 +++ b/shippable.yml
 @@ -9,7 +9,8 @@ env:
@@ -157,83 +157,78 @@ index f55eb1415a..5529732b05 100644
      - PROFILE="-Ppitest-checks-annotation,no-validations"
      - PROFILE="-Ppitest-checks-blocks,no-validations"
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
-index 146babf81b..86a8d9458b 100644
+index f13933454f..86a8d9458b 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
-@@ -79,4 +79,31 @@ public void testSeparatorWrapMethodRef() throws Exception {
-         final Integer[] warnList = getLinesWithWarn(filePath);
-         verify(checkConfig, filePath, expected, warnList);
-     }
-+
-+    @Test
-+    public void testEllipsis() throws Exception {
-+        final String[] expected = {
+@@ -83,9 +83,9 @@ public void testSeparatorWrapMethodRef() throws Exception {
+     @Test
+     public void testEllipsis() throws Exception {
+         final String[] expected = {
+-            "11:13: " + getCheckMessage(SeparatorWrapCheck.class, "line.previous", ","),
 +            "11:13: " + getCheckMessage(SeparatorWrapCheck.class, "line.previous", "..."),
-+        };
+         };
+-        
 +
-+        final Configuration checkConfig = getCheckConfig("SeparatorWrap", "SeparatorWrapEllipsis");
-+        final String filePath = getPath("InputSeparatorWrapEllipsis.java");
-+
-+        final Integer[] warnList = getLinesWithWarn(filePath);
-+        verify(checkConfig, filePath, expected, warnList);
-+    }
-+
-+    @Test
-+    public void testArrayDeclarator() throws Exception {
-+        final String[] expected = {
+         final Configuration checkConfig = getCheckConfig("SeparatorWrap", "SeparatorWrapEllipsis");
+         final String filePath = getPath("InputSeparatorWrapEllipsis.java");
+ 
+@@ -96,9 +96,10 @@ public void testEllipsis() throws Exception {
+     @Test
+     public void testArrayDeclarator() throws Exception {
+         final String[] expected = {
+-            "9:13: " + getCheckMessage(SeparatorWrapCheck.class, "line.previous", ","),
 +            "9:13: " + getCheckMessage(SeparatorWrapCheck.class, "line.previous", "["),
-+        };
+         };
+-        final Configuration checkConfig = getCheckConfig("SeparatorWrap", "SeparatorWrapArrayDeclarator");
 +        final Configuration checkConfig = getCheckConfig("SeparatorWrap",
 +                "SeparatorWrapArrayDeclarator");
-+        final String filePath = getPath("InputSeparatorWrapArrayDeclarator.java");
-+
-+        final Integer[] warnList = getLinesWithWarn(filePath);
-+        verify(checkConfig, filePath, expected, warnList);
-+    }
-+
- }
+         final String filePath = getPath("InputSeparatorWrapArrayDeclarator.java");
+ 
+         final Integer[] warnList = getLinesWithWarn(filePath);
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapArrayDeclarator.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapArrayDeclarator.java
-new file mode 100644
-index 0000000000..acbcdd9b89
---- /dev/null
+index 42e37a148e..acbcdd9b89 100755
+--- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapArrayDeclarator.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapArrayDeclarator.java
-@@ -0,0 +1,12 @@
+@@ -1,12 +1,12 @@
+-package com.puppycrawl.tools.checkstyle.checks.whitespace.separatorwrap;
 +package com.google.checkstyle.test.chapter4formatting.rule451wheretobreak;
-+
-+class InputSeparatorWrapArrayDeclarator {
-+
-+    protected int[] arrayDeclarationWithGoodWrapping = new int[
+ 
+ class InputSeparatorWrapArrayDeclarator {
+ 
+     protected int[] arrayDeclarationWithGoodWrapping = new int[
+-            ] {1, 2};
 +            ] {1, 2}; // ok
-+
-+    protected int[] arrayDeclarationWithBadWrapping = new int
+ 
+     protected int[] arrayDeclarationWithBadWrapping = new int
+-            [] {1, 2};
 +            [] {1, 2}; // warn
-+
-+}
-+
+ 
+ }
+ 
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapEllipsis.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapEllipsis.java
-new file mode 100644
-index 0000000000..d962046689
---- /dev/null
+index 95e32a4982..d962046689 100755
+--- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapEllipsis.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/InputSeparatorWrapEllipsis.java
-@@ -0,0 +1,16 @@
+@@ -1,14 +1,14 @@
+-package com.puppycrawl.tools.checkstyle.checks.whitespace.separatorwrap;
 +package com.google.checkstyle.test.chapter4formatting.rule451wheretobreak;
-+
-+class InputSeparatorWrapEllipsis {
-+
+ 
+ class InputSeparatorWrapEllipsis {
+ 
+-    public void testMethodWithGoodWrapping(String...
 +    public void testMethodWithGoodWrapping(String... // ok
-+            parameters) {
-+
-+    }
-+
-+    public void testMethodWithBadWrapping(String
+             parameters) {
+ 
+     }
+ 
+     public void testMethodWithBadWrapping(String
+-            ...parameters) {
 +            ...parameters) { // warn
-+
-+    }
-+
-+}
-+
+ 
+     }
+ 
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
-index 7ff3a58c92..a0d2556f13 100644
+index 7ff3a58c92..a0d2556f13 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
 @@ -333,7 +333,7 @@ public Tag(String text, int line, SuppressWithNearbyCommentFilter filter) {
@@ -245,31 +240,8 @@ index 7ff3a58c92..a0d2556f13 100644
                      firstLine = line;
                      lastLine = line + influence;
                  }
-diff --git a/src/main/resources/google_checks.xml b/src/main/resources/google_checks.xml
-index a9126033d7..f5efa5515d 100644
---- a/src/main/resources/google_checks.xml
-+++ b/src/main/resources/google_checks.xml
-@@ -93,6 +93,18 @@
-             <property name="tokens" value="COMMA"/>
-             <property name="option" value="EOL"/>
-         </module>
-+        <module name="SeparatorWrap">
-+            <!-- ELLIPSIS is EOL until https://github.com/google/styleguide/issues/258 -->
-+            <property name="id" value="SeparatorWrapEllipsis"/>
-+            <property name="tokens" value="ELLIPSIS"/>
-+            <property name="option" value="EOL"/>
-+        </module>
-+        <module name="SeparatorWrap">
-+            <!-- ARRAY_DECLARATOR is EOL until https://github.com/google/styleguide/issues/259 -->
-+            <property name="id" value="SeparatorWrapArrayDeclarator"/>
-+            <property name="tokens" value="ARRAY_DECLARATOR"/>
-+            <property name="option" value="EOL"/>
-+        </module>
-         <module name="SeparatorWrap">
-             <property name="id" value="SeparatorWrapMethodRef"/>
-             <property name="tokens" value="METHOD_REF"/>
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
-index cdfd276591..1e1e96cfa2 100644
+index cdfd276591..1e1e96cfa2 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
 @@ -60,7 +60,10 @@ protected DefaultConfiguration createCheckerConfig(
@@ -285,7 +257,7 @@ index cdfd276591..1e1e96cfa2 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocPackageCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocPackageCheckTest.java
-index a4d263c1ba..ee59ce15c9 100644
+index a4d263c1ba..ee59ce15c9 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocPackageCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocPackageCheckTest.java
 @@ -37,7 +37,8 @@
@@ -375,7 +347,7 @@ index a4d263c1ba..ee59ce15c9 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocParagraphCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocParagraphCheckTest.java
-index aa86c1d16a..a9e6ff6a22 100644
+index aa86c1d16a..a9e6ff6a22 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocParagraphCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocParagraphCheckTest.java
 @@ -47,7 +47,8 @@ public void setUp() {
@@ -414,38 +386,8 @@ index aa86c1d16a..a9e6ff6a22 100644
 +        verify(checkConfig, getPath("InputJavaDocParagraphIncorrect.java"), expected);
      }
  }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/SeparatorWrapCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/SeparatorWrapCheckTest.java
-index 8f00833b1b..87454c8510 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/SeparatorWrapCheckTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/SeparatorWrapCheckTest.java
-@@ -112,4 +112,25 @@ public void testInvalidOption() throws Exception {
-                 ex.getMessage().startsWith(messageStart));
-         }
-     }
-+
-+    @Test
-+    public void testEllipsis() throws Exception {
-+        checkConfig.addAttribute("option", "EOL");
-+        checkConfig.addAttribute("tokens", "ELLIPSIS");
-+        final String[] expected = {
-+            "11:13: " + getCheckMessage(MSG_LINE_PREVIOUS, "..."),
-+        };
-+        verify(checkConfig, getPath("InputSeparatorWrapForEllipsis.java"), expected);
-+    }
-+
-+    @Test
-+    public void testArrayDeclarator() throws Exception {
-+        checkConfig.addAttribute("option", "EOL");
-+        checkConfig.addAttribute("tokens", "ARRAY_DECLARATOR");
-+        final String[] expected = {
-+            "9:13: " + getCheckMessage(MSG_LINE_PREVIOUS, "["),
-+        };
-+        verify(checkConfig, getPath("InputSeparatorWrapForArrayDeclarator.java"), expected);
-+    }
-+
- }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
-index c71e130e8f..4e1851a096 100644
+index c71e130e8f..4e1851a096 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
 @@ -258,6 +258,25 @@ public void testInvalidInfluenceFormat() throws Exception {
@@ -475,7 +417,7 @@ index c71e130e8f..4e1851a096 100644
      public void testInvalidCheckFormat() throws Exception {
          final DefaultConfiguration filterConfig =
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
-index 4100fcd1e2..5784e8964f 100644
+index 4100fcd1e2..5784e8964f 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
 @@ -152,7 +152,7 @@ public void testCustomAstTree() throws Exception {
@@ -487,54 +429,16 @@ index 4100fcd1e2..5784e8964f 100644
      }
  
      @Test
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-index b8e5491fc0..158c760ed9 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-@@ -179,9 +179,15 @@
-                 "METHOD_DEF", "CTOR_DEF", "CLASS_DEF", "ENUM_DEF", "INTERFACE_DEF")
-                 .collect(Collectors.toSet()));
-         GOOGLE_TOKENS_IN_CONFIG_TO_IGNORE.put("SeparatorWrap", Stream.of(
--                // state of configuration until
--                // https://github.com/checkstyle/checkstyle/issues/3752
--                "RBRACK", "AT", "ELLIPSIS", "SEMI", "ARRAY_DECLARATOR",
-+                // location could be any to allow writing expressions for indexes evaluation
-+                // on new line, see https://github.com/checkstyle/checkstyle/issues/3752
-+                "RBRACK",
-+                // for some targets annotations can be used without wrapping, as described
-+                // in https://google.github.io/styleguide/javaguide.html#s4.8.5-annotations
-+                "AT",
-+                // location could be any to allow using for line separation in enum values,
-+                // see https://github.com/checkstyle/checkstyle/issues/3752
-+                "SEMI",
-                 // needs context to decide what type of parentheses should be separated or not
-                 // which this check does not provide
-                 "LPAREN", "RPAREN").collect(Collectors.toSet()));
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputAstRegressionNewlineCrAtEndOfFile.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputAstRegressionNewlineCrAtEndOfFile.java
-new file mode 100644
+new file mode 100755
 index 0000000000..46e2b3962f
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputAstRegressionNewlineCrAtEndOfFile.java
 @@ -0,0 +1 @@
-+////////////////////////////////////////////////////////////////////////////////
-// Test case file for checkstyle.
-// Created: 2015
-////////////////////////////////////////////////////////////////////////////////
-package com.puppycrawl.tools.checkstyle.checks;
-
-/**
- * Test case for detection of an existing CR newline at EOF, using the 
- * NewlineAtEndOfFileCheck.
- * @author Martin Steiger
- **/
-public interface InputAstRegressionNewlineCrAtEndOfFile
-{
-/** Test with ending with CR newline
-*/
-}
++////////////////////////////////////////////////////////////////////////////////// Test case file for checkstyle.// Created: 2015////////////////////////////////////////////////////////////////////////////////package com.puppycrawl.tools.checkstyle.checks;/** * Test case for detection of an existing CR newline at EOF, using the  * NewlineAtEndOfFileCheck. * @author Martin Steiger **/public interface InputAstRegressionNewlineCrAtEndOfFile{/** Test with ending with CR newline*/}
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrAtEndOfFileAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrAtEndOfFileAst.txt
-index 9d1e889cc9..30609ef584 100644
+index 9d1e889cc9..30609ef584 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrAtEndOfFileAst.txt
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrAtEndOfFileAst.txt
 @@ -25,7 +25,7 @@ INTERFACE_DEF -> INTERFACE_DEF [12:0]
@@ -547,7 +451,7 @@ index 9d1e889cc9..30609ef584 100644
      |--LCURLY -> { [13:0]
      |--BLOCK_COMMENT_BEGIN -> /* [14:0]
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputBadCls.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputBadCls.java
-deleted file mode 100644
+deleted file mode 100755
 index 6082756e10..0000000000
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputBadCls.java
 +++ /dev/null
@@ -559,7 +463,7 @@ index 6082756e10..0000000000
 -    void m() throws X {}
 -}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadCls.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadCls.java
-new file mode 100644
+new file mode 100755
 index 0000000000..2c0072a599
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadCls.java
@@ -571,7 +475,7 @@ index 0000000000..2c0072a599
 +    void m() throws X {}
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadTag.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadTag.java
-new file mode 100644
+new file mode 100755
 index 0000000000..46aa084581
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageBadTag.java
@@ -586,7 +490,7 @@ index 0000000000..46aa084581
 +{
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageNoJavadoc.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageNoJavadoc.java
-new file mode 100644
+new file mode 100755
 index 0000000000..036c2dcefb
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/InputJavadocPackageNoJavadoc.java
@@ -712,7 +616,7 @@ index 0000000000..036c2dcefb
 +    void methodWithTwoStarComment() {}
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/annotation/package-info.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/annotation/package-info.java
-new file mode 100644
+new file mode 100755
 index 0000000000..fbdd526592
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/annotation/package-info.java
@@ -730,7 +634,7 @@ index 0000000000..fbdd526592
 +@Deprecated
 +package com.puppycrawl.tools.checkstyle.checks.javadoc.javadocpackage.annotation;
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/InputJavadocPackageBothIgnored.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/InputJavadocPackageBothIgnored.java
-new file mode 100644
+new file mode 100755
 index 0000000000..93c48faaf2
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/InputJavadocPackageBothIgnored.java
@@ -741,7 +645,7 @@ index 0000000000..93c48faaf2
 +{
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/package-info.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/package-info.java
-new file mode 100644
+new file mode 100755
 index 0000000000..c8a22909e1
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/bothfiles/package-info.java
@@ -755,7 +659,7 @@ diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/p
 similarity index 65%
 rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/pkghtml/InputIgnored.java
 rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/pkghtml/InputJavadocPackageHtmlIgnored.java
-index 374955c862..f35f19707c 100644
+index 374955c862..f35f19707c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/pkghtml/InputIgnored.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/pkghtml/InputJavadocPackageHtmlIgnored.java
 @@ -1,5 +1,5 @@
@@ -766,14 +670,14 @@ index 374955c862..f35f19707c 100644
  {
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/pkghtml/package.html b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/pkghtml/package.html
-new file mode 100644
+new file mode 100755
 index 0000000000..739cd584a2
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocpackage/pkghtml/package.html
 @@ -0,0 +1 @@
 +Ignored
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocparagraph/InputJavaDocParagraphCorrect.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocparagraph/InputJavaDocParagraphCorrect.java
-new file mode 100644
+new file mode 100755
 index 0000000000..c4dafe3f50
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocparagraph/InputJavaDocParagraphCorrect.java
@@ -894,7 +798,7 @@ diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/I
 similarity index 94%
 rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputIncorrectJavaDocParagraph.java
 rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocparagraph/InputJavaDocParagraphIncorrect.java
-index f827ce4eb5..8ef60a4c13 100644
+index f827ce4eb5..8ef60a4c13 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputIncorrectJavaDocParagraph.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/javadocparagraph/InputJavaDocParagraphIncorrect.java
 @@ -1,4 +1,4 @@
@@ -924,7 +828,7 @@ diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewl
 similarity index 84%
 rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrlfAtEndOfFile.java
 rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineCrlfAtEndOfFile.java
-index 8cdfa10c76..fd93ac6913 100644
+index 8cdfa10c76..fd93ac6913 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineCrlfAtEndOfFile.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineCrlfAtEndOfFile.java
 @@ -2,7 +2,7 @@
@@ -940,7 +844,7 @@ diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewl
 similarity index 84%
 rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineLfAtEndOfFile.java
 rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineLfAtEndOfFile.java
-index 08ec9c937c..bc8a9f8ceb 100644
+index 08ec9c937c..bc8a9f8ceb 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNewlineLfAtEndOfFile.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineLfAtEndOfFile.java
 @@ -2,7 +2,7 @@
@@ -956,7 +860,7 @@ diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNoNe
 similarity index 84%
 rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNoNewlineAtEndOfFile.java
 rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNoNewlineAtEndOfFile.java
-index 218e617279..dbcb78f923 100644
+index 218e617279..dbcb78f923 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputNoNewlineAtEndOfFile.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNoNewlineAtEndOfFile.java
 @@ -2,7 +2,7 @@
@@ -968,43 +872,3 @@ index 218e617279..dbcb78f923 100644
  
  /**
   * Test case for detection of missing newlines at EOF, using the
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForArrayDeclarator.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForArrayDeclarator.java
-new file mode 100644
-index 0000000000..59a4b8a0c1
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForArrayDeclarator.java
-@@ -0,0 +1,12 @@
-+package com.puppycrawl.tools.checkstyle.checks.whitespace.separatorwrap;
-+
-+class InputSeparatorWrapTestArrayDeclarator {
-+
-+    protected int[] arrayDeclarationWithGoodWrapping = new int[
-+            ] {1, 2};
-+
-+    protected int[] arrayDeclarationWithBadWrapping = new int
-+            [] {1, 2};
-+
-+}
-+
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForEllipsis.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForEllipsis.java
-new file mode 100644
-index 0000000000..f95d8cf846
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/separatorwrap/InputSeparatorWrapForEllipsis.java
-@@ -0,0 +1,16 @@
-+package com.puppycrawl.tools.checkstyle.checks.whitespace.separatorwrap;
-+
-+class InputSeparatorWrapTestEllipsis {
-+
-+    public void testMethodWithGoodWrapping(String...
-+            parameters) {
-+
-+    }
-+
-+    public void testMethodWithBadWrapping(String
-+            ...parameters) {
-+
-+    }
-+
-+}
-+

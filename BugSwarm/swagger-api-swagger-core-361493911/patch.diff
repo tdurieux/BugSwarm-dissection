@@ -1,5 +1,5 @@
 diff --git a/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java b/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
-index abc31e2d6..f23205936 100644
+index abc31e2d63..f232059369 100755
 --- a/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
 +++ b/modules/swagger-core/src/main/java/io/swagger/v3/core/converter/AnnotatedType.java
 @@ -194,7 +194,7 @@ public boolean equals(Object o) {
@@ -28,7 +28,7 @@ index abc31e2d6..f23205936 100644
      }
  }
 diff --git a/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java b/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
-index c050ed528..d4db72253 100644
+index c050ed5285..d4db722537 100755
 --- a/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
 +++ b/modules/swagger-core/src/main/java/io/swagger/v3/core/jackson/ModelResolver.java
 @@ -141,7 +141,13 @@ public Schema resolve(AnnotatedType annotatedType, ModelConverterContext context
@@ -117,8 +117,8 @@ index c050ed528..d4db72253 100644
 +    }
  }
 diff --git a/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java
-new file mode 100644
-index 000000000..eaf685602
+new file mode 100755
+index 0000000000..eaf6856024
 --- /dev/null
 +++ b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/Ticket2740CyclicTest.java
 @@ -0,0 +1,32 @@
@@ -155,8 +155,8 @@ index 000000000..eaf685602
 +
 +}
 diff --git a/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java
-new file mode 100644
-index 000000000..61b3913c7
+new file mode 100755
+index 0000000000..61b3913c70
 --- /dev/null
 +++ b/modules/swagger-core/src/test/java/io/swagger/v3/core/resolving/resources/MyThing.java
 @@ -0,0 +1,21 @@
@@ -181,139 +181,3 @@ index 000000000..61b3913c7
 +    }
 +}
 +
-diff --git a/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java b/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
-index 73a06abdf..36a135971 100644
---- a/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
-+++ b/modules/swagger-jaxrs2/src/main/java/io/swagger/v3/jaxrs2/DefaultParameterExtension.java
-@@ -21,6 +21,7 @@
- import javax.ws.rs.HeaderParam;
- import javax.ws.rs.PathParam;
- import javax.ws.rs.QueryParam;
-+import javax.ws.rs.MatrixParam;
- import java.lang.annotation.Annotation;
- import java.lang.reflect.Type;
- import java.util.ArrayList;
-@@ -67,6 +68,13 @@ public ResolvedParameter extractParameters(List<Annotation> annotations,
-                 pp.setIn(PATH_PARAM);
-                 pp.setName(param.value());
-                 parameter = pp;
-+            } else if (annotation instanceof MatrixParam) {
-+                MatrixParam param = (MatrixParam) annotation;
-+                Parameter pp = new Parameter();
-+                pp.setIn(PATH_PARAM);
-+                pp.setStyle(Parameter.StyleEnum.MATRIX);
-+                pp.setName(param.value());
-+                parameter = pp;
-             } else if (annotation instanceof HeaderParam) {
-                 HeaderParam param = (HeaderParam) annotation;
-                 Parameter pp = new Parameter();
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-index dffafb0a9..c18e44dbd 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-@@ -411,6 +411,36 @@ public void testCompletePetResource() throws IOException {
-                 "                $ref: '#/components/schemas/Pet'\n" +
-                 "        400:\n" +
-                 "          description: Invalid tag value\n" +
-+                "  /pet/findByCategory/{category}:\n" +
-+                "    get:\n" +
-+                "      summary: Finds Pets by category\n" +
-+                "      operationId: findPetsByCategory\n" +
-+                "      parameters:\n" +
-+                "      - name: category\n" +
-+                "        in: path\n" +
-+                "        description: Category value that need to be considered for filter\n" +
-+                "        required: true\n" +
-+                "        style: matrix\n" +
-+                "        schema:\n" +
-+                "          $ref: '#/components/schemas/Category'\n" +
-+                "      - name: skip\n" +
-+                "        in: query\n" +
-+                "        schema:\n" +
-+                "          type: integer\n" +
-+                "          format: int32\n" +
-+                "      - name: limit\n" +
-+                "        in: query\n" +
-+                "        schema:\n" +
-+                "          type: integer\n" +
-+                "          format: int32\n" +
-+                "      responses:\n" +
-+                "        default:\n" +
-+                "          content:\n" +
-+                "            application/json:\n" +
-+                "              schema:\n" +
-+                "                $ref: '#/components/schemas/Pet'\n" +
-+                "        400:\n" +
-+                "          description: Invalid category value\n" +
-                 "  /pet/{petId}:\n" +
-                 "    get:\n" +
-                 "      summary: Find pet by ID\n" +
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
-index cff9c7ac7..0f93f66a1 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/PetResource.java
-@@ -18,6 +18,7 @@
- 
- import io.swagger.v3.jaxrs2.resources.data.PetData;
- import io.swagger.v3.jaxrs2.resources.exception.NotFoundException;
-+import io.swagger.v3.jaxrs2.resources.model.Category;
- import io.swagger.v3.jaxrs2.resources.model.Pet;
- import io.swagger.v3.oas.annotations.Operation;
- import io.swagger.v3.oas.annotations.Parameter;
-@@ -28,6 +29,7 @@
- import javax.ws.rs.BeanParam;
- import javax.ws.rs.Consumes;
- import javax.ws.rs.GET;
-+import javax.ws.rs.MatrixParam;
- import javax.ws.rs.POST;
- import javax.ws.rs.PUT;
- import javax.ws.rs.Path;
-@@ -145,6 +147,25 @@ public Response findPetsByStatus(
-         return Response.ok(petData.findPetByStatus(status)).build();
-     }
- 
-+    @GET
-+    @Path("/findByCategory/{category}")
-+    @Produces("application/xml")
-+    @Operation(summary = "Finds Pets by category",
-+            responses = {
-+                    @ApiResponse(
-+                            content = @Content(mediaType = "application/json",
-+                                    schema = @Schema(implementation = Pet.class))),
-+                    @ApiResponse(
-+                            responseCode = "400", description = "Invalid category value"
-+                    )}
-+    )
-+    public Response findPetsByCategory(
-+            @Parameter(description = "Category value that need to be considered for filter", required = true) @MatrixParam("category") Category category,
-+            @BeanParam QueryResultBean qr
-+    ) {
-+        return Response.ok(petData.findPetByCategory(category)).build();
-+    }
-+
-     @GET
-     @Path("/findByTags")
-     @Produces("application/json")
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
-index 4cf558389..03d76dfdb 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/data/PetData.java
-@@ -22,6 +22,7 @@
- 
- import java.util.ArrayList;
- import java.util.List;
-+import java.util.stream.Collectors;
- 
- public class PetData {
-     static List<Pet> pets = new ArrayList<Pet>();
-@@ -80,6 +81,10 @@ public Pet getPetById(long petId) {
-         return result;
-     }
- 
-+    public List<Pet> findPetByCategory(Category category) {
-+        return pets.stream().filter(pet -> category.equals(pet.getCategory())).collect(Collectors.toList());
-+    }
-+
-     public List<Pet> findPetByTags(String tags) {
-         String[] tagList = tags.split(",");
-         List<Pet> result = new ArrayList<Pet>();

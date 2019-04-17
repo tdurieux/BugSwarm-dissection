@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 265c9899..ec1fe66c 100644
+index 265c989949..ec1fe66c41 100755
 --- a/README.md
 +++ b/README.md
 @@ -17,19 +17,19 @@ Save time.  Save code.  Save sanity.
@@ -28,7 +28,7 @@ index 265c9899..ec1fe66c 100644
  
 diff --git a/factory/src/it/functional/java7_compat_test.sh b/factory/src/it/functional/java7_compat_test.sh
 new file mode 100755
-index 00000000..c3365e18
+index 0000000000..c3365e187e
 --- /dev/null
 +++ b/factory/src/it/functional/java7_compat_test.sh
 @@ -0,0 +1,47 @@
@@ -80,7 +80,7 @@ index 00000000..c3365e18
 +"${JDK7_JAVA}" -classpath "${TEST_TMPDIR}:${CLASS_PATH}" \
 +    org.junit.runner.JUnitCore "${TEST_CLASS}"
 diff --git a/value/CHANGES.md b/value/CHANGES.md
-index 8f9b400c..be365c33 100644
+index 8f9b400cd7..be365c337b 100755
 --- a/value/CHANGES.md
 +++ b/value/CHANGES.md
 @@ -1,5 +1,95 @@
@@ -180,7 +180,7 @@ index 8f9b400c..be365c33 100644
  
  ### Functional changes
 diff --git a/value/pom.xml b/value/pom.xml
-index d528c051..027ebf43 100644
+index d528c05143..027ebf4320 100755
 --- a/value/pom.xml
 +++ b/value/pom.xml
 @@ -26,7 +26,7 @@
@@ -192,63 +192,8 @@ index d528c051..027ebf43 100644
    <name>AutoValue</name>
    <description>
      Immutable value-type code generation for Java 1.6+.
-diff --git a/value/src/main/java/com/google/auto/value/processor/AutoValueProcessor.java b/value/src/main/java/com/google/auto/value/processor/AutoValueProcessor.java
-index 4709b749..76a2f4c1 100644
---- a/value/src/main/java/com/google/auto/value/processor/AutoValueProcessor.java
-+++ b/value/src/main/java/com/google/auto/value/processor/AutoValueProcessor.java
-@@ -15,6 +15,8 @@
-  */
- package com.google.auto.value.processor;
- 
-+import static com.google.auto.common.AnnotationMirrors.getAnnotationValue;
-+import static com.google.auto.common.MoreElements.getAnnotationMirror;
- import static com.google.auto.common.MoreElements.getLocalAndInheritedMethods;
- import static com.google.auto.common.MoreElements.isAnnotationPresent;
- import static com.google.common.collect.Sets.union;
-@@ -77,6 +79,7 @@
- import javax.lang.model.type.TypeMirror;
- import javax.lang.model.util.ElementFilter;
- import javax.lang.model.util.Elements;
-+import javax.lang.model.util.SimpleAnnotationValueVisitor6;
- import javax.lang.model.util.Types;
- import javax.tools.Diagnostic;
- import javax.tools.JavaFileObject;
-@@ -1103,9 +1106,31 @@ private boolean checkReturnType(TypeElement autoValueClass, ExecutableElement ge
-     }
-   }
- 
-+  // Detects whether the visited AnnotationValue is an array that contains the string "mutable".
-+  // The simpler approach using Element.getAnnotation(SuppressWarnings.class) doesn't work if
-+  // the annotation has an undefined reference, like @SuppressWarnings(UNDEFINED).
-+  // TODO(emcmanus): replace with a method from auto-common when that is available.
-+  private static class ContainsMutableVisitor extends SimpleAnnotationValueVisitor6<Boolean, Void> {
-+    @Override
-+    public Boolean visitArray(List<? extends AnnotationValue> list, Void p) {
-+      for (AnnotationValue value : list) {
-+        if ("mutable".equals(value.getValue())) {
-+          return true;
-+        }
-+      }
-+      return false;
-+    }
-+  }
-+
-   private void warnAboutPrimitiveArrays(TypeElement autoValueClass, ExecutableElement getter) {
--    SuppressWarnings suppressWarnings = getter.getAnnotation(SuppressWarnings.class);
--    if (suppressWarnings == null || !Arrays.asList(suppressWarnings.value()).contains("mutable")) {
-+    boolean suppressed = false;
-+    Optional<AnnotationMirror> maybeAnnotation =
-+        getAnnotationMirror(getter, SuppressWarnings.class);
-+    if (maybeAnnotation.isPresent()) {
-+      AnnotationValue listValue = getAnnotationValue(maybeAnnotation.get(), "value");
-+      suppressed = listValue.accept(new ContainsMutableVisitor(), null);
-+    }
-+    if (!suppressed) {
-       // If the primitive-array property method is defined directly inside the @AutoValue class,
-       // then our error message should point directly to it. But if it is inherited, we don't
-       // want to try to make the error message point to the inherited definition, since that would
 diff --git a/value/src/test/java/com/google/auto/value/processor/CompilationTest.java b/value/src/test/java/com/google/auto/value/processor/CompilationTest.java
-index 5392a659..82697720 100644
+index 45bea31601..826977205c 100755
 --- a/value/src/test/java/com/google/auto/value/processor/CompilationTest.java
 +++ b/value/src/test/java/com/google/auto/value/processor/CompilationTest.java
 @@ -38,6 +38,7 @@
@@ -259,83 +204,20 @@ index 5392a659..82697720 100644
  import org.junit.Test;
  import org.junit.runner.RunWith;
  import org.junit.runners.JUnit4;
-@@ -959,8 +960,9 @@ public void correctBuilder() throws Exception {
-         "}");
-     assertAbout(javaSources())
-         .that(ImmutableList.of(javaFileObject, nestedJavaFileObject))
-+        .withCompilerOptions("-Xlint:-processing")
-         .processedWith(new AutoValueProcessor())
--        .compilesWithoutError()
-+        .compilesWithoutWarnings()
-         .and()
-         .generatesSources(expectedOutput);
-   }
-@@ -2331,4 +2333,63 @@ public void referencingGeneratedClass() {
-         .processedWith(new AutoValueProcessor(), new FooProcessor())
+@@ -2333,7 +2334,11 @@ public void referencingGeneratedClass() {
          .compilesWithoutError();
    }
-+
+ 
 +  // Test currently ignored because sometimes we get two UNDEFINED errors and sometimes we
 +  // get no warnings if there is an error, depending on the exact JDK version. We may be
 +  // able to get something a bit more solid once we require JDK 8.
-+  @Test
+   @Test
 +  @Ignore
-+  public void annotationReferencesUndefined() {
-+    // Test that we don't throw an exception if asked to compile @SuppressWarnings(UNDEFINED)
-+    // where UNDEFINED is an undefined symbol.
-+    JavaFileObject bazFileObject = JavaFileObjects.forSourceLines(
-+        "foo.bar.Baz",
-+        "package foo.bar;",
-+        "",
-+        "import com.google.auto.value.AutoValue;",
-+        "",
-+        "@AutoValue",
-+        "public abstract class Baz {",
-+        "  @SuppressWarnings(UNDEFINED)",
-+        "  public abstract int[] buh();",
-+        "}");
-+    assertAbout(javaSource())
-+        .that(bazFileObject)
-+        .withCompilerOptions("-Xlint:-processing")
-+        .processedWith(new AutoValueProcessor())
-+        .failsToCompile()
-+        .withErrorCount(1)
-+        .withErrorContaining("UNDEFINED")
-+        .in(bazFileObject)
-+        .onLine(7)
-+        .and()
-+        .withWarningCount(1)
-+        .withWarningContaining("mutable")
-+        .in(bazFileObject)
-+        .onLine(8);
-+
-+    // Same test, except we do successfully suppress the warning despite the UNDEFINED.
-+    bazFileObject = JavaFileObjects.forSourceLines(
-+        "foo.bar.Baz",
-+        "package foo.bar;",
-+        "",
-+        "import com.google.auto.value.AutoValue;",
-+        "",
-+        "@AutoValue",
-+        "public abstract class Baz {",
-+        "  @SuppressWarnings({UNDEFINED, \"mutable\"})",
-+        "  public abstract int[] buh();",
-+        "}");
-+    assertAbout(javaSource())
-+        .that(bazFileObject)
-+        .withCompilerOptions("-Xlint:-processing")
-+        .processedWith(new AutoValueProcessor())
-+        .failsToCompile()
-+        .withErrorCount(1)
-+        .withErrorContaining("UNDEFINED")
-+        .in(bazFileObject)
-+        .onLine(7)
-+        .and()
-+        .withWarningCount(0);
-+  }
- }
+   public void annotationReferencesUndefined() {
+     // Test that we don't throw an exception if asked to compile @SuppressWarnings(UNDEFINED)
+     // where UNDEFINED is an undefined symbol.
 diff --git a/value/userguide/builders-howto.md b/value/userguide/builders-howto.md
-index 43d1b330..60c121fc 100644
+index 43d1b33035..60c121fce8 100755
 --- a/value/userguide/builders-howto.md
 +++ b/value/userguide/builders-howto.md
 @@ -551,5 +551,9 @@ requirements are:
@@ -349,7 +231,7 @@ index 43d1b330..60c121fc 100644
  
  [protobuf]: https://developers.google.com/protocol-buffers/docs/reference/java-generated#builders
 diff --git a/value/userguide/index.md b/value/userguide/index.md
-index f6fd09a8..2b37d920 100644
+index f6fd09a8d2..2b37d920c4 100755
 --- a/value/userguide/index.md
 +++ b/value/userguide/index.md
 @@ -2,7 +2,7 @@

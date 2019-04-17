@@ -1,46 +1,20 @@
 diff --git a/numpy/lib/function_base.py b/numpy/lib/function_base.py
-index 78880708623..8875068e996 100644
+index ad142f93c8..8875068e99 100755
 --- a/numpy/lib/function_base.py
 +++ b/numpy/lib/function_base.py
-@@ -56,24 +56,29 @@ def iterable(y):
- 
-     Returns
-     -------
--    b : {0, 1}
--      Return 1 if the object has an iterator method or is a sequence,
--      and 0 otherwise.
-+    b : bool
-+      Return ``True`` if the object has an iterator method or is a
-+      sequence, and ``False`` otherwise.
- 
- 
+@@ -64,9 +64,9 @@ def iterable(y):
      Examples
      --------
      >>> np.iterable([1, 2, 3])
--    1
-+    True
-     >>> np.iterable(2)
--    0
+-    False
+-    >>> np.iterable(2)
+     True
++    >>> np.iterable(2)
 +    False
  
      """
-+    # 2016-02-07, 1.12
-+    msg = "Use of numpy.iterable is deprecated. " \
-+          "It will be removed from the public API in the future."
-+    warnings.warn(msg, DeprecationWarning)
-+
-     try:
-         iter(y)
--    except:
--        return 0
--    return 1
-+    except TypeError:
-+        return False
-+    return True
- 
- 
- def _hist_optim_numbins_estimator(a, estimator):
-@@ -355,7 +360,9 @@ def histogram(a, bins=10, range=None, normed=False, weights=None,
+     # 2016-02-07, 1.12
+@@ -360,7 +360,9 @@ def histogram(a, bins=10, range=None, normed=False, weights=None,
      # computing histograms, to minimize memory usage.
      BLOCK = 65536
  
@@ -51,7 +25,7 @@ index 78880708623..8875068e996 100644
          if np.isscalar(bins) and bins < 1:
              raise ValueError(
                  '`bins` should be a positive integer.')
-@@ -375,7 +382,9 @@ def histogram(a, bins=10, range=None, normed=False, weights=None,
+@@ -380,7 +382,9 @@ def histogram(a, bins=10, range=None, normed=False, weights=None,
                                          np.can_cast(weights.dtype, np.complex)):
              bins = linspace(mn, mx, bins + 1, endpoint=True)
  
@@ -62,7 +36,7 @@ index 78880708623..8875068e996 100644
          # We now convert values of a to bin indices, under the assumption of
          # equal bin widths (which is valid here).
  
-@@ -1984,11 +1993,12 @@ def __init__(self, pyfunc, otypes='', doc=None, excluded=None,
+@@ -1989,11 +1993,12 @@ def __init__(self, pyfunc, otypes='', doc=None, excluded=None,
                  if char not in typecodes['All']:
                      raise ValueError(
                          "Invalid otype specified: %s" % (char,))
@@ -80,7 +54,7 @@ index 78880708623..8875068e996 100644
          # Excluded variable support
          if excluded is None:
 diff --git a/numpy/lib/stride_tricks.py b/numpy/lib/stride_tricks.py
-index 4c23ab35559..ec2bc23b566 100644
+index 4c23ab3555..ec2bc23b56 100755
 --- a/numpy/lib/stride_tricks.py
 +++ b/numpy/lib/stride_tricks.py
 @@ -55,7 +55,12 @@ def as_strided(x, shape=None, strides=None, subok=False):
@@ -98,7 +72,7 @@ index 4c23ab35559..ec2bc23b566 100644
      if not shape and array.shape:
          raise ValueError('cannot broadcast a non-scalar to a scalar array')
 diff --git a/numpy/polynomial/chebyshev.py b/numpy/polynomial/chebyshev.py
-index 2537bea32d4..fb2a4bc5fcd 100644
+index 2537bea32d..fb2a4bc5fc 100755
 --- a/numpy/polynomial/chebyshev.py
 +++ b/numpy/polynomial/chebyshev.py
 @@ -1052,7 +1052,9 @@ def chebint(c, m=1, k=[], lbnd=0, scl=1, axis=0):
@@ -113,7 +87,7 @@ index 2537bea32d4..fb2a4bc5fcd 100644
      cnt, iaxis = [int(t) for t in [m, axis]]
  
 diff --git a/numpy/polynomial/hermite.py b/numpy/polynomial/hermite.py
-index e234c8e2319..39afa056513 100644
+index e234c8e231..39afa05651 100755
 --- a/numpy/polynomial/hermite.py
 +++ b/numpy/polynomial/hermite.py
 @@ -810,7 +810,9 @@ def hermint(c, m=1, k=[], lbnd=0, scl=1, axis=0):
@@ -128,7 +102,7 @@ index e234c8e2319..39afa056513 100644
      cnt, iaxis = [int(t) for t in [m, axis]]
  
 diff --git a/numpy/polynomial/hermite_e.py b/numpy/polynomial/hermite_e.py
-index 08e83899aa7..faf04106db3 100644
+index 08e83899aa..faf04106db 100755
 --- a/numpy/polynomial/hermite_e.py
 +++ b/numpy/polynomial/hermite_e.py
 @@ -809,7 +809,9 @@ def hermeint(c, m=1, k=[], lbnd=0, scl=1, axis=0):
@@ -143,7 +117,7 @@ index 08e83899aa7..faf04106db3 100644
      cnt, iaxis = [int(t) for t in [m, axis]]
  
 diff --git a/numpy/polynomial/laguerre.py b/numpy/polynomial/laguerre.py
-index d459551ae89..7c53243210d 100644
+index d459551ae8..7c53243210 100755
 --- a/numpy/polynomial/laguerre.py
 +++ b/numpy/polynomial/laguerre.py
 @@ -810,7 +810,9 @@ def lagint(c, m=1, k=[], lbnd=0, scl=1, axis=0):
@@ -158,7 +132,7 @@ index d459551ae89..7c53243210d 100644
      cnt, iaxis = [int(t) for t in [m, axis]]
  
 diff --git a/numpy/polynomial/legendre.py b/numpy/polynomial/legendre.py
-index 54e9895db95..a2d1822535c 100644
+index 54e9895db9..a2d1822535 100755
 --- a/numpy/polynomial/legendre.py
 +++ b/numpy/polynomial/legendre.py
 @@ -852,7 +852,9 @@ def legint(c, m=1, k=[], lbnd=0, scl=1, axis=0):

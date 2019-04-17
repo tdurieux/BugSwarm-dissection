@@ -1,32 +1,8 @@
 diff --git a/BaragonData/src/main/java/com/hubspot/baragon/data/BaragonStateDatastore.java b/BaragonData/src/main/java/com/hubspot/baragon/data/BaragonStateDatastore.java
-index 06815153..06c950da 100644
+index 2b0ef635f4..06c950da00 100755
 --- a/BaragonData/src/main/java/com/hubspot/baragon/data/BaragonStateDatastore.java
 +++ b/BaragonData/src/main/java/com/hubspot/baragon/data/BaragonStateDatastore.java
-@@ -92,37 +92,31 @@ public void removeService(String serviceId) {
- 
-   @Timed
-   public void updateService(BaragonRequest request) throws Exception {
--    String serviceId = request.getLoadBalancerService().getServiceId();
--
--    if (!request.getReplaceUpstreams().isEmpty()) {
--      for (UpstreamInfo upstreamInfo : getUpstreams(serviceId)) {
--        deleteNode(String.format(UPSTREAM_FORMAT, serviceId, upstreamInfo.toPath()));
--      }
--      for (UpstreamInfo upstreamInfo : request.getReplaceUpstreams()) {
--        createNode(String.format(UPSTREAM_FORMAT, serviceId,upstreamInfo.toPath()));
--      }
--    } else {
--      for (UpstreamInfo upstreamInfo : request.getRemoveUpstreams()) {
--        deleteNode(String.format(UPSTREAM_FORMAT, serviceId, upstreamInfo.toPath()));
--      }
--      for (UpstreamInfo upstreamInfo : request.getAddUpstreams()) {
--        createNode(String.format(UPSTREAM_FORMAT, serviceId, upstreamInfo.toPath()));
--      }
--    }
--
--/*    if (!nodeExists(SERVICES_FORMAT)) {
-+    if (!nodeExists(SERVICES_FORMAT)) {
-       createNode(SERVICES_FORMAT);
+@@ -97,14 +97,26 @@ public void updateService(BaragonRequest request) throws Exception {
      }
  
      String serviceId = request.getLoadBalancerService().getServiceId();
@@ -56,12 +32,28 @@ index 06815153..06c950da 100644
        }
      } else {
        for (UpstreamInfo upstreamInfo : request.getRemoveUpstreams()) {
-@@ -138,7 +132,7 @@ public void updateService(BaragonRequest request) throws Exception {
-         }
+diff --git a/BaragonService/src/main/java/com/hubspot/baragon/service/managers/RequestManager.java b/BaragonService/src/main/java/com/hubspot/baragon/service/managers/RequestManager.java
+index 989fd36542..87f3726ad5 100755
+--- a/BaragonService/src/main/java/com/hubspot/baragon/service/managers/RequestManager.java
++++ b/BaragonService/src/main/java/com/hubspot/baragon/service/managers/RequestManager.java
+@@ -6,7 +6,6 @@
+ import java.util.Map;
+ import java.util.Set;
+ 
+-import org.apache.zookeeper.KeeperException.NodeExistsException;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -306,11 +305,8 @@ private void updateStateDatastore(BaragonRequest request) {
+         stateDatastore.updateStateNode();
        }
+       stateDatastore.incrementStateVersion();
+-    } catch (NodeExistsException e) {
+-      LOG.error(String.format("Error updating state datastore %s, for path %s: %s", e, e.getPath(), e.getMessage()));
+-
+     } catch (Exception e) {
+-      LOG.error(String.format("Error updating state datastore %s, for path %s", e));
++      LOG.error(String.format("Error updating state datastore %s", e));
      }
--    transaction.commit();*/
-+    transaction.commit();
    }
  
-   @Timed

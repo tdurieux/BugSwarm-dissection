@@ -1,9 +1,5 @@
-diff --git a/.coverage b/.coverage
-new file mode 100644
-index 00000000..71e1f63c
-Binary files /dev/null and b/.coverage differ
 diff --git a/.gitignore b/.gitignore
-index 21ee0eec..06d25c11 100644
+index 21ee0eecca..06d25c11dd 100755
 --- a/.gitignore
 +++ b/.gitignore
 @@ -23,5 +23,5 @@ dist
@@ -15,7 +11,7 @@ index 21ee0eec..06d25c11 100644
 +*.coverage
 +*coverage_report/*
 diff --git a/server/app/api.py b/server/app/api.py
-index 8febd996..d58d1c53 100644
+index 06f1b7b88e..d58d1c5355 100755
 --- a/server/app/api.py
 +++ b/server/app/api.py
 @@ -18,7 +18,7 @@
@@ -27,32 +23,6 @@ index 8febd996..d58d1c53 100644
  from app.utils import add_to_grading_queues, parse_date, assign_submission
  from app.utils import merge_user
  
-@@ -408,14 +408,14 @@ class ParticipantAPI(APIResource):
-     """
-     Root-level API functions
-     """
--    
-+
-     model = models.Participant
- 
-     methods = {
-         'enrollment': {
-         }
-     }
--    
-+
-     def enrollment(self):
-         user = models.User.lookup(request.args.get('email'))
-         data = []
-@@ -672,7 +672,7 @@ def get_backups(self, obj, user, data):
-         return obj.get_backups(data['assignment'], data['quantity'])
- 
-     def get_submissions(self, obj, user, data):
--        return obj.get_submissions(data['assignment'], data['quantity'])
-+        return [subm.submission for subm in obj.get_submissions(data['assignment'], data['quantity'])]
- 
-     def timed_submission(self, obj, user, data):
-         return obj.get_submission_before(data['assignment'], data['before'])
 @@ -837,80 +837,17 @@ def invite(self, obj, user, data):
          if err:
              raise BadValueError(err)
@@ -60,7 +30,7 @@ index 8febd996..d58d1c53 100644
 -
      def download_scores(self, obj, user, data):
          """
--        Download all composition scores for this assignment. 
+-        Download all composition scores for this assignment.
 +        Write all composition scores for this assignment as a GCS file. 
          Format is 'STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG'.
          """
@@ -92,13 +62,13 @@ index 8febd996..d58d1c53 100644
 -        return course_name, content
 -
 -    def scores_for_student_or_group(self, student, assignment):
--        """ Returns a tuple of two elements: 
+-        """ Returns a tuple of two elements:
 -                1) Score data (list of lists) for STUDENT's final submission for ASSIGNMENT.
--                    There is an element for each score. 
+-                    There is an element for each score.
 -                    * OBS * If the student is in a group, the list will contain an
 -                    element for each combination of group member and score.
 -                2) A boolean indicating whether the student had a
--                    scored final submission for ASSIGNMENT. 
+-                    scored final submission for ASSIGNMENT.
 -            Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
 -        """
 -        fs = models.User.get_final_submission(student, assignment.key)
@@ -109,10 +79,10 @@ index 8febd996..d58d1c53 100644
 -
 -    def scores_for_group_members(self, group, assignment):
 -        """ Returns a list of lists containing score data
--            for the groups's final submission for ASSIGNMENT. 
--            There is one element for each combination of 
+-            for the groups's final submission for ASSIGNMENT.
+-            There is one element for each combination of
 -            group member and score.
--            Ensures that each student only appears once in the list. 
+-            Ensures that each student only appears once in the list.
 -            Format: [['STUDENT', 'SCORE', 'MESSAGE', 'GRADER', 'TAG']]
 -        """
 -        content = []
@@ -121,7 +91,7 @@ index 8febd996..d58d1c53 100644
 -            data, success = self.scores_for_student_or_group(member, assignment)
 -            content.extend(data)
 -            if success:
--                # get_scores_for_student_or_group will return scores for all group members. 
+-                # get_scores_for_student_or_group will return scores for all group members.
 -                return content
 -        return [[member.email[0], 0, None, None, None]]
 -
@@ -138,228 +108,21 @@ index 8febd996..d58d1c53 100644
      def autograde(self, obj, user, data):
        need = Need('grade')
        if not obj.can(user, need, obj):
-@@ -1027,8 +964,6 @@ class SubmissionAPI(APIResource):
-             }
-         },
-         'get': {
--            'web_args': {
--            }
-         },
-         'index': {
-             'web_args': {
-@@ -1078,7 +1013,7 @@ class SubmissionAPI(APIResource):
-                 'score': Arg(int, required=True),
-                 'message': Arg(str, required=True),
-             }
--        },
-+        }
-     }
- 
-     def graded(self, obj, user, data):
-@@ -1322,7 +1257,7 @@ def score(self, obj, user, data):
-         if not self.subm_model.can(user, need, subm, subm_q):
-             raise need.exception()
- 
--        if not subm.backup() == obj.key:
-+        if not subm.backup == obj.key:
-           raise ValueError('Submission does not match backup')
- 
-         score = models.Score(
-@@ -1332,16 +1267,12 @@ def score(self, obj, user, data):
+@@ -1330,9 +1267,8 @@ def score(self, obj, user, data):
              grader=user.key)
          score.put()
  
--        if data['key'] == 'composition':
--          # Create a new composition score - but retain everything else.
--          subm.score = [autograde for autograde in subm.score \
--           if autograde.key != 'composition']
--          subm.score.append(score)
--        else:
--          subm.score.append(score)
-+        subm.score = [autograde for autograde in subm.score \
+-        # Replace old score with key if it exists.
+         subm.score = [autograde for autograde in subm.score \
+-         if autograde.tag != data['key']]
 +            if autograde.tag != data['key']]
-+        subm.score.append(score)
+         subm.score.append(score)
  
          subm.put()
--        return {1:1}
-+        return score
- 
-     def get_assignment(self, name):
-         """
-@@ -1510,7 +1441,7 @@ def tokenize(query):
-         second named group "op" as a string preceded by two dashes
-         and followed by a space. Captures final named group "arg"
-         with optional quotations.
--        
-+
-         If quotes are detected, the string inside is allowed spaces and
-         a second, identical quote must be found.
-         """
-@@ -1557,7 +1488,7 @@ def querify(cls, query):
-         args = cls.get_args(model, objects)
-         query = model.query(*args)
-         return cls.order(model, query)
--        
-+
-     @staticmethod
-     def get_model(prime):
-         """ determine model using passed-in data """
-@@ -1826,8 +1757,7 @@ def get_courses(self, course, user, data):
-     def get_students(self, course, user, data):
-         query = models.Participant.query(
-             models.Participant.course == course.key,
--            models.Participant.role == 'student',
--            models.Participant.status != 'inactive')
-+            models.Participant.role == 'student')
-         need = Need('staff')
-         if not models.Participant.can(user, need, course, query):
-             raise need.exception()
-@@ -1971,7 +1901,7 @@ def exit(self, group, user, data):
-             raise need.exception()
- 
-         group.exit(user)
--        
-+
-     def reorder(self, group, user, data):
-         """ Saves order of partners """
-         need = Need('reorder')
-@@ -1983,7 +1913,7 @@ def reorder(self, group, user, data):
- 
-         if len(new_order) != len(group.member):
-             raise BadValueError('Incorrect number of group members.')
--        
-+
-         for member in group.member:
-             if member not in new_order:
-                 raise BadValueError('Intruding group member does not belong.')
-@@ -2037,11 +1967,11 @@ def new_entity(self, attributes):
-         ent.assigned_staff = [models.User.get_or_insert(
-             user.id()).key for user in ent.assigned_staff]
-         return ent
--    
--    
-+
-+
- class QueuesAPI(APIResource):
-     """ API resource for sets of queues """
--    
-+
-     contains_entities = False
- 
-     methods = {
-@@ -2054,16 +1984,16 @@ class QueuesAPI(APIResource):
-             }
-         }
-     }
--    
-+
-     def generate(self, user, data):
-         """ Splits up submissions among staff members """
--        
-+
-         if self.check_permissions(user, data):
-             raise Need('get').exception()
- 
-         course_key, assignment_key, staff_list = data['course'], data['assignment'], data['staff']
-         userify = lambda parts: [part.user.get() for part in parts]
--        
-+
-         staff = [staff for staff in
-             userify(models.Participant.query(
-             models.Participant.role == STAFF_ROLE,
-@@ -2074,16 +2004,16 @@ def generate(self, user, data):
-         subms = models.FinalSubmission.query(
-             models.FinalSubmission.assignment == assignment_key
-         ).fetch()
--        
-+
-         queues = []
--        
-+
-         for instr in staff:
-             q = models.Queue.query(
-                 models.Queue.owner == instr.key,
-                 models.Queue.assignment == assignment_key).get()
-             if not q:
-                 q = models.Queue(
--                    owner=instr.key, 
-+                    owner=instr.key,
-                     assignment=assignment_key,
-                     assigned_staff=[instr.key])
-                 q.put()
-@@ -2095,21 +2025,20 @@ def generate(self, user, data):
-             subm.queue = queues[i].key
-             subm.put()
-             i = (i + 1) % len(staff)
--            
-+
-         return queues
- 
-     def check_permissions(self, user, data):
-         course = data['course'].get()
-         return user.key not in course.staff and not user.is_admin
--    
-+
- 
- class FinalSubmissionAPI(APIResource):
-     """
-     The API resource for the Assignment Object
-     """
-     model = models.FinalSubmission
--    contains_entities = False
--    
-+
-     methods = {
-         'get': {
-         },
-@@ -2119,40 +2048,9 @@ class FinalSubmissionAPI(APIResource):
-             'web_args': {
-                 'submission': KeyArg('Submission', required=True)
-             }
--        },
--        'mark_backup': {
--            'methods': set(['POST']),
--            'web_args': {
--                'backup': KeyArg('Backup', required=True)
--            }
--        },
-+        }
-     }
- 
--    def mark_backup(self, user, data):
--        """
--        Converts backup to Finalsubmission
--
--        :param attributes: (dictionary)
--        :return: None
--        """
--        backup = data['backup'].get()
--        
--        if not backup:
--            raise BadValueError('No such backup exists.')
--        
--        need = Need('get')  # allows group, staff members
--        if not backup.can(user, need, backup):
--            raise need.exception()
--        
--        subm = models.Submission.query(
--            models.Submission.backup == backup.key
--        ).get()
--
--        if not subm:
--            raise BadValueError('No such submission exists.')
--        
--        return self.new_entity(dict(submission=subm.key))
--
-     def new_entity(self, attributes):
-         """
-         Creates a new entity with given attributes.
-@@ -2167,7 +2065,10 @@ def new_entity(self, attributes):
- 
+@@ -2130,6 +2066,9 @@ def new_entity(self, attributes):
          if not subm:
              raise BadValueError('No such submission exists.')
--        
-+
+ 
 +        if not subm.backup.get():
 +            raise BadValueError('Submission backup is missing.')
 +
@@ -367,8 +130,8 @@ index 8febd996..d58d1c53 100644
          return subm.get_final()
  
 diff --git a/server/app/cloudstorage/__init__.py b/server/app/cloudstorage/__init__.py
-new file mode 100644
-index 00000000..349a021a
+new file mode 100755
+index 0000000000..349a021a55
 --- /dev/null
 +++ b/server/app/cloudstorage/__init__.py
 @@ -0,0 +1,29 @@
@@ -402,8 +165,8 @@ index 00000000..349a021a
 +from errors import *
 +from storage_api import *
 diff --git a/server/app/cloudstorage/api_utils.py b/server/app/cloudstorage/api_utils.py
-new file mode 100644
-index 00000000..a78750a9
+new file mode 100755
+index 0000000000..a78750a970
 --- /dev/null
 +++ b/server/app/cloudstorage/api_utils.py
 @@ -0,0 +1,356 @@
@@ -764,8 +527,8 @@ index 00000000..a78750a9
 +
 +  return eager_wrapper
 diff --git a/server/app/cloudstorage/cloudstorage_api.py b/server/app/cloudstorage/cloudstorage_api.py
-new file mode 100644
-index 00000000..35ccad7d
+new file mode 100755
+index 0000000000..35ccad7dc8
 --- /dev/null
 +++ b/server/app/cloudstorage/cloudstorage_api.py
 @@ -0,0 +1,583 @@
@@ -1353,8 +1116,8 @@ index 00000000..35ccad7d
 +        elements.remove(e.tag)
 +    return element_mapping
 diff --git a/server/app/cloudstorage/common.py b/server/app/cloudstorage/common.py
-new file mode 100644
-index 00000000..ab9c8df3
+new file mode 100755
+index 0000000000..ab9c8df358
 --- /dev/null
 +++ b/server/app/cloudstorage/common.py
 @@ -0,0 +1,429 @@
@@ -1788,8 +1551,8 @@ index 00000000..ab9c8df3
 +_T_NEXT_MARKER = _add_ns('NextMarker')
 +_T_IS_TRUNCATED = _add_ns('IsTruncated')
 diff --git a/server/app/cloudstorage/errors.py b/server/app/cloudstorage/errors.py
-new file mode 100644
-index 00000000..21743806
+new file mode 100755
+index 0000000000..21743806d4
 --- /dev/null
 +++ b/server/app/cloudstorage/errors.py
 @@ -0,0 +1,143 @@
@@ -1937,8 +1700,8 @@ index 00000000..21743806
 +  else:
 +    raise FatalError(msg)
 diff --git a/server/app/cloudstorage/rest_api.py b/server/app/cloudstorage/rest_api.py
-new file mode 100644
-index 00000000..96755f33
+new file mode 100755
+index 0000000000..96755f3354
 --- /dev/null
 +++ b/server/app/cloudstorage/rest_api.py
 @@ -0,0 +1,268 @@
@@ -2211,8 +1974,8 @@ index 00000000..96755f33
 +
 +_RestApi = add_sync_methods(_RestApi)
 diff --git a/server/app/cloudstorage/storage_api.py b/server/app/cloudstorage/storage_api.py
-new file mode 100644
-index 00000000..2f3c597c
+new file mode 100755
+index 0000000000..2f3c597c40
 --- /dev/null
 +++ b/server/app/cloudstorage/storage_api.py
 @@ -0,0 +1,924 @@
@@ -3141,8 +2904,8 @@ index 00000000..2f3c597c
 +  def writable(self):
 +    return True
 diff --git a/server/app/cloudstorage/test_utils.py b/server/app/cloudstorage/test_utils.py
-new file mode 100644
-index 00000000..e4d82477
+new file mode 100755
+index 0000000000..e4d82477dc
 --- /dev/null
 +++ b/server/app/cloudstorage/test_utils.py
 @@ -0,0 +1,25 @@
@@ -3172,7 +2935,7 @@ index 00000000..e4d82477
 +    self.content_was_truncated = False
 +    self.final_url = None
 diff --git a/server/app/constants.py b/server/app/constants.py
-index b01429c8..990dd839 100644
+index b01429c8bc..990dd839ea 100755
 --- a/server/app/constants.py
 +++ b/server/app/constants.py
 @@ -4,3 +4,4 @@
@@ -3181,55 +2944,10 @@ index b01429c8..990dd839 100644
  VALID_ROLES = [STUDENT_ROLE, STAFF_ROLE]
 +GRADES_BUCKET = 'ok_grades_bucket'
 diff --git a/server/app/models.py b/server/app/models.py
-index 5566762d..5de839b5 100644
+index e565ab06e1..5de839b5ad 100755
 --- a/server/app/models.py
 +++ b/server/app/models.py
-@@ -50,7 +50,6 @@ def convert_timezone(utc_dt):
- class Base(ndb.Model):
-     """Shared utility methods and properties."""
-     created = ndb.DateTimeProperty(auto_now_add=True)
--    statuses = ['inactive', 'active']
- 
-     @classmethod
-     def from_dict(cls, values):
-@@ -152,7 +151,6 @@ class User(Base):
-     """
-     email = ndb.StringProperty(repeated=True)
-     is_admin = ndb.BooleanProperty(default=False)
--    status = ndb.StringProperty(choices=Base.statuses, default='active')
-     # TODO add a name
-     # TODO add a student ID
- 
-@@ -266,12 +264,17 @@ def get_submissions(self, assignment, num_submissions=10):
-             for s in results:
-                 all_subms.append(s)
- 
--        all_subms = [x.backup.get() for x in all_subms]
-+        def update(x):
-+            b = x.backup.get()
-+            b.submission = x
-+            return b
-+        
-+        all_subms = [update(x) for x in all_subms]
-         all_subms = [x for x in all_subms if x.assignment == assignment \
-                 and self._contains_files(x)]
- 
-         all_subms.sort(lambda x, y: int(-5*(int(x.server_time > y.server_time) - 0.5)))
--
-+        
-         return all_subms[:num_submissions]
- 
-     get_num_submissions = make_num_counter(_get_submissions_helper)
-@@ -390,7 +393,7 @@ def lookup(cls, email):
-         """Retrieve a user by email or return None."""
-         assert isinstance(email, (str, unicode)), "Invalid email: " + str(email)
-         email = email.lower()
--        users = cls.query(cls.email == email, cls.status != 'inactive').fetch()
-+        users = cls.query(cls.email == email).fetch()
-         if not users:
-             return None
-         if len(users) > 1:
-@@ -435,6 +438,22 @@ def _pre_put_hook(self):
+@@ -438,6 +438,22 @@ def _pre_put_hook(self):
              raise BadValueError("No email associated with " + str(self))
          #utils.check_user(self.key.id())
  
@@ -3252,51 +2970,7 @@ index 5566762d..5de839b5 100644
  class Course(Base):
      """Courses are expected to have a unique offering."""
      offering = ndb.StringProperty() # E.g., 'cal/cs61a/fa14'
-@@ -478,8 +497,7 @@ def get_students(self, user):
- 
-         query = Participant.query(
-             Participant.course == self.key,
--            Participant.role == 'student',
--            Participant.status != 'inactive')
-+            Participant.role == 'student')
- 
-         return list(query.fetch())
- 
-@@ -502,7 +520,7 @@ class Assignment(Base):
-     autograding_enabled = ndb.BooleanProperty(default=False)
-     grading_script_file = ndb.TextProperty()
-     zip_file_url = ndb.StringProperty()
--    
-+
-     # TODO Add services requested
- 
-     @classmethod
-@@ -517,7 +535,7 @@ def _can(cls, user, need, obj, query):
-             if obj and isinstance(obj, Assignment):
-                 return Participant.has_role(user, obj.course, STAFF_ROLE)
-         return False
--    
-+
-     def __lt__(self, other):
-         """ Allows us to sort assignments - reverse order so that latest due dates come first """
-         return self.due_date > other.due_date
-@@ -528,7 +546,6 @@ class Participant(Base):
-     user = ndb.KeyProperty(User)
-     course = ndb.KeyProperty(Course)
-     role = ndb.StringProperty() # See constants.py for roles
--    status = ndb.StringProperty(choices=Base.statuses, default='active')
- 
-     @classmethod
-     def _can(cls, user, need, course, query):
-@@ -732,6 +749,7 @@ class Score(Base):
-     score = ndb.IntegerProperty()
-     message = ndb.TextProperty() # Plain text
-     grader = ndb.KeyProperty(User) # For autograders, the user who authenticated
-+    server_time = ndb.DateTimeProperty(auto_now_add=True)
- 
- 
- class Submission(Base):
-@@ -1085,6 +1103,24 @@ def _pre_put_hook(self):
+@@ -1087,6 +1103,24 @@ def _pre_put_hook(self):
          if error:
              raise BadValueError(error)
  
@@ -3321,103 +2995,8 @@ index 5566762d..5de839b5 100644
  
  
  class AuditLog(Base):
-@@ -1214,7 +1250,7 @@ def assigned(self):
-         Return whether or not this assignment has been assigned to a queue.
-         """
-         return bool(self.queue)
--    
-+
-     @classmethod
-     def _can(cls, user, need, final, query):
-         action = need.action
-@@ -1230,24 +1266,24 @@ def _pre_put_hook(self):
-         self.submitter = self.submission.get().submitter
- 
-     def get_scores(self):
--        """ 
-+        """
-         Return a list of lists of the format [[student, score, message, grader, tag]]
--        if the submission has been scored. Otherwise an empty list. 
--        If the submission is a group submission, there will be an element 
-+        if the submission has been scored. Otherwise an empty list.
-+        If the submission is a group submission, there will be an element
-         for each combination of student and score.
-         """
--        # TODO: get the most recent score for each tag. 
--        # Question: will all scores have a grader? In particular the scores from the autograder. 
-+        # TODO: get the most recent score for each tag.
-+        # Question: will all scores have a grader? In particular the scores from the autograder.
-         all_scores = []
-         if self.group:
-             members = [member for member in self.group.get().member]
--        else: 
-+        else:
-             members = [self.submitter]
-         for member in members:
-             email = member.get().email[0]
-             for score in self.submission.get().score:
-                 all_scores.append([email,
--                        score.score, 
-+                        score.score,
-                         score.message,
-                         score.grader.get().email[0],
-                         score.tag])
-diff --git a/server/app/seed/__init__.py b/server/app/seed/__init__.py
-index af851400..72f3a387 100644
---- a/server/app/seed/__init__.py
-+++ b/server/app/seed/__init__.py
-@@ -329,23 +329,23 @@ def score_seed_submission(final, score, msg, grader):
- 
-     group1_subm = make_seed_submission(assign, group_members[1])
-     group1_subm.put()
--    # Make team 1's submission final and score it. 
-+    # Make team 1's submission final and score it.
-     final = make_final_with_group(group1_subm, assign, group_members[1], g1)
--    score_seed_submission(final, 2, "Nice job, group 1!", staff[8]) 
-+    score_seed_submission(final, 2, "Nice job, group 1!", staff[8])
-     subms.append(group1_subm)
- 
-     group3_subm = make_seed_submission(assign, group_members[5])
-     group3_subm.put()
--    # Make team 1's submission final and score it. 
-+    # Make team 1's submission final and score it.
-     final3 = make_final_with_group(group3_subm, assign, group_members[5], g3)
--    score_seed_submission(final3, 1, "Awesome job, group 3!", staff[8]) 
-+    score_seed_submission(final3, 1, "Awesome job, group 3!", staff[8])
-     subms.append(group3_subm)
- 
-     # Make this one be a final submission though.
-     # subm = make_seed_submission(assign, group_members[1], True)
-     # subm.put()
-     # subms.append(subm)
--    
-+
- 
-     # scheme final
-     # subm = make_seed_scheme_submission(assign2, group_members[1], True)
-@@ -361,16 +361,16 @@ def score_seed_submission(final, score, msg, grader):
-         subm.put()
-         subms.append(subm)
- 
--        # Make each individual submission final and score it. 
-+        # Make each individual submission final and score it.
-         final = make_final(subm, assign, students[i])
-         score_seed_submission(final, i, "Good job, student %s" % str(i), staff[i])
- 
- 
-     # Seed a queue. This should be auto-generated.
--    # make_queue(assign, subms[:len(subms)//2], c)
--    # make_queue(assign, subms[len(subms)//2:], k)
-+    make_queue(assign, subms[:len(subms)//2], c)
-+    make_queue(assign, subms[len(subms)//2:], k)
- 
--    #utils.add_to_grading_queues(assign.key)
-+    utils.add_to_grading_queues(assign.key)
- 
- 
- 
 diff --git a/server/app/utils.py b/server/app/utils.py
-index 29e34758..8f0f5003 100644
+index 24c82127ee..8f0f500325 100755
 --- a/server/app/utils.py
 +++ b/server/app/utils.py
 @@ -21,8 +21,10 @@
@@ -3511,24 +3090,6 @@ index 29e34758..8f0f5003 100644
          if not user.logged_in or user.key.id() in seen:
              continue
          queues.sort(key=lambda x: len(x.submissions))
-@@ -360,7 +411,7 @@ def get_dup_user():
-     E = ModelProxy.Participant
-     enrolls = E.query(E.user == dup_user_key).fetch()
-     for enroll in enrolls:
--        enroll.status = 'inactive'
-+        # enroll.status = 'inactive'
-         enroll.put_async()
- 
-     # Re-submit submissions
-@@ -380,7 +431,7 @@ def get_dup_user():
- 
-     # Invalidate emails
-     dup_user.email = ['#'+email for email in dup_user.email]
--    dup_user.status = 'inactive'
-+    # dup_user.status = 'inactive'
-     dup_user.put_async()
-     user.put_async()
- 
 @@ -448,3 +499,10 @@ def check_user(user_key):
          user_key = user_key.id()
  
@@ -3541,18 +3102,86 @@ index 29e34758..8f0f5003 100644
 +    csv_contents = create_csv_content(content)
 +    create_gcs_file(assignment, csv_contents, 'scores')
 diff --git a/server/static/js/admin/controllers.js b/server/static/js/admin/controllers.js
-index d76fdf65..21277fd1 100644
+index 9c5b53a2fd..21277fd160 100755
 --- a/server/static/js/admin/controllers.js
 +++ b/server/static/js/admin/controllers.js
-@@ -416,6 +416,7 @@ app.controller("FinalSubmissionCtrl", ['$scope', '$location', '$stateParams', '$
-       $scope.submission = response.submission;
-       $scope.backupId = response.submission.backup.id;
-       $scope.diff = Submission.diff({id: $scope.backupId});
-+
-       if (response.submission.score.length > 0) {
-         $scope.compScore = response.submission.score[0].score
-         $scope.compMessage = response.submission.score[0].message
-@@ -626,7 +627,27 @@ app.controller("CourseListCtrl", ['$scope', 'Course',
+@@ -254,7 +254,7 @@ app.controller("AssignmentEditCtrl", ["$scope", "$window", "$state", "$statePara
+     }
+   }
+   ]);
+-
++  
+ app.controller("AssignmentQueueListCtrl", ["$scope", "$window", "$state", "$stateParams", "Assignment", "Course", "Queues",
+   function ($scope, $window, $state, $stateParams, Assignment, Course, Queues) {
+     Course.get({
+@@ -282,7 +282,7 @@ app.controller("AssignmentQueueListCtrl", ["$scope", "$window", "$state", "$stat
+             $window.swal('Error', 'Could not load queues. Maybe none exist?', 'error')
+         });
+     }
+-
++    
+     $scope.generateQueues = function() {
+         Queues.generate({
+             course: $scope.course.id,
+@@ -294,7 +294,7 @@ app.controller("AssignmentQueueListCtrl", ["$scope", "$window", "$state", "$stat
+             $window.swal('Error', 'Queues could not be generated.', 'error');
+         });
+     }
+-
++    
+     $scope.reloadAssignment();
+     $scope.reloadQueues();
+ }])
+@@ -305,18 +305,18 @@ app.controller("AssignmentQueueGenerateCtrl", ["$scope", "$window", "$state", "$
+         'students': '*',
+         'staff': '*'
+     }
+-
++  
+     Course.get({
+       id: $stateParams.courseId
+     }, function(response) {
+       $scope.course = response;
+       $scope.hideStaffList();
+     });
+-
++    
+     $scope.hideStaffList = function hideStaffList() {
+         $scope.stafflist = $scope.selection = [];
+     }
+-
++    
+     $scope.showStaffList = function showStaffList() {
+         Course.staff({
+             id: $stateParams.courseId
+@@ -332,7 +332,7 @@ app.controller("AssignmentQueueGenerateCtrl", ["$scope", "$window", "$state", "$
+             $scope.selection = $scope.stafflist.slice();
+         });
+     }
+-
++    
+     // http://stackoverflow.com/a/14520103/4855984
+     $scope.toggleSelection = function toggleSelection(staffEmail) {
+         var idx = $scope.selection.indexOf(staffEmail);
+@@ -357,7 +357,7 @@ app.controller("AssignmentQueueGenerateCtrl", ["$scope", "$window", "$state", "$
+         $window.swal('Error', 'Could not load assignment. Wrong page?', 'error')
+        });
+     }
+-
++    
+     $scope.generateQs = function() {
+         var staff = $scope.selection.length > 0 ? $scope.selection : $scope.newQs.staff.split(',');
+         console.log(staff);
+@@ -373,7 +373,7 @@ app.controller("AssignmentQueueGenerateCtrl", ["$scope", "$window", "$state", "$
+             $window.swal('Error', 'Queues could not be generated.', 'error');
+         });
+     }
+-
++    
+     $scope.reloadAssignment();
+ }]);
+ 
+@@ -627,7 +627,27 @@ app.controller("CourseListCtrl", ['$scope', 'Course',
           });
         }
  
@@ -3581,41 +3210,11 @@ index d76fdf65..21277fd1 100644
  
       $scope.delete = function(assign) {
        $window.swal({
-@@ -1022,7 +1043,7 @@ app.controller("CommentController", ["$scope", "$window", "$stateParams", "$time
-       });
-       modal.result.then(function() {
-         Submission.deleteComment({
--          id: $stateParams.submissionId,
-+          id: $scope.backupId,
-           comment: $scope.comment.id
-         }, function (result){
-           $scope.toggleBox();
-@@ -1051,7 +1072,7 @@ app.controller("WriteCommentController", ["$scope", "$window", "$sce", "$statePa
-       text = $scope.commentText.text;
-       if (text !== undefined && text.trim() != "") {
-         Submission.addComment({
--          id: $stateParams.submissionId,
-+          id: $scope.backupId,
-           file: $scope.file_name,
-           index: $scope.codeline.rightNum - 1,
-           message: text,
 diff --git a/server/static/js/common/services.js b/server/static/js/common/services.js
-index 619b8f97..12f5f548 100644
+index 431be2f318..12f5f548e0 100755
 --- a/server/static/js/common/services.js
 +++ b/server/static/js/common/services.js
-@@ -112,9 +112,8 @@ app.factory('FinalSubmission', ['$resource',
-         get: {
-           transformResponse: defaultTransformer
-         },
--        mark_backup: {
--          method: "POST",
--          url: "/api/v1/final_submission/mark_backup",
-+        post: {
-+          method: 'POST',
-           transformResponse: defaultTransformer
-         }
-       })
-@@ -160,6 +159,11 @@ app.factory('Assignment', ['$resource',
+@@ -159,6 +159,11 @@ app.factory('Assignment', ['$resource',
            url: '/api/v1/assignment/:id/invite',
            transformResponse: defaultTransformer
          },
@@ -3628,20 +3227,9 @@ index 619b8f97..12f5f548 100644
            isArray:true,
            url: '/api/v1/assignment/:id/queues',
 diff --git a/server/static/js/student/controllers.js b/server/static/js/student/controllers.js
-index 62f7797a..a99259ac 100644
+index 0f46588bcd..a99259ac9a 100755
 --- a/server/static/js/student/controllers.js
 +++ b/server/static/js/student/controllers.js
-@@ -391,8 +391,8 @@ app.controller("AssignmentDashController", ['$scope', '$window', '$state',  '$st
-       }
- 
-       $scope.changeSubmission = function (backup) {
--        FinalSubmission.mark_backup({
--          backup: backup.id
-+        FinalSubmission.post({
-+          submission: backup.id
-         }, function (response) {
-             $scope.closeDetails();
-           $scope.reloadView();
 @@ -428,6 +428,12 @@ app.controller("AssignmentDashController", ['$scope', '$window', '$state',  '$st
             });
          }
@@ -3656,7 +3244,7 @@ index 62f7797a..a99259ac 100644
        $scope.randomColor = function randomColor(assignment) {
          themes = ['blue','gold','purple']
 diff --git a/server/static/partials/admin/course.assignment.list.html b/server/static/partials/admin/course.assignment.list.html
-index e721ef0d..24919bcd 100644
+index e721ef0dea..24919bcd72 100755
 --- a/server/static/partials/admin/course.assignment.list.html
 +++ b/server/static/partials/admin/course.assignment.list.html
 @@ -61,7 +61,7 @@ <h3 class="box-title" ng-if="assignments.length > 0">Assignments</h3>
@@ -3669,7 +3257,7 @@ index e721ef0d..24919bcd 100644
          <td>
            <a ui-sref="course.assignment.edit({courseId: course.id, assignmentId:assignment.id})" class="btn btn-primary btn-sm"><i class="fa fa-edit"></i></a>
 diff --git a/server/static/partials/student/assignment.detail.html b/server/static/partials/student/assignment.detail.html
-index beea7797..f0d6b087 100644
+index c1333ae8d1..f0d6b087b7 100755
 --- a/server/static/partials/student/assignment.detail.html
 +++ b/server/static/partials/student/assignment.detail.html
 @@ -26,12 +26,13 @@ <h2 class="blob-title ng-binding">{{ assign.assignment.display_name }}</h2>
@@ -3688,30 +3276,8 @@ index beea7797..f0d6b087 100644
                      </span>
                      {{ member.email[0] }}
                      <i class="fa fa-close" ng-if="assign.assignment.active" ng-click="removeMember(assign.group.group_info, member)"></i></span>
-@@ -66,17 +67,17 @@ <h2 class="sidebar-subtitle">Submissions</h2>
-             <li ng-if="!assign.submissions || assign.submissions.length == 0">No submissions found.</li>
-             <li ng-repeat="subm in assign.submissions | orderBy:'created':true">
-                 <a class="flag"
--                   ng-class=" {active: assign.final.final_submission && subm.id == assign.final.backup.id }"
-+                   ng-class=" {active: assign.final.final_submission && subm.id == assign.final.submission.id }"
-                     ng-click="changeSubmission(subm)">
-                     <span class="label right">
--                        <p ng-hide="assign.final.final_submission && subm.id == assign.final.backup.id">Flag for Grading</p>
--                        <p ng-show="assign.final.final_submission && subm.id == assign.final.backup.id">Flagged for Grading</p>
-+                        <p ng-hide="assign.final.final_submission && subm.id == assign.final.submission.id">Flag for Grading</p>
-+                        <p ng-show="assign.final.final_submission && subm.id == assign.final.submission.id">Flagged for Grading</p>
-                     </span>
-                     <span class="cloth"></span>
-                     <span class="stem"></span>
-                 </a>
-                 {{ subm.created | amCalendar }} by {{ subm.submitter.email[0] }}
--                <a ui-sref="submission.detail({courseId: courseId, submissionId:subm.id})">view
-+                <a ui-sref="submission.detail({courseId: courseId, submissionId:subm.backup.id})">view
-                     <span class="arrow right dark fat"></span>
-                 </a>
-             </li>
 diff --git a/server/tests/integration/test_api_final_submissions.py b/server/tests/integration/test_api_final_submissions.py
-index 6239aa54..9f053586 100644
+index 6239aa5430..9f0535869e 100755
 --- a/server/tests/integration/test_api_final_submissions.py
 +++ b/server/tests/integration/test_api_final_submissions.py
 @@ -40,32 +40,31 @@ def setUp(self):
@@ -3754,68 +3320,9 @@ index 6239aa54..9f053586 100644
  		except BadValueError as e:
  			self.assertEqual(str(e), 'No such submission exists.')
 \ No newline at end of file
-diff --git a/server/tests/integration/test_api_participant.py b/server/tests/integration/test_api_participant.py
-index 7ef6b4e3..210f73ac 100644
---- a/server/tests/integration/test_api_participant.py
-+++ b/server/tests/integration/test_api_participant.py
-@@ -68,20 +68,20 @@ def test_copy_submissions(self):
- 		self.assertNotEqual([], list(query1.fetch()))  # user1 receives user2 subs
- 		self.assertEqual([], list(query2.fetch()))  # user2 is no longe the owner
- 
--	def test_deactivate_enrollment(self):
--		""" Tests that the merged user has been unenrolled from all courses """
--		part1 = models.Participant(
--			course=self._course.key,
--			role='student',
--			user=self.user1.key
--		).put()
--		models.Participant(
--			course=self._course.key,
--			role='student',
--			user=self.user2.key
--		).put()
--		self.merge_users()
--		self.assertEqual([part1.get()], self._course.get_students(self.user))
-+	# def test_deactivate_enrollment(self):
-+	# 	""" Tests that the merged user has been unenrolled from all courses """
-+	# 	part1 = models.Participant(
-+	# 		course=self._course.key,
-+	# 		role='student',
-+	# 		user=self.user1.key
-+	# 	).put()
-+	# 	models.Participant(
-+	# 		course=self._course.key,
-+	# 		role='student',
-+	# 		user=self.user2.key
-+	# 	).put()
-+	# 	self.merge_users()
-+	# 	self.assertEqual([part1.get()], self._course.get_students(self.user))
- 
- 	def test_emails_transferred(self):
- 		""" Tests that emails have been merged in. """
-@@ -91,10 +91,10 @@ def test_emails_transferred(self):
- 		self.assertEqual(['#dummy2@student.com'], self.user2.key.get().email)
- 		self.assertEqual(['dummy@student.com', 'dummy2@student.com'], self.user1.key.get().email)
- 
--	def test_user_status(self):
--		""" Tests that the old user has been deactivated. """
--		self.assertEqual('active', self.user2.status)
--		self.assertEqual('active', self.user1.status)
--		self.merge_users()
--		self.assertEqual('inactive', self.user2.key.get().status)
--		self.assertEqual('active', self.user1.key.get().status)
-\ No newline at end of file
-+	# def test_user_status(self):
-+	# 	""" Tests that the old user has been deactivated. """
-+	# 	self.assertEqual('active', self.user2.status)
-+	# 	self.assertEqual('active', self.user1.status)
-+	# 	self.merge_users()
-+	# 	self.assertEqual('inactive', self.user2.key.get().status)
-+	# 	self.assertEqual('active', self.user1.key.get().status)
-\ No newline at end of file
 diff --git a/server/tests/integration/test_api_submission.py b/server/tests/integration/test_api_submission.py
-new file mode 100644
-index 00000000..4a8fbe6e
+new file mode 100755
+index 0000000000..4a8fbe6e29
 --- /dev/null
 +++ b/server/tests/integration/test_api_submission.py
 @@ -0,0 +1,43 @@
@@ -3864,7 +3371,7 @@ index 00000000..4a8fbe6e
 +		return APITest().get_accounts()
 \ No newline at end of file
 diff --git a/server/tests/integration/test_final_submissions.py b/server/tests/integration/test_final_submissions.py
-index 4fffc81d..36bab3ca 100755
+index 4fffc81d97..36bab3cac1 100755
 --- a/server/tests/integration/test_final_submissions.py
 +++ b/server/tests/integration/test_final_submissions.py
 @@ -264,9 +264,11 @@ def test_set_different_backup_as_final_submission(self):

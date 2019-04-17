@@ -1,5 +1,5 @@
 diff --git a/doc/release/1.11.2-notes.rst b/doc/release/1.11.2-notes.rst
-index 99fa8946c7b..f15e732e52e 100644
+index 99fa8946c7..f15e732e52 100755
 --- a/doc/release/1.11.2-notes.rst
 +++ b/doc/release/1.11.2-notes.rst
 @@ -5,12 +5,12 @@ Numpy 1.11.2 supports Python 2.6 - 2.7 and 3.2 - 3.5. It fixes bugs and
@@ -25,39 +25,8 @@ index 99fa8946c7b..f15e732e52e 100644
  - #7972 BUG: MSVCCompiler grows 'lib' & 'include' env strings exponentially.
 +- #8005 BLD: Remove __NUMPY_SETUP__ from builtins at end of setup.py.
 +- #8010 MAINT: Remove leftover imp module imports.
-diff --git a/doc/release/1.12.0-notes.rst b/doc/release/1.12.0-notes.rst
-index f7f3b4e555e..dbd4c3ac652 100644
---- a/doc/release/1.12.0-notes.rst
-+++ b/doc/release/1.12.0-notes.rst
-@@ -180,10 +180,10 @@ Add a hook in ``numpy/__init__.py`` to import a ``numpy/_distributor_init.py``
- file that will remain empty (bar a docstring) in the standard numpy source,
- but that can be overwritten by people making binary distributions of numpy.
- 
--New nanfunctions ``nancumsum`` and ``nancumprod`` added
--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--Nanfunctions ``nancumsum`` and ``nancumprod`` have been added to
--compute ``cumsum`` and ``cumprod`` by ignoring nans.
-+New nanfunctions ``nancov``, ``nancumsum``, and ``nancumprod`` added
-+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-+Nanfunctions ``nancov``, ``nancumsum``, and ``nancumprod`` have been added to
-+compute ``cov``, ``cumsum``, and ``cumprod`` by ignoring nans.
- 
- ``np.interp`` can now interpolate complex values
- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-diff --git a/doc/source/reference/routines.statistics.rst b/doc/source/reference/routines.statistics.rst
-index d359541aa62..cfc1425bcbc 100644
---- a/doc/source/reference/routines.statistics.rst
-+++ b/doc/source/reference/routines.statistics.rst
-@@ -43,6 +43,7 @@ Correlating
-    corrcoef
-    correlate
-    cov
-+   nancov
- 
- Histograms
- ----------
 diff --git a/doc/source/user/c-info.ufunc-tutorial.rst b/doc/source/user/c-info.ufunc-tutorial.rst
-index ab97846a85f..f064fbcc949 100644
+index ab97846a85..f064fbcc94 100755
 --- a/doc/source/user/c-info.ufunc-tutorial.rst
 +++ b/doc/source/user/c-info.ufunc-tutorial.rst
 @@ -70,7 +70,7 @@ Example Non-ufunc extension
@@ -88,7 +57,7 @@ index ab97846a85f..f064fbcc949 100644
           *
           * Details explaining the Python-C API can be found under
 diff --git a/numpy/core/setup.py b/numpy/core/setup.py
-index bec35848042..0b055dba460 100644
+index bec3584804..0b055dba46 100755
 --- a/numpy/core/setup.py
 +++ b/numpy/core/setup.py
 @@ -1,6 +1,5 @@
@@ -99,7 +68,7 @@ index bec35848042..0b055dba460 100644
  import sys
  import pickle
 diff --git a/numpy/distutils/fcompiler/gnu.py b/numpy/distutils/fcompiler/gnu.py
-index fd49db49216..1de658afb2f 100644
+index fd49db4921..1de658afb2 100755
 --- a/numpy/distutils/fcompiler/gnu.py
 +++ b/numpy/distutils/fcompiler/gnu.py
 @@ -364,7 +364,7 @@ def _can_target(cmd, arch):
@@ -112,373 +81,20 @@ index fd49db49216..1de658afb2f 100644
          d = os.path.dirname(filename)
          output = os.path.splitext(filename)[0] + ".o"
 diff --git a/numpy/lib/nanfunctions.py b/numpy/lib/nanfunctions.py
-index 7f7aea9bc04..352be0a546a 100644
+index fc7d071f54..352be0a546 100755
 --- a/numpy/lib/nanfunctions.py
 +++ b/numpy/lib/nanfunctions.py
-@@ -17,6 +17,7 @@
- - `nanstd` -- standard deviation of non-NaN values
- - `nanmedian` -- median of non-NaN values
- - `nanpercentile` -- qth percentile of non-NaN values
-+- `nancov` -- covariance matrix of non-Nan values
+@@ -1643,7 +1643,7 @@ def nancov(m, y=None, rowvar=1, ddof=1, fweights=None, aweights=None,
  
- """
- from __future__ import division, absolute_import, print_function
-@@ -29,7 +30,7 @@
- __all__ = [
-     'nansum', 'nanmax', 'nanmin', 'nanargmax', 'nanargmin', 'nanmean',
-     'nanmedian', 'nanpercentile', 'nanvar', 'nanstd', 'nanprod',
--    'nancumsum', 'nancumprod'
-+    'nancumsum', 'nancumprod', 'nancov'
-     ]
- 
- 
-@@ -1425,3 +1426,243 @@ def nanstd(a, axis=None, dtype=None, out=None, ddof=0, keepdims=np._NoValue):
-     else:
-         std = var.dtype.type(np.sqrt(var))
-     return std
-+
-+
-+def nancov(m, y=None, rowvar=1, ddof=1, fweights=None, aweights=None,
-+           pairwise=False):
-+    """
-+    Estimate a covariance matrix, given data, ignoring observations containing
-+    NaN values.
-+
-+    Covariance indicates the level to which two variables vary together.
-+    If we examine N-dimensional samples, :math:`X = [x_1, x_2, ... x_N]^T`,
-+    then the covariance matrix element :math:`C_{ij}` is the covariance of
-+    :math:`x_i` and :math:`x_j`. The element :math:`C_{ii}` is the variance
-+    of :math:`x_i`.
-+
-+    Parameters
-+    ----------
-+    m : array_like
-+        A 1-D or 2-D array containing multiple variables and observations.
-+        Each row of `m` represents a variable, and each column a single
-+        observation of all those variables. Also see `rowvar` below.
-+    y : array_like, optional
-+        An additional set of variables and observations. `y` has the same
-+        form as that of `m`.
-+    rowvar : int, optional
-+        If `rowvar` is non-zero (default), then each row represents a
-+        variable, with observations in the columns. Otherwise, the relationship
-+        is transposed: each column represents a variable, while the rows
-+        contain observations.
-+    ddof : int, optional
-+        Normalization is by ``(N - ddof)``, where ``N`` is
-+        the number of observations. The default value is ``1``.
-+    fweights : array_like, int, optional
-+        1-D array of integer freguency weights; the number of times each
-+        observation vector should be repeated.
-+    aweights : array_like, optional
-+        1-D array of observation vector weights. These relative weights are
-+        typically large for observations considered "important" and smaller for
-+        observations considered less "important". If ``ddof=0`` the array of
-+        weights can be used to assign probabilities to observation vectors.
-+    pairwise : bool, optional
-+        If ``False`` then a NaN value causes that observation to be eliminated
-+        across all variables.  If ``True`` then each pair of variables is
-+        compared separately.  Observations with NaN values in the pair are
-+        removed, but do not affect other pairs.  The returned covariance matrix
-+        may no longer be positive semi-definite in this case.  False is
-+        equivalent to the ``na.or.complete`` use flag for cov in R, while
-+        ``True`` is equivalent to ``pairwise.complete.obs``.
-+
-+    Returns
-+    -------
-+    out : ndarray
-+        The covariance matrix of the variables.
-+
-+    See Also
-+    --------
-+    corrcoef : Normalized covariance matrix
-+
-+    Examples
-+    --------
-+    Consider two variables, :math:`x_0` and :math:`x_1`, which
-+    correlate perfectly, but in opposite directions:
-+
-+    >>> x = np.array([[0, 2], [1, 1], [np.nan, 1], [2, 0]]).T
-+    >>> x
-+    array([[0, 1, nan, 2],
-+           [2, 1,   1, 0]])
-+
-+    Note how :math:`x_0` increases while :math:`x_1` decreases. The covariance
-+    matrix shows this clearly:
-+
-+    >>> np.nancov(x)
-+    array([[ 1., -1.],
-+           [-1.,  1.]])
-+
-+    Note that element :math:`C_{0,1}`, which shows the correlation between
-+    :math:`x_0` and :math:`x_1`, is negative.
-+
-+    Further, note how `x` and `y` are combined:
-+
-+    >>> x = [-2.1, -1,  np.nan, 4.3]
-+    >>> y = [3,  1.1,  1, 0.12]
-+    >>> X = np.vstack((x,y))
-+    >>> print np.nancov(X)
-+    [[ 11.71        -4.286     ]
-+     [ -4.286        2.14413333]]
-+    >>> print np.nancov(x, y)
-+    [[ 11.71        -4.286     ]
-+     [ -4.286        2.14413333]]
-+    >>> print np.nancov(x)
-+    11.71
-+
-+    Finally it can be seen how the pairwise option handles nan values
-+    differently than when when the pairwise option is disabled (default).
-+
-+    >>> X = np.array([[ 1.,  2.,     10., np.nan,   5.],
-+    ...               [ 4., 10.,     13., np.nan,   8.],
-+    ...               [-2., -4., np.nan, np.nan, -10.]])
-+    >>> np.nancov(X)
-+    array([[  4.33333333,   2.66666667,  -8.66666667],
-+           [  2.66666667,   9.33333333,  -5.33333333],
-+           [ -8.66666667,  -5.33333333,  17.33333333]])
-+    >>> np.nancov(X, pairwise=True)
-+    array([[ 16.33333333,  12.16666667,  -8.66666667],
-+           [ 12.16666667,  14.25      ,  -5.33333333],
-+           [ -8.66666667,  -5.33333333,  17.33333333]])
-+    """
-+    # Check inputs
-+    if ddof is not None and ddof != int(ddof):
-+        raise ValueError(
-+            "ddof must be integer")
-+
-+    m = np.asarray(m)
-+    if m.ndim > 2:
-+        raise ValueError("m has more than 2 dimensions")
-+
-+    if y is None:
-+        dtype = np.result_type(m, np.float64)
-+    else:
-+        y = np.asarray(y)
-+        if y.ndim > 2:
-+            raise ValueError("y has more than 2 dimensions")
-+        dtype = np.result_type(m, y, np.float64)
-+    X = np.array(m, ndmin=2, dtype=dtype)
-+
-+    if X.shape[0] == 1:
-+        rowvar = 1
-+    if rowvar:
-+        axis = 0
-+    else:
-+        axis = 1
-+
-+    if y is not None:
-+        y = np.array(y, copy=False, ndmin=2, dtype=dtype)
-+        X = np.concatenate((X, y), axis)
-+
-+    if axis:
-+        n = X.shape[0]
-+    else:
-+        n = X.shape[1]
-+
-+    # Get the product of frequencies and weights
-+    if fweights is not None:
-+        fweights = np.asarray(fweights, dtype=np.float64)
-+        if not np.all(fweights == np.around(fweights)):
-+            raise TypeError(
-+                "fweights must be integer")
-+        if fweights.ndim > 1:
-+            raise RuntimeError(
-+                "cannot handle multidimensional fweights")
-+        if fweights.shape[0] != n:
-+            raise RuntimeError(
-+                "incompatible numbers of samples and fweights")
-+        if any(fweights < 0):
-+            raise ValueError(
-+                "fweights cannot be negative")
-+    if aweights is not None:
-+        aweights = np.asarray(aweights, dtype=np.float64)
-+        if aweights.ndim > 1:
-+            raise RuntimeError(
-+                "cannot handle multidimensional aweights")
-+        if aweights.shape[0] != n:
-+            raise RuntimeError(
-+                "incompatible numbers of samples and aweights")
-+        if any(aweights < 0):
-+            raise ValueError(
-+                "aweights cannot be negative")
-+
-+    if pairwise:
-+        w = None
-+        if fweights is not None:
-+            w = fweights
-+        if aweights is not None:
-+            if w is None:
-+                w = aweights
-+            else:
-+                w *= aweights
-+
-+        nan_vals = np.isnan(X)
-+        if axis:
-+            one_array = np.ones(X.T.shape)
-+            one_array[nan_vals.T] = np.nan
-+        else:
-+            one_array = np.ones(X.shape)
-+            one_array[nan_vals] = np.nan
-+        # each pair may cause a unique mean for the variable, so we create
-+        # pair_array which has the correctly nan-ed values.
-+        if axis:
-+            pair_array = X[:, None, :].swapaxes(0, 2) * one_array[None, :, :]
-+        else:
-+            pair_array = X[:, None, :] * one_array[None, :, :]
-+
-+        if w is None:
-+            pair_means = nanmean(pair_array, axis=2)
-+            pair_w_sum = nansum(~np.isnan(pair_array), axis=2)
-+        else:
-+            pair_w = w[None, None, :] * ~np.isnan(pair_array)
-+            pair_w_sum = np.nansum(pair_w, axis=2)
-+            pair_means = nansum(w[None, None, :] * pair_array,
-+                                axis=2) / pair_w_sum
-+        pair_array -= pair_means[:, :, None]
-+
-+        if w is None:
-+            dotted = pair_array * pair_array.swapaxes(0, 1).conj()
-+        else:
-+            dotted = pair_array * \
-+                (w[None, None, :] * pair_array).swapaxes(0, 1).conj()
-+
-+        c = nansum(dotted, axis=2)
-+
-+        if aweights is None:
-+            fact = pair_w_sum - ddof
-+        else:
-+            ddof_weight = nansum(aweights[None, None, :] * pair_w, axis=2)
-+            fact = pair_w_sum - ddof * ddof_weight / pair_w_sum
-+
-+        if np.any(fact <= 0):
-+            warnings.warn("Degrees of freedom <= 0 for a slice",
+         if np.any(fact <= 0):
+             warnings.warn("Degrees of freedom <= 0 for a slice",
+-                          RuntimeWarning)
 +                          RuntimeWarning, stacklevel=2)
-+            fact[fact <= 0] = 0.0
-+
-+        c *= 1. / fact.astype(np.float64)
-+        return c
-+    else:
-+        # "Complete" version for handling nans where a nan value in any
-+        # variable causes the observation to be removed from all variables.
-+
-+        # Find observations with nans
-+        nan_obvs = np.any(np.isnan(X), axis=axis)
-+
-+        if fweights is not None:
-+            fweights = fweights[~nan_obvs]
-+        if aweights is not None:
-+            aweights = aweights[~nan_obvs]
-+
-+        if axis:
-+            X_nonan = X[~nan_obvs, :]
-+        else:
-+            X_nonan = X[:, ~nan_obvs]
-+        return np.cov(X_nonan, rowvar=rowvar, ddof=ddof, fweights=fweights,
-+                      aweights=aweights)
-diff --git a/numpy/lib/tests/test_nanfunctions.py b/numpy/lib/tests/test_nanfunctions.py
-index 06c0953b5df..8607db4ab38 100644
---- a/numpy/lib/tests/test_nanfunctions.py
-+++ b/numpy/lib/tests/test_nanfunctions.py
-@@ -5,7 +5,8 @@
- import numpy as np
- from numpy.testing import (
-     run_module_suite, TestCase, assert_, assert_equal, assert_almost_equal,
--    assert_no_warnings, assert_raises, assert_array_equal, suppress_warnings
-+    assert_no_warnings, assert_raises, assert_array_equal, suppress_warnings,
-+    assert_warns, assert_allclose
-     )
+             fact[fact <= 0] = 0.0
  
- 
-@@ -842,5 +843,86 @@ def test_multiple_percentiles(self):
-         assert_equal(np.nanpercentile(megamat, perc, axis=(1, 2)).shape, (2, 3, 6))
- 
- 
-+class TestNanFunctions_Cov(TestCase):
-+    x = np.array([[1, 2, 10, 3]])
-+    y = np.array([[0, 1, np.nan, 0]])
-+    X = np.vstack((x, y))
-+    X_no_nan_complete = X[:, (0, 1, 3)]
-+
-+    fweights = np.array([1, 2, 3, 1])
-+    aweights = np.array([0.9, 1, 0.8, 1.1])
-+    mask = ~np.isnan(y).reshape(-1,)
-+    fweights_no_nan_complete = fweights[mask]
-+    aweights_no_nan_complete = aweights[mask]
-+
-+    def test_basic(self):
-+        assert_equal(np.nancov(self.X), np.cov(self.X_no_nan_complete))
-+        assert_equal(np.nancov(self.X.T, rowvar=0),
-+                     np.cov(self.X_no_nan_complete))
-+
-+    def test_xy(self):
-+        assert_equal(np.nancov(self.x, self.y),
-+                     np.cov(self.X_no_nan_complete))
-+
-+    def test_complex(self):
-+        x = np.array([[1, 2, 10, 3], [1j, 2j, np.nan, 3j]])
-+        assert_allclose(np.nancov(x), np.array([[1., -1.j], [1.j, 1.]]))
-+
-+    def test_weights(self):
-+        val = np.nancov(self.X,
-+                        fweights=self.fweights,
-+                        aweights=self.aweights)
-+        nonan_val = np.cov(self.X_no_nan_complete,
-+                           fweights=self.fweights_no_nan_complete,
-+                           aweights=self.aweights_no_nan_complete)
-+        assert_equal(val, nonan_val)
-+
-+    def test_empty(self):
-+        with warnings.catch_warnings(record=True):
-+            warnings.simplefilter('always', RuntimeWarning)
-+            assert_array_equal(np.nancov(np.array([])), np.nan)
-+            assert_array_equal(np.nancov(np.array([]).reshape(0, 2)),
-+                               np.array([]).reshape(0, 0))
-+            assert_array_equal(np.nancov(np.array([]).reshape(2, 0)),
-+                               np.array([[np.nan, np.nan], [np.nan, np.nan]]))
-+
-+    def test_wrong_ddof(self):
-+        x = np.array([[0, 2], [np.nan, 1], [2, 0]]).T
-+        with warnings.catch_warnings(record=True) as w:
-+            warnings.simplefilter('always')
-+            assert_(np.isinf(np.nancov(x, ddof=3)).all())
-+            assert_(len(w) == 2)
-+            # Degree of freedom <= 0
-+            assert_(issubclass(w[0].category, RuntimeWarning))
-+            # Divide by zero error
-+            assert_(issubclass(w[1].category, RuntimeWarning))
-+
-+    def test_pairwise(self):
-+        x = np.array([[ 1.,  2.,     10., np.nan,   5.],
-+                      [ 4., 10.,     13., np.nan,   8.],
-+                      [-2., -4., np.nan, np.nan, -10.]])
-+        fweights = np.array([1, 2, 3, 1, 1])
-+        aweights = np.array([0.9, 1.0, 0.8, 1.1, 1.0])
-+        val_weight = np.zeros((3, 3))
-+        val = np.zeros((3, 3))
-+        for ii in range(3):
-+            for jj in range(ii, 3):
-+                val[ii, jj] = np.nancov(x[ii, :], x[jj, :])[0, 1]
-+                val[jj, ii] = val[ii, jj]
-+                val_weight[ii, jj] = np.nancov(x[ii, :], x[jj, :],
-+                                               fweights=fweights,
-+                                               aweights=aweights)[0, 1]
-+                val_weight[jj, ii] = val_weight[ii, jj]
-+        assert_allclose(val, np.nancov(x, pairwise=True))
-+        assert_allclose(val_weight, np.nancov(x,
-+                        fweights=fweights,
-+                        aweights=aweights,
-+                        pairwise=True))
-+        assert_allclose(val_weight, np.nancov(x.T,
-+                        rowvar=0,
-+                        fweights=fweights,
-+                        aweights=aweights,
-+                        pairwise=True))
-+
- if __name__ == "__main__":
-     run_module_suite()
+         c *= 1. / fact.astype(np.float64)
 diff --git a/numpy/ma/core.py b/numpy/ma/core.py
-index 1bf41b3d812..f83e2adcc36 100644
+index 1bf41b3d81..f83e2adcc3 100755
 --- a/numpy/ma/core.py
 +++ b/numpy/ma/core.py
 @@ -26,6 +26,11 @@
@@ -521,7 +137,7 @@ index 1bf41b3d812..f83e2adcc36 100644
              return np.full(out_dims, items, dtype=np.intp)
  
 diff --git a/numpy/ma/extras.py b/numpy/ma/extras.py
-index a05ea476b9d..0d5c73e7e46 100644
+index a05ea476b9..0d5c73e7e4 100755
 --- a/numpy/ma/extras.py
 +++ b/numpy/ma/extras.py
 @@ -708,34 +708,37 @@ def _median(a, axis=None, out=None, overwrite_input=False):
@@ -571,7 +187,7 @@ index a05ea476b9d..0d5c73e7e46 100644
      if np.issubdtype(asorted.dtype, np.inexact):
          # avoid inf / x = masked
 diff --git a/numpy/ma/tests/test_core.py b/numpy/ma/tests/test_core.py
-index 7cac90628bf..338a6d0dc9d 100644
+index 7cac90628b..338a6d0dc9 100755
 --- a/numpy/ma/tests/test_core.py
 +++ b/numpy/ma/tests/test_core.py
 @@ -4364,6 +4364,7 @@ def test_count(self):
@@ -583,7 +199,7 @@ index 7cac90628bf..338a6d0dc9d 100644
          assert_equal(count(a, axis=(0,1), keepdims=True), 6*ones((1,1,4)))
          assert_equal(count(a, axis=-2), 3*ones((2,4)))
 diff --git a/numpy/ma/tests/test_extras.py b/numpy/ma/tests/test_extras.py
-index 6d56d4dc6c9..27fac3d635a 100644
+index 6d56d4dc6c..27fac3d635 100755
 --- a/numpy/ma/tests/test_extras.py
 +++ b/numpy/ma/tests/test_extras.py
 @@ -10,6 +10,7 @@
@@ -633,7 +249,7 @@ index 6d56d4dc6c9..27fac3d635a 100644
          x = array(np.arange(5), mask=True)
          assert_equal(np.ma.median(x), np.ma.masked)
 diff --git a/runtests.py b/runtests.py
-index 9008950e9c0..7be76e46de6 100755
+index 9008950e9c..7be76e46de 100755
 --- a/runtests.py
 +++ b/runtests.py
 @@ -60,7 +60,6 @@
@@ -645,7 +261,7 @@ index 9008950e9c0..7be76e46de6 100755
  
  ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 diff --git a/setup.py b/setup.py
-index 981746ff941..66499245159 100755
+index 981746ff94..6649924515 100755
 --- a/setup.py
 +++ b/setup.py
 @@ -388,3 +388,8 @@ def setup_package():

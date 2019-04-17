@@ -1,5 +1,5 @@
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
-index 3c313e4c7e..336088c3dd 100644
+index 3c313e4c7e..336088c3dd 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/CookieShouldNotContainSensitiveDataCheck.java
 @@ -21,14 +21,17 @@
@@ -82,44 +82,8 @@ index 3c313e4c7e..336088c3dd 100644
 +        && !(tree.is(Tree.Kind.STRING_LITERAL) && StringUtils.isBlank(LiteralUtils.trimQuotes(((LiteralTree) tree).value())));
    }
  }
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java
-index 83f8e4a973..bac76601d4 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/security/LDAPDeserializationCheck.java
-@@ -39,7 +39,7 @@
-   protected List<MethodMatcher> getMethodInvocationMatchers() {
-     return Arrays.asList(
-       MethodMatcher.create().typeDefinition(TypeCriteria.subtypeOf(CLASS_NAME)).name("<init>").withAnyParameters(),
--      MethodMatcher.create().typeDefinition(TypeCriteria.subtypeOf(CLASS_NAME)).name("setReturningObjFlag").withAnyParameters());
-+      MethodMatcher.create().typeDefinition(TypeCriteria.subtypeOf(CLASS_NAME)).name("setReturningObjFlag").parameters("boolean"));
-   }
-   @Override
-   protected void onConstructorFound(NewClassTree newClassTree) {
-@@ -52,9 +52,6 @@ protected void onConstructorFound(NewClassTree newClassTree) {
- 
-   @Override
-   protected void onMethodInvocationFound(MethodInvocationTree methodTree) {
--    if (methodTree.arguments().size() != 1) {
--      return;
--    }
-     ExpressionTree setValue = methodTree.arguments().get(0);
-     reportIfTrue(setValue);
-   }
-diff --git a/java-checks/src/test/files/checks/security/AESAlgorithmCheck.java b/java-checks/src/test/files/checks/security/AESAlgorithmCheck.java
-index 74cd78367e..9f14091813 100644
---- a/java-checks/src/test/files/checks/security/AESAlgorithmCheck.java
-+++ b/java-checks/src/test/files/checks/security/AESAlgorithmCheck.java
-@@ -17,6 +17,8 @@ public void foo(java.util.Properties props) {
-     Cipher.getInstance(algo); // Noncompliant
- 
-     Cipher.getInstance("AES" + "/ECB/NoPadding"); // Noncompliant
-+    Cipher.getInstance(null);
-+    Cipher.getInstance("");
-   }
- 
-   abstract java.security.Provider getProvider();
 diff --git a/java-checks/src/test/files/checks/security/CookieShouldNotContainSensitiveDataCheck.java b/java-checks/src/test/files/checks/security/CookieShouldNotContainSensitiveDataCheck.java
-index c275ea5295..7c5b165ff5 100644
+index c275ea5295..7c5b165ff5 100755
 --- a/java-checks/src/test/files/checks/security/CookieShouldNotContainSensitiveDataCheck.java
 +++ b/java-checks/src/test/files/checks/security/CookieShouldNotContainSensitiveDataCheck.java
 @@ -9,12 +9,13 @@
@@ -179,28 +143,8 @@ index c275ea5295..7c5b165ff5 100644
 +    new SavedCookie("n", "   ", "c", "d", 1, "p", true, 1);
    }
  }
-diff --git a/java-checks/src/test/files/checks/security/LDAPAuthenticatedConnectionCheck.java b/java-checks/src/test/files/checks/security/LDAPAuthenticatedConnectionCheck.java
-index 5cd638e7c0..aac6e3b750 100644
---- a/java-checks/src/test/files/checks/security/LDAPAuthenticatedConnectionCheck.java
-+++ b/java-checks/src/test/files/checks/security/LDAPAuthenticatedConnectionCheck.java
-@@ -2,6 +2,7 @@
- import java.util.Map;
- import java.util.concurrent.ConcurrentHashMap;
- import javax.naming.Context;
-+import javax.xml.XMLConstants;
- 
- class S4433 {
- 
-@@ -13,6 +14,7 @@ void method1() {
-   void method2() {
-     Hashtable<String, String> env = new Hashtable<>();
-     env.put(Context.SECURITY_AUTHENTICATION, "none"); // Noncompliant
-+    env.put(XMLConstants.FEATURE_SECURE_PROCESSING, "none");
-   }
- 
-   void method3(java.util.Properties props) {
 diff --git a/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java b/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
-index 58a50dcf15..eb47d4151c 100644
+index 58a50dcf15..eb47d4151c 100755
 --- a/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
 +++ b/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
 @@ -136,3 +136,7 @@ DocumentBuilderFactory no_property() {
@@ -212,7 +156,7 @@ index 58a50dcf15..eb47d4151c 100644
 +  XMLInputFactory factory = XMLInputFactory.newInstance();
 +}
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
-index fb43e56143..d5f2b71f8c 100644
+index fb43e56143..d5f2b71f8c 100755
 --- a/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
 +++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
 @@ -19,6 +19,7 @@
@@ -267,30 +211,60 @@ index fb43e56143..d5f2b71f8c 100644
      return (ClassTree) tree.types().get(0);
    }
 diff --git a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
-index 8408e3aa5b..7edb239a9c 100644
+index 0b51a6d41c..7edb239a9c 100755
 --- a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
-@@ -62,6 +62,9 @@ public static void setUp() {
+@@ -49,7 +49,7 @@
+ 
+   private final ActionParser<Tree> p = JavaParser.createParser();
+ 
+-  private static List<VariableTree> variables;
++  static List<VariableTree> variables;
+ 
+   @BeforeClass
+   public static void setUp() {
+@@ -62,6 +62,44 @@ public static void setUp() {
        .collect(Collectors.toList());
    }
  
 +  /**
 +   * The variables below are used in the setUp method above to create the 'variables' list which is used in tests
 +   */
-   int x1 = 42;
-   int x2 = -7;
-   int x3 = +3;
-@@ -184,11 +187,13 @@ public void is_0xff() {
-     assertThat(LiteralUtils.is0xff(tree)).isFalse();
-   }
- 
-+  @Test
-   public void isTrue_withNonBooleanLiteral_returnsFalse() {
-     ExpressionTree tree = getFirstExpression("void foo(java.util.Properties props){ props.setProperty(\"myKey\", \"myValue\"); }");
-     assertThat(LiteralUtils.isTrue(tree)).isFalse();
-   }
- 
-+  @Test
-   public void isFalse_withNonBooleanLiteral_returnsFalse() {
-     ExpressionTree tree = getFirstExpression("void foo(java.util.Properties props){ props.setProperty(\"myKey\", \"myValue\"); }");
-     assertThat(LiteralUtils.isFalse(tree)).isFalse();
++  int x1 = 42;
++  int x2 = -7;
++  int x3 = +3;
++  int x4 = 42 + x1;
++  int x5 = -x1;
++  int x6 = 0xff;
++  int x7 = 0b0100;
++  int x8 = 56_78;
++  int x9 = 0XFF;
++  int x10 = 0B1100110;
++
++  long y1 = 42;
++  long y2 = 42L;
++  long y3 = -7;
++  long y4 = -7l;
++  long y5 = +3;
++  long y6 = +3L;
++  long y7 = 42 + y1;
++  long y8 = -y1;
++  long y9 = 0xFFL;
++  long y10 = 0xFFFFFFFFFFFFFFFFL;
++  long y11 = 0xFFFFFFFFFFFFFFFEL;
++  long y12 = 0x8000000000000000L;
++  long y13 = 0x7FFFFFFFFFFFFFFFL;
++  long y14 = 0x7FFF_FFFF_FFFF_FFFFL;
++  long y15 = 0b11010010_01101001_10010100_10010010;
++  long y16 = 100_10;
++  long y17 = 0XFFL;
++  long y18 = 0B1100110L;
++
++  String s1 = "";
++  String s2 = " ";
++  String s3 = "not_empty";
++  String s4 = "\n";
++
+   @Test
+   public void private_constructor() throws Exception {
+     Constructor constructor = LiteralUtils.class.getDeclaredConstructor();

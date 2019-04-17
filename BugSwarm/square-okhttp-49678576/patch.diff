@@ -1,52 +1,13 @@
-diff --git a/okhttp-tests/src/test/java/com/squareup/okhttp/ConnectionSpecTest.java b/okhttp-tests/src/test/java/com/squareup/okhttp/ConnectionSpecTest.java
-index df1e58fa7..4ffc2d940 100644
---- a/okhttp-tests/src/test/java/com/squareup/okhttp/ConnectionSpecTest.java
-+++ b/okhttp-tests/src/test/java/com/squareup/okhttp/ConnectionSpecTest.java
-@@ -166,6 +166,16 @@ public void tls_explicitCiphers() throws Exception {
-     assertEquals(expectedCipherSet, expectedCipherSet);
-   }
- 
-+  @Test
-+  public void customCiphers() throws Exception {
-+    // Supporting arbitrary input strings allows users to enable suites and versions that are not
-+    // yet known to the library, but are supported by the platform.
-+    ConnectionSpec tlsSpec = new ConnectionSpec.Builder(true)
-+        .cipherSuites("MAGIC-CIPHER")
-+        .tlsVersions("TLS9k")
-+        .build();
-+  }
-+
-   private static Set<String> createSet(String... values) {
-     return new LinkedHashSet<String>(Arrays.asList(values));
-   }
 diff --git a/okhttp/src/main/java/com/squareup/okhttp/ConnectionSpec.java b/okhttp/src/main/java/com/squareup/okhttp/ConnectionSpec.java
-index c075ecff9..2e8111443 100644
+index ffe8f55974..2e81114434 100755
 --- a/okhttp/src/main/java/com/squareup/okhttp/ConnectionSpec.java
 +++ b/okhttp/src/main/java/com/squareup/okhttp/ConnectionSpec.java
-@@ -219,7 +219,7 @@ private ConnectionSpec supportedSpec(SSLSocket sslSocket) {
-     private String[] tlsVersions;
-     private boolean supportsTlsExtensions;
- 
--    Builder(boolean tls) {
-+    public Builder(boolean tls) {
-       this.tls = tls;
-     }
- 
 @@ -242,7 +242,7 @@ public Builder cipherSuites(CipherSuite... cipherSuites) {
        return cipherSuites(strings);
      }
  
--    Builder cipherSuites(String[] cipherSuites) {
+-    public Builder cipherSuites(String[] cipherSuites) {
 +    public Builder cipherSuites(String... cipherSuites) {
        this.cipherSuites = cipherSuites; // No defensive copy.
-       return this;
-     }
-@@ -259,7 +259,7 @@ public Builder tlsVersions(TlsVersion... tlsVersions) {
-       return tlsVersions(strings);
-     }
- 
--    Builder tlsVersions(String... tlsVersions) {
-+    public Builder tlsVersions(String... tlsVersions) {
-       this.tlsVersions = tlsVersions; // No defensive copy.
        return this;
      }

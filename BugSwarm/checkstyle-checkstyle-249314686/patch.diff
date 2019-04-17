@@ -1,5 +1,5 @@
 diff --git a/pom.xml b/pom.xml
-index b6d65155f9..e4345df434 100644
+index 32fe889abc..e4345df434 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -205,7 +205,7 @@
@@ -11,524 +11,56 @@ index b6d65155f9..e4345df434 100644
      <maven.sevntu-checkstyle-check.checkstyle.version>8.0</maven.sevntu-checkstyle-check.checkstyle.version>
      <maven.versions.plugin.version>2.4</maven.versions.plugin.version>
      <java.version>1.8</java.version>
-@@ -1977,7 +1977,7 @@
-             <configuration>
-               <targetClasses>
-                 <param>com.puppycrawl.tools.checkstyle.AuditEventDefaultFormatter</param>
--                <param>com.puppycrawl.tools.checkstyle.ConfigurationLoader</param>
-+                <param>com.puppycrawl.tools.checkstyle.ConfigurationLoader*</param>
-                 <param>com.puppycrawl.tools.checkstyle.PackageNamesLoader</param>
-                 <param>com.puppycrawl.tools.checkstyle.DefaultConfiguration</param>
-                 <param>com.puppycrawl.tools.checkstyle.DefaultContext</param>
-@@ -1990,6 +1990,7 @@
-                 <param>com.puppycrawl.tools.checkstyle.Checker</param>
-                 <param>com.puppycrawl.tools.checkstyle.ant.*</param>
-                 <param>com.puppycrawl.tools.checkstyle.doclets.*</param>
-+                <param>com.puppycrawl.tools.checkstyle.ThreadModeSettings</param>
-               </targetClasses>
-               <targetTests>
-                 <param>com.puppycrawl.tools.checkstyle.AuditEventDefaultFormatterTest</param>
-@@ -2005,6 +2006,7 @@
-                 <param>com.puppycrawl.tools.checkstyle.CheckerTest</param>
-                 <param>com.puppycrawl.tools.checkstyle.ant.*</param>
-                 <param>com.puppycrawl.tools.checkstyle.doclets.*</param>
-+                <param>com.puppycrawl.tools.checkstyle.ThreadModeSettingsTest</param>
-               </targetTests>
-               <excludedMethods>
-                 <!-- till https://github.com/hcoles/pitest/issues/353 -->
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-index afc2c2b682..feebb1e8ca 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-@@ -103,6 +103,9 @@
-     /** Flags if modules with the severity 'ignore' should be omitted. */
-     private final boolean omitIgnoredModules;
- 
-+    /** The thread mode configuration. */
-+    private final ThreadModeSettings threadModeSettings;
-+
-     /** The Configuration that is being built. */
-     private Configuration configuration;
- 
-@@ -117,9 +120,26 @@
-     private ConfigurationLoader(final PropertyResolver overrideProps,
-                                 final boolean omitIgnoredModules)
-             throws ParserConfigurationException, SAXException {
-+        this(overrideProps, omitIgnoredModules, ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE);
-+    }
-+
-+    /**
-+     * Creates a new {@code ConfigurationLoader} instance.
-+     * @param overrideProps resolver for overriding properties
-+     * @param omitIgnoredModules {@code true} if ignored modules should be
-+     *         omitted
-+     * @param threadModeSettings the thread mode configuration
-+     * @throws ParserConfigurationException if an error occurs
-+     * @throws SAXException if an error occurs
-+     */
-+    private ConfigurationLoader(final PropertyResolver overrideProps,
-+                                final boolean omitIgnoredModules,
-+                                final ThreadModeSettings threadModeSettings)
-+            throws ParserConfigurationException, SAXException {
-         saxHandler = new InternalLoader();
-         overridePropsResolver = overrideProps;
-         this.omitIgnoredModules = omitIgnoredModules;
-+        this.threadModeSettings = threadModeSettings;
-     }
- 
-     /**
-@@ -162,6 +182,20 @@ public static Configuration loadConfiguration(String config,
-         return loadConfiguration(config, overridePropsResolver, false);
-     }
- 
-+    /**
-+     * Returns the module configurations in a specified file.
-+     * @param config location of config file, can be either a URL or a filename
-+     * @param overridePropsResolver overriding properties
-+     * @param threadModeSettings the thread mode configuration
-+     * @return the check configurations
-+     * @throws CheckstyleException if an error occurs
-+     */
-+    public static Configuration loadConfiguration(String config,
-+            PropertyResolver overridePropsResolver, ThreadModeSettings threadModeSettings)
-+            throws CheckstyleException {
-+        return loadConfiguration(config, overridePropsResolver, false, threadModeSettings);
-+    }
-+
-     /**
-      * Returns the module configurations in a specified file.
-      *
-@@ -175,11 +209,30 @@ public static Configuration loadConfiguration(String config,
-     public static Configuration loadConfiguration(String config,
-         PropertyResolver overridePropsResolver, boolean omitIgnoredModules)
-             throws CheckstyleException {
-+        return loadConfiguration(config, overridePropsResolver, omitIgnoredModules,
-+                ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE);
-+    }
-+
-+    /**
-+     * Returns the module configurations in a specified file.
-+     *
-+     * @param config location of config file, can be either a URL or a filename
-+     * @param overridePropsResolver overriding properties
-+     * @param omitIgnoredModules {@code true} if modules with severity
-+     *            'ignore' should be omitted, {@code false} otherwise
-+     * @param threadModeSettings the thread mode configuration
-+     * @return the check configurations
-+     * @throws CheckstyleException if an error occurs
-+     */
-+    public static Configuration loadConfiguration(String config,
-+            PropertyResolver overridePropsResolver,
-+            boolean omitIgnoredModules, ThreadModeSettings threadModeSettings)
-+            throws CheckstyleException {
-         // figure out if this is a File or a URL
-         final URI uri = CommonUtils.getUriByFilename(config);
-         final InputSource source = new InputSource(uri.toString());
-         return loadConfiguration(source, overridePropsResolver,
--                omitIgnoredModules);
-+                omitIgnoredModules, threadModeSettings);
-     }
- 
-     /**
-@@ -222,10 +275,31 @@ public static Configuration loadConfiguration(InputStream configStream,
-     public static Configuration loadConfiguration(InputSource configSource,
-             PropertyResolver overridePropsResolver, boolean omitIgnoredModules)
-             throws CheckstyleException {
-+        return loadConfiguration(configSource, overridePropsResolver,
-+                omitIgnoredModules, ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE);
-+    }
-+
-+    /**
-+     * Returns the module configurations from a specified input source.
-+     * Note that if the source does wrap an open byte or character
-+     * stream, clients are required to close that stream by themselves
-+     *
-+     * @param configSource the input stream to the Checkstyle configuration
-+     * @param overridePropsResolver overriding properties
-+     * @param omitIgnoredModules {@code true} if modules with severity
-+     *            'ignore' should be omitted, {@code false} otherwise
-+     * @param threadModeSettings the thread mode configuration
-+     * @return the check configurations
-+     * @throws CheckstyleException if an error occurs
-+     */
-+    public static Configuration loadConfiguration(InputSource configSource,
-+        PropertyResolver overridePropsResolver,
-+        boolean omitIgnoredModules, ThreadModeSettings threadModeSettings)
-+            throws CheckstyleException {
-         try {
-             final ConfigurationLoader loader =
-                 new ConfigurationLoader(overridePropsResolver,
--                                        omitIgnoredModules);
-+                                        omitIgnoredModules, threadModeSettings);
-             loader.parseInputSource(configSource);
-             return loader.configuration;
-         }
-@@ -411,9 +485,10 @@ public void startElement(String uri,
-                 throws SAXException {
-             if (qName.equals(MODULE)) {
-                 //create configuration
--                final String name = attributes.getValue(NAME);
-+                final String originalName = attributes.getValue(NAME);
-+                final String name = threadModeSettings.resolveName(originalName);
-                 final DefaultConfiguration conf =
--                    new DefaultConfiguration(name);
-+                    new DefaultConfiguration(name, threadModeSettings);
- 
-                 if (configuration == null) {
-                     configuration = conf;
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultConfiguration.java b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultConfiguration.java
-index 0e96dec780..8467b1b563 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultConfiguration.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultConfiguration.java
-@@ -48,12 +48,26 @@
-     /** The map containing custom messages. */
-     private final Map<String, String> messages = new HashMap<>();
- 
-+    /** The thread mode configuration. */
-+    private final ThreadModeSettings threadModeSettings;
-+
-     /**
-      * Instantiates a DefaultConfiguration.
-      * @param name the name for this DefaultConfiguration.
-      */
-     public DefaultConfiguration(String name) {
-+        this(name, ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE);
-+    }
-+
-+    /**
-+     * Instantiates a DefaultConfiguration.
-+     * @param name the name for this DefaultConfiguration.
-+     * @param threadModeSettings the thread mode configuration.
-+     */
-+    public DefaultConfiguration(String name,
-+        ThreadModeSettings threadModeSettings) {
-         this.name = name;
-+        this.threadModeSettings = threadModeSettings;
-     }
- 
-     @Override
-@@ -131,4 +145,12 @@ public void addMessage(String key, String value) {
-     public ImmutableMap<String, String> getMessages() {
-         return ImmutableMap.copyOf(messages);
-     }
-+
-+    /**
-+     * Gets the thread mode configuration.
-+     * @return the thread mode configuration.
-+     */
-+    public ThreadModeSettings getThreadModeSettings() {
-+        return threadModeSettings;
-+    }
- }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-index 8b2792ca2d..8032ce9759 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-@@ -127,12 +127,28 @@
-     /** Name for the option '--exclude-regexp'. */
-     private static final String OPTION_EXCLUDE_REGEXP_NAME = "exclude-regexp";
- 
-+    /** Name for the option '-C'. */
-+    private static final String OPTION_CAPITAL_C_NAME = "C";
-+
-+    /** Name for the option '--checker-threads-number'. */
-+    private static final String OPTION_CHECKER_THREADS_NUMBER_NAME = "checker-threads-number";
-+
-+    /** Name for the option '-W'. */
-+    private static final String OPTION_CAPITAL_W_NAME = "W";
-+
-+    /** Name for the option '--tree-walker-threads-number'. */
-+    private static final String OPTION_TREE_WALKER_THREADS_NUMBER_NAME =
-+        "tree-walker-threads-number";
-+
-     /** Name for 'xml' format. */
-     private static final String XML_FORMAT_NAME = "xml";
- 
-     /** Name for 'plain' format. */
-     private static final String PLAIN_FORMAT_NAME = "plain";
- 
-+    /** A string value of 1. */
-+    private static final String ONE_STRING_VALUE = "1";
-+
-     /** Don't create instance of this class, use {@link #main(String[])} method instead. */
-     private Main() {
-     }
-@@ -293,6 +309,12 @@ else if (cmdLine.hasOption(OPTION_C_NAME)) {
-                     result.add(String.format("Could not find file '%s'.", propertiesLocation));
-                 }
-             }
-+            verifyThreadsNumberParameter(cmdLine, result, OPTION_CAPITAL_C_NAME,
-+                "Checker threads number must be greater than zero",
-+                "Invalid Checker threads number");
-+            verifyThreadsNumberParameter(cmdLine, result, OPTION_CAPITAL_W_NAME,
-+                "TreeWalker threads number must be greater than zero",
-+                "Invalid TreeWalker threads number");
-         }
-         else {
-             result.add("Must specify a config XML file.");
-@@ -301,6 +323,34 @@ else if (cmdLine.hasOption(OPTION_C_NAME)) {
-         return result;
-     }
- 
-+    /**
-+     * Verifies threads number CLI parameter value.
-+     * @param cmdLine a command line
-+     * @param result a resulting list of errors
-+     * @param cliParameterName a CLI parameter name
-+     * @param mustBeGreaterThanZeroMessage a message which should be reported
-+     *                                     if the number of threads is less than or equal to zero
-+     * @param invalidNumberMessage a message which should be reported if the passed value
-+     *                             is not a valid number
-+     */
-+    private static void verifyThreadsNumberParameter(CommandLine cmdLine, List<String> result,
-+        String cliParameterName, String mustBeGreaterThanZeroMessage,
-+        String invalidNumberMessage) {
-+        if (cmdLine.hasOption(cliParameterName)) {
-+            final String checkerThreadsNumberStr =
-+                cmdLine.getOptionValue(cliParameterName);
-+            if (CommonUtils.isInt(checkerThreadsNumberStr)) {
-+                final int checkerThreadsNumber = Integer.parseInt(checkerThreadsNumberStr);
-+                if (checkerThreadsNumber < 1) {
-+                    result.add(mustBeGreaterThanZeroMessage);
-+                }
-+            }
-+            else {
-+                result.add(invalidNumberMessage);
-+            }
-+        }
-+    }
-+
-     /**
-      * Do execution of CheckStyle based on Command line options.
-      * @param commandLine command line object
-@@ -382,6 +432,12 @@ private static CliOptions convertCliToPojo(CommandLine cmdLine, List<File> files
-         conf.propertiesLocation = cmdLine.getOptionValue(OPTION_P_NAME);
-         conf.files = filesToProcess;
-         conf.executeIgnoredModules = cmdLine.hasOption(OPTION_EXECUTE_IGNORED_MODULES_NAME);
-+        final String checkerThreadsNumber = cmdLine.getOptionValue(
-+                OPTION_CAPITAL_C_NAME, ONE_STRING_VALUE);
-+        conf.checkerThreadsNumber = Integer.parseInt(checkerThreadsNumber);
-+        final String treeWalkerThreadsNumber = cmdLine.getOptionValue(
-+                OPTION_CAPITAL_W_NAME, ONE_STRING_VALUE);
-+        conf.treeWalkerThreadsNumber = Integer.parseInt(treeWalkerThreadsNumber);
-         return conf;
-     }
- 
-@@ -408,9 +464,12 @@ private static int runCheckstyle(CliOptions cliOptions)
-         }
- 
-         // create a configuration
-+        final ThreadModeSettings multiThreadModeSettings =
-+                new ThreadModeSettings(
-+                        cliOptions.checkerThreadsNumber, cliOptions.treeWalkerThreadsNumber);
-         final Configuration config = ConfigurationLoader.loadConfiguration(
-                 cliOptions.configLocation, new PropertiesExpander(props),
--                !cliOptions.executeIgnoredModules);
-+                !cliOptions.executeIgnoredModules, multiThreadModeSettings);
- 
-         // create a listener for output
-         final AuditListener listener = createListener(cliOptions.format, cliOptions.outputLocation);
-@@ -634,6 +693,10 @@ private static Options buildOptions() {
-                 "Regular expression of directory to exclude from CheckStyle");
-         options.addOption(OPTION_EXECUTE_IGNORED_MODULES_NAME, false,
-                 "Allows ignored modules to be run.");
-+        options.addOption(OPTION_CAPITAL_C_NAME, OPTION_CHECKER_THREADS_NUMBER_NAME, true,
-+                "(experimental) The number of Checker threads (must be greater than zero)");
-+        options.addOption(OPTION_CAPITAL_W_NAME, OPTION_TREE_WALKER_THREADS_NUMBER_NAME, true,
-+                "(experimental) The number of TreeWalker threads (must be greater than zero)");
-         return options;
-     }
- 
-@@ -651,5 +714,9 @@ private static Options buildOptions() {
-         private List<File> files;
-         /** Switch whether to execute ignored modules or not. */
-         private boolean executeIgnoredModules;
-+        /** The checker threads number. */
-+        private int checkerThreadsNumber;
-+        /** The tree walker threads number. */
-+        private int treeWalkerThreadsNumber;
-     }
- }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ThreadModeSettings.java b/src/main/java/com/puppycrawl/tools/checkstyle/ThreadModeSettings.java
-new file mode 100644
-index 0000000000..a401267d98
---- /dev/null
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/ThreadModeSettings.java
-@@ -0,0 +1,99 @@
-+////////////////////////////////////////////////////////////////////////////////
-+// checkstyle: Checks Java source code for adherence to a set of rules.
-+// Copyright (C) 2001-2017 the original author or authors.
-+//
-+// This library is free software; you can redistribute it and/or
-+// modify it under the terms of the GNU Lesser General Public
-+// License as published by the Free Software Foundation; either
-+// version 2.1 of the License, or (at your option) any later version.
-+//
-+// This library is distributed in the hope that it will be useful,
-+// but WITHOUT ANY WARRANTY; without even the implied warranty of
-+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+// Lesser General Public License for more details.
-+//
-+// You should have received a copy of the GNU Lesser General Public
-+// License along with this library; if not, write to the Free Software
-+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-+////////////////////////////////////////////////////////////////////////////////
-+
-+package com.puppycrawl.tools.checkstyle;
-+
-+import java.io.Serializable;
-+
-+/**
-+ * Thread mode settings for the checkstyle modules.
-+ * @author Andrew Kuchev
-+ */
-+public class ThreadModeSettings implements Serializable {
-+    /** A checker module name. */
-+    public static final String CHECKER_MODULE_NAME = Checker.class.getSimpleName();
-+
-+    /** A multi thread checker module name. */
-+    public static final String MULTI_THREAD_CHECKER_MODULE_NAME =
-+            Checker.class.getSimpleName();
-+
-+    /** A three walker module name. */
-+    public static final String TREE_WALKER_MODULE_NAME = TreeWalker.class.getSimpleName();
-+
-+    /** A multi thread three walker module name. */
-+    public static final String MULTI_THREAD_TREE_WALKER_MODULE_NAME =
-+            TreeWalker.class.getSimpleName();
-+
-+    /** A single thread mode settings instance. */
-+    public static final ThreadModeSettings SINGLE_THREAD_MODE_INSTANCE =
-+            new ThreadModeSettings(1, 1);
-+
-+    private static final long serialVersionUID = 1L;
-+
-+    /** The checker threads number. */
-+    private final int checkerThreadsNumber;
-+    /** The tree walker threads number. */
-+    private final int treeWalkerThreadsNumber;
-+
-+    /**
-+     * Initializes the thread mode configuration.
-+     * @param checkerThreadsNumber the Checker threads number
-+     * @param treeWalkerThreadsNumber the TreeWalker threads number
-+     */
-+    public ThreadModeSettings(int checkerThreadsNumber, int treeWalkerThreadsNumber) {
-+        this.checkerThreadsNumber = checkerThreadsNumber;
-+        this.treeWalkerThreadsNumber = treeWalkerThreadsNumber;
-+    }
-+
-+    /**
-+     * Gets the number of threads for the Checker module.
-+     * @return the number of threads for the Checker module.
-+     */
-+    public int getCheckerThreadsNumber() {
-+        return checkerThreadsNumber;
-+    }
-+
-+    /**
-+     * Gets the number of threads for the TreeWalker module.
-+     * @return the number of threads for the TreeWalker module.
-+     */
-+    public int getTreeWalkerThreadsNumber() {
-+        return treeWalkerThreadsNumber;
-+    }
-+
-+    /**
-+     * Resolves the module name according to the thread settings.
-+     * @param name The original module name.
-+     * @return resolved module name.
-+     */
-+    public final String resolveName(String name) {
-+        if (CHECKER_MODULE_NAME.equals(name)
-+                && getCheckerThreadsNumber() > 1) {
-+            throw new IllegalArgumentException(
-+                    "Multi thread mode for Checker module is not implemented");
-+        }
-+        if (TREE_WALKER_MODULE_NAME.equals(name)
-+                && getTreeWalkerThreadsNumber() > 1) {
-+            throw new IllegalArgumentException(
-+                    "Multi thread mode for TreeWalker module is not implemented");
-+        }
-+
-+        return name;
-+    }
-+}
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java b/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
-index 0f0665cd16..63cc685f39 100644
+index 616c20fa74..63cc685f39 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTask.java
-@@ -51,6 +51,7 @@
- import com.puppycrawl.tools.checkstyle.ModuleFactory;
- import com.puppycrawl.tools.checkstyle.PackageObjectFactory;
- import com.puppycrawl.tools.checkstyle.PropertiesExpander;
-+import com.puppycrawl.tools.checkstyle.ThreadModeSettings;
- import com.puppycrawl.tools.checkstyle.XMLLogger;
- import com.puppycrawl.tools.checkstyle.api.AuditListener;
- import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
-@@ -391,11 +392,11 @@ private RootModule createRootModule() {
-         final RootModule rootModule;
+@@ -110,11 +110,6 @@
+     /** The maximum number of warnings that are tolerated. */
+     private int maxWarnings = Integer.MAX_VALUE;
+ 
+-    /** The checker threads number. */
+-    private int checkerThreadsNumber = 1;
+-    /** The tree walker threads number. */
+-    private int treeWalkerThreadsNumber = 1;
+-
+     /**
+      * Whether to execute ignored modules - some modules may log above
+      * their severity depending on their configuration (e.g. WriteTag) so
+@@ -252,22 +247,6 @@ public void setExecuteIgnoredModules(boolean omit) {
+         executeIgnoredModules = omit;
+     }
+ 
+-    /**
+-     * Sets checker threads number.
+-     * @param checkerThreadsNumber The checker threads number.
+-     */
+-    public void setCheckerThreadsNumber(int checkerThreadsNumber) {
+-        this.checkerThreadsNumber = checkerThreadsNumber;
+-    }
+-
+-    /**
+-     * Sets tree walker threads number.
+-     * @param treeWalkerThreadsNumber The tree walker threads number.
+-     */
+-    public void setTreeWalkerThreadsNumber(int treeWalkerThreadsNumber) {
+-        this.treeWalkerThreadsNumber = treeWalkerThreadsNumber;
+-    }
+-
+     ////////////////////////////////////////////////////////////////////////////
+     // Setters for Root Module's configuration attributes
+     ////////////////////////////////////////////////////////////////////////////
+@@ -414,7 +393,7 @@ private RootModule createRootModule() {
          try {
              final Properties props = createOverridingProperties();
--            final Configuration configuration =
--                ConfigurationLoader.loadConfiguration(
--                    config,
--                    new PropertiesExpander(props),
--                    !executeIgnoredModules);
-+            final ThreadModeSettings threadModeSettings =
+             final ThreadModeSettings threadModeSettings =
+-                    new ThreadModeSettings(checkerThreadsNumber, treeWalkerThreadsNumber);
 +                    ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+            final Configuration configuration = ConfigurationLoader.loadConfiguration(
-+                    config, new PropertiesExpander(props),
-+                    !executeIgnoredModules, threadModeSettings);
- 
-             final ClassLoader moduleClassLoader =
-                 Checker.class.getClassLoader();
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java b/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-index 66345c7766..588a2a105c 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-@@ -521,4 +521,26 @@ public static boolean isBlank(String value) {
-         }
-         return result;
-     }
-+
-+    /**
-+     * Checks whether the string contains an integer value.
-+     * @param str a string to check
-+     * @return true if the given string is an integer, false otherwise.
-+     */
-+    public static boolean isInt(String str) {
-+        boolean isInt;
-+        if (str == null) {
-+            isInt = false;
-+        }
-+        else {
-+            try {
-+                Integer.parseInt(str);
-+                isInt = true;
-+            }
-+            catch (NumberFormatException ignored) {
-+                isInt = false;
-+            }
-+        }
-+        return isInt;
-+    }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
-index 977bce1560..196da0a1e8 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
-@@ -529,7 +529,7 @@ public void testWithCacheWithNoViolation() throws Exception {
-         assertEquals("Cache has unexpected size",
-                 expectedNumberOfObjectsInCache, cache.size());
- 
--        final String expectedConfigHash = "68EE3C3B4593FD8D86159C670C504542E20C6FA0";
-+        final String expectedConfigHash = "B8535A811CA90BE8B7A14D40BCA62B4FC2447B46";
-         assertEquals("Cache has unexpected hash",
-                 expectedConfigHash, cache.getProperty(PropertyCacheFile.CONFIG_HASH_KEY));
- 
+             final Configuration configuration = ConfigurationLoader.loadConfiguration(
+                     config, new PropertiesExpander(props),
+                     !executeIgnoredModules, threadModeSettings);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
-index 1911cfab34..75e46e059c 100644
+index 2f64f71175..75e46e059c 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
 @@ -28,6 +28,7 @@
@@ -539,80 +71,7 @@ index 1911cfab34..75e46e059c 100644
  import java.lang.reflect.InvocationTargetException;
  import java.lang.reflect.Method;
  import java.util.Properties;
-@@ -64,8 +65,7 @@ private static Configuration loadConfiguration(
-         String name, Properties props) throws CheckstyleException {
-         final String fName = getConfigPath(name);
- 
--        return ConfigurationLoader.loadConfiguration(
--                fName, new PropertiesExpander(props));
-+        return ConfigurationLoader.loadConfiguration(fName, new PropertiesExpander(props));
-     }
- 
-     private static Method getReplacePropertiesMethod() throws Exception {
-@@ -97,6 +97,47 @@ public void testResourceLoadConfiguration() throws Exception {
-         verifyConfigNode(config, "Checker", 3, attributes);
-     }
- 
-+    @Test
-+    public void testResourceLoadConfigurationWithMultiThreadConfiguration() throws Exception {
-+        final Properties props = new Properties();
-+        props.setProperty("checkstyle.basedir", "basedir");
-+
-+        final PropertiesExpander propertiesExpander = new PropertiesExpander(props);
-+        final String configPath = getConfigPath("checkstyle_checks.xml");
-+        final ThreadModeSettings multiThreadModeSettings =
-+            new ThreadModeSettings(4, 2);
-+
-+        try {
-+            ConfigurationLoader.loadConfiguration(
-+                configPath, propertiesExpander, multiThreadModeSettings);
-+            fail("An exception is expected");
-+        }
-+        catch (IllegalArgumentException ex) {
-+            assertEquals("Multi thread mode for Checker module is not implemented",
-+                ex.getMessage());
-+        }
-+    }
-+
-+    @Test
-+    public void testResourceLoadConfigurationWithSingleThreadConfiguration() throws Exception {
-+        final Properties props = new Properties();
-+        props.setProperty("checkstyle.basedir", "basedir");
-+
-+        final PropertiesExpander propertiesExpander = new PropertiesExpander(props);
-+        final String configPath = getConfigPath("checkstyle_checks.xml");
-+        final ThreadModeSettings singleThreadModeSettings =
-+            ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+
-+        final DefaultConfiguration config =
-+            (DefaultConfiguration) ConfigurationLoader.loadConfiguration(
-+                configPath, propertiesExpander, singleThreadModeSettings);
-+
-+        final Properties attributes = new Properties();
-+        attributes.setProperty("tabWidth", "4");
-+        attributes.setProperty("basedir", "basedir");
-+        verifyConfigNode(config, "Checker", 3, attributes);
-+    }
-+
-     @Test
-     public void testEmptyConfiguration() throws Exception {
-         final DefaultConfiguration config =
-@@ -104,6 +145,14 @@ public void testEmptyConfiguration() throws Exception {
-         verifyConfigNode(config, "Checker", 0, new Properties());
-     }
- 
-+    @Test
-+    public void testEmptyModuleResolver() throws Exception {
-+        final DefaultConfiguration config =
-+            (DefaultConfiguration) loadConfiguration(
-+                "empty_configuration.xml", new Properties());
-+        verifyConfigNode(config, "Checker", 0, new Properties());
-+    }
-+
-     @Test
-     public void testMissingPropertyName() {
-         try {
-@@ -365,12 +414,9 @@ public void testExternalEntityFromUri() throws Exception {
+@@ -413,12 +414,9 @@ public void testExternalEntityFromUri() throws Exception {
      public void testIncorrectTag() throws Exception {
          try {
              final Class<?> aClassParent = ConfigurationLoader.class;
@@ -628,16 +87,7 @@ index 1911cfab34..75e46e059c 100644
              final Class<?> aClass = Class.forName("com.puppycrawl.tools.checkstyle."
                      + "ConfigurationLoader$InternalLoader");
              Constructor<?> constructor = null;
-@@ -380,7 +426,7 @@ public void testIncorrectTag() throws Exception {
-                 constructor = constr;
-             }
- 
--            final Object objParent = ctorParent.newInstance(null, true);
-+            final Object objParent = ctorParent.newInstance(null, true, null);
-             final Object obj = constructor.newInstance(objParent);
- 
-             final Class<?>[] param = new Class<?>[] {String.class, String.class,
-@@ -398,6 +444,31 @@ public void testIncorrectTag() throws Exception {
+@@ -446,6 +444,31 @@ public void testIncorrectTag() throws Exception {
          }
      }
  
@@ -669,436 +119,66 @@ index 1911cfab34..75e46e059c 100644
      @Test
      public void testNonExistingPropertyName() {
          try {
-@@ -525,11 +596,14 @@ public void testConfigWithIgnoreExceptionalAttributes() throws Exception {
-         when(tested.getAttribute("severity")).thenThrow(CheckstyleException.class);
-         // to void creation of 2 other mocks for now reason, only one moc is used for all cases
-         PowerMockito.whenNew(DefaultConfiguration.class)
--                .withArguments("MemberName").thenReturn(tested);
-+                .withArguments("MemberName", ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE)
-+                .thenReturn(tested);
-         PowerMockito.whenNew(DefaultConfiguration.class)
--                .withArguments("Checker").thenReturn(tested);
-+                .withArguments("Checker", ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE)
-+                .thenReturn(tested);
-         PowerMockito.whenNew(DefaultConfiguration.class)
--                .withArguments("TreeWalker").thenReturn(tested);
-+                .withArguments("TreeWalker", ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE)
-+                .thenReturn(tested);
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTaskTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTaskTest.java
+index 100330f0ca..188134e982 100755
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTaskTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/ant/CheckstyleAntTaskTest.java
+@@ -57,7 +57,6 @@
  
-         try {
-             ConfigurationLoader.loadConfiguration(
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/DefaultConfigurationTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/DefaultConfigurationTest.java
-index ab7fb09933..4ed72db6e8 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/DefaultConfigurationTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/DefaultConfigurationTest.java
-@@ -53,4 +53,22 @@ public void testExceptionForNonExistingAttribute() {
-                     expected.getMessage());
-         }
-     }
-+
-+    @Test
-+    public void testDefaultMultiThreadConfiguration() throws Exception {
-+        final String name = "MyConfig";
-+        final DefaultConfiguration config = new DefaultConfiguration(name);
-+        final ThreadModeSettings singleThreadMode =
-+                ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+        assertEquals(singleThreadMode, config.getThreadModeSettings());
-+    }
-+
-+    @Test
-+    public void testMultiThreadConfiguration() throws Exception {
-+        final String name = "MyConfig";
-+        final ThreadModeSettings multiThreadMode =
-+                new ThreadModeSettings(4, 2);
-+        final DefaultConfiguration config = new DefaultConfiguration(name, multiThreadMode);
-+        assertEquals(multiThreadMode, config.getThreadModeSettings());
-+    }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index 2f83af7920..5ec3aba7b5 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-@@ -56,27 +56,35 @@
- import org.junit.rules.TemporaryFolder;
- 
- import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
-+import com.puppycrawl.tools.checkstyle.api.Configuration;
- import com.puppycrawl.tools.checkstyle.api.LocalizedMessage;
- 
- public class MainTest {
-     private static final String USAGE = String.format(Locale.ROOT,
-           "usage: java com.puppycrawl.tools.checkstyle.Main [options] -c <config.xml>"
-         + " file...%n"
--        + " -c <arg>                    Sets the check configuration file to use.%n"
--        + " -d,--debug                  Print all debug logging of CheckStyle utility%n"
--        + " -e,--exclude <arg>          Directory path to exclude from CheckStyle%n"
--        + " -executeIgnoredModules      Allows ignored modules to be run.%n"
--        + " -f <arg>                    Sets the output format. (plain|xml). Defaults to"
--        + " plain%n"
--        + " -j,--javadocTree            Print Parse tree of the Javadoc comment%n"
--        + " -J,--treeWithJavadoc        Print full Abstract Syntax Tree of the file%n"
--        + " -o <arg>                    Sets the output file. Defaults to stdout%n"
--        + " -p <arg>                    Loads the properties file%n"
--        + " -t,--tree                   Print Abstract Syntax Tree(AST) of the file%n"
--        + " -T,--treeWithComments       Print Abstract Syntax Tree(AST) of the file"
--        + " including comments%n"
--        + " -v                          Print product version and exit%n"
--        + " -x,--exclude-regexp <arg>   Regular expression of directory to exclude from"
-+        + " -c <arg>                                Sets the check configuration file to use.%n"
-+        + " -C,--checker-threads-number <arg>       (experimental) The number of Checker threads "
-+        + "(must be%n"
-+        + "                                         greater than zero)%n"
-+        + " -d,--debug                              Print all debug logging of CheckStyle utility%n"
-+        + " -e,--exclude <arg>                      Directory path to exclude from CheckStyle%n"
-+        + " -executeIgnoredModules                  Allows ignored modules to be run.%n"
-+        + " -f <arg>                                Sets the output format. (plain|xml). Defaults"
-+        + " to plain%n"
-+        + " -j,--javadocTree                        Print Parse tree of the Javadoc comment%n"
-+        + " -J,--treeWithJavadoc                    Print full Abstract Syntax Tree of the file%n"
-+        + " -o <arg>                                Sets the output file. Defaults to stdout%n"
-+        + " -p <arg>                                Loads the properties file%n"
-+        + " -t,--tree                               Print Abstract Syntax Tree(AST) of the file%n"
-+        + " -T,--treeWithComments                   Print Abstract Syntax Tree(AST) of the file"
-+        + " including%n"
-+        + "                                         comments%n"
-+        + " -v                                      Print product version and exit%n"
-+        + " -W,--tree-walker-threads-number <arg>   (experimental) The number of TreeWalker threads"
-+        + " (must be%n"
-+        + "                                         greater than zero)%n"
-+        + " -x,--exclude-regexp <arg>               Regular expression of directory to exclude from"
-         + " CheckStyle%n");
- 
-     private static final Logger LOG = Logger.getLogger(MainTest.class.getName()).getParent();
-@@ -848,4 +856,123 @@ public void testExecuteIgnoredModule() throws Exception {
-                 "-executeIgnoredModules",
-                 getPath("InputMain.java"));
-     }
-+
-+    @Test
-+    public void testInvalidCheckerThreadsNumber() throws Exception {
-+        exit.expectSystemExitWithStatus(-1);
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("Invalid Checker threads number"
-+                + System.lineSeparator(), systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+        });
-+        Main.main("-C", "invalid", "-c", "/google_checks.xml", getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testInvalidTreeWalkerThreadsNumber() throws Exception {
-+        exit.expectSystemExitWithStatus(-1);
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("Invalid TreeWalker threads number"
-+                + System.lineSeparator(), systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+        });
-+        Main.main("-W", "invalid", "-c", "/google_checks.xml", getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testZeroCheckerThreadsNumber() throws Exception {
-+        exit.expectSystemExitWithStatus(-1);
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("Checker threads number must be greater than zero"
-+                + System.lineSeparator(), systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+        });
-+        Main.main("-C", "0", "-c", "/google_checks.xml", getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testZeroTreeWalkerThreadsNumber() throws Exception {
-+        exit.expectSystemExitWithStatus(-1);
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("TreeWalker threads number must be greater than zero"
-+                + System.lineSeparator(), systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+        });
-+        Main.main("-W", "0", "-c", "/google_checks.xml", getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testCheckerThreadsNumber() throws Exception {
-+        TestRootModuleChecker.reset();
-+
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("", systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+            assertTrue(TestRootModuleChecker.isProcessed());
-+            final DefaultConfiguration config =
-+                    (DefaultConfiguration) TestRootModuleChecker.getConfig();
-+            final ThreadModeSettings multiThreadModeSettings = config.getThreadModeSettings();
-+            assertEquals(4, multiThreadModeSettings.getCheckerThreadsNumber());
-+            assertEquals(1, multiThreadModeSettings.getTreeWalkerThreadsNumber());
-+        });
-+        Main.main("-C", "4", "-c", getPath("config-custom-root-module.xml"),
-+            getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testTreeWalkerThreadsNumber() throws Exception {
-+        TestRootModuleChecker.reset();
-+
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("", systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+            assertTrue(TestRootModuleChecker.isProcessed());
-+            final DefaultConfiguration config =
-+                    (DefaultConfiguration) TestRootModuleChecker.getConfig();
-+            final ThreadModeSettings multiThreadModeSettings = config.getThreadModeSettings();
-+            assertEquals(1, multiThreadModeSettings.getCheckerThreadsNumber());
-+            assertEquals(4, multiThreadModeSettings.getTreeWalkerThreadsNumber());
-+        });
-+        Main.main("-W", "4", "-c", getPath("config-custom-root-module.xml"),
-+            getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testModuleNameInSingleThreadMode() throws Exception {
-+        TestRootModuleChecker.reset();
-+
-+        exit.checkAssertionAfterwards(() -> {
-+            assertEquals("", systemOut.getLog());
-+            assertEquals("", systemErr.getLog());
-+            assertTrue(TestRootModuleChecker.isProcessed());
-+            final DefaultConfiguration config =
-+                    (DefaultConfiguration) TestRootModuleChecker.getConfig();
-+            final ThreadModeSettings multiThreadModeSettings =
-+                config.getThreadModeSettings();
-+            assertEquals(1, multiThreadModeSettings.getCheckerThreadsNumber());
-+            assertEquals(1, multiThreadModeSettings.getTreeWalkerThreadsNumber());
-+            final Configuration checkerConfiguration = config
-+                .getChildren()[0];
-+            assertEquals("Checker", checkerConfiguration.getName());
-+            final Configuration treeWalkerConfig = checkerConfiguration.getChildren()[0];
-+            assertEquals("TreeWalker", treeWalkerConfig.getName());
-+        });
-+        Main.main("-C", "1", "-W", "1", "-c", getPath("config-multi-thread-mode.xml"),
-+            getPath("InputMain.java"));
-+    }
-+
-+    @Test
-+    public void testModuleNameInMultiThreadMode() throws Exception {
-+        TestRootModuleChecker.reset();
-+
-+        try {
-+            Main.main("-C", "4", "-W", "4", "-c", getPath("config-multi-thread-mode.xml"),
-+                getPath("InputMain.java"));
-+            fail("An exception is expected");
-+        }
-+        catch (IllegalArgumentException ex) {
-+            assertEquals("Multi thread mode for Checker module is not implemented",
-+                ex.getMessage());
-+        }
-+    }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/PropertyCacheFileTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/PropertyCacheFileTest.java
-index 94f53d4860..4a7259847a 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/PropertyCacheFileTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/PropertyCacheFileTest.java
-@@ -433,7 +433,7 @@ public void testChangeInConfig() throws Exception {
-         final PropertyCacheFile cache = new PropertyCacheFile(config, cacheFile.getPath());
-         cache.load();
- 
--        final String expectedInitialConfigHash = "EEF15651C2D79B29968835FC729E788938CAFE3B";
-+        final String expectedInitialConfigHash = "91753B970AFDF9F5F3DFA0D258064841949D3C6B";
-         final String actualInitialConfigHash = cache.get(PropertyCacheFile.CONFIG_HASH_KEY);
-         assertEquals(expectedInitialConfigHash, actualInitialConfigHash);
- 
-@@ -450,7 +450,7 @@ public void testChangeInConfig() throws Exception {
-             new PropertyCacheFile(config, cacheFile.getPath());
-         cacheAfterChangeInConfig.load();
- 
--        final String expectedConfigHashAfterChange = "0FFFF89F6636EE8AEB904681F594B0F05E1FF795";
-+        final String expectedConfigHashAfterChange = "4CF5EC78955B81D76153ACC2CA6D60CB77FDCB2A";
-         final String actualConfigHashAfterChange =
-             cacheAfterChangeInConfig.get(PropertyCacheFile.CONFIG_HASH_KEY);
-         assertEquals(expectedConfigHashAfterChange, actualConfigHashAfterChange);
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/TestRootModuleChecker.java b/src/test/java/com/puppycrawl/tools/checkstyle/TestRootModuleChecker.java
-index adea93ead4..ff8e2ff38c 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/TestRootModuleChecker.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/TestRootModuleChecker.java
-@@ -32,10 +32,11 @@
- public class TestRootModuleChecker implements RootModule {
-     private static boolean processed;
-     private static List<File> filesToCheck;
-+    private static Configuration config;
- 
-     @Override
-     public void configure(Configuration configuration) throws CheckstyleException {
--        // not used
-+        config = configuration;
+ import com.google.common.io.Closeables;
+ import com.puppycrawl.tools.checkstyle.BaseCheckTestSupport;
+-import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
+ import com.puppycrawl.tools.checkstyle.DefaultLogger;
+ import com.puppycrawl.tools.checkstyle.Definitions;
+ import com.puppycrawl.tools.checkstyle.PackageNamesLoader;
+@@ -663,45 +662,6 @@ public void testPackageNamesLoaderStreamClosed() throws CheckstyleException {
+         Closeables.closeQuietly(any(InputStream.class));
      }
  
-     @Override
-@@ -67,9 +68,14 @@ public static boolean isProcessed() {
-     public static void reset() {
-         processed = false;
-         filesToCheck = null;
-+        config = null;
-     }
- 
-     public static List<File> getFilesToCheck() {
-         return Collections.unmodifiableList(filesToCheck);
-     }
-+
-+    public static Configuration getConfig() {
-+        return config;
-+    }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/ThreadModeSettingsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/ThreadModeSettingsTest.java
-new file mode 100644
-index 0000000000..62575e6aa0
---- /dev/null
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/ThreadModeSettingsTest.java
-@@ -0,0 +1,101 @@
-+////////////////////////////////////////////////////////////////////////////////
-+// checkstyle: Checks Java source code for adherence to a set of rules.
-+// Copyright (C) 2001-2017 the original author or authors.
-+//
-+// This library is free software; you can redistribute it and/or
-+// modify it under the terms of the GNU Lesser General Public
-+// License as published by the Free Software Foundation; either
-+// version 2.1 of the License, or (at your option) any later version.
-+//
-+// This library is distributed in the hope that it will be useful,
-+// but WITHOUT ANY WARRANTY; without even the implied warranty of
-+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+// Lesser General Public License for more details.
-+//
-+// You should have received a copy of the GNU Lesser General Public
-+// License along with this library; if not, write to the Free Software
-+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-+////////////////////////////////////////////////////////////////////////////////
-+
-+package com.puppycrawl.tools.checkstyle;
-+
-+import static org.hamcrest.core.Is.is;
-+import static org.junit.Assert.assertEquals;
-+import static org.junit.Assert.assertThat;
-+import static org.junit.Assert.fail;
-+
-+import java.util.Set;
-+
-+import org.junit.Test;
-+
-+import com.puppycrawl.tools.checkstyle.internal.CheckUtil;
-+
-+public class ThreadModeSettingsTest {
-+    @Test
-+    public void testProperties() throws Exception {
-+        final ThreadModeSettings config = new ThreadModeSettings(1, 2);
-+        assertEquals(1, config.getCheckerThreadsNumber());
-+        assertEquals(2, config.getTreeWalkerThreadsNumber());
-+    }
-+
-+    @Test
-+    public void testResolveCheckerInMultiThreadMode() throws Exception {
-+        final ThreadModeSettings configuration = new ThreadModeSettings(2, 2);
-+
-+        try {
-+            configuration.resolveName("Checker");
-+            fail("An exception is expected");
-+        }
-+        catch (IllegalArgumentException ex) {
-+            assertEquals("Multi thread mode for Checker module is not implemented",
-+                    ex.getMessage());
-+        }
-+    }
-+
-+    @Test
-+    public void testResolveCheckerInSingleThreadMode() throws Exception {
-+        final ThreadModeSettings singleThreadMode = ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+
-+        assertEquals("Checker", singleThreadMode.resolveName("Checker"));
-+    }
-+
-+    @Test
-+    public void testResolveTreeWalker() throws Exception {
-+        final ThreadModeSettings configuration = new ThreadModeSettings(2, 2);
-+
-+        try {
-+            configuration.resolveName("TreeWalker");
-+        }
-+        catch (IllegalArgumentException ex) {
-+            assertEquals("Multi thread mode for TreeWalker module is not implemented",
-+                    ex.getMessage());
-+        }
-+    }
-+
-+    @Test
-+    public void testResolveTreeWalkerInSingleThreadMode() throws Exception {
-+        final ThreadModeSettings singleThreadMode = ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+
-+        assertThat(singleThreadMode.resolveName("TreeWalker"), is("TreeWalker"));
-+    }
-+
-+    @Test
-+    public void testResolveAnyOtherModule() throws Exception {
-+        final Set<Class<?>> allModules = CheckUtil.getCheckstyleModules();
-+        final ThreadModeSettings multiThreadModeSettings = new ThreadModeSettings(2, 2);
-+        final ThreadModeSettings singleThreadModeSettings =
-+                ThreadModeSettings.SINGLE_THREAD_MODE_INSTANCE;
-+
-+        for (Class<?> module : allModules) {
-+            if (Checker.class.isAssignableFrom(module)
-+                    || TreeWalker.class.isAssignableFrom(module)) {
-+                // they're handled in other tests
-+                continue;
-+            }
-+
-+            final String moduleName = module.getSimpleName();
-+            assertThat(singleThreadModeSettings.resolveName(moduleName), is(moduleName));
-+            assertThat(multiThreadModeSettings.resolveName(moduleName), is(moduleName));
-+        }
-+    }
-+}
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/utils/CommonUtilsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/utils/CommonUtilsTest.java
-index 449ef4f35f..e5919dcad1 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/utils/CommonUtilsTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/utils/CommonUtilsTest.java
-@@ -338,6 +338,21 @@ public void testLoadSuppressionsUriSyntaxException() throws Exception {
-         }
-     }
- 
-+    @Test
-+    public void testIsIntValidString() throws Exception {
-+        assertTrue(CommonUtils.isInt("42"));
-+    }
-+
-+    @Test
-+    public void testIsIntInvalidString() throws Exception {
-+        assertFalse(CommonUtils.isInt("foo"));
-+    }
-+
-+    @Test
-+    public void testIsIntNull() throws Exception {
-+        assertFalse(CommonUtils.isInt(null));
-+    }
-+
-     private static class TestCloseable implements Closeable {
-         private boolean closed;
- 
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/config-multi-thread-mode.xml b/src/test/resources/com/puppycrawl/tools/checkstyle/config-multi-thread-mode.xml
-new file mode 100644
-index 0000000000..080da44cc8
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/config-multi-thread-mode.xml
-@@ -0,0 +1,11 @@
-+<?xml version="1.0"?>
-+<!DOCTYPE module PUBLIC
-+          "-//Puppy Crawl//DTD Check Configuration 1.3//EN"
-+          "http://checkstyle.sourceforge.net/dtds/configuration_1_3.dtd">
-+
-+<module name="com.puppycrawl.tools.checkstyle.TestRootModuleChecker">
-+  <module name="Checker">
-+    <module name="TreeWalker">
-+    </module>
-+  </module>
-+</module>
+-    @Test
+-    public void testDefaultThreadsConfiguration() throws Exception {
+-        final CheckstyleAntTask antTask = getCheckstyleAntTask(CUSTOM_ROOT_CONFIG_FILE);
+-        antTask.setFile(new File(getPath(FLAWLESS_INPUT)));
+-        antTask.setCheckerThreadsNumber(1);
+-        antTask.execute();
+-
+-        final DefaultConfiguration testConfig =
+-                (DefaultConfiguration) TestRootModuleChecker.getConfig();
+-        assertThat(testConfig.getThreadModeSettings().getCheckerThreadsNumber(), is(1));
+-        assertThat(testConfig.getThreadModeSettings().getTreeWalkerThreadsNumber(), is(1));
+-    }
+-
+-    @Test
+-    public void testSetCheckerThreadsNumber() throws Exception {
+-        final CheckstyleAntTask antTask = getCheckstyleAntTask(CUSTOM_ROOT_CONFIG_FILE);
+-        antTask.setFile(new File(getPath(FLAWLESS_INPUT)));
+-        antTask.setCheckerThreadsNumber(4);
+-        antTask.execute();
+-
+-        final DefaultConfiguration testConfig =
+-                (DefaultConfiguration) TestRootModuleChecker.getConfig();
+-        assertThat(testConfig.getThreadModeSettings().getCheckerThreadsNumber(), is(4));
+-        assertThat(testConfig.getThreadModeSettings().getTreeWalkerThreadsNumber(), is(1));
+-    }
+-
+-    @Test
+-    public void testSetTreeWalkerCheckerNumber() throws Exception {
+-        final CheckstyleAntTask antTask = getCheckstyleAntTask(CUSTOM_ROOT_CONFIG_FILE);
+-        antTask.setFile(new File(getPath(FLAWLESS_INPUT)));
+-        antTask.setTreeWalkerThreadsNumber(4);
+-        antTask.execute();
+-
+-        final DefaultConfiguration testConfig =
+-                (DefaultConfiguration) TestRootModuleChecker.getConfig();
+-        assertThat(testConfig.getThreadModeSettings().getCheckerThreadsNumber(), is(1));
+-        assertThat(testConfig.getThreadModeSettings().getTreeWalkerThreadsNumber(), is(4));
+-    }
+-
+     private static class CheckstyleAntTaskStub extends CheckstyleAntTask {
+         @Override
+         protected List<File> scanFileSets() {
 diff --git a/wercker.yml b/wercker.yml
-index 31bbdb5d81..7a3f4ae798 100644
+index 31bbdb5d81..7a3f4ae798 100755
 --- a/wercker.yml
 +++ b/wercker.yml
 @@ -150,18 +150,18 @@ build:

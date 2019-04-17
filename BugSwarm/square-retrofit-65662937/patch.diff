@@ -1,5 +1,5 @@
 diff --git a/retrofit-adapters/rxjava/src/main/java/retrofit/ObservableCallAdapterFactory.java b/retrofit-adapters/rxjava/src/main/java/retrofit/ObservableCallAdapterFactory.java
-index 5bef817bd..b40be0e69 100644
+index 5bef817bdd..b40be0e698 100755
 --- a/retrofit-adapters/rxjava/src/main/java/retrofit/ObservableCallAdapterFactory.java
 +++ b/retrofit-adapters/rxjava/src/main/java/retrofit/ObservableCallAdapterFactory.java
 @@ -75,10 +75,10 @@ private ObservableCallAdapterFactory() {
@@ -43,7 +43,7 @@ index 5bef817bd..b40be0e69 100644
              @Override public Result<T> call(Response<T> response) {
                return Result.fromResponse(response);
 diff --git a/retrofit/src/main/java/retrofit/MethodInfo.java b/retrofit/src/main/java/retrofit/MethodInfo.java
-index 57c908ff7..3d0e5a4a2 100644
+index 540e7380e8..3d0e5a4a20 100755
 --- a/retrofit/src/main/java/retrofit/MethodInfo.java
 +++ b/retrofit/src/main/java/retrofit/MethodInfo.java
 @@ -213,6 +213,9 @@ private void parseHttpMethodAndPath(String method, String path, boolean hasBody)
@@ -60,43 +60,14 @@ index 57c908ff7..3d0e5a4a2 100644
            "Registered call adapter factory was unable to handle return type " + returnType);
      }
      Type responseType = adapter.responseType();
--    if (Utils.hasTypeVariable(responseType)) {
--      throw methodError("Method response type must not include a type variable.");
+-    if (Utils.hasUnresolvableType(responseType)) {
+-      throw methodError("Method response type must not include a type variable or wildcard.");
 -    }
      if (converter == null && responseType != ResponseBody.class) {
        throw methodError("Method response type is "
            + responseType
-diff --git a/retrofit/src/main/java/retrofit/Utils.java b/retrofit/src/main/java/retrofit/Utils.java
-index 8c8d1c33b..c9a6d53ac 100644
---- a/retrofit/src/main/java/retrofit/Utils.java
-+++ b/retrofit/src/main/java/retrofit/Utils.java
-@@ -81,21 +81,21 @@ public static Type getSingleParameterUpperBound(ParameterizedType type) {
-     return paramType;
-   }
- 
--  public static boolean hasTypeVariable(Type type) {
-+  public static boolean hasUnresolvableType(Type type) {
-     if (type instanceof Class<?>) {
-       return false;
-     }
-     if (type instanceof ParameterizedType) {
-       ParameterizedType parameterizedType = (ParameterizedType) type;
-       for (Type typeArgument : parameterizedType.getActualTypeArguments()) {
--        if (hasTypeVariable(typeArgument)) {
-+        if (hasUnresolvableType(typeArgument)) {
-           return true;
-         }
-       }
-       return false;
-     }
-     if (type instanceof GenericArrayType) {
--      return hasTypeVariable(((GenericArrayType) type).getGenericComponentType());
-+      return hasUnresolvableType(((GenericArrayType) type).getGenericComponentType());
-     }
-     if (type instanceof TypeVariable) {
-       return true;
 diff --git a/retrofit/src/test/java/retrofit/RequestBuilderTest.java b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
-index e282039b5..8db5f48ad 100644
+index e282039b5a..8db5f48ad4 100755
 --- a/retrofit/src/test/java/retrofit/RequestBuilderTest.java
 +++ b/retrofit/src/test/java/retrofit/RequestBuilderTest.java
 @@ -305,38 +305,38 @@
@@ -192,7 +163,7 @@ index e282039b5..8db5f48ad 100644
      class Example {
        @GET("/foo/bar/{ping}/") //
 diff --git a/retrofit/src/test/java/retrofit/RestAdapterTest.java b/retrofit/src/test/java/retrofit/RestAdapterTest.java
-index 71cec4b06..2c3b76a34 100644
+index 71cec4b068..2c3b76a34e 100755
 --- a/retrofit/src/test/java/retrofit/RestAdapterTest.java
 +++ b/retrofit/src/test/java/retrofit/RestAdapterTest.java
 @@ -40,10 +40,12 @@

@@ -1,5 +1,5 @@
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
-index d58554f9b6..2aeb83e7a3 100644
+index d58554f9b6..2aeb83e7a3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 @@ -40,7 +40,7 @@
@@ -83,70 +83,182 @@ index d58554f9b6..2aeb83e7a3 100644
      }
  
      @Test
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-similarity index 91%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-index bf75c7bd26..b8c1df3f66 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
+new file mode 100755
+index 0000000000..b8c1df3f66
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-@@ -2,9 +2,9 @@
- // Input test file for testing empty LITERAL_CASE.
- // Created: 2017
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,36 @@
++////////////////////////////////////////////////////////////////////////////////
++// Input test file for testing empty LITERAL_CASE.
++// Created: 2017
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
--class InputEmptyBlockCase
++
 +class InputEmptyCase
- {
-     void method1(int a) {
-         switch (a) {}
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-similarity index 94%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-index d387c10d10..94cda5d53d 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
++{
++    void method1(int a) {
++        switch (a) {}
++        switch (a) {case 1: ; } // no violation
++        switch (a) {case 1:{}}  // 1 violation
++        switch (a) {
++            case 1:
++        }
++        switch (a) {
++            case 1: // 1 violation
++            {}
++        }
++        switch (a) {
++            case 1: // 1 violation if checking statements
++            {// none if checking text
++            }
++        }
++    }
++
++    public void method2(char c) {
++        switch(c) { case 0: } // no violation
++        switch(c) { case 0: {} method1(1); } // 1 violation
++        switch(c) { case 0: method1(0); {} } // no violation
++        switch(c) { case 0: case 1: {} } // 1 violation
++        switch(c) { case 0: {} case 1: {// 2 violations if checking statements
++        }
++        }
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
+new file mode 100755
+index 0000000000..94cda5d53d
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-@@ -2,7 +2,7 @@
- // Test case file for checkstyle.
- // Created: 2001
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,87 @@
++////////////////////////////////////////////////////////////////////////////////
++// Test case file for checkstyle.
++// Created: 2001
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
- import java.io.*; // star import for instantiation tests
- import java.awt.Dimension; // explicit import for instantiation tests
-@@ -12,7 +12,7 @@
-  * Test case for detecting empty block statements.
-  * @author Lars Kühne
-  **/
--class InputEmptyBlockDefault
++
++import java.io.*; // star import for instantiation tests
++import java.awt.Dimension; // explicit import for instantiation tests
++import java.awt.Color;
++
++/**
++ * Test case for detecting empty block statements.
++ * @author Lars Kühne
++ **/
 +class InputSemantic
- {
-     static {
-         Boolean x = new Boolean(true);
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-similarity index 89%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-index b1f994af76..01b93dfdaa 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
++{
++    static {
++        Boolean x = new Boolean(true);
++    }
++
++    {
++        Boolean x = new Boolean(true);
++        Boolean[] y = new Boolean[]{Boolean.TRUE, Boolean.FALSE};
++    }
++
++    Boolean getBoolean()
++    {
++        return new java.lang.Boolean(true);
++    }
++
++    void exHandlerTest()
++    {
++        try {
++        }
++        finally {
++        }
++        try {
++        // something
++        }
++        finally {
++            // something
++        }
++        try {
++            ; // something
++        }
++        finally {
++            ; // statement
++        }
++    }
++
++    /** test **/
++    private static final long IGNORE = 666l + 666L;
++
++    public class EqualsVsHashCode1
++    {
++        public boolean equals(int a)
++        {
++            return a == 1;
++        }
++    }
++
++    // empty instance initializer
++    {
++    }
++
++    private class InputBraces {
++        
++    }
++
++    synchronized void foo() {
++        synchronized (this) {} // not OK
++        synchronized (Class.class) { // OK
++            synchronized (new Object()) {
++                // not OK if checking statements
++            }
++        }
++    }
++    
++    
++    static {
++       
++    int a = 0;}
++    
++    static {
++        
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
+new file mode 100755
+index 0000000000..01b93dfdaa
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-@@ -2,13 +2,13 @@
- // Test case file for checkstyle.
- // Created: 2001
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,38 @@
++////////////////////////////////////////////////////////////////////////////////
++// Test case file for checkstyle.
++// Created: 2001
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
- import java.io.*; // star import for instantiation tests
- import java.awt.Dimension; // explicit import for instantiation tests
- import java.awt.Color;
- 
--class InputEmptyBlockAllowEmptyLoops
++
++import java.io.*; // star import for instantiation tests
++import java.awt.Dimension; // explicit import for instantiation tests
++import java.awt.Color;
++
 +class UpdateClass
- {
- 	public void fooMethod()
- 	{
++{
++	public void fooMethod()
++	{
++		int a = 1;
++		if (a == 1) {} //is not OK 
++		char[] s = {'1', '2'};
++		int index = 2;
++		if (doSideEffect() == 1) {} //is not OK, 
++		while ((a = index - 1) != 0) {} // is OK 
++		for (; index < s.length && s[index] != 'x'; index++) {} // is OK
++		if (a == 1) {} else {System.identityHashCode("a");} // is not OK
++		switch (a) {} //warn
++		switch (a) { //ok
++        case 1:
++            a = 2;
++        case 2:
++            a = 3;
++        default:
++            a = 0;
++        }
++	}
++	
++	public int doSideEffect()
++	{
++		return 1;
++	}
++}

@@ -1,11 +1,12 @@
 diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
-index ee02368..adbd487 100755
+index ee02368b2d..adbd487afa 100755
 --- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
 +++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/FieldLocator.java
-@@ -335,54 +335,6 @@ public interface FieldLocator {
+@@ -334,54 +334,6 @@ public String toString() {
+         }
      }
  
-     /**
+-    /**
 -     * Attempts to only locate fields declared by the accessing type.
 -     */
 -    class ForAccessingType extends AbstractBase {
@@ -53,15 +54,14 @@ index ee02368..adbd487 100755
 -        }
 -    }
 -
--    /**
+     /**
       * A field locator that looks up fields that are declared within a class's class hierarchy.
       */
-     class ForClassHierarchy extends AbstractBase {
 diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
-index 5d04d2b..cfeda08 100755
+index 5d04d2bdcb..cfeda08db7 100755
 --- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
 +++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/InstrumentedType.java
-@@ -178,117 +178,6 @@ public interface InstrumentedType extends TypeDescription {
+@@ -178,117 +178,6 @@
           * @return The prepared instrumented type.
           */
          InstrumentedType prepare(InstrumentedType instrumentedType);
@@ -180,10 +180,10 @@ index 5d04d2b..cfeda08 100755
  
      /**
 diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
-index b04577f..1a8018a 100755
+index b04577ffba..1a8018a3b0 100755
 --- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
 +++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/Forwarding.java
-@@ -135,8 +135,18 @@ public class Forwarding implements Implementation {
+@@ -135,8 +135,18 @@ public static Implementation toInstanceField(String fieldName, TypeDefinition fi
  
      @Override
      public ByteCodeAppender appender(Target implementationTarget) {
@@ -205,10 +205,10 @@ index b04577f..1a8018a 100755
  
      @Override
 diff --git a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
-index c126401..a9d0fca 100755
+index c126401ba8..a9d0fcac7f 100755
 --- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
 +++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/MethodDelegation.java
-@@ -3,10 +3,8 @@ package net.bytebuddy.implementation;
+@@ -3,10 +3,8 @@
  import net.bytebuddy.description.field.FieldDescription;
  import net.bytebuddy.description.method.MethodDescription;
  import net.bytebuddy.description.method.MethodList;
@@ -219,7 +219,7 @@ index c126401..a9d0fca 100755
  import net.bytebuddy.dynamic.scaffold.InstrumentedType;
  import net.bytebuddy.dynamic.scaffold.MethodGraph;
  import net.bytebuddy.implementation.bind.MethodDelegationBinder;
-@@ -159,37 +157,40 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -159,37 +157,40 @@
      /**
       * The implementation delegate for this method delegation.
       */
@@ -268,7 +268,7 @@ index c126401..a9d0fca 100755
  
      /**
       * Creates a new method delegation.
-@@ -200,21 +201,22 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -200,21 +201,22 @@
       * @param terminationHandler     The termination handler to apply.
       * @param ambiguityResolver      The ambiguity resolver to use by this method delegator.
       * @param assigner               The assigner to be supplied by this method delegator.
@@ -294,7 +294,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -239,13 +241,13 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -239,13 +241,13 @@ public static MethodDelegation to(TypeDescription typeDescription) {
          } else if (typeDescription.isPrimitive()) {
              throw new IllegalArgumentException("Cannot delegate to primitive " + typeDescription);
          }
@@ -311,7 +311,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -374,7 +376,7 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -374,7 +376,7 @@ public static MethodDelegation to(Object delegate, Type type) {
      public static MethodDelegation to(Object delegate, Type type, MethodGraph.Compiler methodGraphCompiler) {
          return to(delegate,
                  type,
@@ -320,7 +320,7 @@ index c126401..a9d0fca 100755
                  methodGraphCompiler);
      }
  
-@@ -424,140 +426,145 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -424,140 +426,145 @@ public static MethodDelegation to(Object delegate, Type type, String fieldName,
          if (!typeDescription.asErasure().isInstance(delegate)) {
              throw new IllegalArgumentException(delegate + " is not an instance of " + type);
          }
@@ -543,7 +543,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -571,9 +578,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -571,9 +578,9 @@ public MethodDelegation appendParameterBinder(TargetMethodAnnotationDrivenBinder
                  CompoundList.of(parameterBinders, parameterBinder),
                  defaultsProvider,
                  terminationHandler,
@@ -555,7 +555,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -587,9 +594,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -587,9 +594,9 @@ public MethodDelegation defineParameterBinder(TargetMethodAnnotationDrivenBinder
                  Arrays.asList(parameterBinder),
                  defaultsProvider,
                  terminationHandler,
@@ -567,7 +567,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -603,9 +610,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -603,9 +610,9 @@ public MethodDelegation withDefaultsProvider(TargetMethodAnnotationDrivenBinder.
                  parameterBinders,
                  defaultsProvider,
                  terminationHandler,
@@ -579,7 +579,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -629,9 +636,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -629,9 +636,9 @@ public MethodDelegation defineAmbiguityResolver(MethodDelegationBinder.Ambiguity
                  parameterBinders,
                  defaultsProvider,
                  terminationHandler,
@@ -591,7 +591,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -645,9 +652,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -645,9 +652,9 @@ public MethodDelegation withAssigner(Assigner assigner) {
                  parameterBinders,
                  defaultsProvider,
                  terminationHandler,
@@ -603,7 +603,7 @@ index c126401..a9d0fca 100755
      }
  
      /**
-@@ -657,13 +664,13 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -657,13 +664,13 @@ public MethodDelegation withAssigner(Assigner assigner) {
       * @return A method delegation with the filter applied.
       */
      public MethodDelegation filter(ElementMatcher<? super MethodDescription> methodMatcher) {
@@ -620,7 +620,7 @@ index c126401..a9d0fca 100755
      }
  
      @Override
-@@ -672,28 +679,28 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -672,28 +679,28 @@ public Implementation andThen(Implementation implementation) {
                  parameterBinders,
                  defaultsProvider,
                  TargetMethodAnnotationDrivenBinder.TerminationHandler.Dropping.INSTANCE,
@@ -656,7 +656,7 @@ index c126401..a9d0fca 100755
          );
      }
  
-@@ -706,8 +713,8 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -706,8 +713,8 @@ public boolean equals(Object other) {
                  && assigner.equals(that.assigner)
                  && defaultsProvider.equals(that.defaultsProvider)
                  && terminationHandler.equals(that.terminationHandler)
@@ -666,7 +666,7 @@ index c126401..a9d0fca 100755
                  && parameterBinders.equals(that.parameterBinders);
      }
  
-@@ -717,9 +724,9 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -717,9 +724,9 @@ public int hashCode() {
          result = 31 * result + parameterBinders.hashCode();
          result = 31 * result + defaultsProvider.hashCode();
          result = 31 * result + terminationHandler.hashCode();
@@ -677,7 +677,7 @@ index c126401..a9d0fca 100755
          return result;
      }
  
-@@ -730,313 +737,203 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -730,313 +737,203 @@ public String toString() {
                  ", parameterBinders=" + parameterBinders +
                  ", defaultsProvider=" + defaultsProvider +
                  ", terminationHandler=" + terminationHandler +
@@ -1105,7 +1105,7 @@ index c126401..a9d0fca 100755
                          '}';
              }
          }
-@@ -1052,29 +949,12 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -1052,29 +949,12 @@ public String toString() {
              private final TypeDescription typeDescription;
  
              /**
@@ -1138,7 +1138,7 @@ index c126401..a9d0fca 100755
              }
  
              @Override
-@@ -1083,56 +963,130 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -1083,56 +963,130 @@ public InstrumentedType prepare(InstrumentedType instrumentedType) {
              }
  
              @Override
@@ -1291,7 +1291,7 @@ index c126401..a9d0fca 100755
  
              /**
               * The method graph compiler to use.
-@@ -1140,101 +1094,78 @@ public class MethodDelegation implements Implementation.Composable {
+@@ -1140,101 +1094,78 @@ public String toString() {
              private final MethodGraph.Compiler methodGraphCompiler;
  
              /**
@@ -1426,10 +1426,10 @@ index c126401..a9d0fca 100755
                          '}';
              }
 diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
-index 6e531c3..cd2a001 100755
+index 6e531c3e7b..cd2a001129 100755
 --- a/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
 +++ b/byte-buddy-dep/src/test/java/net/bytebuddy/ByteBuddyTutorialExamplesTest.java
-@@ -345,7 +345,7 @@ public class ByteBuddyTutorialExamplesTest {
+@@ -345,7 +345,7 @@ public void testFieldsAndMethodsFieldAccess() throws Exception {
          ByteBuddy byteBuddy = new ByteBuddy();
          Class<? extends UserType> dynamicUserType = byteBuddy
                  .subclass(UserType.class)
@@ -1439,10 +1439,10 @@ index 6e531c3..cd2a001 100755
                  .make()
                  .load(getClass().getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
 diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
-index 410e7d5..2e0c211 100755
+index 410e7d5eb0..2e0c2119df 100755
 --- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
 +++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationOtherTest.java
-@@ -7,6 +7,9 @@ import org.junit.Test;
+@@ -7,6 +7,9 @@
  import java.util.List;
  
  import static net.bytebuddy.matcher.ElementMatchers.isToString;
@@ -1452,10 +1452,11 @@ index 410e7d5..2e0c211 100755
  import static org.mockito.Mockito.when;
  
  public class MethodDelegationOtherTest {
-@@ -28,6 +31,48 @@ public class MethodDelegationOtherTest {
+@@ -27,6 +30,48 @@ public void testDelegationWithIllegalType() throws Exception {
+         MethodDelegation.to(new Object(), String.class);
      }
  
-     @Test
++    @Test
 +    public void testStaticMethodDelegation() throws Exception {
 +        assertThat(MethodDelegation.to(Foo.class).hashCode(), is(MethodDelegation.to(Foo.class).hashCode()));
 +        assertThat(MethodDelegation.to(Foo.class), is(MethodDelegation.to(Foo.class)));
@@ -1497,11 +1498,10 @@ index 410e7d5..2e0c211 100755
 +        assertThat(MethodDelegation.toConstructor(Foo.class), not(MethodDelegation.toConstructor(Bar.class)));
 +    }
 +
-+    @Test
+     @Test
      public void testObjectProperties() throws Exception {
          ObjectPropertyAssertion.of(MethodDelegation.class).refine(new ObjectPropertyAssertion.Refinement<List<?>>() {
-             @Override
-@@ -35,11 +80,13 @@ public class MethodDelegationOtherTest {
+@@ -35,11 +80,13 @@ public void apply(List<?> mock) {
                  when(mock.size()).thenReturn(1);
              }
          }).apply();
@@ -1518,7 +1518,7 @@ index 410e7d5..2e0c211 100755
  
      public static class Foo {
 diff --git a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
-index 6ee7421..539ed78 100755
+index 6ee74212ec..539ed785fd 100755
 --- a/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
 +++ b/byte-buddy-dep/src/test/java/net/bytebuddy/implementation/MethodDelegationTest.java
 @@ -1,6 +1,5 @@
@@ -1528,7 +1528,7 @@ index 6ee7421..539ed78 100755
  import net.bytebuddy.dynamic.DynamicType;
  import net.bytebuddy.test.utility.CallTraceable;
  import org.hamcrest.CoreMatchers;
-@@ -21,7 +20,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
+@@ -21,7 +20,7 @@
  @RunWith(Parameterized.class)
  public class MethodDelegationTest<T extends CallTraceable> extends AbstractImplementationTest {
  
@@ -1537,7 +1537,7 @@ index 6ee7421..539ed78 100755
  
      private static final byte BYTE_MULTIPLICATOR = 3;
  
-@@ -121,8 +120,8 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -121,8 +120,8 @@ public void testStaticFieldBinding() throws Exception {
  
      @Test
      @SuppressWarnings("unchecked")
@@ -1548,7 +1548,7 @@ index 6ee7421..539ed78 100755
          assertThat(loaded.getLoadedAuxiliaryTypes().size(), is(0));
          assertThat(loaded.getLoaded().getDeclaredMethods().length, is(1));
          assertThat(loaded.getLoaded().getDeclaredFields().length, is(1));
-@@ -138,44 +137,8 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -138,44 +137,8 @@ public void testFieldInstanceBindingAndDefined() throws Exception {
          instance.assertZeroCalls();
      }
  
@@ -1593,7 +1593,7 @@ index 6ee7421..539ed78 100755
          public boolean foo(boolean b) {
              register(FOO);
              return b;
-@@ -195,10 +158,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -195,10 +158,6 @@ public boolean qux(boolean b) {
  
      public static class ByteSource extends CallTraceable {
  
@@ -1604,7 +1604,7 @@ index 6ee7421..539ed78 100755
          public byte foo(byte b) {
              register(FOO);
              return b;
-@@ -218,10 +177,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -218,10 +177,6 @@ public byte qux(byte b) {
  
      public static class ShortSource extends CallTraceable {
  
@@ -1615,7 +1615,7 @@ index 6ee7421..539ed78 100755
          public short foo(short s) {
              register(FOO);
              return s;
-@@ -241,10 +196,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -241,10 +196,6 @@ public short qux(short s) {
  
      public static class CharSource extends CallTraceable {
  
@@ -1626,7 +1626,7 @@ index 6ee7421..539ed78 100755
          public char foo(char s) {
              register(FOO);
              return s;
-@@ -264,10 +215,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -264,10 +215,6 @@ public char qux(char c) {
  
      public static class IntSource extends CallTraceable {
  
@@ -1637,7 +1637,7 @@ index 6ee7421..539ed78 100755
          public int foo(int i) {
              register(FOO);
              return i;
-@@ -287,10 +234,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -287,10 +234,6 @@ public int qux(int i) {
  
      public static class LongSource extends CallTraceable {
  
@@ -1648,7 +1648,7 @@ index 6ee7421..539ed78 100755
          public long foo(long l) {
              register(FOO);
              return l;
-@@ -310,10 +253,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -310,10 +253,6 @@ public long qux(long l) {
  
      public static class FloatSource extends CallTraceable {
  
@@ -1659,7 +1659,7 @@ index 6ee7421..539ed78 100755
          public float foo(float f) {
              register(FOO);
              return f;
-@@ -333,10 +272,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -333,10 +272,6 @@ public float qux(float f) {
  
      public static class DoubleSource extends CallTraceable {
  
@@ -1670,7 +1670,7 @@ index 6ee7421..539ed78 100755
          public double foo(double d) {
              register(FOO);
              return d;
-@@ -356,10 +291,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -356,10 +291,6 @@ public double qux(double d) {
  
      public static class VoidSource extends CallTraceable {
  
@@ -1681,7 +1681,7 @@ index 6ee7421..539ed78 100755
          public void foo() {
              register(FOO);
          }
-@@ -378,10 +309,6 @@ public class MethodDelegationTest<T extends CallTraceable> extends AbstractImple
+@@ -378,10 +309,6 @@ public void qux() {
  
      public static class StringSource extends CallTraceable {
  

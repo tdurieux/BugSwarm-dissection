@@ -1,25 +1,8 @@
 diff --git a/okhttp-tests/src/test/java/okhttp3/CacheTest.java b/okhttp-tests/src/test/java/okhttp3/CacheTest.java
-index 15be10cfe..d33dd3b9e 100644
+index 7c02396d2b..d33dd3b9e5 100755
 --- a/okhttp-tests/src/test/java/okhttp3/CacheTest.java
 +++ b/okhttp-tests/src/test/java/okhttp3/CacheTest.java
-@@ -56,6 +56,7 @@
- import org.junit.Rule;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_END;
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.assertFalse;
-@@ -83,7 +84,7 @@
-   @Before public void setUp() throws Exception {
-     server.setProtocolNegotiationEnabled(false);
-     cache = new Cache(new File("/cache/"), Integer.MAX_VALUE, fileSystem);
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .cache(cache)
-         .cookieJar(new JavaNetCookieJar(cookieManager))
-         .build();
-@@ -1031,6 +1032,10 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
+@@ -1032,6 +1032,10 @@ private void assertNonIdentityEncodingCached(MockResponse response) throws Excep
    }
  
    @Test public void conditionalCacheHitIsNotDoublePooled() throws Exception {
@@ -30,39 +13,8 @@ index 15be10cfe..d33dd3b9e 100644
      server.enqueue(new MockResponse()
          .addHeader("ETag: v1")
          .setBody("A"));
-diff --git a/okhttp-tests/src/test/java/okhttp3/CallTest.java b/okhttp-tests/src/test/java/okhttp3/CallTest.java
-index 02c25f41c..4094600a3 100644
---- a/okhttp-tests/src/test/java/okhttp3/CallTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/CallTest.java
-@@ -827,7 +827,7 @@ private void postBodyRetransmittedAfterAuthorizationFail(String body) throws Exc
- 
-   /** https://github.com/square/okhttp/issues/1801 */
-   @Test public void asyncCallEngineInitialized() throws Exception {
--    OkHttpClient c = new OkHttpClient.Builder()
-+    OkHttpClient c = defaultClient().newBuilder()
-         .addInterceptor(new Interceptor() {
-           @Override public Response intercept(Chain chain) throws IOException {
-             throw new IOException();
-@@ -2586,7 +2586,7 @@ private RequestBody requestBody(final boolean chunked, final long size, final in
-     server.enqueue(new MockResponse()
-         .setBody("This gets leaked."));
- 
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .connectionPool(new ConnectionPool(0, 10, TimeUnit.MILLISECONDS))
-         .build();
- 
-@@ -2615,7 +2615,7 @@ private RequestBody requestBody(final boolean chunked, final long size, final in
-     server.enqueue(new MockResponse()
-         .setBody("This gets leaked."));
- 
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .connectionPool(new ConnectionPool(0, 10, TimeUnit.MILLISECONDS))
-         .build();
- 
 diff --git a/okhttp-tests/src/test/java/okhttp3/ConnectionReuseTest.java b/okhttp-tests/src/test/java/okhttp3/ConnectionReuseTest.java
-index 6f9014bb3..533d8ab35 100644
+index 6f9014bb34..533d8ab352 100755
 --- a/okhttp-tests/src/test/java/okhttp3/ConnectionReuseTest.java
 +++ b/okhttp-tests/src/test/java/okhttp3/ConnectionReuseTest.java
 @@ -15,9 +15,11 @@
@@ -97,122 +49,11 @@ index 6f9014bb3..533d8ab35 100644
        fail();
      } catch (IllegalStateException expected) {
        assertTrue(expected.getMessage().startsWith("Closing the body of"));
-diff --git a/okhttp-tests/src/test/java/okhttp3/DispatcherTest.java b/okhttp-tests/src/test/java/okhttp3/DispatcherTest.java
-index b49379dff..e4896a94d 100644
---- a/okhttp-tests/src/test/java/okhttp3/DispatcherTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/DispatcherTest.java
-@@ -17,6 +17,7 @@
- import org.junit.Test;
- 
- import static java.util.concurrent.TimeUnit.SECONDS;
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.assertFalse;
- import static org.junit.Assert.assertTrue;
-@@ -26,7 +27,7 @@
-   RecordingExecutor executor = new RecordingExecutor();
-   RecordingCallback callback = new RecordingCallback();
-   Dispatcher dispatcher = new Dispatcher(executor);
--  OkHttpClient client = new OkHttpClient.Builder()
-+  OkHttpClient client = defaultClient().newBuilder()
-       .dispatcher(dispatcher)
-       .build();
- 
-diff --git a/okhttp-tests/src/test/java/okhttp3/SocksProxyTest.java b/okhttp-tests/src/test/java/okhttp3/SocksProxyTest.java
-index f74cb6f07..f0d63f17a 100644
---- a/okhttp-tests/src/test/java/okhttp3/SocksProxyTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/SocksProxyTest.java
-@@ -28,6 +28,7 @@
- import org.junit.Before;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.assertEquals;
- 
- public final class SocksProxyTest {
-@@ -48,7 +49,7 @@
-     server.enqueue(new MockResponse().setBody("abc"));
-     server.enqueue(new MockResponse().setBody("def"));
- 
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .proxy(socksProxy.proxy())
-         .build();
- 
-@@ -77,7 +78,7 @@
-       }
-     };
- 
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .proxySelector(proxySelector)
-         .build();
- 
-@@ -92,7 +93,7 @@
-     // This testcase will fail if the target is resolved locally instead of through the proxy.
-     server.enqueue(new MockResponse().setBody("abc"));
- 
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .proxy(socksProxy.proxy())
-         .build();
- 
-diff --git a/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java b/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-index 2e7114677..6a205c86b 100644
---- a/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/URLConnectionTest.java
-@@ -326,7 +326,7 @@ private void testRequestBodySurvivesRetries(TransferKind transferKind) throws Ex
-     server.enqueue(new MockResponse()
-         .setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST));
- 
--    urlFactory = new OkUrlFactory(new OkHttpClient.Builder()
-+    urlFactory = new OkUrlFactory(defaultClient().newBuilder()
-         .dns(new DoubleInetAddressDns())
-         .build());
-     HttpURLConnection connection = urlFactory.open(server.url("/").url());
-diff --git a/okhttp-tests/src/test/java/okhttp3/WebSocketCallTest.java b/okhttp-tests/src/test/java/okhttp3/WebSocketCallTest.java
-index 8f18cb389..261799a30 100644
---- a/okhttp-tests/src/test/java/okhttp3/WebSocketCallTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/WebSocketCallTest.java
-@@ -34,6 +34,7 @@
- import org.junit.Test;
- 
- import static java.util.concurrent.TimeUnit.SECONDS;
-+import static okhttp3.TestUtil.defaultClient;
- import static okhttp3.WebSocket.BINARY;
- import static okhttp3.WebSocket.TEXT;
- import static org.junit.Assert.assertEquals;
-@@ -48,7 +49,7 @@
-   private final WebSocketRecorder clientListener = new WebSocketRecorder("client");
-   private final WebSocketRecorder serverListener = new WebSocketRecorder("server");
-   private final Random random = new Random(0);
--  private OkHttpClient client = new OkHttpClient.Builder()
-+  private OkHttpClient client = defaultClient().newBuilder()
-       .addInterceptor(new Interceptor() {
-         @Override public Response intercept(Chain chain) throws IOException {
-           Response response = chain.proceed(chain.request());
 diff --git a/okhttp-tests/src/test/java/okhttp3/internal/http/DisconnectTest.java b/okhttp-tests/src/test/java/okhttp3/internal/http/DisconnectTest.java
-index eb8591319..aad2bfc8d 100644
+index edb689d2a8..aad2bfc8dd 100755
 --- a/okhttp-tests/src/test/java/okhttp3/internal/http/DisconnectTest.java
 +++ b/okhttp-tests/src/test/java/okhttp3/internal/http/DisconnectTest.java
-@@ -34,6 +34,7 @@
- import org.junit.Before;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.fail;
- 
- public final class DisconnectTest {
-@@ -56,7 +57,7 @@
-             return serverSocket;
-           }
-         });
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .socketFactory(new DelegatingSocketFactory(SocketFactory.getDefault()) {
-           @Override protected Socket configureSocket(Socket socket) throws IOException {
-             socket.setSendBufferSize(SOCKET_BUFFER_SIZE);
-@@ -113,7 +114,7 @@
+@@ -114,7 +114,7 @@
      } catch (IOException expected) {
      }
  
@@ -222,27 +63,10 @@ index eb8591319..aad2bfc8d 100644
  
    private void disconnectLater(final HttpURLConnection connection, final int delayMillis) {
 diff --git a/okhttp-tests/src/test/java/okhttp3/internal/http/ThreadInterruptTest.java b/okhttp-tests/src/test/java/okhttp3/internal/http/ThreadInterruptTest.java
-index 47f4f0fc6..9ac3b93ec 100644
+index d3da8b2b2f..9ac3b93ecc 100755
 --- a/okhttp-tests/src/test/java/okhttp3/internal/http/ThreadInterruptTest.java
 +++ b/okhttp-tests/src/test/java/okhttp3/internal/http/ThreadInterruptTest.java
-@@ -35,6 +35,7 @@
- import org.junit.Before;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.fail;
- 
- public final class ThreadInterruptTest {
-@@ -58,7 +59,7 @@ protected ServerSocket configureServerSocket(ServerSocket serverSocket)
-             return serverSocket;
-           }
-         });
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .socketFactory(new DelegatingSocketFactory(SocketFactory.getDefault()) {
-           @Override
-           protected Socket configureSocket(Socket socket) throws IOException {
-@@ -116,7 +117,7 @@ protected Socket configureSocket(Socket socket) throws IOException {
+@@ -117,7 +117,7 @@ protected Socket configureSocket(Socket socket) throws IOException {
      } catch (InterruptedIOException expected) {
      }
  
@@ -252,27 +76,10 @@ index 47f4f0fc6..9ac3b93ec 100644
  
    private void interruptLater(final int delayMillis) {
 diff --git a/okhttp-tests/src/test/java/okhttp3/internal/http2/HttpOverHttp2Test.java b/okhttp-tests/src/test/java/okhttp3/internal/http2/HttpOverHttp2Test.java
-index 0ccbf3b9f..6643a9db4 100644
+index 0aae2faa00..6643a9db42 100755
 --- a/okhttp-tests/src/test/java/okhttp3/internal/http2/HttpOverHttp2Test.java
 +++ b/okhttp-tests/src/test/java/okhttp3/internal/http2/HttpOverHttp2Test.java
-@@ -61,6 +61,7 @@
- 
- import static java.util.concurrent.TimeUnit.MILLISECONDS;
- import static java.util.concurrent.TimeUnit.SECONDS;
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.assertArrayEquals;
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.assertNull;
-@@ -79,7 +80,7 @@
-   @Before public void setUp() throws Exception {
-     server.useHttps(sslClient.socketFactory, false);
-     cache = new Cache(tempDir.getRoot(), Integer.MAX_VALUE);
--    client = new OkHttpClient.Builder()
-+    client = defaultClient().newBuilder()
-         .protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
-         .dns(new SingleInetAddressDns())
-         .sslSocketFactory(sslClient.socketFactory, sslClient.trustManager)
-@@ -233,6 +234,9 @@
+@@ -234,6 +234,9 @@
      assertEquals("JKL", response2.body().source().readUtf8(3));
      assertEquals(0, server.takeRequest().getSequenceNumber());
      assertEquals(1, server.takeRequest().getSequenceNumber());
@@ -282,7 +89,7 @@ index 0ccbf3b9f..6643a9db4 100644
    }
  
    /** https://github.com/square/okhttp/issues/373 */
-@@ -321,6 +325,8 @@
+@@ -322,6 +325,8 @@
      assertEquals('C', in.read());
      assertEquals(-1, in.read());
      assertEquals(-1, in.read());
@@ -291,7 +98,7 @@ index 0ccbf3b9f..6643a9db4 100644
    }
  
    @Ignore // See https://github.com/square/okhttp/issues/578
-@@ -561,6 +567,10 @@
+@@ -562,6 +567,10 @@
  
    /** https://github.com/square/okhttp/issues/1191 */
    @Test public void cancelWithStreamNotCompleted() throws Exception {
@@ -302,7 +109,7 @@ index 0ccbf3b9f..6643a9db4 100644
      server.enqueue(new MockResponse()
          .setBody("abc"));
      server.enqueue(new MockResponse()
-@@ -570,7 +580,7 @@
+@@ -571,7 +580,7 @@
      Call call1 = client.newCall(new Request.Builder()
          .url(server.url("/"))
          .build());
@@ -311,7 +118,7 @@ index 0ccbf3b9f..6643a9db4 100644
      call1.cancel();
  
      // That connection is pooled, and it works.
-@@ -581,6 +591,9 @@
+@@ -582,6 +591,9 @@
      Response response2 = call2.execute();
      assertEquals("def", response2.body().string());
      assertEquals(0, server.takeRequest().getSequenceNumber());
@@ -321,7 +128,7 @@ index 0ccbf3b9f..6643a9db4 100644
    }
  
    @Test public void recoverFromOneRefusedStreamReusesConnection() throws Exception {
-@@ -685,6 +698,7 @@ private void noRecoveryFromErrorWithRetryDisabled(ErrorCode errorCode) throws Ex
+@@ -686,6 +698,7 @@ private void noRecoveryFromErrorWithRetryDisabled(ErrorCode errorCode) throws Ex
          .url(server.url("/"))
          .build());
      Response response = call.execute();
@@ -329,56 +136,8 @@ index 0ccbf3b9f..6643a9db4 100644
  
      assertEquals("α", response.header("Alpha"));
      assertEquals("Beta", response.header("β"));
-diff --git a/okhttp-tests/src/test/java/okhttp3/internal/tls/CertificatePinnerChainValidationTest.java b/okhttp-tests/src/test/java/okhttp3/internal/tls/CertificatePinnerChainValidationTest.java
-index ee8a2fe93..44369605f 100644
---- a/okhttp-tests/src/test/java/okhttp3/internal/tls/CertificatePinnerChainValidationTest.java
-+++ b/okhttp-tests/src/test/java/okhttp3/internal/tls/CertificatePinnerChainValidationTest.java
-@@ -29,6 +29,7 @@
- import org.junit.Rule;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static okhttp3.internal.platform.PlatformTest.getPlatform;
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.assertTrue;
-@@ -61,7 +62,7 @@
-     SslClient sslClient = new SslClient.Builder()
-         .addTrustedCertificate(rootCa.certificate)
-         .build();
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .sslSocketFactory(sslClient.socketFactory, sslClient.trustManager)
-         .hostnameVerifier(new RecordingHostnameVerifier())
-         .certificatePinner(certificatePinner)
-@@ -117,7 +118,7 @@
-     SslClient contextBuilder = new SslClient.Builder()
-         .addTrustedCertificate(rootCa.certificate)
-         .build();
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .sslSocketFactory(contextBuilder.socketFactory, contextBuilder.trustManager)
-         .hostnameVerifier(new RecordingHostnameVerifier())
-         .certificatePinner(certificatePinner)
-@@ -177,7 +178,7 @@
-     SslClient clientContextBuilder = new SslClient.Builder()
-         .addTrustedCertificate(rootCa.certificate)
-         .build();
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .sslSocketFactory(clientContextBuilder.socketFactory, clientContextBuilder.trustManager)
-         .hostnameVerifier(new RecordingHostnameVerifier())
-         .certificatePinner(certificatePinner)
-@@ -263,7 +264,7 @@
-         .addTrustedCertificate(rootCa.certificate)
-         .addTrustedCertificate(compromisedRootCa.certificate)
-         .build();
--    OkHttpClient client = new OkHttpClient.Builder()
-+    OkHttpClient client = defaultClient().newBuilder()
-         .sslSocketFactory(clientContextBuilder.socketFactory, clientContextBuilder.trustManager)
-         .hostnameVerifier(new RecordingHostnameVerifier())
-         .certificatePinner(certificatePinner)
 diff --git a/okhttp-tests/src/test/java/okhttp3/internal/tls/ClientAuthTest.java b/okhttp-tests/src/test/java/okhttp3/internal/tls/ClientAuthTest.java
-index 5b3f1b814..6adbb51b6 100644
+index fc911cd9cb..6adbb51b69 100755
 --- a/okhttp-tests/src/test/java/okhttp3/internal/tls/ClientAuthTest.java
 +++ b/okhttp-tests/src/test/java/okhttp3/internal/tls/ClientAuthTest.java
 @@ -16,8 +16,8 @@
@@ -391,15 +150,7 @@ index 5b3f1b814..6adbb51b6 100644
  import javax.net.ssl.SSLSocket;
  import javax.net.ssl.SSLSocketFactory;
  import javax.security.auth.x500.X500Principal;
-@@ -32,6 +32,7 @@
- import org.junit.Rule;
- import org.junit.Test;
- 
-+import static okhttp3.TestUtil.defaultClient;
- import static org.junit.Assert.assertEquals;
- import static org.junit.Assert.fail;
- 
-@@ -160,7 +161,7 @@ public void initialise() throws GeneralSecurityException {
+@@ -161,7 +161,7 @@ public void initialise() throws GeneralSecurityException {
      try {
        call.execute();
        fail();
@@ -408,7 +159,7 @@ index 5b3f1b814..6adbb51b6 100644
      }
    }
  
-@@ -181,7 +182,7 @@ public void initialise() throws GeneralSecurityException {
+@@ -182,7 +182,7 @@ public void initialise() throws GeneralSecurityException {
      try {
        call.execute();
        fail();
@@ -417,12 +168,3 @@ index 5b3f1b814..6adbb51b6 100644
      }
    }
  
-@@ -194,7 +195,7 @@ public OkHttpClient buildClient(HeldCertificate cert, HeldCertificate... chain)
-     }
- 
-     SslClient sslClient = sslClientBuilder.build();
--    return new OkHttpClient.Builder()
-+    return defaultClient().newBuilder()
-         .sslSocketFactory(sslClient.socketFactory, sslClient.trustManager)
-         .build();
-   }

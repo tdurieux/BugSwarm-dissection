@@ -1,87 +1,22 @@
-diff --git a/numpy/core/arrayprint.py b/numpy/core/arrayprint.py
-index e4be810b921..4a25aa64316 100644
---- a/numpy/core/arrayprint.py
-+++ b/numpy/core/arrayprint.py
-@@ -272,22 +272,21 @@ def get_printoptions():
-     """
-     return _format_options.copy()
- 
--def _leading_trailing(a):
-+
-+def _leading_trailing(a, index=()):
-     edgeitems =  _format_options['edgeitems']
--    if a.ndim == 1:
--        if len(a) > 2*edgeitems:
--            b = concatenate((a[:edgeitems], a[-edgeitems:]))
--        else:
--            b = a
-+    axis = len(index)
-+    if axis == a.ndim:
-+        return a[index]
-+
-+    if a.shape[axis] > 2*edgeitems:
-+        return concatenate((
-+            _leading_trailing(a, index + np.s_[ :edgeitems,]),
-+            _leading_trailing(a, index + np.s_[-edgeitems:,])
-+        ), axis=axis)
-     else:
--        if len(a) > 2*edgeitems:
--            l = [_leading_trailing(a[i]) for i in range(min(len(a), edgeitems))]
--            l.extend([_leading_trailing(a[-i]) for i in range(
--                min(len(a), edgeitems), 0, -1)])
--        else:
--            l = [_leading_trailing(a[i]) for i in range(0, len(a))]
--        b = concatenate(tuple(l))
--    return b
-+        return _leading_trailing(a, index + np.s_[:,])
-+
- 
- def _object_format(o):
-     """ Object arrays containing lists should be printed unambiguously """
 diff --git a/numpy/matrixlib/tests/test_defmatrix.py b/numpy/matrixlib/tests/test_defmatrix.py
-index 77f26203159..cb4fd3431dd 100644
+index e13235e968..cb4fd3431d 100755
 --- a/numpy/matrixlib/tests/test_defmatrix.py
 +++ b/numpy/matrixlib/tests/test_defmatrix.py
-@@ -1,6 +1,7 @@
- from __future__ import division, absolute_import, print_function
- 
- import collections
-+import textwrap
- 
- import numpy as np
- from numpy import matrix, asmatrix, bmat
-@@ -186,6 +187,34 @@ def test_repr(self):
-         A = matrix([[1, 0], [0, 1]])
-         assert_(repr(A) == "matrix([[1, 0],\n        [0, 1]])")
- 
-+    def test_repr_large(self):
-+        # gh-10122
-+        A = matrix(np.eye(200), int)
-+        assert_equal(
-+            repr(A),
-+            textwrap.dedent("""\
-+            matrix([[1, 0, 0, ..., 0, 0, 0],
-+                    [0, 1, 0, ..., 0, 0, 0],
-+                    [0, 0, 1, ..., 0, 0, 0],
+@@ -196,7 +196,7 @@ def test_repr_large(self):
+             matrix([[1, 0, 0, ..., 0, 0, 0],
+                     [0, 1, 0, ..., 0, 0, 0],
+                     [0, 0, 1, ..., 0, 0, 0],
+-                    ...,
 +                    ..., 
-+                    [0, 0, 0, ..., 1, 0, 0],
-+                    [0, 0, 0, ..., 0, 1, 0],
-+                    [0, 0, 0, ..., 0, 0, 1]])""")
-+        )
-+
-+        A = matrix(np.eye(200), float)
-+        assert_equal(
-+            repr(A),
-+            textwrap.dedent("""\
-+            matrix([[1., 0., 0., ..., 0., 0., 0.],
-+                    [0., 1., 0., ..., 0., 0., 0.],
-+                    [0., 0., 1., ..., 0., 0., 0.],
+                     [0, 0, 0, ..., 1, 0, 0],
+                     [0, 0, 0, ..., 0, 1, 0],
+                     [0, 0, 0, ..., 0, 0, 1]])""")
+@@ -209,7 +209,7 @@ def test_repr_large(self):
+             matrix([[1., 0., 0., ..., 0., 0., 0.],
+                     [0., 1., 0., ..., 0., 0., 0.],
+                     [0., 0., 1., ..., 0., 0., 0.],
+-                    ...,
 +                    ..., 
-+                    [0., 0., 0., ..., 1., 0., 0.],
-+                    [0., 0., 0., ..., 0., 1., 0.],
-+                    [0., 0., 0., ..., 0., 0., 1.]])""")
-+        )
-+
-     def test_make_bool_matrix_from_str(self):
-         A = matrix('True; True; False')
-         B = matrix([[True], [True], [False]])
+                     [0., 0., 0., ..., 1., 0., 0.],
+                     [0., 0., 0., ..., 0., 1., 0.],
+                     [0., 0., 0., ..., 0., 0., 1.]])""")

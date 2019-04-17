@@ -1,5 +1,5 @@
 diff --git a/checkstyle.xml b/checkstyle.xml
-index 9428dce8..8d7e8b5b 100644
+index 9428dce8a7..8d7e8b5be4 100755
 --- a/checkstyle.xml
 +++ b/checkstyle.xml
 @@ -133,7 +133,10 @@
@@ -15,7 +15,7 @@ index 9428dce8..8d7e8b5b 100644
  
          <!-- Checks for common coding problems               -->
 diff --git a/java-manta-benchmark/pom.xml b/java-manta-benchmark/pom.xml
-index a4e8dfa5..a5138d89 100644
+index a4e8dfa50d..a5138d896c 100755
 --- a/java-manta-benchmark/pom.xml
 +++ b/java-manta-benchmark/pom.xml
 @@ -63,7 +63,7 @@
@@ -36,25 +36,37 @@ index a4e8dfa5..a5138d89 100644
                  </configuration>
              </plugin>
          </plugins>
-diff --git a/java-manta-benchmark/src/main/java/com/joyent/manta/Benchmark.java b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/Benchmark.java
-similarity index 65%
-rename from java-manta-benchmark/src/main/java/com/joyent/manta/Benchmark.java
-rename to java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/Benchmark.java
-index 064d5488..aa60e055 100644
---- a/java-manta-benchmark/src/main/java/com/joyent/manta/Benchmark.java
+diff --git a/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/Benchmark.java b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/Benchmark.java
+new file mode 100755
+index 0000000000..aa60e055e6
+--- /dev/null
 +++ b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/Benchmark.java
-@@ -1,4 +1,4 @@
--package com.joyent.manta;
+@@ -0,0 +1,192 @@
 +package com.joyent.manta.benchmark;
- 
- import com.joyent.manta.client.MantaClient;
- import com.joyent.manta.client.MantaObjectInputStream;
-@@ -23,13 +23,58 @@
-  *
-  * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
-  */
--public class Benchmark {
--    private static Logger LOG = LoggerFactory.getLogger(Benchmark.class);
++
++import com.joyent.manta.client.MantaClient;
++import com.joyent.manta.client.MantaObjectInputStream;
++import com.joyent.manta.config.ChainedConfigContext;
++import com.joyent.manta.config.ConfigContext;
++import com.joyent.manta.config.DefaultsConfigContext;
++import com.joyent.manta.config.SystemSettingsConfigContext;
++import org.apache.commons.io.FileUtils;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import java.io.IOException;
++import java.io.InputStream;
++import java.time.Duration;
++import java.time.Instant;
++import java.util.ArrayList;
++import java.util.UUID;
++
++/**
++ * Benchmark class that can be invoked to get some simple benchmarks about
++ * Manta performance from the command line.
++ *
++ * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
++ */
 +public final class Benchmark {
 +    /**
 +     * Logger instance.
@@ -79,23 +91,23 @@ index 064d5488..aa60e055 100644
 +    /**
 +     * Configuration context that informs the Manta client about its settings.
 +     */
-     private static ConfigContext config;
++    private static ConfigContext config;
 +
 +    /**
 +     * Manta client library.
 +     */
-     private static MantaClient client;
++    private static MantaClient client;
 +
 +    /**
 +     * Unique test run id.
 +     */
-     private static UUID testRunId = UUID.randomUUID();
++    private static UUID testRunId = UUID.randomUUID();
 +
 +    /**
 +     * Test directory.
 +     */
-     private static String testDirectory;
- 
++    private static String testDirectory;
++
 +    /**
 +     * Use the main method and not the constructor.
 +     */
@@ -107,51 +119,83 @@ index 064d5488..aa60e055 100644
 +     * @param argv first param is the size of object in kb, second param is the number of iterations
 +     * @throws Exception when something goes wrong
 +     */
-     public static void main(final String[] argv) throws Exception {
-         config = new ChainedConfigContext(
-                 new DefaultsConfigContext(),
-@@ -44,14 +89,14 @@ public static void main(final String[] argv) throws Exception {
-             if (argv.length > 0) {
-                 sizeInKb = Long.parseLong(argv[0]);
-             } else {
--                sizeInKb = 128;
++    public static void main(final String[] argv) throws Exception {
++        config = new ChainedConfigContext(
++                new DefaultsConfigContext(),
++                new SystemSettingsConfigContext()
++        );
++        client = new MantaClient(config);
++        testDirectory = String.format("%s/stor/benchmark-%s",
++                config.getMantaHomeDirectory(), testRunId);
++
++        try {
++            final long sizeInKb;
++            if (argv.length > 0) {
++                sizeInKb = Long.parseLong(argv[0]);
++            } else {
 +                sizeInKb = DEFAULT_OBJ_SIZE_KB;
-             }
- 
-             final int iterations;
-             if (argv.length > 1) {
-                 iterations = Integer.parseInt(argv[1]);
-             } else {
--                iterations = 10;
++            }
++
++            final int iterations;
++            if (argv.length > 1) {
++                iterations = Integer.parseInt(argv[1]);
++            } else {
 +                iterations = DEFAULT_ITERATIONS;
-             }
- 
-             System.out.printf("Testing latencies on a %d kb object for %d iterations\n",
-@@ -87,18 +132,33 @@ public static void main(final String[] argv) throws Exception {
-         }
-     }
- 
++            }
++
++            System.out.printf("Testing latencies on a %d kb object for %d iterations\n",
++                    sizeInKb, iterations);
++
++            setupTestDirectory();
++            String path = addTestFile(FileUtils.ONE_KB * sizeInKb);
++
++            long fullAggregation = 0;
++            long serverAggregation = 0;
++
++            for (int i = 0; i < iterations; i++) {
++                Duration[] durations = measureGet(path);
++                long fullLatency = durations[0].toMillis();
++                long serverLatency = durations[1].toMillis();
++                fullAggregation += fullLatency;
++                serverAggregation += serverLatency;
++
++                System.out.printf("Read %d full=%dms, server=%dms\n",
++                        i, fullLatency, serverLatency);
++            }
++
++            final long fullAverage = Math.round(fullAggregation / iterations);
++            final long serverAverage = Math.round(serverAggregation / iterations);
++            System.out.printf("Average full latency: %d ms\n", fullAverage);
++            System.out.printf("Average server latency: %d ms\n", serverAverage);
++
++        } catch (IOException e) {
++            LOG.error("Error running benchmark", e);
++        } finally {
++            cleanUp();
++            client.closeQuietly();
++        }
++    }
++
 +    /**
 +     * Creates test directory.
 +     *
 +     * @throws IOException thrown when we can't access Manta over the network
 +     */
-     private static void setupTestDirectory() throws IOException {
-         client.putDirectory(testDirectory);
-     }
- 
++    private static void setupTestDirectory() throws IOException {
++        client.putDirectory(testDirectory);
++    }
++
 +    /**
 +     * Cleans up the test directory.
 +     */
-     private static void cleanUp() {
-         try {
--//            client.deleteRecursive(testDirectory);
++    private static void cleanUp() {
++        try {
 +            client.deleteRecursive(testDirectory);
-         } catch (Exception e) {
-             LOG.error("Error cleaning up benchmark", e);
-         }
-     }
- 
++        } catch (Exception e) {
++            LOG.error("Error cleaning up benchmark", e);
++        }
++    }
++
 +    /**
 +     * Adds a file (object) for testing.
 +     *
@@ -159,13 +203,15 @@ index 064d5488..aa60e055 100644
 +     * @return path to the object added
 +     * @throws IOException thrown when we can't access Manta over the network
 +     */
-     private static String addTestFile(final long size) throws IOException {
-         try (InputStream is = new RandomInputStream(size)) {
-             String path = String.format("%s/%s.random", testDirectory,
-@@ -108,17 +168,25 @@ private static String addTestFile(final long size) throws IOException {
-         }
-     }
- 
++    private static String addTestFile(final long size) throws IOException {
++        try (InputStream is = new RandomInputStream(size)) {
++            String path = String.format("%s/%s.random", testDirectory,
++                    UUID.randomUUID());
++            client.put(path, is);
++            return path;
++        }
++    }
++
 +    /**
 +     * Measures the total time to get an object from Manta.
 +     *
@@ -174,72 +220,75 @@ index 064d5488..aa60e055 100644
 +     * @throws IOException thrown when we can't access Manta over the network
 +     */
 +    @SuppressWarnings("emptyblock")
-     private static Duration[] measureGet(final String path) throws IOException {
-         final Instant start = Instant.now();
-         final String serverLatencyString;
--                try (MantaObjectInputStream is = client.getAsInputStream(path)) {
--            while (is.skip(1024) != 0);
++    private static Duration[] measureGet(final String path) throws IOException {
++        final Instant start = Instant.now();
++        final String serverLatencyString;
 +        try (MantaObjectInputStream is = client.getAsInputStream(path)) {
 +            while (is.skip(SKIP_VALUE) != 0) { }
-             serverLatencyString = ((ArrayList<?>)is.getHeader("x-response-time")).get(0).toString();
-         }
-         final Instant stop = Instant.now();
- 
-         Duration serverLatency = Duration.ofMillis(Long.parseLong(serverLatencyString));
-         Duration fullLatency = Duration.between(start, stop);
--        return new Duration[] { fullLatency, serverLatency };
++            serverLatencyString = ((ArrayList<?>)is.getHeader("x-response-time")).get(0).toString();
++        }
++        final Instant stop = Instant.now();
++
++        Duration serverLatency = Duration.ofMillis(Long.parseLong(serverLatencyString));
++        Duration fullLatency = Duration.between(start, stop);
 +        return new Duration[] {fullLatency, serverLatency};
-     }
- }
-diff --git a/java-manta-benchmark/src/main/java/com/joyent/manta/RandomInputStream.java b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/RandomInputStream.java
-similarity index 56%
-rename from java-manta-benchmark/src/main/java/com/joyent/manta/RandomInputStream.java
-rename to java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/RandomInputStream.java
-index 74f254a2..8183701b 100644
---- a/java-manta-benchmark/src/main/java/com/joyent/manta/RandomInputStream.java
++    }
++}
+diff --git a/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/RandomInputStream.java b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/RandomInputStream.java
+new file mode 100755
+index 0000000000..8183701bbf
+--- /dev/null
 +++ b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/RandomInputStream.java
-@@ -1,4 +1,4 @@
--package com.joyent.manta;
+@@ -0,0 +1,46 @@
 +package com.joyent.manta.benchmark;
- 
- import org.apache.commons.lang3.RandomUtils;
- 
-@@ -6,14 +6,30 @@
- import java.io.InputStream;
- 
- /**
-- * @author Elijah Zupancic
-- * @since 1.0.0
++
++import org.apache.commons.lang3.RandomUtils;
++
++import java.io.IOException;
++import java.io.InputStream;
++
++/**
 + * {@link InputStream} implementation that generates random data.
 + *
 + * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
-  */
- public class RandomInputStream extends InputStream {
++ */
++public class RandomInputStream extends InputStream {
 +    /**
 +     * End of file magic number.
 +     */
-     private static final int EOF = -1;
++    private static final int EOF = -1;
 +
 +    /**
 +     * Maximum number of bytes to generate.
 +     */
-     private final long maximumBytes;
++    private final long maximumBytes;
 +
 +    /**
 +     * Current generated byte count.
 +     */
-     private volatile long count;
- 
++    private volatile long count;
++
 +    /**
 +     * Creates a new instance.
 +     * @param maximumBytes maximum number of random bytes in stream
 +     */
-     public RandomInputStream(final long maximumBytes) {
-         this.maximumBytes = maximumBytes;
-     }
++    public RandomInputStream(final long maximumBytes) {
++        this.maximumBytes = maximumBytes;
++    }
++
++    @Override
++    public int read() throws IOException {
++        if (count > maximumBytes) {
++            return EOF;
++        }
++        count++;
++
++        return RandomUtils.nextInt(0, Integer.MAX_VALUE);
++    }
++}
 diff --git a/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/package-info.java b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/package-info.java
-new file mode 100644
-index 00000000..5fccf9db
+new file mode 100755
+index 0000000000..5fccf9db02
 --- /dev/null
 +++ b/java-manta-benchmark/src/main/java/com/joyent/manta/benchmark/package-info.java
 @@ -0,0 +1,5 @@
@@ -249,7 +298,7 @@ index 00000000..5fccf9db
 + */
 +package com.joyent.manta.benchmark;
 diff --git a/java-manta-client/src/main/java/com/joyent/manta/client/HttpRequestFactoryProvider.java b/java-manta-client/src/main/java/com/joyent/manta/client/HttpRequestFactoryProvider.java
-index d5cc0595..faaa2d4f 100644
+index d5cc0595a9..faaa2d4f83 100755
 --- a/java-manta-client/src/main/java/com/joyent/manta/client/HttpRequestFactoryProvider.java
 +++ b/java-manta-client/src/main/java/com/joyent/manta/client/HttpRequestFactoryProvider.java
 @@ -129,8 +129,6 @@ private HttpClient buildHttpClient() {

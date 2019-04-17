@@ -1,5 +1,5 @@
 diff --git a/doc/conftest.py b/doc/conftest.py
-index 463df3f38221..11b190d8f66f 100644
+index 463df3f382..11b190d8f6 100755
 --- a/doc/conftest.py
 +++ b/doc/conftest.py
 @@ -1,5 +1,6 @@
@@ -32,7 +32,7 @@ index 463df3f38221..11b190d8f66f 100644
  
  def pytest_runtest_teardown(item):
 diff --git a/doc/modules/clustering.rst b/doc/modules/clustering.rst
-index 1410b50d6518..70b38aa77027 100644
+index 1410b50d65..70b38aa770 100755
 --- a/doc/modules/clustering.rst
 +++ b/doc/modules/clustering.rst
 @@ -1166,42 +1166,42 @@ proposed more recently and is **normalized against chance**::
@@ -86,7 +86,7 @@ index 1410b50d6518..70b38aa77027 100644
  
  
 diff --git a/doc/modules/compose.rst b/doc/modules/compose.rst
-index 8f303ed58521..8817b6d83a38 100644
+index 8f303ed585..8817b6d83a 100755
 --- a/doc/modules/compose.rst
 +++ b/doc/modules/compose.rst
 @@ -413,7 +413,7 @@ variable, but apply a :class:`feature_extraction.text.CountVectorizer
@@ -108,7 +108,7 @@ index 8f303ed58521..8817b6d83a38 100644
  
  .. topic:: Examples:
 diff --git a/doc/modules/ensemble.rst b/doc/modules/ensemble.rst
-index 83da35eb46ca..19e46d3eab25 100644
+index 83da35eb46..19e46d3eab 100755
 --- a/doc/modules/ensemble.rst
 +++ b/doc/modules/ensemble.rst
 @@ -965,7 +965,7 @@ The following example shows how to fit the majority rule classifier::
@@ -130,7 +130,7 @@ index 83da35eb46ca..19e46d3eab25 100644
     Accuracy: 0.95 (+/- 0.05) [Ensemble]
  
 diff --git a/doc/modules/feature_selection.rst b/doc/modules/feature_selection.rst
-index ae630af183cd..7c6df892e5be 100644
+index ae630af183..7c6df892e5 100755
 --- a/doc/modules/feature_selection.rst
 +++ b/doc/modules/feature_selection.rst
 @@ -245,7 +245,7 @@ meta-transformer)::
@@ -143,7 +143,7 @@ index ae630af183cd..7c6df892e5be 100644
    >>> clf.feature_importances_  # doctest: +SKIP
    array([ 0.04...,  0.05...,  0.4...,  0.4...])
 diff --git a/doc/modules/preprocessing.rst b/doc/modules/preprocessing.rst
-index f70a05cf3785..70f24def72f2 100644
+index f70a05cf37..70f24def72 100755
 --- a/doc/modules/preprocessing.rst
 +++ b/doc/modules/preprocessing.rst
 @@ -706,7 +706,7 @@ a transformer that applies a log transformation in a pipeline, do::
@@ -156,7 +156,7 @@ index f70a05cf3785..70f24def72f2 100644
      >>> transformer.transform(X)
      array([[0.        , 0.69314718],
 diff --git a/doc/tutorial/statistical_inference/model_selection.rst b/doc/tutorial/statistical_inference/model_selection.rst
-index 3feba26c6a77..2146c62b9af8 100644
+index 3feba26c6a..2146c62b9a 100755
 --- a/doc/tutorial/statistical_inference/model_selection.rst
 +++ b/doc/tutorial/statistical_inference/model_selection.rst
 @@ -215,15 +215,15 @@ estimator during the construction and exposes an estimator API::
@@ -190,7 +190,7 @@ index 3feba26c6a77..2146c62b9af8 100644
  
      Two cross-validation loops are performed in parallel: one by the
 diff --git a/sklearn/compose/_column_transformer.py b/sklearn/compose/_column_transformer.py
-index 7ec8f326c698..7c5cd2750a4d 100644
+index 7ec8f326c6..7c5cd2750a 100755
 --- a/sklearn/compose/_column_transformer.py
 +++ b/sklearn/compose/_column_transformer.py
 @@ -71,14 +71,14 @@ class ColumnTransformer(_BaseComposition, TransformerMixin):
@@ -245,7 +245,7 @@ index 7ec8f326c698..7c5cd2750a4d 100644
          raise TypeError('Unknown keyword arguments: "{}"'
                          .format(list(kwargs.keys())[0]))
 diff --git a/sklearn/compose/tests/test_column_transformer.py b/sklearn/compose/tests/test_column_transformer.py
-index 06ac7c5eed43..c1363992c0da 100644
+index 06ac7c5eed..c1363992c0 100755
 --- a/sklearn/compose/tests/test_column_transformer.py
 +++ b/sklearn/compose/tests/test_column_transformer.py
 @@ -405,7 +405,7 @@ def test_column_transformer_get_set_params():
@@ -320,47 +320,8 @@ index 06ac7c5eed43..c1363992c0da 100644
  
  @pytest.mark.parametrize("key", [[0], np.array([0]), slice(0, 1),
                                   np.array([True, False])])
-diff --git a/sklearn/covariance/robust_covariance.py b/sklearn/covariance/robust_covariance.py
-index 8b211425141c..420c44ea033f 100644
---- a/sklearn/covariance/robust_covariance.py
-+++ b/sklearn/covariance/robust_covariance.py
-@@ -7,6 +7,8 @@
- # Author: Virgile Fritsch <virgile.fritsch@inria.fr>
- #
- # License: BSD 3 clause
-+from __future__ import division
-+
- import warnings
- import numbers
- import numpy as np
-@@ -144,6 +146,16 @@ def _c_step(X, n_support, random_state, remaining_iterations=30,
-         location = X_support.mean(axis=0)
-         covariance = cov_computation_method(X_support)
-         det = fast_logdet(covariance)
-+
-+        if det > previous_det:
-+            # determinant has increased (should not happen)
-+            warnings.warn("Determinant has increased; this should not happen: "
-+                          "log(det) > log(previous_det) (%.15f > %.15f). "
-+                          "You may want to try with a higher value of "
-+                          "support_fraction (current value: %.3f)."
-+                          % (det, previous_det, n_support / n_samples),
-+                          RuntimeWarning)
-+
-         # update remaining iterations for early stopping
-         remaining_iterations -= 1
- 
-@@ -161,8 +173,6 @@ def _c_step(X, n_support, random_state, remaining_iterations=30,
-         results = location, covariance, det, support, dist
-     elif det > previous_det:
-         # determinant has increased (should not happen)
--        warnings.warn("Warning! det > previous_det (%.15f > %.15f)"
--                      % (det, previous_det), RuntimeWarning)
-         results = previous_location, previous_covariance, \
-             previous_det, previous_support, previous_dist
- 
 diff --git a/sklearn/covariance/tests/test_graphical_lasso.py b/sklearn/covariance/tests/test_graphical_lasso.py
-index 76bcd302a762..2c1b604e5cf7 100644
+index 76bcd302a7..2c1b604e5c 100755
 --- a/sklearn/covariance/tests/test_graphical_lasso.py
 +++ b/sklearn/covariance/tests/test_graphical_lasso.py
 @@ -16,6 +16,7 @@
@@ -381,7 +342,7 @@ index 76bcd302a762..2c1b604e5cf7 100644
      dim = 5
      n_samples = 6
 diff --git a/sklearn/linear_model/tests/test_least_angle.py b/sklearn/linear_model/tests/test_least_angle.py
-index ef0e22f6921f..15df84177e66 100644
+index ef0e22f692..15df84177e 100755
 --- a/sklearn/linear_model/tests/test_least_angle.py
 +++ b/sklearn/linear_model/tests/test_least_angle.py
 @@ -1,5 +1,7 @@
@@ -404,7 +365,7 @@ index ef0e22f6921f..15df84177e66 100644
  
  
 diff --git a/sklearn/metrics/tests/test_common.py b/sklearn/metrics/tests/test_common.py
-index 51ebd00f00cc..b804a97f1534 100644
+index 51ebd00f00..b804a97f15 100755
 --- a/sklearn/metrics/tests/test_common.py
 +++ b/sklearn/metrics/tests/test_common.py
 @@ -198,22 +198,20 @@ def precision_recall_curve_padded_thresholds(*args, **kwargs):
@@ -470,7 +431,7 @@ index 51ebd00f00cc..b804a97f1534 100644
      "coverage_error", "label_ranking_loss",
      "label_ranking_average_precision_score",
 diff --git a/sklearn/tests/test_common.py b/sklearn/tests/test_common.py
-index 1f4c41ec8285..2cde1ca9a14a 100644
+index 1f4c41ec82..2cde1ca9a1 100755
 --- a/sklearn/tests/test_common.py
 +++ b/sklearn/tests/test_common.py
 @@ -110,6 +110,8 @@ def test_no_attributes_set_in_init(name, Estimator):
@@ -483,7 +444,7 @@ index 1f4c41ec8285..2cde1ca9a14a 100644
      # Smoke test the 'configure' step of setup, this tests all the
      # 'configure' functions in the setup.pys in scikit-learn
 diff --git a/sklearn/tests/test_impute.py b/sklearn/tests/test_impute.py
-index 978a948c824b..acd9117e9f7d 100644
+index 978a948c82..acd9117e9f 100755
 --- a/sklearn/tests/test_impute.py
 +++ b/sklearn/tests/test_impute.py
 @@ -323,7 +323,7 @@ def test_imputation_most_frequent_pandas(dtype):

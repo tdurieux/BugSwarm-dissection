@@ -1,5 +1,5 @@
 diff --git a/.travis.yml b/.travis.yml
-index 8b3bc2d430..d6c5a12a01 100644
+index 8b3bc2d430..d6c5a12a01 100755
 --- a/.travis.yml
 +++ b/.travis.yml
 @@ -1,5 +1,6 @@
@@ -9,170 +9,8 @@ index 8b3bc2d430..d6c5a12a01 100644
  
  cache:
    apt: true
-diff --git a/config/intellij-idea-inspections.xml b/config/intellij-idea-inspections.xml
-index 0e18c26510..d2244d4edb 100644
---- a/config/intellij-idea-inspections.xml
-+++ b/config/intellij-idea-inspections.xml
-@@ -196,7 +196,7 @@
-         <option name="onlyWarnOnBaseMethods" value="true" />
-         <option name="questionString" value="is,can,has,should,could,will,shall,check,contains,equals,add,put,remove,starts,ends,are,was,matches,start,must,accept" />
-     </inspection_tool>
--    <inspection_tool class="BooleanParameter" enabled="false" level="ERROR" enabled_by_default="false" />
-+    <inspection_tool class="BooleanParameter" enabled="true" level="ERROR" enabled_by_default="true" />
-     <!-- even it is always negated, it is better than possible negation/inversion of negated term -->
-     <inspection_tool class="BooleanVariableAlwaysNegated" enabled="false" level="ERROR" enabled_by_default="false" />
-     <inspection_tool class="BoxingBoxedValue" enabled="true" level="ERROR" enabled_by_default="true" />
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinter.java b/src/main/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinter.java
-index 2a97a8fbe4..c27e8f1d8c 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinter.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinter.java
-@@ -41,6 +41,20 @@
-  */
- public final class AstTreeStringPrinter {
- 
-+    /**
-+     * Enum to be used for test if comments should be printed.
-+     */
-+    public enum PrintOptions {
-+        /**
-+         * Comments has to be printed.
-+         */
-+        WITH_COMMENTS,
-+        /**
-+         * Comments has NOT to be printed.
-+         */
-+        WITHOUT_COMMENTS
-+    }
-+
-     /** Newline pattern. */
-     private static final Pattern NEWLINE = Pattern.compile("\n");
-     /** Return pattern. */
-@@ -64,7 +78,7 @@ private AstTreeStringPrinter() {
-      * @throws IOException if the file could not be read.
-      * @throws CheckstyleException if the file is not a Java source.
-      */
--    public static String printFileAst(File file, boolean withComments)
-+    public static String printFileAst(File file, PrintOptions withComments)
-             throws IOException, CheckstyleException {
-         return printTree(parseFile(file, withComments));
-     }
-@@ -78,7 +92,7 @@ public static String printFileAst(File file, boolean withComments)
-      */
-     public static String printJavaAndJavadocTree(File file)
-             throws IOException, CheckstyleException {
--        final DetailAST tree = parseFile(file, true);
-+        final DetailAST tree = parseFile(file, PrintOptions.WITH_COMMENTS);
-         return printJavaAndJavadocTree(tree);
-     }
- 
-@@ -130,7 +144,8 @@ private static String parseAndPrintJavadocTree(DetailAST node) {
-      * @return the AST of the file in String form.
-      * @throws CheckstyleException if the file is not a Java source.
-      */
--    public static String printAst(FileText text, boolean withComments) throws CheckstyleException {
-+    public static String printAst(FileText text,
-+                                  PrintOptions withComments) throws CheckstyleException {
-         return printTree(parseFileText(text, withComments));
-     }
- 
-@@ -216,7 +231,7 @@ private static String escapeAllControlChars(String text) {
-      * @throws IOException if the file could not be read.
-      * @throws CheckstyleException if the file is not a Java source.
-      */
--    private static DetailAST parseFile(File file, boolean withComments)
-+    private static DetailAST parseFile(File file, PrintOptions withComments)
-             throws IOException, CheckstyleException {
-         final FileText text = new FileText(file.getAbsoluteFile(),
-             System.getProperty("file.encoding", "UTF-8"));
-@@ -230,12 +245,12 @@ private static DetailAST parseFile(File file, boolean withComments)
-      * @return the root node of the parse tree.
-      * @throws CheckstyleException if the file is not a Java source.
-      */
--    private static DetailAST parseFileText(FileText text, boolean withComments)
-+    private static DetailAST parseFileText(FileText text, PrintOptions withComments)
-             throws CheckstyleException {
-         final FileContents contents = new FileContents(text);
-         final DetailAST result;
-         try {
--            if (withComments) {
-+            if (withComments == PrintOptions.WITH_COMMENTS) {
-                 result = TreeWalker.parseWithComments(contents);
-             }
-             else {
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-index 64f4805671..55e72353a0 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-@@ -205,6 +205,7 @@ public static Configuration loadConfiguration(String config,
-      *            'ignore' should be omitted, {@code false} otherwise
-      * @return the check configurations
-      * @throws CheckstyleException if an error occurs
-+     * @noinspection BooleanParameter
-      */
-     public static Configuration loadConfiguration(String config,
-         PropertyResolver overridePropsResolver, boolean omitIgnoredModules)
-@@ -223,6 +224,7 @@ public static Configuration loadConfiguration(String config,
-      * @param threadModeSettings the thread mode configuration
-      * @return the check configurations
-      * @throws CheckstyleException if an error occurs
-+     * @noinspection BooleanParameter
-      */
-     public static Configuration loadConfiguration(String config,
-             PropertyResolver overridePropsResolver,
-@@ -251,6 +253,7 @@ public static Configuration loadConfiguration(String config,
-      *     {@link #loadConfiguration(InputSource,PropertyResolver,boolean)
-      *          version using an InputSource}
-      *     should be used instead
-+     * @noinspection BooleanParameter
-      */
-     @Deprecated
-     public static Configuration loadConfiguration(InputStream configStream,
-@@ -271,6 +274,7 @@ public static Configuration loadConfiguration(InputStream configStream,
-      *            'ignore' should be omitted, {@code false} otherwise
-      * @return the check configurations
-      * @throws CheckstyleException if an error occurs
-+     * @noinspection BooleanParameter
-      */
-     public static Configuration loadConfiguration(InputSource configSource,
-             PropertyResolver overridePropsResolver, boolean omitIgnoredModules)
-@@ -291,6 +295,7 @@ public static Configuration loadConfiguration(InputSource configSource,
-      * @param threadModeSettings the thread mode configuration
-      * @return the check configurations
-      * @throws CheckstyleException if an error occurs
-+     * @noinspection BooleanParameter
-      */
-     public static Configuration loadConfiguration(InputSource configSource,
-         PropertyResolver overridePropsResolver,
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
-index 3a14fcc904..5810354ccd 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/DefaultLogger.java
-@@ -76,6 +76,7 @@
-      * Creates a new {@code DefaultLogger} instance.
-      * @param outputStream where to log infos and errors
-      * @param closeStreamsAfterUse if oS should be closed in auditFinished()
-+     * @noinspection BooleanParameter
-      */
-     public DefaultLogger(OutputStream outputStream, boolean closeStreamsAfterUse) {
-         // no need to close oS twice
-@@ -88,6 +89,7 @@ public DefaultLogger(OutputStream outputStream, boolean closeStreamsAfterUse) {
-      * @param closeInfoAfterUse auditFinished should close infoStream.
-      * @param errorStream the {@code OutputStream} for error messages.
-      * @param closeErrorAfterUse auditFinished should close errorStream
-+     * @noinspection BooleanParameter
-      */
-     public DefaultLogger(OutputStream infoStream,
-                          boolean closeInfoAfterUse,
-@@ -105,6 +107,7 @@ public DefaultLogger(OutputStream infoStream,
-      * @param errorStream the {@code OutputStream} for error messages
-      * @param closeErrorAfterUse auditFinished should close errorStream
-      * @param messageFormatter formatter for the log message.
-+     * @noinspection BooleanParameter
-      */
-     public DefaultLogger(OutputStream infoStream,
-                          boolean closeInfoAfterUse,
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java b/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
-index ad29a2bed0..3fb7720b80 100644
+index ad29a2bed0..3fb7720b80 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
 @@ -23,6 +23,8 @@
@@ -251,136 +89,8 @@ index ad29a2bed0..3fb7720b80 100644
 +    }
 +
  }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-index df2e0d2b79..22215ace45 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-@@ -390,12 +390,14 @@ private static int runCli(CommandLine commandLine, List<File> filesToProcess)
-         if (commandLine.hasOption(OPTION_T_NAME)) {
-             // print AST
-             final File file = config.files.get(0);
--            final String stringAst = AstTreeStringPrinter.printFileAst(file, false);
-+            final String stringAst = AstTreeStringPrinter.printFileAst(file,
-+                    AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-             System.out.print(stringAst);
-         }
-         else if (commandLine.hasOption(OPTION_CAPITAL_T_NAME)) {
-             final File file = config.files.get(0);
--            final String stringAst = AstTreeStringPrinter.printFileAst(file, true);
-+            final String stringAst = AstTreeStringPrinter.printFileAst(file,
-+                    AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-             System.out.print(stringAst);
-         }
-         else if (commandLine.hasOption(OPTION_J_NAME)) {
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/XMLLogger.java b/src/main/java/com/puppycrawl/tools/checkstyle/XMLLogger.java
-index 19818f54b0..db7be51aa9 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/XMLLogger.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/XMLLogger.java
-@@ -67,6 +67,7 @@
-      * Sets the output to a defined stream.
-      * @param outputStream the stream to write logs to.
-      * @param closeStream close oS in auditFinished
-+     * @noinspection BooleanParameter
-      */
-     public XMLLogger(OutputStream outputStream, boolean closeStream) {
-         setOutputStream(outputStream);
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTokenTextCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTokenTextCheck.java
-index f6a6b1baed..72b74873bb 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTokenTextCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/IllegalTokenTextCheck.java
-@@ -147,6 +147,7 @@ public void setFormat(String format) {
-     /**
-      * Set whether or not the match is case sensitive.
-      * @param caseInsensitive true if the match is case insensitive.
-+     * @noinspection BooleanParameter
-      */
-     public void setIgnoreCase(boolean caseInsensitive) {
-         if (caseInsensitive) {
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/AbstractExpressionHandler.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/AbstractExpressionHandler.java
-index c22cefcc25..433802db24 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/AbstractExpressionHandler.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/AbstractExpressionHandler.java
-@@ -353,7 +353,8 @@ protected void checkWrappingIndentation(DetailAST firstNode, DetailAST lastNode)
-     protected void checkWrappingIndentation(DetailAST firstNode, DetailAST lastNode,
-             int wrappedIndentLevel, int startIndent, boolean ignoreFirstLine) {
-         indentCheck.getLineWrappingHandler().checkIndentation(firstNode, lastNode,
--                wrappedIndentLevel, startIndent, ignoreFirstLine);
-+                wrappedIndentLevel, startIndent,
-+                LineWrappingHandler.LineWrappingOptions.ofBoolean(ignoreFirstLine));
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/LineWrappingHandler.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/LineWrappingHandler.java
-index 9ee72d852c..6ad00c62c2 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/LineWrappingHandler.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/LineWrappingHandler.java
-@@ -38,6 +38,36 @@
-  */
- public class LineWrappingHandler {
- 
-+    /**
-+     * Enum to be used for test if first line's indentation should be checked or not.
-+     */
-+    public enum LineWrappingOptions {
-+        /**
-+         * First line's indentation should NOT be checked.
-+         */
-+        IGNORE_FIRST_LINE,
-+        /**
-+         * First line's indentation should be checked.
-+         */
-+        NONE;
-+
-+        /**
-+         * Builds enum value from boolean.
-+         * @param val value.
-+         * @return enum instance.
-+         *
-+         * @noinspection BooleanParameter
-+         */
-+        public static LineWrappingOptions ofBoolean(boolean val) {
-+            if (val) {
-+                return IGNORE_FIRST_LINE;
-+            }
-+            else {
-+                return NONE;
-+            }
-+        }
-+    }
-+
-     /**
-      * The current instance of {@code IndentationCheck} class using this
-      * handler. This field used to get access to private fields of
-@@ -74,7 +104,8 @@ public void checkIndentation(DetailAST firstNode, DetailAST lastNode) {
-      * @param indentLevel Indentation all wrapped lines should use.
-      */
-     public void checkIndentation(DetailAST firstNode, DetailAST lastNode, int indentLevel) {
--        checkIndentation(firstNode, lastNode, indentLevel, -1, true);
-+        checkIndentation(firstNode, lastNode, indentLevel,
-+                -1, LineWrappingOptions.IGNORE_FIRST_LINE);
-     }
- 
-     /**
-@@ -87,7 +118,7 @@ public void checkIndentation(DetailAST firstNode, DetailAST lastNode, int indent
-      * @param ignoreFirstLine Test if first line's indentation should be checked or not.
-      */
-     public void checkIndentation(DetailAST firstNode, DetailAST lastNode, int indentLevel,
--            int startIndent, boolean ignoreFirstLine) {
-+            int startIndent, LineWrappingOptions ignoreFirstLine) {
-         final NavigableMap<Integer, DetailAST> firstNodesOnLines = collectFirstNodes(firstNode,
-                 lastNode);
- 
-@@ -110,7 +141,7 @@ public void checkIndentation(DetailAST firstNode, DetailAST lastNode, int indent
-             }
-         }
- 
--        if (ignoreFirstLine) {
-+        if (ignoreFirstLine == LineWrappingOptions.IGNORE_FIRST_LINE) {
-             // First node should be removed because it was already checked before.
-             firstNodesOnLines.remove(firstNodesOnLines.firstKey());
-         }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheck.java
-index f27682f1f1..460fcdc0ec 100644
+index f27682f1f1..460fcdc0ec 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheck.java
 @@ -70,11 +70,6 @@
@@ -395,156 +105,8 @@ index f27682f1f1..460fcdc0ec 100644
  
      /**
       * Key is "line:column". Value is {@link DetailNode} tree. Map is stored in {@link ThreadLocal}
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-index 2b73218a08..083419fac6 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-@@ -202,7 +202,7 @@ public Builder maximum(int val) {
-          * Specifies whether to ignore case when matching and returns Builder object.
-          * @param val whether to ignore case when matching.
-          * @return Builder object.
--         * @noinspection ReturnOfInnerClass
-+         * @noinspection ReturnOfInnerClass, BooleanParameter
-          */
-         public Builder ignoreCase(boolean val) {
-             ignoreCase = val;
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
-index dd8c7d7d5c..b2e4b09506 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
-@@ -62,6 +62,20 @@
-     extends AutomaticBean
-     implements TreeWalkerFilter {
- 
-+    /**
-+     * Enum to be used for switching checkstyle reporting for tags.
-+     */
-+    public enum TagType {
-+        /**
-+         * Switch reporting on.
-+         */
-+        ON,
-+        /**
-+         * Switch reporting off.
-+         */
-+        OFF
-+    }
-+
-     /** Turns checkstyle reporting off. */
-     private static final String DEFAULT_OFF_FORMAT = "CHECKSTYLE:OFF";
- 
-@@ -183,7 +197,7 @@ public boolean accept(TreeWalkerAuditEvent event) {
-                 tagSuppressions();
-             }
-             final Tag matchTag = findNearestMatch(event);
--            accepted = matchTag == null || matchTag.isReportingOn();
-+            accepted = matchTag == null || matchTag.getTagType() == TagType.ON;
-         }
-         return accepted;
-     }
-@@ -253,12 +267,12 @@ private void tagSuppressions(Collection<TextBlock> comments) {
-     private void tagCommentLine(String text, int line, int column) {
-         final Matcher offMatcher = offCommentFormat.matcher(text);
-         if (offMatcher.find()) {
--            addTag(offMatcher.group(0), line, column, false);
-+            addTag(offMatcher.group(0), line, column, TagType.OFF);
-         }
-         else {
-             final Matcher onMatcher = onCommentFormat.matcher(text);
-             if (onMatcher.find()) {
--                addTag(onMatcher.group(0), line, column, true);
-+                addTag(onMatcher.group(0), line, column, TagType.ON);
-             }
-         }
-     }
-@@ -270,7 +284,7 @@ private void tagCommentLine(String text, int line, int column) {
-      * @param column the column number of the tag.
-      * @param reportingOn {@code true} if the tag turns checkstyle reporting on.
-      */
--    private void addTag(String text, int line, int column, boolean reportingOn) {
-+    private void addTag(String text, int line, int column, TagType reportingOn) {
-         final Tag tag = new Tag(line, column, text, reportingOn, this);
-         tags.add(tag);
-     }
-@@ -292,7 +306,7 @@ private void addTag(String text, int line, int column, boolean reportingOn) {
-         private final int column;
- 
-         /** Determines whether the suppression turns checkstyle reporting on. */
--        private final boolean reportingOn;
-+        private final TagType tagType;
- 
-         /** The parsed check regexp, expanded for the text of this tag. */
-         private final Pattern tagCheckRegexp;
-@@ -305,22 +319,22 @@ private void addTag(String text, int line, int column, boolean reportingOn) {
-          * @param line the line number.
-          * @param column the column number.
-          * @param text the text of the suppression.
--         * @param reportingOn {@code true} if the tag turns checkstyle reporting.
-+         * @param tagType {@code ON} if the tag turns checkstyle reporting.
-          * @param filter the {@code SuppressionCommentFilter} with the context
-          * @throws IllegalArgumentException if unable to parse expanded text.
-          */
--        public Tag(int line, int column, String text, boolean reportingOn,
-+        public Tag(int line, int column, String text, TagType tagType,
-                    SuppressionCommentFilter filter) {
-             this.line = line;
-             this.column = column;
-             this.text = text;
--            this.reportingOn = reportingOn;
-+            this.tagType = tagType;
- 
-             //Expand regexp for check and message
-             //Does not intern Patterns with Utils.getPattern()
-             String format = "";
-             try {
--                if (reportingOn) {
-+                if (this.tagType == TagType.ON) {
-                     format = CommonUtils.fillTemplateWithStringsByRegexp(
-                             filter.checkFormat, text, filter.onCommentFormat);
-                     tagCheckRegexp = Pattern.compile(format);
-@@ -374,10 +388,10 @@ public int getColumn() {
-         /**
-          * Determines whether the suppression turns checkstyle reporting on or
-          * off.
--         * @return {@code true}if the suppression turns reporting on.
-+         * @return {@code ON} if the suppression turns reporting on.
-          */
--        public boolean isReportingOn() {
--            return reportingOn;
-+        public TagType getTagType() {
-+            return tagType;
-         }
- 
-         /**
-@@ -411,7 +425,7 @@ public boolean equals(Object other) {
-             final Tag tag = (Tag) other;
-             return Objects.equals(line, tag.line)
-                     && Objects.equals(column, tag.column)
--                    && Objects.equals(reportingOn, tag.reportingOn)
-+                    && Objects.equals(tagType, tag.tagType)
-                     && Objects.equals(text, tag.text)
-                     && Objects.equals(tagCheckRegexp, tag.tagCheckRegexp)
-                     && Objects.equals(tagMessageRegexp, tag.tagMessageRegexp);
-@@ -419,7 +433,7 @@ public boolean equals(Object other) {
- 
-         @Override
-         public int hashCode() {
--            return Objects.hash(text, line, column, reportingOn, tagCheckRegexp, tagMessageRegexp);
-+            return Objects.hash(text, line, column, tagType, tagCheckRegexp, tagMessageRegexp);
-         }
- 
-         /**
-@@ -452,7 +466,7 @@ public String toString() {
-             return "Tag[text='" + text + '\''
-                     + ", line=" + line
-                     + ", column=" + column
--                    + ", on=" + reportingOn
-+                    + ", type=" + tagType
-                     + ", tagCheckRegexp=" + tagCheckRegexp
-                     + ", tagMessageRegexp=" + tagMessageRegexp + ']';
-         }
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages.properties
-index 01ed85a422..4ee83eef0d 100644
+index 01ed85a422..4ee83eef0d 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Javadoc comment at column {0} has parse error. Details:
@@ -556,7 +118,7 @@ index 01ed85a422..4ee83eef0d 100644
  javadoc.unusedTagGeneral=Unused Javadoc tag.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_de.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_de.properties
-index 7d38769bd5..1e354e58ba 100644
+index 7d38769bd5..1e354e58ba 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_de.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_de.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Der Javadoc-Kommentar an Position {0} führt zu einem P
@@ -568,7 +130,7 @@ index 7d38769bd5..1e354e58ba 100644
  javadoc.unusedTagGeneral=Nicht verwendeter Javadoc-Tag.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_es.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_es.properties
-index bcf101b580..5cba800409 100644
+index bcf101b580..5cba800409 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_es.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_es.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Javadoc comentario en la columna {0} tiene parse error.
@@ -580,7 +142,7 @@ index bcf101b580..5cba800409 100644
  javadoc.unusedTagGeneral=Etiqueta Javadoc no usada.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fi.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fi.properties
-index 80dab9e689..f3d6d76a24 100644
+index 80dab9e689..f3d6d76a24 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fi.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fi.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Javadoc kommentti sarakkeessa {0} on Jäsennysvirhe. Ti
@@ -592,7 +154,7 @@ index 80dab9e689..f3d6d76a24 100644
  javadoc.unusedTagGeneral=Tuntematon Javadoc-tagi.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fr.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fr.properties
-index be38f6eddb..3b4b40a0ff 100644
+index be38f6eddb..3b4b40a0ff 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fr.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_fr.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Le commentaire Javadoc à la colonne {0} ne peut être
@@ -604,7 +166,7 @@ index be38f6eddb..3b4b40a0ff 100644
  javadoc.unusedTagGeneral=Balise javadoc inutilisée.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_ja.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_ja.properties
-index 1618f5617a..2ee37c8403 100644
+index 1618f5617a..2ee37c8403 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_ja.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_ja.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error={0} 桁目の Javadoc コメントでパースエラー
@@ -616,7 +178,7 @@ index 1618f5617a..2ee37c8403 100644
  javadoc.unusedTagGeneral=使用されない Javadoc タグです。
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_pt.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_pt.properties
-index 9726bf55d3..4841d860d5 100644
+index 9726bf55d3..4841d860d5 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_pt.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_pt.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Javadoc comentário na coluna {0} tem analisar erro. De
@@ -628,7 +190,7 @@ index 9726bf55d3..4841d860d5 100644
  javadoc.unusedTagGeneral=Marca Javadoc não utilizada.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_tr.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_tr.properties
-index e1c594a964..455471059c 100644
+index e1c594a964..455471059c 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_tr.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_tr.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Sütununda Javadoc comment {0} hatası ayrıştırmak v
@@ -640,7 +202,7 @@ index e1c594a964..455471059c 100644
  javadoc.unusedTagGeneral=Kullanılmayan Javadoc etiketi.
  javadoc.writeTag={0}={1}
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_zh.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_zh.properties
-index 4b863dd0dc..453b85c691 100644
+index 4b863dd0dc..453b85c691 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_zh.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/messages_zh.properties
 @@ -20,7 +20,6 @@ javadoc.parse.rule.error=Javadoc 第 {0} 个字符解析错误。解析 {2} ，
@@ -651,137 +213,8 @@ index 4b863dd0dc..453b85c691 100644
  javadoc.unusedTag=''{1}'' 的无用标签 {0} 。
  javadoc.unusedTagGeneral=无用标签。
  javadoc.writeTag={0}={1}
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/AbstractTreeTestSupport.java b/src/test/java/com/puppycrawl/tools/checkstyle/AbstractTreeTestSupport.java
-index 84b463bcae..0b41cbf0da 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/AbstractTreeTestSupport.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/AbstractTreeTestSupport.java
-@@ -55,7 +55,8 @@ protected final String getNonCompilablePath(String filename) throws IOException
-      * @throws Exception if exception occurs during verification.
-      */
-     protected static void verifyAst(String expectedTextPrintFileName, String actualJavaFileName,
--                                    boolean withComments) throws Exception {
-+                                    AstTreeStringPrinter.PrintOptions withComments)
-+            throws Exception {
-         final String expectedContents = readFile(expectedTextPrintFileName);
- 
-         final String actualContents = AstTreeStringPrinter.printFileAst(
-@@ -67,7 +68,8 @@ protected static void verifyAst(String expectedTextPrintFileName, String actualJ
- 
-     /**
-      * Performs verification of the given text ast tree representation.
--     * This implementation uses {@link BaseCheckTestSupport#verifyAst(String, String, boolean)}
-+     * This implementation uses
-+     * {@link BaseCheckTestSupport#verifyAst(String, String, AstTreeStringPrinter.PrintOptions)}
-      * method inside.
-      * @param expectedTextPrintFileName expected text ast tree representation.
-      * @param actualJavaFileName actual text ast tree representation.
-@@ -75,7 +77,8 @@ protected static void verifyAst(String expectedTextPrintFileName, String actualJ
-      */
-     protected static void verifyAst(String expectedTextPrintFileName, String actualJavaFileName)
-             throws Exception {
--        verifyAst(expectedTextPrintFileName, actualJavaFileName, false);
-+        verifyAst(expectedTextPrintFileName, actualJavaFileName,
-+                AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-     }
- 
-     /**
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-index 51d950e185..23da55177c 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-@@ -49,7 +49,8 @@ public void testIsProperUtilsClass() throws ReflectiveOperationException {
-     public void testParseFileThrowable() throws Exception {
-         try {
-             AstTreeStringPrinter.printFileAst(
--                new File(getNonCompilablePath("InputAstTreeStringPrinter.java")), false);
-+                new File(getNonCompilablePath("InputAstTreeStringPrinter.java")),
-+                    AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-             Assert.fail("exception expected");
-         }
-         catch (CheckstyleException ex) {
-@@ -63,7 +64,8 @@ public void testParseFileThrowable() throws Exception {
-     @Test
-     public void testParseFile() throws Exception {
-         verifyAst(getPath("expectedInputAstTreeStringPrinter.txt"),
--                getPath("InputAstTreeStringPrinterComments.java"), false);
-+                getPath("InputAstTreeStringPrinterComments.java"),
-+                AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-     }
- 
-     @Test
-@@ -71,7 +73,8 @@ public void testPrintAst() throws Exception {
-         final FileText text = new FileText(
-                 new File(getPath("InputAstTreeStringPrinterComments.java")).getAbsoluteFile(),
-                 System.getProperty("file.encoding", "UTF-8"));
--        final String actual = AstTreeStringPrinter.printAst(text, false);
-+        final String actual = AstTreeStringPrinter.printAst(text,
-+                AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-         final String expected = new String(Files.readAllBytes(Paths.get(
-                 getPath("expectedInputAstTreeStringPrinter.txt"))), StandardCharsets.UTF_8);
- 
-@@ -81,7 +84,8 @@ public void testPrintAst() throws Exception {
-     @Test
-     public void testParseFileWithComments() throws Exception {
-         verifyAst(getPath("expectedInputAstTreeStringPrinterComments.txt"),
--                getPath("InputAstTreeStringPrinterComments.java"), true);
-+                getPath("InputAstTreeStringPrinterComments.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-     @Test
-@@ -113,12 +117,14 @@ public void testJavadocPosition() throws Exception {
-     @Test
-     public void testAstTreeBlockComments() throws Exception {
-         verifyAst(getPath("InputFullOfBlockCommentsAst.txt"),
--                getPath("InputFullOfBlockComments.java"), true);
-+                getPath("InputFullOfBlockComments.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-     @Test
-     public void testAstTreeSingleLineComments() throws Exception {
-         verifyAst(getPath("InputFullOfSinglelineCommentsAst.txt"),
--                getPath("InputFullOfSinglelineComments.java"), true);
-+                getPath("InputFullOfSinglelineComments.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java b/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
-index a1e40a6387..4afe6b48a3 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/BaseCheckTestSupport.java
-@@ -146,7 +146,8 @@ protected String getNonCompilablePath(String filename) throws IOException {
- 
-     /**
-      * Performs verification of the given text ast tree representation.
--     * This implementation uses {@link BaseCheckTestSupport#verifyAst(String, String, boolean)}
-+     * This implementation uses
-+     * {@link BaseCheckTestSupport#verifyAst(String, String, AstTreeStringPrinter.PrintOptions)}
-      * method inside.
-      * @param expectedTextPrintFileName expected text ast tree representation.
-      * @param actualJavaFileName actual text ast tree representation.
-@@ -154,7 +155,8 @@ protected String getNonCompilablePath(String filename) throws IOException {
-      */
-     protected static void verifyAst(String expectedTextPrintFileName, String actualJavaFileName)
-             throws Exception {
--        verifyAst(expectedTextPrintFileName, actualJavaFileName, false);
-+        verifyAst(expectedTextPrintFileName, actualJavaFileName,
-+                AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-     }
- 
-     /**
-@@ -165,7 +167,8 @@ protected static void verifyAst(String expectedTextPrintFileName, String actualJ
-      * @throws Exception if exception occurs during verification.
-      */
-     protected static void verifyAst(String expectedTextPrintFileName, String actualJavaFileName,
--                                    boolean withComments) throws Exception {
-+                                    AstTreeStringPrinter.PrintOptions withComments)
-+            throws Exception {
-         final String expectedContents = readFile(expectedTextPrintFileName);
- 
-         final String actualContents = AstTreeStringPrinter.printFileAst(
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/BaseFileSetCheckTestSupport.java b/src/test/java/com/puppycrawl/tools/checkstyle/BaseFileSetCheckTestSupport.java
-index 345533d674..634d72d7ee 100644
+index 345533d674..634d72d7ee 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/BaseFileSetCheckTestSupport.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/BaseFileSetCheckTestSupport.java
 @@ -21,7 +21,12 @@
@@ -799,7 +232,7 @@ index 345533d674..634d72d7ee 100644
      protected DefaultConfiguration createCheckerConfig(
          Configuration config) {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
-index d8084a7944..4158376df0 100644
+index d8084a7944..4158376df0 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
 @@ -37,10 +37,11 @@
@@ -818,7 +251,7 @@ index d8084a7944..4158376df0 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index 9d9c99fc7a..008179e947 100644
+index 9d9c99fc7a..008179e947 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 @@ -170,9 +170,10 @@ public void testVersionPrint()
@@ -1501,7 +934,7 @@ index 9d9c99fc7a..008179e947 100644
          }
      }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
-index 992c4cb3f8..27fcf5a49f 100644
+index 992c4cb3f8..27fcf5a49f 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
 @@ -63,10 +63,16 @@
@@ -1523,7 +956,7 @@ index 992c4cb3f8..27fcf5a49f 100644
      public void testProperFileExtension() throws Exception {
          final DefaultConfiguration checkConfig =
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/api/ScopeTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/api/ScopeTest.java
-index 0b9d6420c3..4144c30ea6 100644
+index 0b9d6420c3..4144c30ea6 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/api/ScopeTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/api/ScopeTest.java
 @@ -42,34 +42,35 @@
@@ -1691,7 +1124,7 @@ index 0b9d6420c3..4144c30ea6 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
-index 333a998b77..49084f3c8a 100644
+index 333a998b77..49084f3c8a 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
 @@ -26,7 +26,6 @@
@@ -1717,7 +1150,7 @@ index 333a998b77..49084f3c8a 100644
  
      /* Additional test for jacoco, since valueOf()
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheckTest.java
-index 0af2b56ea3..0c4647d6f1 100644
+index 0af2b56ea3..0c4647d6f1 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheckTest.java
 @@ -73,8 +73,8 @@ public void testLambdaExpression() throws Exception {
@@ -1733,7 +1166,7 @@ index 0af2b56ea3..0c4647d6f1 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
-index e7051efed1..b6a6dbb757 100644
+index e7051efed1..b6a6dbb757 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
 @@ -26,7 +26,6 @@
@@ -1759,7 +1192,7 @@ index e7051efed1..b6a6dbb757 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
-index 54018b7933..7e59620825 100644
+index 54018b7933..7e59620825 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
 @@ -31,7 +31,6 @@
@@ -1783,7 +1216,7 @@ index 54018b7933..7e59620825 100644
  
      /**
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlRegExpTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlRegExpTest.java
-index 1c157da340..847f4bca31 100644
+index 1c157da340..847f4bca31 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlRegExpTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlRegExpTest.java
 @@ -44,47 +44,47 @@ public void setUp() {
@@ -1850,7 +1283,7 @@ index 1c157da340..847f4bca31 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlTest.java
-index fd960f20f1..34151a0aa5 100644
+index fd960f20f1..34151a0aa5 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlTest.java
 @@ -44,39 +44,40 @@ public void setUp() {
@@ -1907,7 +1340,7 @@ index fd960f20f1..34151a0aa5 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/PkgImportRuleTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/PkgImportRuleTest.java
-index c11a47e3b1..fb703cbe6a 100644
+index c11a47e3b1..fb703cbe6a 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/PkgImportRuleTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/PkgImportRuleTest.java
 @@ -29,76 +29,76 @@
@@ -2034,7 +1467,7 @@ index c11a47e3b1..fb703cbe6a 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
-index e369d56c27..9fed668251 100644
+index e369d56c27..9fed668251 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
 @@ -22,7 +22,6 @@
@@ -2076,7 +1509,7 @@ index e369d56c27..9fed668251 100644
          verify(checkConfig,
              getPath("InputAbstractJavadocUnclosedTagAndInvalidAtSeeReference.java"), expected);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/utils/InlineTagUtilsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/utils/InlineTagUtilsTest.java
-index 224fdb04e5..da925c859b 100644
+index 224fdb04e5..da925c859b 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/utils/InlineTagUtilsTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/utils/InlineTagUtilsTest.java
 @@ -49,7 +49,7 @@ public void testExtractInlineTags() {
@@ -2145,7 +1578,7 @@ index 224fdb04e5..da925c859b 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
-index 61d0b08753..bdbea2f68e 100644
+index 61d0b08753..bdbea2f68e 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 @@ -25,7 +25,6 @@
@@ -2171,7 +1604,7 @@ index 61d0b08753..bdbea2f68e 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpOnFilenameCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpOnFilenameCheckTest.java
-index 9d35b02190..8c2cf79c6a 100644
+index 9d35b02190..8c2cf79c6a 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpOnFilenameCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpOnFilenameCheckTest.java
 @@ -25,7 +25,6 @@
@@ -2197,7 +1630,7 @@ index 9d35b02190..8c2cf79c6a 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpSinglelineCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpSinglelineCheckTest.java
-index ede05458a5..c7539a87c9 100644
+index ede05458a5..c7539a87c9 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpSinglelineCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpSinglelineCheckTest.java
 @@ -22,9 +22,6 @@
@@ -2225,7 +1658,7 @@ index ede05458a5..c7539a87c9 100644
  
      @Test
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDocletTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDocletTest.java
-index 5b07c4d541..fc6246b712 100644
+index 5b07c4d541..fc6246b712 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDocletTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDocletTest.java
 @@ -37,6 +37,7 @@
@@ -2250,88 +1683,8 @@ index 5b07c4d541..fc6246b712 100644
      }
  
      @Test
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
-index 062f870ae5..78eca0ab7e 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
-@@ -251,11 +251,12 @@ public void testEqualsAndHashCodeOfTagClass() {
-     @Test
-     public void testToStringOfTagClass() {
-         final SuppressionCommentFilter.Tag tag = new SuppressionCommentFilter.Tag(
--                0, 1, "text", false, new SuppressionCommentFilter()
-+                0, 1, "text",
-+                SuppressionCommentFilter.TagType.OFF, new SuppressionCommentFilter()
-         );
- 
-         assertEquals("Invalid toString result",
--            "Tag[text='text', line=0, column=1, on=false,"
-+            "Tag[text='text', line=0, column=1, type=OFF,"
-                     + " tagCheckRegexp=.*, tagMessageRegexp=null]", tag.toString());
-     }
- 
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
-index ac85833009..ab656d5f65 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/AstRegressionTest.java
-@@ -137,19 +137,25 @@ public void testCustomAstTree() throws Exception {
-         verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "\r\r");
-         verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "\r");
-         verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "\u000c\f");
--        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \n", true);
--        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \r", true);
--        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \r\n", true);
--        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "/* \n */", true);
--        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "/* \r\n */", true);
-+        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \n",
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-+        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \r",
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-+        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "// \r\n",
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-+        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "/* \n */",
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-+        verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "/* \r\n */",
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-         verifyAstRaw(getPath("InputRegressionEmptyAst.txt"), "/* \r" + "\u0000\u0000" + " */",
--            true);
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-     @Test
-     public void testNewlineCr() throws Exception {
-         verifyAst(getPath("InputNewlineCrAtEndOfFileAst.txt"),
--                getPath("InputAstRegressionNewlineCrAtEndOfFile.java"), true);
-+                getPath("InputAstRegressionNewlineCrAtEndOfFile.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-     @Test
-@@ -203,11 +209,12 @@ public void testImpossibleValid() throws Exception {
- 
-     private static void verifyAstRaw(String expectedTextPrintFileName, String actualJava)
-             throws Exception {
--        verifyAstRaw(expectedTextPrintFileName, actualJava, false);
-+        verifyAstRaw(expectedTextPrintFileName, actualJava,
-+                AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-     }
- 
-     private static void verifyAstRaw(String expectedTextPrintFileName, String actualJava,
--            boolean withComments) throws Exception {
-+            AstTreeStringPrinter.PrintOptions withComments) throws Exception {
-         final File expectedFile = new File(expectedTextPrintFileName);
-         final String expectedContents = new FileText(expectedFile, System.getProperty(
-                 "file.encoding", "UTF-8")).getFullText().toString().replace("\r", "");
-@@ -242,7 +249,7 @@ public static void verifyFail(String methodName, char... laResults) throws Excep
-             verify(methodName, false, 1, laResults);
-         }
- 
--        public static void verify(String methodName, boolean expectPass, int guessing,
-+        private static void verify(String methodName, boolean expectPass, int guessing,
-                 char... laResults) throws Exception {
-             final AssertGeneratedJavaLexer instance = new AssertGeneratedJavaLexer();
-             instance.laPosition = 0;
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllBlockCommentsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllBlockCommentsTest.java
-index 5b0fa352c3..354fb63c00 100644
+index 4edbc79bf2..354fb63c00 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllBlockCommentsTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllBlockCommentsTest.java
 @@ -19,8 +19,6 @@
@@ -2343,10 +1696,11 @@ index 5b0fa352c3..354fb63c00 100644
  import java.util.Arrays;
  import java.util.LinkedHashSet;
  import java.util.Set;
-@@ -28,22 +26,21 @@
+@@ -28,23 +26,21 @@
  import org.junit.Assert;
  import org.junit.Test;
  
+-import com.puppycrawl.tools.checkstyle.AstTreeStringPrinter;
 -import com.puppycrawl.tools.checkstyle.BaseCheckTestSupport;
 +import com.puppycrawl.tools.checkstyle.AbstractModuleTestSupport;
  import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
@@ -2370,11 +1724,25 @@ index 5b0fa352c3..354fb63c00 100644
      }
  
      @Test
+@@ -55,13 +51,6 @@ public void testAllBlockComments() throws Exception {
+         Assert.assertTrue("All comments should be empty", ALL_COMMENTS.isEmpty());
+     }
+ 
+-    @Test
+-    public void testAstTree() throws Exception {
+-        verifyAst(getPath("InputFullOfBlockCommentsAst.txt"),
+-                getPath("InputFullOfBlockComments.java"),
+-                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
+-    }
+-
+     private static class BlockCommentListenerCheck extends AbstractCheck {
+         @Override
+         public boolean isCommentNodesRequired() {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllSinglelineCommentsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllSinglelineCommentsTest.java
-index 87b1d3555f..75ad4a4a01 100644
+index 80b13619c5..75ad4a4a01 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllSinglelineCommentsTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/AllSinglelineCommentsTest.java
-@@ -19,30 +19,27 @@
+@@ -19,31 +19,27 @@
  
  package com.puppycrawl.tools.checkstyle.grammars.comments;
  
@@ -2386,6 +1754,7 @@ index 87b1d3555f..75ad4a4a01 100644
  import org.junit.Assert;
  import org.junit.Test;
  
+-import com.puppycrawl.tools.checkstyle.AstTreeStringPrinter;
 -import com.puppycrawl.tools.checkstyle.BaseCheckTestSupport;
 +import com.puppycrawl.tools.checkstyle.AbstractModuleTestSupport;
  import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
@@ -2409,37 +1778,22 @@ index 87b1d3555f..75ad4a4a01 100644
      }
  
      @Test
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CommentsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CommentsTest.java
-index 18179046e5..a762219902 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CommentsTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CommentsTest.java
-@@ -23,6 +23,7 @@
- import org.junit.Test;
- 
- import com.puppycrawl.tools.checkstyle.AbstractTreeTestSupport;
-+import com.puppycrawl.tools.checkstyle.AstTreeStringPrinter;
- import com.puppycrawl.tools.checkstyle.api.Comment;
- 
- public class CommentsTest extends AbstractTreeTestSupport {
-@@ -33,12 +34,14 @@ protected String getPackageLocation() {
- 
-     @Test
-     public void testCompareExpectedTreeWithInput1() throws Exception {
--        verifyAst(getPath("InputComments1Ast.txt"), getPath("InputComments1.java"), true);
-+        verifyAst(getPath("InputComments1Ast.txt"), getPath("InputComments1.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
+@@ -55,13 +51,6 @@ public void testAllBlockComments() throws Exception {
+         Assert.assertTrue("All comments should be empty", ALL_COMMENTS.isEmpty());
      }
  
-     @Test
-     public void testCompareExpectedTreeWithInput2() throws Exception {
--        verifyAst(getPath("InputComments2Ast.txt"), getPath("InputComments2.java"), true);
-+        verifyAst(getPath("InputComments2Ast.txt"), getPath("InputComments2.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-     @Test
+-    @Test
+-    public void testAstTree() throws Exception {
+-        verifyAst(getPath("InputFullOfSinglelineCommentsAst.txt"),
+-                getPath("InputFullOfSinglelineComments.java"),
+-                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
+-    }
+-
+     private static class SinglelineCommentListenerCheck extends AbstractCheck {
+         @Override
+         public boolean isCommentNodesRequired() {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentationTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentationTest.java
-index 71fd05874c..b90d5192ac 100644
+index 71fd05874c..b90d5192ac 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentationTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentationTest.java
 @@ -28,12 +28,12 @@
@@ -2479,7 +1833,7 @@ index 71fd05874c..b90d5192ac 100644
  
      /** Converts lineToPosition from multicharacter to one character line separator
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/gui/MainFrameModelTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/gui/MainFrameModelTest.java
-index 0229a83124..1e2d6b923e 100644
+index 0229a83124..1e2d6b923e 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/gui/MainFrameModelTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/gui/MainFrameModelTest.java
 @@ -26,6 +26,7 @@
@@ -2589,7 +1943,7 @@ index 0229a83124..1e2d6b923e 100644
  
          final String expectedTitle = "Checkstyle GUI : " + FILE_NAME_TEST_DATA;
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePresentationTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePresentationTest.java
-index 80b23dcfc6..965f46f994 100644
+index 80b23dcfc6..965f46f994 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePresentationTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeTablePresentationTest.java
 @@ -26,6 +26,7 @@
@@ -2863,20 +2217,8 @@ index 80b23dcfc6..965f46f994 100644
  
      }
  
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
-index 13252deb4e..bfea081dd4 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/TestUtils.java
-@@ -50,6 +50,7 @@ private TestUtils() {
-      * @param checkConstructorIsPrivate flag to skip check for private visibility, it is useful
-      *                                  for Classes that are mocked by PowerMockRunner that make
-      *                                  private c-tors as public
-+     * @noinspection BooleanParameter
-      */
-     public static void assertUtilsClassHasPrivateConstructor(final Class<?> utilClass,
-                                                              boolean checkConstructorIsPrivate)
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/utils/BlockCommentPositionTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/utils/BlockCommentPositionTest.java
-index b05ce838c4..aa646ae030 100644
+index b05ce838c4..aa646ae030 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/utils/BlockCommentPositionTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/utils/BlockCommentPositionTest.java
 @@ -28,11 +28,12 @@
@@ -2907,7 +2249,7 @@ index b05ce838c4..aa646ae030 100644
  
      private static final class BlockCommentPositionTestMetadata {
 diff --git a/src/xdocs/config_javadoc.xml b/src/xdocs/config_javadoc.xml
-index 0a8c3e65b7..30c2d321fa 100644
+index 0a8c3e65b7..30c2d321fa 100755
 --- a/src/xdocs/config_javadoc.xml
 +++ b/src/xdocs/config_javadoc.xml
 @@ -114,10 +114,6 @@
@@ -2977,7 +2319,7 @@ index 0a8c3e65b7..30c2d321fa 100644
              <a href="https://github.com/search?q=path%3Asrc%2Fmain%2Fresources%2Fcom%2Fpuppycrawl%2Ftools%2Fcheckstyle%2Fchecks%2Fjavadoc+filename%3Amessages*.properties+repo%3Acheckstyle%2Fcheckstyle+%22javadoc.wrong.singleton.html.tag%22">
              javadoc.wrong.singleton.html.tag</a>
 diff --git a/wercker.yml b/wercker.yml
-index 48c489c91c..64db94cd29 100644
+index 48c489c91c..64db94cd29 100755
 --- a/wercker.yml
 +++ b/wercker.yml
 @@ -169,6 +169,21 @@ build:

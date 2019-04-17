@@ -1,53 +1,5 @@
-diff --git a/doc/conftest.py b/doc/conftest.py
-index 0c9c79a2dd7e..5423122d62b4 100644
---- a/doc/conftest.py
-+++ b/doc/conftest.py
-@@ -70,17 +70,19 @@ def setup_compose():
- 
- def pytest_runtest_setup(item):
-     fname = item.fspath.strpath
--    if fname.endswith('datasets/labeled_faces.rst'):
-+    is_index = fname.endswith('datasets/index.rst')
-+    if fname.endswith('datasets/labeled_faces.rst') or is_index:
-         setup_labeled_faces()
--    elif fname.endswith('datasets/mldata.rst'):
-+    elif fname.endswith('datasets/mldata.rst') or is_index:
-         setup_mldata()
--    elif fname.endswith('datasets/rcv1.rst'):
-+    elif fname.endswith('datasets/rcv1.rst') or is_index:
-         setup_rcv1()
--    elif fname.endswith('datasets/twenty_newsgroups.rst'):
-+    elif fname.endswith('datasets/twenty_newsgroups.rst') or is_index:
-         setup_twenty_newsgroups()
--    elif fname.endswith('tutorial/text_analytics/working_with_text_data.rst'):
-+    elif fname.endswith('tutorial/text_analytics/working_with_text_data.rst')\
-+            or is_index:
-         setup_working_with_text_data()
--    elif fname.endswith('modules/compose.rst'):
-+    elif fname.endswith('modules/compose.rst') or is_index:
-         setup_compose()
- 
- 
-diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
-index 32b4ef309826..b5a43b0b8fc3 100644
---- a/doc/whats_new/v0.20.rst
-+++ b/doc/whats_new/v0.20.rst
-@@ -253,6 +253,13 @@ Model evaluation and meta-estimators
-   return estimators fitted on each split. :issue:`9686` by :user:`Aurélien Bellet
-   <bellet>`.
- 
-+- New ``refit_time_`` attribute will be stored in
-+  :class:`model_selection.GridSearchCV` and
-+  :class:`model_selection.RandomizedSearchCV` if ``refit`` is set to ``True``.
-+  This will allow measuring the complete time it takes to perform
-+  hyperparameter optimization and refitting the best model on the whole
-+  dataset. :issue:`11310` by :user:`Matthias Feurer <mfeurer>`.
-+
- Decomposition and manifold learning
- 
- - Speed improvements for both 'exact' and 'barnes_hut' methods in
 diff --git a/sklearn/decomposition/kernel_pca.py b/sklearn/decomposition/kernel_pca.py
-index 5d824c9598ce..3316ddb24d2d 100644
+index 5d824c9598..3316ddb24d 100755
 --- a/sklearn/decomposition/kernel_pca.py
 +++ b/sklearn/decomposition/kernel_pca.py
 @@ -151,10 +151,6 @@ def __init__(self, n_components=None, kernel="linear",
@@ -62,7 +14,7 @@ index 5d824c9598ce..3316ddb24d2d 100644
      def _pairwise(self):
          return self.kernel == "precomputed"
 diff --git a/sklearn/linear_model/omp.py b/sklearn/linear_model/omp.py
-index 99ce93b47676..298a1fa4259d 100644
+index 99ce93b476..298a1fa425 100755
 --- a/sklearn/linear_model/omp.py
 +++ b/sklearn/linear_model/omp.py
 @@ -828,10 +828,6 @@ def __init__(self, copy=True, fit_intercept=True, normalize=True,
@@ -77,7 +29,7 @@ index 99ce93b47676..298a1fa4259d 100644
          """Fit the model using X, y as training data.
  
 diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
-index 025202edaf4b..80778132bb24 100644
+index 025202edaf..80778132bb 100755
 --- a/sklearn/linear_model/ridge.py
 +++ b/sklearn/linear_model/ridge.py
 @@ -647,10 +647,6 @@ def __init__(self, alpha=1.0, fit_intercept=True, normalize=False,
@@ -103,7 +55,7 @@ index 025202edaf4b..80778132bb24 100644
          """Fit Ridge regression model.
  
 diff --git a/sklearn/manifold/isomap.py b/sklearn/manifold/isomap.py
-index 54e633a07825..f649237448d3 100644
+index 54e633a078..f649237448 100755
 --- a/sklearn/manifold/isomap.py
 +++ b/sklearn/manifold/isomap.py
 @@ -99,10 +99,6 @@ def __init__(self, n_neighbors=5, n_components=2, eigen_solver='auto',
@@ -117,81 +69,8 @@ index 54e633a07825..f649237448d3 100644
      def _fit_transform(self, X):
          X = check_array(X)
          self.nbrs_ = NearestNeighbors(n_neighbors=self.n_neighbors,
-diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
-index 99d6096af73d..a339b9b16763 100644
---- a/sklearn/model_selection/_search.py
-+++ b/sklearn/model_selection/_search.py
-@@ -17,6 +17,7 @@
- from functools import partial, reduce
- from itertools import product
- import operator
-+import time
- import warnings
- 
- import numpy as np
-@@ -766,10 +767,13 @@ def _store(key_name, array, weights=None, splits=False, rank=False):
-         if self.refit:
-             self.best_estimator_ = clone(base_estimator).set_params(
-                 **self.best_params_)
-+            refit_start_time = time.time()
-             if y is not None:
-                 self.best_estimator_.fit(X, y, **fit_params)
-             else:
-                 self.best_estimator_.fit(X, **fit_params)
-+            refit_end_time = time.time()
-+            self.refit_time_ = refit_end_time - refit_start_time
- 
-         # Store the only scorer not as a dict for single metric evaluation
-         self.scorer_ = scorers if self.multimetric_ else scorers['score']
-@@ -1076,6 +1080,11 @@ class GridSearchCV(BaseSearchCV):
-     n_splits_ : int
-         The number of cross-validation splits (folds/iterations).
- 
-+    refit_time_ : float
-+        Seconds used for refitting the best model on the whole dataset.
-+
-+        This is present only if ``refit`` is not False.
-+
-     Notes
-     ------
-     The parameters selected are those that maximize the score of the left out
-@@ -1387,6 +1396,11 @@ class RandomizedSearchCV(BaseSearchCV):
-     n_splits_ : int
-         The number of cross-validation splits (folds/iterations).
- 
-+    refit_time_ : float
-+        Seconds used for refitting the best model on the whole dataset.
-+
-+        This is present only if ``refit`` is not False.
-+
-     Notes
-     -----
-     The parameters selected are those that maximize the score of the held-out
-diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
-index f436c7b55cf3..0b7b0338f9ad 100644
---- a/sklearn/model_selection/tests/test_search.py
-+++ b/sklearn/model_selection/tests/test_search.py
-@@ -26,6 +26,7 @@
- from sklearn.utils.testing import assert_array_equal
- from sklearn.utils.testing import assert_array_almost_equal
- from sklearn.utils.testing import assert_almost_equal
-+from sklearn.utils.testing import assert_greater_equal
- from sklearn.utils.testing import ignore_warnings
- from sklearn.utils.mocking import CheckingClassifier, MockDataFrame
- 
-@@ -1172,6 +1173,10 @@ def test_search_cv_timing():
-             assert_true(search.cv_results_[key][0] == 0.0)
-             assert_true(np.all(search.cv_results_[key] < 1))
- 
-+        assert_true(hasattr(search, "refit_time_"))
-+        assert_true(isinstance(search.refit_time_, float))
-+        assert_greater_equal(search.refit_time_, 0)
-+
- 
- def test_grid_search_correct_score_results():
-     # test that correct scores are used
 diff --git a/sklearn/svm/classes.py b/sklearn/svm/classes.py
-index 4ad6c8a52da6..b1746ae76728 100644
+index 4ad6c8a52d..b1746ae767 100755
 --- a/sklearn/svm/classes.py
 +++ b/sklearn/svm/classes.py
 @@ -604,7 +604,7 @@ def __init__(self, C=1.0, kernel='rbf', degree=3, gamma='auto_deprecated',
@@ -245,83 +124,3 @@ index 4ad6c8a52da6..b1746ae76728 100644
      def fit(self, X, y=None, sample_weight=None, **params):
          """
          Detects the soft boundary of the set of samples X.
-diff --git a/sklearn/utils/deprecation.py b/sklearn/utils/deprecation.py
-index 5621f436d9ba..fc06f9bc84d3 100644
---- a/sklearn/utils/deprecation.py
-+++ b/sklearn/utils/deprecation.py
-@@ -78,6 +78,9 @@ def wrapped(*args, **kwargs):
-             return fun(*args, **kwargs)
- 
-         wrapped.__doc__ = self._update_doc(wrapped.__doc__)
-+        # Add a reference to the wrapped function so that we can introspect
-+        # on function arguments in Python 2 (already works in Python 3)
-+        wrapped.__wrapped__ = fun
- 
-         return wrapped
- 
-diff --git a/sklearn/utils/tests/test_estimator_checks.py b/sklearn/utils/tests/test_estimator_checks.py
-index 734e4dc1e190..4747f04626c8 100644
---- a/sklearn/utils/tests/test_estimator_checks.py
-+++ b/sklearn/utils/tests/test_estimator_checks.py
-@@ -9,11 +9,13 @@
- from sklearn.externals import joblib
- 
- from sklearn.base import BaseEstimator, ClassifierMixin
-+from sklearn.utils import deprecated
- from sklearn.utils.testing import (assert_raises_regex, assert_true,
-                                    assert_equal, ignore_warnings)
- from sklearn.utils.estimator_checks import check_estimator
- from sklearn.utils.estimator_checks import set_random_state
- from sklearn.utils.estimator_checks import check_estimators_unfitted
-+from sklearn.utils.estimator_checks import check_fit_score_takes_y
- from sklearn.utils.estimator_checks import check_no_attributes_set_in_init
- from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
- from sklearn.linear_model import LinearRegression, SGDClassifier
-@@ -175,6 +177,19 @@ def transform(self, X):
-         return sp.csr_matrix(X)
- 
- 
-+def test_check_fit_score_takes_y_works_on_deprecated_fit():
-+    # Tests that check_fit_score_takes_y works on a class with
-+    # a deprecated fit method
-+
-+    class TestEstimatorWithDeprecatedFitMethod(BaseEstimator):
-+        @deprecated("Deprecated for the purpose of testing "
-+                    "check_fit_score_takes_y")
-+        def fit(self, X, y):
-+            return self
-+
-+    check_fit_score_takes_y("test", TestEstimatorWithDeprecatedFitMethod())
-+
-+
- def test_check_estimator():
-     # tests that the estimator actually fails on "bad" estimators.
-     # not a complete test of all checks, which are very extensive.
-diff --git a/sklearn/utils/tests/test_validation.py b/sklearn/utils/tests/test_validation.py
-index 076e6d88440f..5af26ac5b978 100644
---- a/sklearn/utils/tests/test_validation.py
-+++ b/sklearn/utils/tests/test_validation.py
-@@ -22,6 +22,7 @@
- from sklearn.utils.testing import assert_allclose_dense_sparse
- from sklearn.utils import as_float_array, check_array, check_symmetric
- from sklearn.utils import check_X_y
-+from sklearn.utils import deprecated
- from sklearn.utils.mocking import MockDataFrame
- from sklearn.utils.estimator_checks import NotAnArray
- from sklearn.random_projection import sparse_random_matrix
-@@ -563,6 +564,15 @@ def test_has_fit_parameter():
-     assert_true(has_fit_parameter(SVR, "sample_weight"))
-     assert_true(has_fit_parameter(SVR(), "sample_weight"))
- 
-+    class TestClassWithDeprecatedFitMethod:
-+        @deprecated("Deprecated for the purpose of testing has_fit_parameter")
-+        def fit(self, X, y, sample_weight=None):
-+            pass
-+
-+    assert has_fit_parameter(TestClassWithDeprecatedFitMethod,
-+                             "sample_weight"), \
-+        "has_fit_parameter fails for class with deprecated fit method."
-+
- 
- def test_check_symmetric():
-     arr_sym = np.array([[0, 1], [1, 2]])

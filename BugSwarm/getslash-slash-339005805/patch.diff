@@ -1,148 +1,17 @@
-diff --git a/doc/changelog.rst b/doc/changelog.rst
-index 071313be..0134df2b 100644
---- a/doc/changelog.rst
-+++ b/doc/changelog.rst
-@@ -2,6 +2,7 @@ Changelog
- =========
- 
- * :feature:`-` ``-X`` can now be used to turn off stop-on-error behavior. Useful if you have it on by default through a configuration file
-+* :feature:`711` Support compressed logs
- * :feature:`723` Add configuration for resume state path location
- * :bug:`721 major` Add timeout to sending emails through SMTP
- * :feature:`-` Support fixture keyword arguments for ``generator_fixture``
-diff --git a/requirements.txt b/requirements.txt
-index e7f8ea52..0abc793c 100644
---- a/requirements.txt
-+++ b/requirements.txt
-@@ -7,7 +7,7 @@ dessert>=1.3.1
- emport>=1.1.3
- gossip>=2.2.0
- Jinja2
--Logbook>=1.1.0
-+Logbook>=1.2.0
- orderedset>=2.0.0
- requests>=1.1.0
- SQLAlchemy
-@@ -16,7 +16,7 @@ raven
- py>=1.5.0
- pyparsing
- vintage>=0.4.0
--
-+brotli
- IPython==1.2.1; implementation_name=='pypy'
- IPython==5.*; implementation_name!='pypy' and python_version < '3.3'
- IPython; implementation_name!='pypy' and python_version >= '3.3'
-diff --git a/slash/conf.py b/slash/conf.py
-index 9daaab50..d3746707 100644
---- a/slash/conf.py
-+++ b/slash/conf.py
-@@ -66,6 +66,11 @@
-         "localtime": False // Doc("Use local time for logging. If False, will use UTC"),
-         "unittest_mode": False // Doc("Used during unit testing. Emit all logs to stderr as well as the log files"),
-         "unified_session_log": False // Doc("Make the session log file contain all logs, including from tests"),
-+        "compression": {
-+            "enabled": False // Doc("Compress log files"),
-+            "algorithm": "brotli" // Doc("Compression algorithm to use, either gzip or brotli"),
-+            "use_rotating_raw_file": False //Doc("When compression is enabled, write also to uncompressed cyclic log file"),
-+        },
-     },
-     "run": {
-         "dump_variation": False // Doc("Output the full variation structure before each test is run (mainly used for internal debugging)"),
-diff --git a/slash/log.py b/slash/log.py
-index df3bc32d..259fe459 100644
---- a/slash/log.py
-+++ b/slash/log.py
-@@ -1,7 +1,7 @@
- import numbers
- import os
- import sys
--from contextlib import contextmanager
-+from contextlib import contextmanager, closing
- 
- import logbook  # pylint: disable=F0401
- import logbook.more
-@@ -154,8 +154,18 @@ def get_session_logging_context(self):
-     @contextmanager
-     def _get_file_logging_context(self, filename_template, symlink):
-         with ExitStack() as stack:
--            handler, path = self._get_file_log_handler(filename_template, symlink)
-+
-+            if config.root.log.compression.enabled:
-+                handler, path = self._get_file_log_handler(filename_template, symlink, use_compression=True)
-+            else:
-+                handler, path = self._get_file_log_handler(filename_template, symlink)
-+            stack.enter_context(closing(handler))
-             stack.enter_context(handler.applicationbound())
-+
-+            if config.root.log.compression.enabled and config.root.log.compression.use_rotating_raw_file:
-+                cyclic_handler, _ = self._get_file_log_handler(filename_template, symlink, bubble=True, cyclic=True)
-+                stack.enter_context(cyclic_handler.applicationbound())
-+
-             stack.enter_context(self.console_handler.applicationbound())
-             stack.enter_context(self.warnings_handler.applicationbound())
-             stack.enter_context(self._get_error_logging_context())
-@@ -189,7 +199,7 @@ def _get_silenced_logs_context(self):
-             return ExitStack()
-         return SilencedLoggersHandler(config.root.log.silence_loggers).applicationbound()
- 
--    def _get_file_log_handler(self, subpath, symlink, bubble=False, filter=None):
-+    def _get_file_log_handler(self, subpath, symlink, bubble=False, filter=None, use_compression=False, cyclic=False):
-         root_path = config.root.log.root
-         if root_path is None or subpath is None:
-             log_path = None
-@@ -200,16 +210,29 @@ def _get_file_log_handler(self, subpath, symlink, bubble=False, filter=None):
-         else:
-             log_path = self._normalize_path(os.path.join(root_path, _format_log_path(subpath)))
-             ensure_containing_directory(log_path)
--            handler = self._get_file_handler_class()(log_path, bubble=bubble, filter=filter)
-+            if use_compression:
-+                log_path += ".gz" if config.root.log.compression.algorithm == "gzip" else ".brotli"
-+            handler = self._get_file_handler(log_path, use_compression=use_compression, cyclic=cyclic, bubble=bubble, filter=filter)
-             if symlink:
-                 self._try_create_symlink(log_path, symlink)
-             self._set_formatting(handler, config.root.log.format)
-         return handler, log_path
- 
--    def _get_file_handler_class(self):
--        if config.root.log.colorize:
--            return ColorizedFileHandler
--        return logbook.FileHandler
-+    def _get_file_handler(self, filename, bubble=False, filter=None, use_compression=False, cyclic=False):
-+        kwargs = {"bubble": bubble, "filter": filter}
-+        if use_compression:
-+            if config.root.log.compression.algorithm == "gzip":
-+                handler = logbook.GZIPCompressionHandler
-+            else:
-+                handler = logbook.BrotliCompressionHandler
-+        elif cyclic:
-+            kwargs.update({"max_size": 4*1024**2, "backup_count": 1})
-+            handler = logbook.RotatingFileHandler
-+        elif config.root.log.colorize:
-+            handler = ColorizedFileHandler
-+        else:
-+            handler = logbook.FileHandler
-+        return handler(filename, **kwargs)
- 
-     def _normalize_path(self, p):
-         return os.path.expanduser(p)
 diff --git a/tests/test_logging.py b/tests/test_logging.py
-index 429a074a..dea8056f 100644
+index 02d7d5c2b7..dea8056fc0 100755
 --- a/tests/test_logging.py
 +++ b/tests/test_logging.py
-@@ -3,7 +3,8 @@
- import os
- 
- import logbook
--
-+import brotli
-+import gzip
- import gossip
- import pytest
- import slash
-@@ -43,6 +44,46 @@ def test_global_result_get_log_path(files_dir, suite):
+@@ -44,12 +44,13 @@ def test_global_result_get_log_path(files_dir, suite):
      assert summary.session.results.global_result.get_log_path() is not None
      assert summary.session.results.global_result.get_log_path().startswith(str(files_dir))
  
+-
+-def _decompress_logs(file_name, compression_method):
+-    with open(file_name, 'rb') as compressed_logs_file:
+-        raw_data = compressed_logs_file.read()
+-        return gzip.decompress(raw_data) if compression_method == "gzip" else brotli.decompress(raw_data)
+-
 +def _decompress(input_file_name, use_gzip=True):
 +    if use_gzip:
 +        with gzip.open(input_file_name, 'rb') as in_f:
@@ -150,39 +19,17 @@ index 429a074a..dea8056f 100644
 +    else:
 +        with open(input_file_name, 'rb') as in_f:
 +            return brotli.decompress(in_f.read()).decode()
-+
-+@pytest.mark.parametrize('compression_enabled', [True, False])
-+@pytest.mark.parametrize('compression_method', ['gzip', 'brotli'])
-+@pytest.mark.parametrize('use_rotating_raw_file', [True, False])
-+def test_logs_compression(files_dir, suite, config_override, compression_enabled, compression_method, use_rotating_raw_file):
-+    config_override("log.compression.enabled", compression_enabled)
-+    config_override("log.compression.algorithm", compression_method)
-+    config_override("log.compression.use_rotating_raw_file", use_rotating_raw_file)
-+    summary = suite.run()
-+    session_log_path = summary.session.results.global_result.get_log_path()
-+
-+    if compression_enabled:
-+        #validate file names
-+        if compression_method is "gzip":
-+            session_log_path.endswith("gz")
-+        else:
-+            assert session_log_path.endswith("brotli")
-+
-+        assert summary.session.results.global_result.get_log_path().startswith(str(files_dir))
-+
-+        raw_file_name = session_log_path[:session_log_path.rfind(".")]
-+        if use_rotating_raw_file:
-+            assert os.path.exists(raw_file_name)
-+        else:
-+            assert not os.path.exists(raw_file_name)
-+
-+        #validate compressing successfully
-+        if use_rotating_raw_file:
+ 
+ @pytest.mark.parametrize('compression_enabled', [True, False])
+ @pytest.mark.parametrize('compression_method', ['gzip', 'brotli'])
+@@ -78,8 +79,8 @@ def test_logs_compression(files_dir, suite, config_override, compression_enabled
+ 
+         #validate compressing successfully
+         if use_rotating_raw_file:
+-            decompressed_logs = _decompress_logs(session_log_path, compression_method)
+-            with open(raw_file_name, 'rb') as raw_file:
 +            decompressed_logs = _decompress(session_log_path, compression_method == "gzip")
 +            with open(raw_file_name, 'r') as raw_file:
-+                assert decompressed_logs.endswith(raw_file.read())
-+    else:
-+        assert session_log_path.endswith(".log")
- 
- def test_log_file_colorize(files_dir, config_override, suite, suite_test):
-     config_override('log.colorize', True)
+                 assert decompressed_logs.endswith(raw_file.read())
+     else:
+         assert session_log_path.endswith(".log")

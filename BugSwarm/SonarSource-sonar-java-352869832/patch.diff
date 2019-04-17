@@ -1,5 +1,5 @@
 diff --git a/its/ruling/src/test/resources/commons-beanutils/squid-S3366.json b/its/ruling/src/test/resources/commons-beanutils/squid-S3366.json
-new file mode 100644
+new file mode 100755
 index 0000000000..d1e2f961a9
 --- /dev/null
 +++ b/its/ruling/src/test/resources/commons-beanutils/squid-S3366.json
@@ -10,7 +10,7 @@ index 0000000000..d1e2f961a9
 +],
 +}
 diff --git a/its/ruling/src/test/resources/guava/squid-S3366.json b/its/ruling/src/test/resources/guava/squid-S3366.json
-new file mode 100644
+new file mode 100755
 index 0000000000..70bef52602
 --- /dev/null
 +++ b/its/ruling/src/test/resources/guava/squid-S3366.json
@@ -28,7 +28,7 @@ index 0000000000..70bef52602
 +],
 +}
 diff --git a/its/ruling/src/test/resources/jdk6/squid-S3366.json b/its/ruling/src/test/resources/jdk6/squid-S3366.json
-new file mode 100644
+new file mode 100755
 index 0000000000..a76ca9ae0e
 --- /dev/null
 +++ b/its/ruling/src/test/resources/jdk6/squid-S3366.json
@@ -111,133 +111,8 @@ index 0000000000..a76ca9ae0e
 +187,
 +],
 +}
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-index 0964205cf6..ba5ea2e939 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-@@ -531,6 +531,7 @@ private CheckList() {
-       .add(CompareToNotOverloadedCheck.class)
-       .add(EqualsParametersMarkedNonNullCheck.class)
-       .add(NestedSwitchStatementCheck.class)
-+      .add(ThisExposedFromConstructorCheck.class)
-       .build();
-   }
- 
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/ThisExposedFromConstructorCheck.java b/java-checks/src/main/java/org/sonar/java/checks/ThisExposedFromConstructorCheck.java
-new file mode 100644
-index 0000000000..6e9601c924
---- /dev/null
-+++ b/java-checks/src/main/java/org/sonar/java/checks/ThisExposedFromConstructorCheck.java
-@@ -0,0 +1,107 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks;
-+
-+import com.google.common.collect.ImmutableList;
-+import java.util.List;
-+import org.sonar.check.Rule;
-+import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
-+import org.sonar.plugins.java.api.semantic.Symbol;
-+import org.sonar.plugins.java.api.tree.Arguments;
-+import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
-+import org.sonar.plugins.java.api.tree.BaseTreeVisitor;
-+import org.sonar.plugins.java.api.tree.ExpressionTree;
-+import org.sonar.plugins.java.api.tree.IdentifierTree;
-+import org.sonar.plugins.java.api.tree.MemberSelectExpressionTree;
-+import org.sonar.plugins.java.api.tree.MethodInvocationTree;
-+import org.sonar.plugins.java.api.tree.MethodTree;
-+import org.sonar.plugins.java.api.tree.Tree;
-+
-+@Rule(key = "S3366")
-+public class ThisExposedFromConstructorCheck extends IssuableSubscriptionVisitor {
-+
-+  private static final String REPORT = "Make sure the use of \"this\" doesn't" +
-+    " expose partially-constructed instances of this class in multi-threaded environments.";
-+
-+  @Override
-+  public List<Tree.Kind> nodesToVisit() {
-+    return ImmutableList.of(Tree.Kind.CONSTRUCTOR);
-+  }
-+
-+  @Override
-+  public void visitNode(Tree tree) {
-+    if (!hasSemantic()) {
-+      return;
-+    }
-+    MethodTree methodTree = (MethodTree) tree;
-+    methodTree.block().accept(new ConstructorBodyVisitor(methodTree.symbol().owner()));
-+  }
-+
-+  private class ConstructorBodyVisitor extends BaseTreeVisitor {
-+    private Symbol owner;
-+
-+    public ConstructorBodyVisitor(Symbol owner) {
-+      this.owner = owner;
-+    }
-+
-+    @Override
-+    public void visitMethodInvocation(MethodInvocationTree tree) {
-+      if (this.owner == tree.symbol().owner()) {
-+        return;
-+      }
-+      Arguments args = tree.arguments();
-+      if (args.isEmpty()) {
-+        return;
-+      }
-+      args.stream().filter(arg -> is(arg, "this")).forEach(expr -> reportIssue(expr, REPORT));
-+    }
-+
-+    @Override
-+    public void visitAssignmentExpression(AssignmentExpressionTree tree) {
-+      if (!is(tree.expression(), "this")) {
-+        return;
-+      }
-+      ExpressionTree variable = tree.variable();
-+      MemberSelectExpressionTree memberSelect;
-+      if (variable.is(Tree.Kind.MEMBER_SELECT)) {
-+        memberSelect = (MemberSelectExpressionTree) variable;
-+        if (memberSelect.expression().symbolType().symbol().equals(this.owner) && memberSelect.identifier().symbol().isStatic()) {
-+          return;
-+        }
-+      }
-+      if (variable.is(Tree.Kind.IDENTIFIER) && isStaticField((IdentifierTree) variable)) {
-+        return;
-+      }
-+      reportIssue(tree, REPORT);
-+    }
-+
-+    private boolean is(ExpressionTree expression, String match) {
-+      if (expression.is(Tree.Kind.IDENTIFIER)) {
-+        String targetName = ((IdentifierTree) expression).name();
-+        return match.equals(targetName);
-+      }
-+      return false;
-+    }
-+
-+    private boolean isStaticField(IdentifierTree identifier) {
-+      return identifier.symbol().isStatic();
-+    }
-+  }
-+}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..42906bb31c
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
@@ -276,7 +151,7 @@ index 0000000000..42906bb31c
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..e7683acb1a
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json
@@ -300,108 +175,4 @@ index 0000000000..e7683acb1a
 +  "defaultSeverity": "Major",
 +  "ruleSpecification": "RSPEC-3366",
 +  "sqKey": "S3366"
-+}
-diff --git a/java-checks/src/test/files/checks/ThisExposedFromConstructorCheck.java b/java-checks/src/test/files/checks/ThisExposedFromConstructorCheck.java
-new file mode 100644
-index 0000000000..c43f92b29b
---- /dev/null
-+++ b/java-checks/src/test/files/checks/ThisExposedFromConstructorCheck.java
-@@ -0,0 +1,60 @@
-+import java.util.List;
-+
-+class A{
-+  private static final List<A> list;
-+  private String location;
-+  private static A tempVal;
-+  public A Instance;
-+  private B Instance2;
-+  
-+  public A(String location) {
-+    list.add(this);  // Noncompliant [sc=16;ec=20] {{Make sure the use of "this" doesn't expose partially-constructed instances of this class in multi-threaded environments.}}
-+    foo(this);  // Compliant
-+    this.location = location; // Compliant
-+    this.tempVal = this;  // Compliant
-+    Instance = this;  // Noncompliant
-+    this.Instance = this; // Noncompliant
-+    tempVal = this;  // Compliant
-+  }
-+
-+  public A() {
-+    this.location = ""; // Compliant
-+    foo2(this);  // Noncompliant
-+    foo2(); // Compliant
-+    foo3(); //  Compliant
-+    foo1(new A());  // Compliant
-+    B.foo2();  // Compliant
-+    B.foo1(this);  // Noncompliant
-+    B.field = this;  // Noncompliant
-+    this.Instance2.foo3(this); // Noncompliant
-+    this.foo3(this);  // Compliant
-+  }
-+  
-+  public void foo(A a) {}
-+  
-+  private void foo2() {
-+    list.add(this);
-+  }
-+  
-+  private void foo3(A a) {
-+  }
-+  
-+}
-+
-+class B {
-+  public static final List<A> list1;
-+  public A field;
-+  public B field2;
-+  
-+  public B() {
-+    this.field2 = this;  // Noncompliant  
-+  }
-+  
-+  void foo(A a) {
-+  }
-+  
-+  void foo2() {}
-+  
-+  public void foo3(A a) {
-+  }
-+}
-diff --git a/java-checks/src/test/java/org/sonar/java/checks/ThisExposedFromConstructorCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/ThisExposedFromConstructorCheckTest.java
-new file mode 100644
-index 0000000000..62f4c4569e
---- /dev/null
-+++ b/java-checks/src/test/java/org/sonar/java/checks/ThisExposedFromConstructorCheckTest.java
-@@ -0,0 +1,32 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks;
-+
-+import org.junit.Test;
-+import org.sonar.java.checks.verifier.JavaCheckVerifier;
-+
-+public class ThisExposedFromConstructorCheckTest {
-+
-+  @Test
-+  public void test() {
-+    JavaCheckVerifier.verify("src/test/files/checks/ThisExposedFromConstructorCheck.java", new ThisExposedFromConstructorCheck());
-+    JavaCheckVerifier.verifyNoIssueWithoutSemantic("src/test/files/checks/ThisExposedFromConstructorCheck.java", new ThisExposedFromConstructorCheck());
-+  }
 +}

@@ -1,23 +1,5 @@
-diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
-index 4d7b8f6625..17e45dd5c0 100644
---- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
-+++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
-@@ -80,7 +80,12 @@ public void oneStatementNonCompilableInputTest() throws Exception {
-             "multiple.statements.line");
- 
-         final String[] expected = {
--            "24:6: " + msg,
-+            "31:6: "  + msg,
-+            "36:58: " + msg,
-+            "37:58: " + msg,
-+            "37:74: " + msg,
-+            "38:50: " + msg,
-+            "42:91: " + msg,
-         };
- 
-         final Configuration checkConfig = getCheckConfig("OneStatementPerLine");
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
-index 68f975ad62..7708dbeed5 100644
+index 68f975ad62..7708dbeed5 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolder.java
 @@ -29,6 +29,7 @@
@@ -69,20 +51,10 @@ index 68f975ad62..7708dbeed5 100644
  
      @Override
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheck.java
-index acb3f1d13c..3c6d761ec5 100644
+index c67ab317d1..3c6d761ec5 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheck.java
-@@ -19,6 +19,9 @@
- 
- package com.puppycrawl.tools.checkstyle.checks.coding;
- 
-+import java.util.ArrayDeque;
-+import java.util.Deque;
-+
- import com.puppycrawl.tools.checkstyle.api.Check;
- import com.puppycrawl.tools.checkstyle.api.DetailAST;
- import com.puppycrawl.tools.checkstyle.api.TokenTypes;
-@@ -72,6 +75,11 @@
+@@ -75,6 +75,11 @@
       */
      public static final String MSG_KEY = "multiple.statements.line";
  
@@ -94,43 +66,19 @@ index acb3f1d13c..3c6d761ec5 100644
      /**
       * Hold the line-number where the last statement ended.
       */
-@@ -87,6 +95,16 @@
+@@ -100,11 +105,6 @@
       */
-     private boolean inForHeader;
+     private int lambdaStatementEnd = -1;
  
-+    /**
-+     * Holds if current token is inside lambda.
-+     */
-+    private boolean isInLambda;
-+
-+    /**
-+     * Hold the line-number where the last lambda statement ended.
-+     */
-+    private int lambdaStatementEnd = -1;
-+
+-    /**
+-     * Counts number of semicolons in nested lambdas.
+-     */
+-    private final Deque<Integer> countOfSemiInLambda = new ArrayDeque<>();
+-
      @Override
      public int[] getDefaultTokens() {
          return getAcceptableTokens();
-@@ -95,8 +113,10 @@
-     @Override
-     public int[] getAcceptableTokens() {
-         return new int[] {
--            TokenTypes.SEMI, TokenTypes.FOR_INIT,
-+            TokenTypes.SEMI,
-+            TokenTypes.FOR_INIT,
-             TokenTypes.FOR_ITERATOR,
-+            TokenTypes.LAMBDA,
-         };
-     }
- 
-@@ -110,27 +130,22 @@ public void beginTree(DetailAST rootAST) {
-         inForHeader = false;
-         lastStatementEnd = -1;
-         forStatementEnd = -1;
-+        isInLambda = false;
-     }
- 
-     @Override
+@@ -137,28 +137,7 @@ public void beginTree(DetailAST rootAST) {
      public void visitToken(DetailAST ast) {
          switch (ast.getType()) {
              case TokenTypes.SEMI:
@@ -141,40 +89,26 @@ index acb3f1d13c..3c6d761ec5 100644
 -                if (!hasResourcesPrevSibling && isMultilineStatement(currentStatement)) {
 -                    currentStatement = ast.getPreviousSibling();
 -                }
--                if (!inForHeader
--                        && isOnTheSameLine(currentStatement, lastStatementEnd, forStatementEnd)) {
+-                if (isInLambda) {
+-                    int countOfSemiInCurrentLambda = countOfSemiInLambda.pop();
+-                    countOfSemiInCurrentLambda++;
+-                    countOfSemiInLambda.push(countOfSemiInCurrentLambda);
+-                    if (!inForHeader && countOfSemiInCurrentLambda > 1
+-                            && isOnTheSameLine(currentStatement,
+-                                lastStatementEnd, forStatementEnd,
+-                                lambdaStatementEnd) ) {
+-                        log(ast, MSG_KEY);
+-                    }
+-                }
+-                else if (!inForHeader  && isOnTheSameLine(currentStatement, lastStatementEnd,
+-                        forStatementEnd, lambdaStatementEnd)) {
 -                    log(ast, MSG_KEY);
 -                }
 +                checkIfSemicolonIsInDifferentLineThanPrevious(ast);
                  break;
              case TokenTypes.FOR_ITERATOR:
                  forStatementEnd = ast.getLineNo();
-                 break;
-+            case TokenTypes.LAMBDA:
-+                isInLambda = true;
-+                countOfSemiInLambda.push(0);
-+                break;
-             default:
-                 inForHeader = true;
-                 break;
-@@ -143,26 +158,66 @@ public void leaveToken(DetailAST ast) {
-             case TokenTypes.SEMI:
-                 lastStatementEnd = ast.getLineNo();
-                 forStatementEnd = -1;
-+                lambdaStatementEnd = -1;
-                 break;
-             case TokenTypes.FOR_ITERATOR:
-                 inForHeader = false;
-                 break;
-+            case TokenTypes.LAMBDA:
-+                countOfSemiInLambda.pop();
-+                if (countOfSemiInLambda.isEmpty()) {
-+                    isInLambda = false;
-+                }
-+                lambdaStatementEnd = ast.getLineNo();
-+                break;
-             default:
-                 break;
+@@ -196,6 +175,35 @@ public void leaveToken(DetailAST ast) {
          }
      }
  
@@ -210,24 +144,8 @@ index acb3f1d13c..3c6d761ec5 100644
      /**
       * Checks whether two statements are on the same line.
       * @param ast token for the current statement.
-      * @param lastStatementEnd the line-number where the last statement ended.
-      * @param forStatementEnd the line-number where the last 'for-loop'
-      *                        statement ended.
-+     * @param lambdaStatementEnd the line-number where the last lambda
-+     *                        statement ended.
-      * @return true if two statements are on the same line.
-      */
-     private static boolean isOnTheSameLine(DetailAST ast, int lastStatementEnd,
--                                           int forStatementEnd) {
--        return lastStatementEnd == ast.getLineNo() && forStatementEnd != ast.getLineNo();
-+                                           int forStatementEnd, int lambdaStatementEnd) {
-+        return lastStatementEnd == ast.getLineNo() && forStatementEnd != ast.getLineNo()
-+                && lambdaStatementEnd != ast.getLineNo();
-     }
- 
-     /**
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheck.java
-index 3da0db307b..06323e9abd 100644
+index 3da0db307b..06323e9abd 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheck.java
 @@ -38,7 +38,9 @@
@@ -414,7 +332,7 @@ index 3da0db307b..06323e9abd 100644
  
      /**
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilter.java
-index 9bc042817f..ddbf90e9a1 100644
+index 9bc042817f..ddbf90e9a1 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilter.java
 @@ -34,7 +34,6 @@
@@ -427,7 +345,7 @@ index 9bc042817f..ddbf90e9a1 100644
      }
  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
-index 66068a7c1c..9125ce1e11 100644
+index 66068a7c1c..9125ce1e11 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilter.java
 @@ -415,7 +415,13 @@ public boolean isMatch(AuditEvent event) {
@@ -446,7 +364,7 @@ index 66068a7c1c..9125ce1e11 100644
                      match = messageMatcher.find();
                  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
-index 20b5d4123e..f0defcf297 100644
+index 20b5d4123e..f0defcf297 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilter.java
 @@ -451,6 +451,10 @@ public boolean isMatch(AuditEvent event) {
@@ -461,7 +379,7 @@ index 20b5d4123e..f0defcf297 100644
          }
  
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolderTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolderTest.java
-index 734fcb9199..480851e4ec 100644
+index 734fcb9199..480851e4ec 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolderTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/SuppressWarningsHolderTest.java
 @@ -44,9 +44,13 @@
@@ -522,26 +440,8 @@ index 734fcb9199..480851e4ec 100644
      }
  
      @Test
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheckTest.java
-index b7428855da..3f2d4a159c 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheckTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/OneStatementPerLineCheckTest.java
-@@ -92,7 +92,12 @@ public void testWithMultilineStatements() throws Exception {
-     public void oneStatementNonCompilableInputTest() throws Exception {
-         final DefaultConfiguration checkConfig = createCheckConfig(OneStatementPerLineCheck.class);
-         final String[] expected = {
--            "24:6: " + getCheckMessage(MSG_KEY),
-+            "31:6: " + getCheckMessage(MSG_KEY),
-+            "36:58: " + getCheckMessage(MSG_KEY),
-+            "37:58: " + getCheckMessage(MSG_KEY),
-+            "37:74: " + getCheckMessage(MSG_KEY),
-+            "38:50: " + getCheckMessage(MSG_KEY),
-+            "42:91: " + getCheckMessage(MSG_KEY),
-         };
- 
-         verify(checkConfig, getNonCompilablePath("InputOneStatementPerLine.java"), expected);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheckTest.java
-index c27d4b4146..4576fb0fc6 100644
+index c27d4b4146..4576fb0fc6 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/RequireThisCheckTest.java
 @@ -58,6 +58,7 @@ public void testIt() throws Exception {
@@ -561,7 +461,7 @@ index c27d4b4146..4576fb0fc6 100644
          verify(checkConfig,
                 getPath("InputRequireThis.java"),
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilterTest.java
-index d7c65ed4a2..5ab0e0d28e 100644
+index d7c65ed4a2..5ab0e0d28e 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWarningsFilterTest.java
 @@ -125,11 +125,19 @@ public Checker createChecker(Configuration checkConfig)
@@ -612,7 +512,7 @@ index d7c65ed4a2..5ab0e0d28e 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
-index b6efa5e38f..662d464141 100644
+index b6efa5e38f..662d464141 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressWithNearbyCommentFilterTest.java
 @@ -217,8 +217,13 @@ public Checker createChecker(Configuration checkConfig)
@@ -660,7 +560,7 @@ index b6efa5e38f..662d464141 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
-index 0a2fb0a1ab..a52a7127d7 100644
+index 0a2fb0a1ab..a52a7127d7 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/filters/SuppressionCommentFilterTest.java
 @@ -217,8 +217,13 @@ public Checker createChecker(Configuration checkConfig)
@@ -707,63 +607,8 @@ index 0a2fb0a1ab..a52a7127d7 100644
 +            removeSuppressed(expectedViolationMessages, suppressedViolationMessages));
 +    }
  }
-diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
-index 65b8a2bf62..0da4ae7515 100644
---- a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
-+++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
-@@ -10,9 +10,16 @@
-  * Two import statements and one 'empty' statement
-  * which are not on the same line are legal.
-  */
-+import java.awt.event.ActionEvent;
- import java.lang.annotation.Annotation;
- ;
- import java.lang.String;
-+import java.util.LinkedList;
-+import java.util.List;
-+import java.util.concurrent.Callable;
-+import java.util.stream.Collectors;
-+
-+import javax.swing.JCheckBox;
- 
- public class InputOneStatementPerLine {
-     /**
-@@ -22,4 +29,33 @@
-      * and rises violation.
-      */
-     ;; //warn
-+    static {
-+        new JCheckBox().addActionListener((final ActionEvent e) -> {good();});
-+        List<Integer> ints = new LinkedList<Integer>();
-+        ints.stream().map( t -> { return t * 2;} ).filter( t -> { return false;});
-+        ints.stream().map( t -> { int m = t * 2; return m; } ); //warn
-+        ints.stream().map( t -> { int m = t * 2; return m; } ); int i = 3; //warn
-+        ints.stream().map( t -> t * 2); int k = 4; //warn
-+        ints.stream().map( t -> t * 2);
-+        List<Integer> ints2 = new LinkedList<Integer>();
-+        ints.stream().map( t -> { return ints2.stream().map(w -> { return w * 2; });});
-+        ints.stream().map( t -> { return ints2.stream().map(w -> { int m = w * 2; return m; });}); //warn
-+        ints.stream().map( t -> {
-+            return ints2.stream().map(
-+                    w -> {
-+                        int m = w * 2;
-+                        return m;
-+                    });
-+        });
-+        ints.stream().map( t -> {
-+            int k = 0;
-+            for (int i = 0;i < 10;i++) {
-+                k = i + k;
-+            }
-+            return k;
-+        });
-+    }
-+
-+    private static void good() {
-+    }
- }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
-index 0fa0b8ad4a..0c6d45597d 100644
+index 0fa0b8ad4a..0c6d45597d 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
 @@ -123,3 +123,14 @@ void bar() {
@@ -782,7 +627,7 @@ index 0fa0b8ad4a..0c6d45597d 100644
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithCommentFilter.java b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithCommentFilter.java
-new file mode 100644
+new file mode 100755
 index 0000000000..748d1574ec
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithCommentFilter.java
@@ -804,7 +649,7 @@ index 0000000000..748d1574ec
 +    private long ID = 1;
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithNearbyCommentFilter.java b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithNearbyCommentFilter.java
-new file mode 100644
+new file mode 100755
 index 0000000000..5586a21f0c
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithNearbyCommentFilter.java
@@ -822,7 +667,7 @@ index 0000000000..5586a21f0c
 +    private long ID = 1; // Suppression @cs-:
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithWarningsFilter.java b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithWarningsFilter.java
-new file mode 100644
+new file mode 100755
 index 0000000000..f889466e78
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/filters/InputSuppressByIdWithWarningsFilter.java
@@ -841,7 +686,7 @@ index 0000000000..f889466e78
 +
 +}
 diff --git a/src/xdocs/config_coding.xml b/src/xdocs/config_coding.xml
-index df4254a3bb..d04c76c47e 100644
+index df4254a3bb..d04c76c47e 100755
 --- a/src/xdocs/config_coding.xml
 +++ b/src/xdocs/config_coding.xml
 @@ -2773,6 +2773,25 @@ public void foo(int i, String s) {}
@@ -871,7 +716,7 @@ index df4254a3bb..d04c76c47e 100644
  
        <subsection name="Properties">
 diff --git a/src/xdocs/config_filters.xml b/src/xdocs/config_filters.xml
-index 70b15bb3e3..18563a2467 100644
+index 70b15bb3e3..18563a2467 100755
 --- a/src/xdocs/config_filters.xml
 +++ b/src/xdocs/config_filters.xml
 @@ -317,6 +317,53 @@ HashSet hashSet; // Warning here: Declaring variables, return values or paramete
@@ -1026,7 +871,7 @@ index 70b15bb3e3..18563a2467 100644
          <subsection name="Example of Usage">
          <ul>
 diff --git a/src/xdocs/index.xml.vm b/src/xdocs/index.xml.vm
-index 752f27137a..e9a08e87e1 100644
+index 752f27137a..e9a08e87e1 100755
 --- a/src/xdocs/index.xml.vm
 +++ b/src/xdocs/index.xml.vm
 @@ -273,6 +273,12 @@

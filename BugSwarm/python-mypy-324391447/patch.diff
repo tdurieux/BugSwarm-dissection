@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index f4e0d526db..98cbe9c3e6 100644
+index f4e0d526db..98cbe9c3e6 100755
 --- a/.gitignore
 +++ b/.gitignore
 @@ -13,6 +13,7 @@ docs/build/
@@ -11,7 +11,7 @@ index f4e0d526db..98cbe9c3e6 100644
  # Packages
  *.egg
 diff --git a/docs/source/builtin_types.rst b/docs/source/builtin_types.rst
-index e41c5db6fb..c3df1e2ee3 100644
+index e41c5db6fb..c3df1e2ee3 100755
 --- a/docs/source/builtin_types.rst
 +++ b/docs/source/builtin_types.rst
 @@ -13,7 +13,7 @@ Type                Description
@@ -24,7 +24,7 @@ index e41c5db6fb..c3df1e2ee3 100644
  ``Dict[str, int]``  dictionary from ``str`` keys to ``int`` values
  ``Iterable[int]``   iterable object containing ints
 diff --git a/extensions/setup.py b/extensions/setup.py
-index b4918f491b..417b3fdd13 100644
+index b4918f491b..417b3fdd13 100755
 --- a/extensions/setup.py
 +++ b/extensions/setup.py
 @@ -2,7 +2,7 @@
@@ -37,18 +37,19 @@ index b4918f491b..417b3fdd13 100644
  long_description = '''
  Mypy Extensions
 diff --git a/mypy/build.py b/mypy/build.py
-index 21fde0239c..5aa4cf931f 100644
+index 1faef055a4..5aa4cf931f 100755
 --- a/mypy/build.py
 +++ b/mypy/build.py
-@@ -25,6 +25,7 @@
- import time
- from os.path import dirname, basename
- import errno
-+from functools import wraps
+@@ -28,7 +28,7 @@
+ from functools import wraps
  
  from typing import (AbstractSet, Any, cast, Dict, Iterable, Iterator, List,
-                     Mapping, NamedTuple, Optional, Set, Tuple, Union, Callable)
-@@ -80,7 +81,7 @@ def __init__(self, manager: 'BuildManager', graph: Graph) -> None:
+-                    Mapping, NamedTuple, Optional, Set, Tuple, TypeVar, Union, Callable)
++                    Mapping, NamedTuple, Optional, Set, Tuple, Union, Callable)
+ # Can't use TYPE_CHECKING because it's not in the Python 3.5.1 stdlib
+ MYPY = False
+ if MYPY:
+@@ -81,7 +81,7 @@ def __init__(self, manager: 'BuildManager', graph: Graph) -> None:
          self.graph = graph
          self.files = manager.modules
          self.types = manager.all_types  # Non-empty for tests only or if dumping deps
@@ -57,15 +58,41 @@ index 21fde0239c..5aa4cf931f 100644
  
  
  class BuildSource:
-@@ -133,6 +134,7 @@ def build(sources: List[BuildSource],
+@@ -128,33 +128,13 @@ def is_source(self, file: MypyFile) -> bool:
+ # be updated in place with newly computed cache data.  See dmypy.py.
+ SavedCache = Dict[str, Tuple['CacheMeta', MypyFile, Dict[Expression, Type]]]
+ 
+-F = TypeVar('F', bound=Callable[..., Any])
+ 
+-
+-def flush_compile_errors(f: F) -> F:
+-    """Catch and flush out any messages from a CompileError thrown in build."""
+-    @wraps(f)
+-    def func(*args, **kwargs):
+-        # type: (*Any, **Any) -> Any
+-        try:
+-            return f(*args, **kwargs)
+-        except CompileError as e:
+-            serious = not e.use_stdout
+-            error_flush = kwargs.get('flush_errors', None)
+-            if error_flush:
+-                error_flush(e.messages[e.num_already_seen:], serious)
+-            raise
+-    return cast(F, func)
+-
+-
+-@flush_compile_errors
+ def build(sources: List[BuildSource],
+           options: Options,
            alt_lib_path: Optional[str] = None,
            bin_dir: Optional[str] = None,
            saved_cache: Optional[SavedCache] = None,
-+          flush_errors: Optional[Callable[[List[str], bool], None]] = None,
+           flush_errors: Optional[Callable[[List[str], bool], None]] = None,
+-          plugin: Optional[Plugin] = None,
            ) -> BuildResult:
      """Analyze a program.
  
-@@ -142,6 +144,11 @@ def build(sources: List[BuildSource],
+@@ -164,6 +144,11 @@ def build(sources: List[BuildSource],
      Return BuildResult if successful or only non-blocking errors were found;
      otherwise raise CompileError.
  
@@ -77,11 +104,11 @@ index 21fde0239c..5aa4cf931f 100644
      Args:
        sources: list of sources to build
        options: build options
-@@ -150,7 +157,36 @@ def build(sources: List[BuildSource],
-       bin_dir: directory containing the mypy script, used for finding data
+@@ -173,8 +158,35 @@ def build(sources: List[BuildSource],
          directories; if omitted, use '.' as the data directory
        saved_cache: optional dict with saved cache state for dmypy (read-write!)
-+      flush_errors: optional function to flush errors after a file is processed
+       flush_errors: optional function to flush errors after a file is processed
+-      plugin: optional plugin that overrides the configured one
 +
      """
 +    # If we were not given a flush_errors, we use one that will populate those
@@ -114,55 +141,44 @@ index 21fde0239c..5aa4cf931f 100644
      # This seems the most reasonable place to tune garbage collection.
      gc.set_threshold(50000)
  
-@@ -212,10 +248,12 @@ def build(sources: List[BuildSource],
-                            version_id=__version__,
-                            plugin=plugin,
-                            errors=errors,
--                           saved_cache=saved_cache)
-+                           saved_cache=saved_cache,
-+                           flush_errors=flush_errors)
+@@ -223,7 +235,7 @@ def build(sources: List[BuildSource],
+     reports = Reports(data_dir, options.report_dirs)
+     source_set = BuildSourceSet(sources)
+     errors = Errors(options.show_error_context, options.show_column_numbers)
+-    plugin = plugin or load_plugins(options, errors)
++    plugin = load_plugins(options, errors)
  
-     try:
-         graph = dispatch(sources, manager)
-+        manager.error_flush(manager.errors.new_messages())
-         return BuildResult(manager, graph)
-     finally:
-         manager.log("Build finished in %.3f seconds with %d modules, and %d errors" %
-@@ -518,6 +556,7 @@ class BuildManager:
+     # Construct a build manager object to hold state during the build.
+     #
+@@ -544,7 +556,7 @@ class BuildManager:
        version_id:      The current mypy version (based on commit id when possible)
        plugin:          Active mypy plugin(s)
        errors:          Used for reporting all errors
+-      flush_errors:    A function for optionally processing errors after each SCC
 +      flush_errors:    A function for processing errors after each SCC
        saved_cache:     Dict with saved cache state for dmypy and fine-grained incremental mode
                         (read-write!)
        stats:           Dict with various instrumentation numbers
-@@ -532,6 +571,7 @@ def __init__(self, data_dir: str,
+@@ -559,7 +571,7 @@ def __init__(self, data_dir: str,
                   version_id: str,
                   plugin: Plugin,
                   errors: Errors,
+-                 flush_errors: Optional[Callable[[List[str], bool], None]] = None,
 +                 flush_errors: Callable[[List[str], bool], None],
                   saved_cache: Optional[SavedCache] = None,
                   ) -> None:
          self.start_time = time.time()
-@@ -555,6 +595,7 @@ def __init__(self, data_dir: str,
-         self.stale_modules = set()  # type: Set[str]
-         self.rechecked_modules = set()  # type: Set[str]
-         self.plugin = plugin
-+        self.flush_errors = flush_errors
-         self.saved_cache = saved_cache if saved_cache is not None else {}  # type: SavedCache
-         self.stats = {}  # type: Dict[str, Any]  # Values are ints or floats
- 
-@@ -703,6 +744,9 @@ def add_stats(self, **kwds: Any) -> None:
-     def stats_summary(self) -> Mapping[str, object]:
+@@ -733,8 +745,7 @@ def stats_summary(self) -> Mapping[str, object]:
          return self.stats
  
-+    def error_flush(self, msgs: List[str], serious: bool=False) -> None:
+     def error_flush(self, msgs: List[str], serious: bool=False) -> None:
+-        if self.flush_errors:
+-            self.flush_errors(msgs, serious)
 +        self.flush_errors(msgs, serious)
-+
+ 
  
  def remove_cwd_prefix_from_path(p: str) -> str:
-     """Remove current working directory prefix from p, if present.
-@@ -1853,14 +1897,14 @@ def parse_file(self) -> None:
+@@ -1886,14 +1897,14 @@ def parse_file(self) -> None:
  
      def semantic_analysis(self) -> None:
          assert self.tree is not None, "Internal error: method must be called on parsed file only"
@@ -179,7 +195,7 @@ index 21fde0239c..5aa4cf931f 100644
          with self.wrap_context():
              self.manager.semantic_analyzer_pass3.visit_file(self.tree, self.xpath,
                                                              self.options, patches)
-@@ -1869,7 +1913,8 @@ def semantic_analysis_pass_three(self) -> None:
+@@ -1902,7 +1913,8 @@ def semantic_analysis_pass_three(self) -> None:
          self.patches = patches + self.patches
  
      def semantic_analysis_apply_patches(self) -> None:
@@ -189,51 +205,28 @@ index 21fde0239c..5aa4cf931f 100644
              patch_func()
  
      def type_check_first_pass(self) -> None:
-@@ -1972,6 +2017,10 @@ def write_cache(self) -> None:
-     def dependency_priorities(self) -> List[int]:
-         return [self.priorities.get(dep, PRI_HIGH) for dep in self.dependencies]
- 
-+    def generate_unused_ignore_notes(self) -> None:
-+        if self.options.warn_unused_ignores:
-+            self.manager.errors.generate_unused_ignore_notes(self.xpath)
-+
- 
- def dispatch(sources: List[BuildSource], manager: BuildManager) -> Graph:
-     set_orig = set(manager.saved_cache)
-@@ -1998,9 +2047,6 @@ def dispatch(sources: List[BuildSource], manager: BuildManager) -> Graph:
-         dump_graph(graph)
-         return graph
-     process_graph(graph, manager)
--    if manager.options.warn_unused_ignores:
--        # TODO: This could also be a per-module option.
--        manager.errors.generate_unused_ignore_notes()
-     updated = preserve_cache(graph)
-     set_updated = set(updated)
-     manager.saved_cache.clear()
-@@ -2489,6 +2535,8 @@ def process_stale_scc(graph: Graph, scc: List[str], manager: BuildManager) -> No
-             graph[id].transitive_error = True
+@@ -2524,7 +2536,7 @@ def process_stale_scc(graph: Graph, scc: List[str], manager: BuildManager) -> No
      for id in stale:
          graph[id].finish_passes()
-+        graph[id].generate_unused_ignore_notes()
+         graph[id].generate_unused_ignore_notes()
+-        manager.error_flush(manager.errors.new_file_messages(graph[id].xpath))
 +        manager.error_flush(manager.errors.file_messages(graph[id].xpath))
          graph[id].write_cache()
          graph[id].mark_as_rechecked()
  
 diff --git a/mypy/errors.py b/mypy/errors.py
-index 923c592442..c8071e3545 100644
+index 334cdad998..c8071e3545 100755
 --- a/mypy/errors.py
 +++ b/mypy/errors.py
-@@ -90,15 +90,17 @@ class Errors:
-     current error context (nested imports).
-     """
+@@ -95,18 +95,12 @@ class Errors:
+     # files were processed.
+     error_info_map = None  # type: Dict[str, List[ErrorInfo]]
  
--    # List of generated error messages.
--    error_info = None  # type: List[ErrorInfo]
-+    # Map from files to generated error messages. Is an OrderedDict so
-+    # that it can be used to order messages based on the order the
-+    # files were processed.
-+    error_info_map = None  # type: Dict[str, List[ErrorInfo]]
-+
+-    # The size of error_info the last time that error messages were flushed
+-    new_errors_start_map = None  # type: Dict[str, int]
+-
+-    # A cache of the formatted messages
+-    formatted_messages = None  # type: List[str]
 +    # Files that we have reported the errors for
 +    flushed_files = None  # type: Set[str]
  
@@ -246,87 +239,27 @@ index 923c592442..c8071e3545 100644
      # Path name prefix that is removed from all paths, if set.
      ignore_prefix = None  # type: str
  
-@@ -141,9 +143,9 @@ def __init__(self, show_error_context: bool = False,
-         self.initialize()
+@@ -150,10 +144,8 @@ def __init__(self, show_error_context: bool = False,
  
      def initialize(self) -> None:
--        self.error_info = []
-+        self.error_info_map = OrderedDict()
+         self.error_info_map = OrderedDict()
+-        self.new_errors_start_map = defaultdict(int)
 +        self.flushed_files = set()
          self.import_ctx = []
+-        self.formatted_messages = []
 -        self.error_files = set()
          self.type_name = [None]
          self.function_or_member = [None]
          self.ignored_lines = OrderedDict()
-@@ -289,6 +291,11 @@ def report(self,
-                          target=self.current_target())
-         self.add_error_info(info)
- 
-+    def _add_error_info(self, info: ErrorInfo) -> None:
-+        if info.file not in self.error_info_map:
-+            self.error_info_map[info.file] = []
-+        self.error_info_map[info.file].append(info)
-+
-     def add_error_info(self, info: ErrorInfo) -> None:
-         (file, line) = cast(Tuple[str, int], info.origin)  # see issue 1855
-         if not info.blocker:  # Blockers cannot be ignored
-@@ -302,18 +309,17 @@ def add_error_info(self, info: ErrorInfo) -> None:
-             if info.message in self.only_once_messages:
+@@ -318,7 +310,6 @@ def add_error_info(self, info: ErrorInfo) -> None:
                  return
              self.only_once_messages.add(info.message)
--        self.error_info.append(info)
+         self._add_error_info(info)
 -        self.error_files.add(file)
--
--    def generate_unused_ignore_notes(self) -> None:
--        for file, ignored_lines in self.ignored_lines.items():
--            if not self.is_typeshed_file(file):
--                for line in ignored_lines - self.used_ignored_lines[file]:
--                    # Don't use report since add_error_info will ignore the error!
--                    info = ErrorInfo(self.import_context(), file, self.current_module(), None,
--                                     None, line, -1, 'note', "unused 'type: ignore' comment",
--                                     False, False)
--                    self.error_info.append(info)
-+        self._add_error_info(info)
-+
-+    def generate_unused_ignore_notes(self, file: str) -> None:
-+        ignored_lines = self.ignored_lines[file]
-+        if not self.is_typeshed_file(file):
-+            for line in ignored_lines - self.used_ignored_lines[file]:
-+                # Don't use report since add_error_info will ignore the error!
-+                info = ErrorInfo(self.import_context(), file, self.current_module(), None,
-+                                 None, line, -1, 'note', "unused 'type: ignore' comment",
-+                                 False, False)
-+                self._add_error_info(info)
  
-     def is_typeshed_file(self, file: str) -> bool:
-         # gross, but no other clear way to tell
-@@ -321,43 +327,46 @@ def is_typeshed_file(self, file: str) -> bool:
- 
-     def num_messages(self) -> int:
-         """Return the number of generated messages."""
--        return len(self.error_info)
-+        return sum(len(x) for x in self.error_info_map.values())
- 
-     def is_errors(self) -> bool:
-         """Are there any generated errors?"""
--        return bool(self.error_info)
-+        return bool(self.error_info_map)
- 
-     def is_blockers(self) -> bool:
-         """Are the any errors that are blockers?"""
--        return any(err for err in self.error_info if err.blocker)
-+        return any(err for errs in self.error_info_map.values() for err in errs if err.blocker)
- 
-     def blocker_module(self) -> Optional[str]:
-         """Return the module with a blocking error, or None if not possible."""
--        for err in self.error_info:
--            if err.blocker:
--                return err.module
-+        for errs in self.error_info_map.values():
-+            for err in errs:
-+                if err.blocker:
-+                    return err.module
-         return None
+     def generate_unused_ignore_notes(self, file: str) -> None:
+         ignored_lines = self.ignored_lines[file]
+@@ -356,7 +347,7 @@ def blocker_module(self) -> Optional[str]:
  
      def is_errors_for_file(self, file: str) -> bool:
          """Are there any errors for the given file?"""
@@ -335,67 +268,70 @@ index 923c592442..c8071e3545 100644
  
      def raise_error(self) -> None:
          """Raise a CompileError with the generated messages.
- 
+@@ -364,13 +355,10 @@ def raise_error(self) -> None:
          Render the messages suitable for displaying.
          """
+         # self.new_messages() will format all messages that haven't already
+-        # been returned from a new_module_messages() call. Count how many
+-        # we've seen before that.
+-        already_seen = len(self.formatted_messages)
 -        raise CompileError(self.messages(),
-+        # self.new_messages() will format all messages that haven't already
 +        # been returned from a new_module_messages() call.
 +        raise CompileError(self.new_messages(),
                             use_stdout=True,
-                            module_with_blocker=self.blocker_module())
+-                           module_with_blocker=self.blocker_module(),
+-                           num_already_seen=already_seen)
++                           module_with_blocker=self.blocker_module())
  
--    def messages(self) -> List[str]:
-+    def format_messages(self, error_info: List[ErrorInfo]) -> List[str]:
+     def format_messages(self, error_info: List[ErrorInfo]) -> List[str]:
          """Return a string list that represents the error messages.
- 
-         Use a form suitable for displaying to the user.
-         """
-         a = []  # type: List[str]
--        errors = self.render_messages(self.sort_messages(self.error_info))
-+        errors = self.render_messages(self.sort_messages(error_info))
-         errors = self.remove_duplicates(errors)
-         for file, line, column, severity, message in errors:
-             s = ''
-@@ -375,12 +384,36 @@ def messages(self) -> List[str]:
+@@ -396,20 +384,15 @@ def format_messages(self, error_info: List[ErrorInfo]) -> List[str]:
              a.append(s)
          return a
  
+-    def new_file_messages(self, path: str) -> List[str]:
 +    def file_messages(self, path: str) -> List[str]:
-+        """Return a string list of new error messages from a given file.
-+
-+        Use a form suitable for displaying to the user.
-+        """
-+        if path not in self.error_info_map:
-+            return []
+         """Return a string list of new error messages from a given file.
+ 
+         Use a form suitable for displaying to the user.
+-        Formatted messages are cached in the order they are generated
+-        by new_file_messages() in order to have consistency in output
+-        between incrementally generated messages and .messages() calls.
+         """
+         if path not in self.error_info_map:
+             return []
+-        msgs = self.format_messages(self.error_info_map[path][self.new_errors_start_map[path]:])
+-        self.new_errors_start_map[path] = len(self.error_info_map[path])
+-        self.formatted_messages += msgs
+-        return msgs
 +        self.flushed_files.add(path)
 +        return self.format_messages(self.error_info_map[path])
-+
-+    def new_messages(self) -> List[str]:
-+        """Return a string list of new error messages.
-+
-+        Use a form suitable for displaying to the user.
-+        Errors from different files are ordered based on the order in which
-+        they first generated an error.
-+        """
-+        msgs = []
+ 
+     def new_messages(self) -> List[str]:
+         """Return a string list of new error messages.
+@@ -419,18 +402,11 @@ def new_messages(self) -> List[str]:
+         they first generated an error.
+         """
+         msgs = []
+-        for key in self.error_info_map.keys():
+-            msgs.extend(self.new_file_messages(key))
 +        for path in self.error_info_map.keys():
 +            if path not in self.flushed_files:
 +                msgs.extend(self.file_messages(path))
-+        return msgs
-+
+         return msgs
+ 
+-    def messages(self) -> List[str]:
+-        """Return a string list that represents the error messages.
+-
+-        Use a form suitable for displaying to the user.
+-        """
+-        self.new_messages()  # Updates formatted_messages as a side effect
+-        return self.formatted_messages
+-
      def targets(self) -> Set[str]:
          """Return a set of all targets that contain errors."""
          # TODO: Make sure that either target is always defined or that not being defined
-         #       is okay for fine-grained incremental checking.
-         return set(info.target
--                   for info in self.error_info
-+                   for errs in self.error_info_map.values()
-+                   for info in errs
-                    if info.target)
- 
-     def render_messages(self, errors: List[ErrorInfo]) -> List[Tuple[Optional[str], int, int,
-@@ -461,7 +494,7 @@ def render_messages(self, errors: List[ErrorInfo]) -> List[Tuple[Optional[str],
+@@ -518,7 +494,7 @@ def render_messages(self, errors: List[ErrorInfo]) -> List[Tuple[Optional[str],
      def sort_messages(self, errors: List[ErrorInfo]) -> List[ErrorInfo]:
          """Sort an array of error messages locally by line number.
  
@@ -404,7 +340,7 @@ index 923c592442..c8071e3545 100644
          context by line number, but otherwise retain the general
          ordering of the messages.
          """
-@@ -511,6 +544,12 @@ class CompileError(Exception):
+@@ -568,24 +544,27 @@ class CompileError(Exception):
  
      It can be a parse, semantic analysis, type check or other
      compilation-related error.
@@ -417,7 +353,26 @@ index 923c592442..c8071e3545 100644
      """
  
      messages = None  # type: List[str]
-@@ -554,7 +593,8 @@ def report_internal_error(err: Exception, file: Optional[str], line: int,
+     use_stdout = False
+     # Can be set in case there was a module with a blocking error
+     module_with_blocker = None  # type: Optional[str]
+-    num_already_seen = 0
+ 
+     def __init__(self,
+                  messages: List[str],
+                  use_stdout: bool = False,
+-                 module_with_blocker: Optional[str] = None,
+-                 num_already_seen: int = 0) -> None:
++                 module_with_blocker: Optional[str] = None) -> None:
+         super().__init__('\n'.join(messages))
+         self.messages = messages
+         self.use_stdout = use_stdout
+         self.module_with_blocker = module_with_blocker
+-        self.num_already_seen = num_already_seen
+ 
+ 
+ class DecodeError(Exception):
+@@ -614,7 +593,8 @@ def report_internal_error(err: Exception, file: Optional[str], line: int,
      # Dump out errors so far, they often provide a clue.
      # But catch unexpected errors rendering them.
      try:
@@ -428,38 +383,29 @@ index 923c592442..c8071e3545 100644
      except Exception as e:
          print("Failed to dump errors:", repr(e), file=sys.stderr)
 diff --git a/mypy/main.py b/mypy/main.py
-index ef30c02d7e..35279c8202 100644
+index c601e2edbb..35279c8202 100755
 --- a/mypy/main.py
 +++ b/mypy/main.py
-@@ -8,7 +8,7 @@
- import sys
- import time
- 
--from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
-+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Callable
- 
- from mypy import build
- from mypy import defaults
-@@ -61,12 +61,23 @@ def main(script_path: Optional[str], args: Optional[List[str]] = None) -> None:
-     if args is None:
+@@ -62,21 +62,22 @@ def main(script_path: Optional[str], args: Optional[List[str]] = None) -> None:
          args = sys.argv[1:]
      sources, options = process_options(args)
-+
+ 
 +    messages = []
 +
-+    def flush_errors(a: List[str], serious: bool) -> None:
+     def flush_errors(a: List[str], serious: bool) -> None:
 +        messages.extend(a)
-+        f = sys.stderr if serious else sys.stdout
-+        try:
-+            for m in a:
-+                f.write(m + '\n')
-+            f.flush()
-+        except BrokenPipeError:
+         f = sys.stderr if serious else sys.stdout
+         try:
+             for m in a:
+                 f.write(m + '\n')
+             f.flush()
+         except BrokenPipeError:
+-            pass
 +            sys.exit(1)
-+
+ 
      serious = False
      try:
--        res = type_check_only(sources, bin_dir, options)
+-        res = type_check_only(sources, bin_dir, options, flush_errors)
 -        a = res.errors
 +        type_check_only(sources, bin_dir, options, flush_errors)
      except CompileError as e:
@@ -467,40 +413,18 @@ index ef30c02d7e..35279c8202 100644
          if not e.use_stdout:
              serious = True
      if options.warn_unused_configs and options.unused_configs:
-@@ -76,14 +87,8 @@ def main(script_path: Optional[str], args: Optional[List[str]] = None) -> None:
+@@ -86,8 +87,8 @@ def flush_errors(a: List[str], serious: bool) -> None:
                file=sys.stderr)
      if options.junit_xml:
          t1 = time.time()
 -        util.write_junit_xml(t1 - t0, serious, a, options.junit_xml)
 -    if a:
--        f = sys.stderr if serious else sys.stdout
--        try:
--            for m in a:
--                f.write(m + '\n')
--        except BrokenPipeError:
--            pass
 +        util.write_junit_xml(t1 - t0, serious, messages, options.junit_xml)
 +    if messages:
          sys.exit(1)
  
  
-@@ -112,11 +117,13 @@ def readlinkabs(link: str) -> str:
- 
- 
- def type_check_only(sources: List[BuildSource], bin_dir: Optional[str],
--                    options: Options) -> BuildResult:
-+                    options: Options,
-+                    flush_errors: Optional[Callable[[List[str], bool], None]]) -> BuildResult:
-     # Type-check the program and dependencies.
-     return build.build(sources=sources,
-                        bin_dir=bin_dir,
--                       options=options)
-+                       options=options,
-+                       flush_errors=flush_errors)
- 
- 
- FOOTER = """environment variables:
-@@ -293,7 +300,7 @@ def add_invertible_flag(flag: str,
+@@ -299,7 +300,7 @@ def add_invertible_flag(flag: str,
      add_invertible_flag('--warn-unused-ignores', default=False, strict_flag=True,
                          help="warn about unneeded '# type: ignore' comments")
      add_invertible_flag('--warn-unused-configs', default=False, strict_flag=True,
@@ -509,24 +433,8 @@ index ef30c02d7e..35279c8202 100644
      add_invertible_flag('--show-error-context', default=False,
                          dest='show_error_context',
                          help='Precede errors with "note:" messages explaining context')
-diff --git a/mypy/messages.py b/mypy/messages.py
-index 7c0df42894..3c13a2c41d 100644
---- a/mypy/messages.py
-+++ b/mypy/messages.py
-@@ -153,8 +153,9 @@ def copy(self) -> 'MessageBuilder':
-     def add_errors(self, messages: 'MessageBuilder') -> None:
-         """Add errors in messages to this builder."""
-         if self.disable_count <= 0:
--            for info in messages.errors.error_info:
--                self.errors.add_error_info(info)
-+            for errs in messages.errors.error_info_map.values():
-+                for info in errs:
-+                    self.errors.add_error_info(info)
- 
-     def disable_errors(self) -> None:
-         self.disable_count += 1
 diff --git a/mypy/semanal.py b/mypy/semanal.py
-index f8cd97373c..4c7b595bd5 100644
+index f8cd97373c..4c7b595bd5 100755
 --- a/mypy/semanal.py
 +++ b/mypy/semanal.py
 @@ -84,6 +84,7 @@
@@ -581,7 +489,7 @@ index f8cd97373c..4c7b595bd5 100644
  
      def check_classvar(self, s: AssignmentStmt) -> None:
 diff --git a/mypy/semanal_pass3.py b/mypy/semanal_pass3.py
-index 7b57b4451a..01c5a6627d 100644
+index 7b57b4451a..01c5a6627d 100755
 --- a/mypy/semanal_pass3.py
 +++ b/mypy/semanal_pass3.py
 @@ -10,7 +10,7 @@
@@ -723,7 +631,7 @@ index 7b57b4451a..01c5a6627d 100644
 +                    self.fail(messages.INCOMPATIBLE_TYPEVAR_VALUE.format(
 +                        arg_name, class_name, actual_type_name), context)
 diff --git a/mypy/semanal_shared.py b/mypy/semanal_shared.py
-new file mode 100644
+new file mode 100755
 index 0000000000..b7ecbe1639
 --- /dev/null
 +++ b/mypy/semanal_shared.py
@@ -740,7 +648,7 @@ index 0000000000..b7ecbe1639
 +# Checks type var values (does subtype checks)
 +PRIORITY_TYPEVAR_VALUES = 2
 diff --git a/mypy/server/astdiff.py b/mypy/server/astdiff.py
-index 89a8ac9fa9..44d08d3f3e 100644
+index 89a8ac9fa9..44d08d3f3e 100755
 --- a/mypy/server/astdiff.py
 +++ b/mypy/server/astdiff.py
 @@ -7,16 +7,16 @@
@@ -801,7 +709,7 @@ index 89a8ac9fa9..44d08d3f3e 100644
 +                result.append(snapshot_untyped_signature(item))
 +        return tuple(result)
 diff --git a/mypy/server/astmerge.py b/mypy/server/astmerge.py
-index 9bb1b2b68b..73d1c9c6cf 100644
+index 9bb1b2b68b..73d1c9c6cf 100755
 --- a/mypy/server/astmerge.py
 +++ b/mypy/server/astmerge.py
 @@ -7,7 +7,7 @@
@@ -825,7 +733,7 @@ index 9bb1b2b68b..73d1c9c6cf 100644
  
      def fixup(self, node: SN) -> SN:
 diff --git a/mypy/server/update.py b/mypy/server/update.py
-index 9b9ec341b9..d6cb0707b8 100644
+index 9b9ec341b9..d6cb0707b8 100755
 --- a/mypy/server/update.py
 +++ b/mypy/server/update.py
 @@ -195,9 +195,9 @@ def update_single(self, module: str, path: str) -> Tuple[List[str],
@@ -887,7 +795,7 @@ index 9b9ec341b9..d6cb0707b8 100644
              line = find_import_line(state.tree, dep) or 1
              assert state.path
 diff --git a/mypy/test/helpers.py b/mypy/test/helpers.py
-index 8bd3a61569..169a02e76c 100644
+index 8bd3a61569..169a02e76c 100755
 --- a/mypy/test/helpers.py
 +++ b/mypy/test/helpers.py
 @@ -7,6 +7,8 @@
@@ -933,7 +841,7 @@ index 8bd3a61569..169a02e76c 100644
 +
 +    return options
 diff --git a/mypy/test/testcheck.py b/mypy/test/testcheck.py
-index b33dfba640..0bdf645e25 100644
+index ecc2cdb591..0bdf645e25 100755
 --- a/mypy/test/testcheck.py
 +++ b/mypy/test/testcheck.py
 @@ -7,14 +7,13 @@
@@ -961,15 +869,41 @@ index b33dfba640..0bdf645e25 100644
          options.use_builtins_fixtures = True
          options.show_traceback = True
          if 'optional' in testcase.file:
-@@ -170,6 +169,7 @@ def run_case_once(self, testcase: DataDrivenTestCase, incremental_step: int = 0)
+@@ -170,22 +169,16 @@ def run_case_once(self, testcase: DataDrivenTestCase, incremental_step: int = 0)
              # Always set to none so we're forced to reread the module in incremental mode
              sources.append(BuildSource(program_path, module_name,
                                         None if incremental_step else program_text))
-+
+-        streamed_messages = []
+-
+-        def flush_errors(msgs: List[str], serious: bool) -> None:
+-            streamed_messages.extend(msgs)
+ 
          res = None
          try:
              res = build.build(sources=sources,
-@@ -328,30 +328,3 @@ def parse_module(self,
+                               options=options,
+-                              alt_lib_path=test_temp_dir,
+-                              flush_errors=flush_errors)
++                              alt_lib_path=test_temp_dir)
+             a = res.errors
+         except CompileError as e:
+             a = e.messages
+         a = normalize_error_messages(a)
+-        streamed_messages = normalize_error_messages(streamed_messages)
+ 
+         # Make sure error messages match
+         if incremental_step == 0:
+@@ -205,9 +198,6 @@ def flush_errors(msgs: List[str], serious: bool) -> None:
+         if output != a and self.update_data:
+             update_testcase_output(testcase, a)
+         assert_string_arrays_equal(output, a, msg.format(testcase.file, testcase.line))
+-        assert_string_arrays_equal(a, streamed_messages,
+-                                   "Streamed/reported error mismatch: " +
+-                                   msg.format(testcase.file, testcase.line))
+ 
+         if incremental_step and res:
+             if options.follow_imports == 'normal' and testcase.output is None:
+@@ -338,30 +328,3 @@ def parse_module(self,
              return out
          else:
              return [('__main__', 'main', program_text)]
@@ -1001,64 +935,77 @@ index b33dfba640..0bdf645e25 100644
 -
 -        return options
 diff --git a/mypy/test/testerrorstream.py b/mypy/test/testerrorstream.py
-new file mode 100644
-index 0000000000..0c2a96d0e4
---- /dev/null
+index a1558091af..0c2a96d0e4 100755
+--- a/mypy/test/testerrorstream.py
 +++ b/mypy/test/testerrorstream.py
-@@ -0,0 +1,51 @@
-+"""Tests for mypy incremental error output."""
-+from typing import List, Callable, Optional
-+
-+import os
-+
-+from mypy import defaults, build
-+from mypy.test.config import test_temp_dir
-+from mypy.myunit import AssertionFailure
-+from mypy.test.helpers import assert_string_arrays_equal
-+from mypy.test.data import DataDrivenTestCase, DataSuite
-+from mypy.build import BuildSource
-+from mypy.errors import CompileError
-+from mypy.options import Options
-+from mypy.nodes import CallExpr, StrExpr
-+from mypy.types import Type
-+
-+
-+class ErrorStreamSuite(DataSuite):
-+    files = ['errorstream.test']
-+
-+    def run_case(self, testcase: DataDrivenTestCase) -> None:
-+        test_error_stream(testcase)
-+
-+
-+def test_error_stream(testcase: DataDrivenTestCase) -> None:
-+    """Perform a single error streaming test case.
-+
-+    The argument contains the description of the test case.
-+    """
-+    options = Options()
-+    options.show_traceback = True
-+
-+    logged_messages = []  # type: List[str]
-+
+@@ -11,7 +11,6 @@
+ from mypy.build import BuildSource
+ from mypy.errors import CompileError
+ from mypy.options import Options
+-from mypy.plugin import Plugin, ChainedPlugin, DefaultPlugin, FunctionContext
+ from mypy.nodes import CallExpr, StrExpr
+ from mypy.types import Type
+ 
+@@ -32,51 +31,21 @@ def test_error_stream(testcase: DataDrivenTestCase) -> None:
+     options.show_traceback = True
+ 
+     logged_messages = []  # type: List[str]
+-    real_messages = []  # type: List[str]
+ 
+-    def flush_errors(msgs: List[str], serious: bool, is_real: bool=True) -> None:
 +    def flush_errors(msgs: List[str], serious: bool) -> None:
-+        if msgs:
-+            logged_messages.append('==== Errors flushed ====')
-+            logged_messages.extend(msgs)
-+
-+    sources = [BuildSource('main', '__main__', '\n'.join(testcase.input))]
-+    try:
+         if msgs:
+             logged_messages.append('==== Errors flushed ====')
+             logged_messages.extend(msgs)
+-        if is_real:
+-            real_messages.extend(msgs)
+-
+-    plugin = ChainedPlugin(options, [LoggingPlugin(options, flush_errors), DefaultPlugin(options)])
+ 
+     sources = [BuildSource('main', '__main__', '\n'.join(testcase.input))]
+     try:
+-        res = build.build(sources=sources,
+-                          options=options,
+-                          alt_lib_path=test_temp_dir,
+-                          flush_errors=flush_errors,
+-                          plugin=plugin)
+-        reported_messages = res.errors
 +        build.build(sources=sources,
 +                    options=options,
 +                    alt_lib_path=test_temp_dir,
 +                    flush_errors=flush_errors)
-+    except CompileError as e:
+     except CompileError as e:
+-        reported_messages = e.messages
 +        pass
-+
-+    assert_string_arrays_equal(testcase.output, logged_messages,
-+                               'Invalid output ({}, line {})'.format(
-+                                   testcase.file, testcase.line))
+ 
+     assert_string_arrays_equal(testcase.output, logged_messages,
+                                'Invalid output ({}, line {})'.format(
+                                    testcase.file, testcase.line))
+-    assert_string_arrays_equal(reported_messages, real_messages,
+-                               'Streamed/reported mismatch ({}, line {})'.format(
+-                                   testcase.file, testcase.line))
+-
+-
+-# Use a typechecking plugin to allow test cases to emit messages
+-# during typechecking. This allows us to verify that error messages
+-# from one SCC are printed before later ones are typechecked.
+-class LoggingPlugin(Plugin):
+-    def __init__(self, options: Options, log: Callable[[List[str], bool, bool], None]) -> None:
+-        super().__init__(options)
+-        self.log = log
+-
+-    def get_function_hook(self, fullname: str) -> Optional[Callable[[FunctionContext], Type]]:
+-        if fullname == 'log.log_checking':
+-            return self.hook
+-        return None
+-
+-    def hook(self, ctx: FunctionContext) -> Type:
+-        assert(isinstance(ctx.context, CallExpr) and len(ctx.context.args) > 0 and
+-               isinstance(ctx.context.args[0], StrExpr))
+-        self.log([ctx.context.args[0].value], False, False)
+-        return ctx.default_return_type
 diff --git a/mypy/test/testfinegrained.py b/mypy/test/testfinegrained.py
-index 37c87168c6..c9fa5538e9 100644
+index 37c87168c6..c9fa5538e9 100755
 --- a/mypy/test/testfinegrained.py
 +++ b/mypy/test/testfinegrained.py
 @@ -23,8 +23,10 @@
@@ -1156,7 +1103,7 @@ index 37c87168c6..c9fa5538e9 100644
  def normalize_messages(messages: List[str]) -> List[str]:
      return [re.sub('^tmp' + re.escape(os.sep), '', message)
 diff --git a/mypy/test/testgraph.py b/mypy/test/testgraph.py
-index dbbe4872aa..e47234925b 100644
+index dbbe4872aa..e47234925b 100755
 --- a/mypy/test/testgraph.py
 +++ b/mypy/test/testgraph.py
 @@ -49,6 +49,7 @@ def _make_manager(self) -> BuildManager:
@@ -1168,7 +1115,7 @@ index dbbe4872aa..e47234925b 100644
          return manager
  
 diff --git a/mypy/traverser.py b/mypy/traverser.py
-index 690d726129..3c05d811ac 100644
+index 690d726129..3c05d811ac 100755
 --- a/mypy/traverser.py
 +++ b/mypy/traverser.py
 @@ -10,7 +10,7 @@
@@ -1191,7 +1138,7 @@ index 690d726129..3c05d811ac 100644
          for a in o.assignments:
              a.accept(self)
 diff --git a/mypy/typeanal.py b/mypy/typeanal.py
-index 842fdf60dd..ba118e6b85 100644
+index 842fdf60dd..ba118e6b85 100755
 --- a/mypy/typeanal.py
 +++ b/mypy/typeanal.py
 @@ -1,7 +1,7 @@
@@ -1318,22 +1265,8 @@ index 842fdf60dd..ba118e6b85 100644
      def visit_callable_type(self, t: CallableType) -> None:
          t.ret_type.accept(self)
          for arg_type in t.arg_types:
-diff --git a/runtests.py b/runtests.py
-index d4712bbfba..e9d9a000c6 100755
---- a/runtests.py
-+++ b/runtests.py
-@@ -213,7 +213,8 @@ def test_path(*names: str):
-     'testtransform',
-     'testtypegen',
-     'testparse',
--    'testsemanal'
-+    'testsemanal',
-+    'testerrorstream',
- )
- 
- SLOW_FILES = test_path(
 diff --git a/test-data/unit/check-newtype.test b/test-data/unit/check-newtype.test
-index badd9488ad..82e99ae5b7 100644
+index badd9488ad..82e99ae5b7 100755
 --- a/test-data/unit/check-newtype.test
 +++ b/test-data/unit/check-newtype.test
 @@ -360,3 +360,10 @@ d: object
@@ -1348,7 +1281,7 @@ index badd9488ad..82e99ae5b7 100644
 +x: List[Union[N, int]]  # E: Invalid type "__main__.N"
 +[builtins fixtures/list.pyi]
 diff --git a/test-data/unit/check-typeddict.test b/test-data/unit/check-typeddict.test
-index 10823ce968..757ad6be8c 100644
+index 10823ce968..757ad6be8c 100755
 --- a/test-data/unit/check-typeddict.test
 +++ b/test-data/unit/check-typeddict.test
 @@ -1333,7 +1333,7 @@ T = TypeVar('T', bound='M')
@@ -1361,7 +1294,7 @@ index 10823ce968..757ad6be8c 100644
  z: int = G[M]().x['x']
  
 diff --git a/test-data/unit/check-unions.test b/test-data/unit/check-unions.test
-index 0f40b3679a..0606ff9d4f 100644
+index 0f40b3679a..0606ff9d4f 100755
 --- a/test-data/unit/check-unions.test
 +++ b/test-data/unit/check-unions.test
 @@ -940,3 +940,10 @@ x: Union[ExtremelyLongTypeNameWhichIsGenericSoWeCanUseItMultipleTimes[int],
@@ -1375,23 +1308,8 @@ index 0f40b3679a..0606ff9d4f 100644
 +[builtins fixtures/list.pyi]
 +[out]
 +main:2: error: Recursive types not fully supported yet, nested types replaced with "Any"
-diff --git a/test-data/unit/cmdline.test b/test-data/unit/cmdline.test
-index 9ed8e602e2..27d57cd7f4 100644
---- a/test-data/unit/cmdline.test
-+++ b/test-data/unit/cmdline.test
-@@ -400,9 +400,9 @@ bla bla
- [file error.py]
- bla bla
- [out]
-+normal.py:2: error: Unsupported operand types for + ("int" and "str")
- main.py:4: note: Import of 'error' ignored
- main.py:4: note: (Using --follow-imports=error, module not passed on command line)
--normal.py:2: error: Unsupported operand types for + ("int" and "str")
- main.py:5: error: Revealed type is 'builtins.int'
- main.py:6: error: Revealed type is 'builtins.int'
- main.py:7: error: Revealed type is 'Any'
 diff --git a/test-data/unit/diff.test b/test-data/unit/diff.test
-index 82f2896f96..8498155952 100644
+index 82f2896f96..8498155952 100755
 --- a/test-data/unit/diff.test
 +++ b/test-data/unit/diff.test
 @@ -476,3 +476,76 @@ def g(x: object) -> Iterator[None]:
@@ -1472,81 +1390,50 @@ index 82f2896f96..8498155952 100644
 +[out]
 +__main__.B.x
 diff --git a/test-data/unit/errorstream.test b/test-data/unit/errorstream.test
-new file mode 100644
-index 0000000000..6877a2098f
---- /dev/null
+index e32dd5f89c..6877a2098f 100755
+--- a/test-data/unit/errorstream.test
 +++ b/test-data/unit/errorstream.test
-@@ -0,0 +1,54 @@
+@@ -1,36 +1,18 @@
+--- Test cases for incremental error streaming. Each test case consists of two
+--- sections.
+--- The first section contains [case NAME] followed by the input code, while
+--- the second section contains [out] followed by the output from the checker.
 +-- Test cases for incremental error streaming.
-+-- Each time errors are reported, '==== Errors flushed ====' is printed.
-+
-+[case testErrorStream]
-+import b
-+[file a.py]
-+1 + ''
-+[file b.py]
-+import a
-+'' / 2
-+[out]
-+==== Errors flushed ====
-+a.py:1: error: Unsupported operand types for + ("int" and "str")
-+==== Errors flushed ====
-+b.py:2: error: Unsupported operand types for / ("str" and "int")
-+
-+[case testBlockers]
-+import b
-+[file a.py]
-+1 + ''
-+[file b.py]
-+import a
-+break
-+1 / ''  # won't get reported, after a blocker
-+[out]
-+==== Errors flushed ====
-+a.py:1: error: Unsupported operand types for + ("int" and "str")
-+==== Errors flushed ====
-+b.py:2: error: 'break' outside loop
-+
-+[case testCycles]
-+import a
-+[file a.py]
-+import b
-+1 + ''
-+def f() -> int:
-+    reveal_type(b.x)
-+    return b.x
-+y = 0 + 0
-+[file b.py]
-+import a
-+def g() -> int:
-+    reveal_type(a.y)
-+    return a.y
-+1 / ''
-+x = 1 + 1
-+
-+[out]
-+==== Errors flushed ====
-+b.py:3: error: Revealed type is 'builtins.int'
-+b.py:5: error: Unsupported operand types for / ("int" and "str")
-+==== Errors flushed ====
-+a.py:2: error: Unsupported operand types for + ("int" and "str")
-+a.py:4: error: Revealed type is 'builtins.int'
-diff --git a/test-data/unit/fine-grained-blockers.test b/test-data/unit/fine-grained-blockers.test
-index f4af0626a1..9eaf25eeea 100644
---- a/test-data/unit/fine-grained-blockers.test
-+++ b/test-data/unit/fine-grained-blockers.test
-@@ -255,9 +255,6 @@ a.py:1: error: invalid syntax
- main:1: error: Cannot find module named 'a'
- main:1: note: (Perhaps setting MYPYPATH or using the "--ignore-missing-imports" flag would help)
- b.py:1: error: Cannot find module named 'a'
---- TODO: Remove redundant errors
--main:1: error: Cannot find module named 'a'
--b.py:1: error: Cannot find module named 'a'
+ -- Each time errors are reported, '==== Errors flushed ====' is printed.
+--- The log.log_checking() function will immediately emit a message from
+--- a plugin when a call to it is checked, which can be used to verify that
+--- error messages are printed before doing later typechecking work.
+---
+--- The input file name in errors is "file".
+---
+--- Comments starting with "--" in this file will be ignored, except for lines
+--- starting with "----" that are not ignored. The first two dashes of these
+--- lines are interpreted as escapes and removed.
  
- [case testModifyFileWhileBlockingErrorElsewhere]
+ [case testErrorStream]
+ import b
+-[file log.py]
+-def log_checking(msg: str) -> None: ...
+ [file a.py]
+ 1 + ''
+ [file b.py]
  import a
+-import log
+-log.log_checking('Checking b')  # Make sure that a has been flushed before this is checked
+ '' / 2
+ [out]
+ ==== Errors flushed ====
+ a.py:1: error: Unsupported operand types for + ("int" and "str")
+ ==== Errors flushed ====
+-Checking b
+-==== Errors flushed ====
+-b.py:4: error: Unsupported operand types for / ("str" and "int")
++b.py:2: error: Unsupported operand types for / ("str" and "int")
+ 
+ [case testBlockers]
+ import b
 diff --git a/test-data/unit/fine-grained-modules.test b/test-data/unit/fine-grained-modules.test
-index 7d73d7de89..4f0851e353 100644
+index 7d73d7de89..4f0851e353 100755
 --- a/test-data/unit/fine-grained-modules.test
 +++ b/test-data/unit/fine-grained-modules.test
 @@ -549,3 +549,73 @@ a.py:2: error: Module has no attribute "x"
@@ -1624,19 +1511,9 @@ index 7d73d7de89..4f0851e353 100644
 +==
 +a/b.py:3: error: Unsupported operand types for + ("int" and "str")
 diff --git a/test-data/unit/fine-grained.test b/test-data/unit/fine-grained.test
-index ae633b15e0..6022004d22 100644
+index 7ebc5e810a..6022004d22 100755
 --- a/test-data/unit/fine-grained.test
 +++ b/test-data/unit/fine-grained.test
-@@ -1032,8 +1032,8 @@ main:2: error: Revealed type is 'contextlib.GeneratorContextManager[builtins.Non
- ==
- a.py:1: error: Cannot find module named 'b'
- a.py:1: note: (Perhaps setting MYPYPATH or using the "--ignore-missing-imports" flag would help)
--main:2: error: Revealed type is 'contextlib.GeneratorContextManager[builtins.None]'
- a.py:3: error: Cannot find module named 'b'
-+main:2: error: Revealed type is 'contextlib.GeneratorContextManager[builtins.None]'
- ==
- main:2: error: Revealed type is 'contextlib.GeneratorContextManager[builtins.None]'
- 
 @@ -1225,3 +1225,57 @@ class A: pass
  ==
  main:2: error: Module 'a' has no attribute 'A'
@@ -1695,10 +1572,16 @@ index ae633b15e0..6022004d22 100644
 +        super(B, self).f()
 +[out]
 +==
-diff --git a/typeshed b/typeshed
-index 97fb265a4c..2a30532f8d 160000
---- a/typeshed
-+++ b/typeshed
-@@ -1 +1 @@
--Subproject commit 97fb265a4c80812c3205a953f3201fc909c43a44
-+Subproject commit 2a30532f8d250e59b393252332429aa6b2fc6c33
+diff --git a/test-requirements.txt b/test-requirements.txt
+index ffc55eb98c..ea802be79c 100755
+--- a/test-requirements.txt
++++ b/test-requirements.txt
+@@ -3,7 +3,7 @@ flake8-bugbear==17.12.0; python_version >= '3.5'
+ flake8-pyi==17.3.0; python_version >= '3.6'
+ lxml==4.0.0
+ psutil==5.4.0
+-pytest==3.3.1
++pytest==3.3.2
+ pytest-xdist==1.21.0
+ pytest-cov==2.5.1
+ typed-ast==1.1.0

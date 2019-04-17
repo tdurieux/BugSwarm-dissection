@@ -1,42 +1,10 @@
-diff --git a/.travis.yml b/.travis.yml
-index 4c25d0e4bd..56804c71bf 100644
---- a/.travis.yml
-+++ b/.travis.yml
-@@ -1,5 +1,7 @@
- sudo: false
- language: python
-+# cache package wheels (1 cache per python version)
-+cache: pip
- python:
-   - "3.3"
-   - "3.4"
 diff --git a/appveyor.yml b/appveyor.yml
-index d768ffc3e6..923387789b 100644
+index 2c8cdb7c08..923387789b 100755
 --- a/appveyor.yml
 +++ b/appveyor.yml
-@@ -4,31 +4,33 @@ environment:
-     - PYTHON: "C:\\Python35"
-       PYTHON_VERSION: "3.5.1"
-       PYTHON_ARCH: "32"
--      
-+
-     - PYTHON: "C:\\Python35-x64"
-       PYTHON_VERSION: "3.5.1"
-       PYTHON_ARCH: "64"
--    
-+
-     - PYTHON: "C:\\Python36"
-       PYTHON_VERSION: "3.6.x"
-       PYTHON_ARCH: "32"
--      
-+
-     - PYTHON: "C:\\Python36-x64"
-       PYTHON_VERSION: "3.6.x"
-       PYTHON_ARCH: "64"
--     
--     
-+
-+
+@@ -19,8 +19,11 @@ environment:
+ 
+ 
  install:
 +    - "git config core.symlinks true"
 +    - "git reset --hard"
@@ -44,35 +12,10 @@ index d768ffc3e6..923387789b 100644
      - "git submodule update --init typeshed"
 +    - "cd typeshed && git config core.symlinks true && git reset --hard && cd .."
      - "%PYTHON%\\python.exe setup.py -q install"
--   
-+
+ 
  build: off
- 
- test_script:
--    # Ignore lint (it's run separately below)
-+    # Ignore lint (it's run in Travis)
-     - "%PYTHON%\\python.exe runtests.py -x lint"
--    - ps: if ($env:PYTHON_VERSION -Match "3.6.x" -And $env:PYTHON_ARCH -Match "64") { iex "$env:PYTHON\\python.exe -m flake8" }
- 
- after_test:
-   - "%PYTHON%\\python.exe -m pip install wheel"
-@@ -37,3 +39,14 @@ after_test:
- 
- artifacts:
-   - path: dist\*
-+
-+skip_commits:
-+  files:
-+    - docs/**/*
-+    - '**/*.rst'
-+    - '**/*.md'
-+    - .gitignore
-+    - .runtest_log.json
-+    - .travis.yml
-+    - CREDITS
-+    - LICENSE
 diff --git a/docs/source/cheat_sheet.rst b/docs/source/cheat_sheet.rst
-index b93a0632b0..49919a5683 100644
+index b93a0632b0..49919a5683 100755
 --- a/docs/source/cheat_sheet.rst
 +++ b/docs/source/cheat_sheet.rst
 @@ -134,7 +134,6 @@ When you're puzzled or when things are complicated
@@ -84,7 +27,7 @@ index b93a0632b0..49919a5683 100644
     # Use `ignore` to suppress type-checking on a given line, when your
     # code confuses mypy or runs into an outright bug in mypy.
 diff --git a/docs/source/cheat_sheet_py3.rst b/docs/source/cheat_sheet_py3.rst
-index 964e78ec1b..adeab7d734 100644
+index 964e78ec1b..adeab7d734 100755
 --- a/docs/source/cheat_sheet_py3.rst
 +++ b/docs/source/cheat_sheet_py3.rst
 @@ -122,6 +122,12 @@ When you're puzzled or when things are complicated
@@ -101,7 +44,7 @@ index 964e78ec1b..adeab7d734 100644
     # code confuses mypy or runs into an outright bug in mypy.
     # Good practice is to comment every `ignore` with a bug link
 diff --git a/docs/source/command_line.rst b/docs/source/command_line.rst
-index 10e5d4ebca..dcd46dcd9a 100644
+index 10e5d4ebca..dcd46dcd9a 100755
 --- a/docs/source/command_line.rst
 +++ b/docs/source/command_line.rst
 @@ -21,7 +21,7 @@ flag (or its long form ``--help``)::
@@ -126,7 +69,7 @@ index 10e5d4ebca..dcd46dcd9a 100644
    list of flags enabled by strict mode in the full ``mypy -h`` output.
  
 diff --git a/docs/source/revision_history.rst b/docs/source/revision_history.rst
-index d2e2714dff..e74386b384 100644
+index d2e2714dff..e74386b384 100755
 --- a/docs/source/revision_history.rst
 +++ b/docs/source/revision_history.rst
 @@ -3,6 +3,9 @@ Revision history
@@ -139,99 +82,8 @@ index d2e2714dff..e74386b384 100644
  - March 2017
      * Publish ``mypy`` version 0.500 on PyPI.
  
-diff --git a/mypy/build.py b/mypy/build.py
-index 682fa1e003..5ab87ab323 100644
---- a/mypy/build.py
-+++ b/mypy/build.py
-@@ -860,8 +860,7 @@ def write_cache(id: str, path: str, tree: MypyFile,
- 
-     # Make sure directory for cache files exists
-     parent = os.path.dirname(data_json)
--    if not os.path.isdir(parent):
--        os.makedirs(parent)
-+    os.makedirs(parent, exist_ok=True)
-     assert os.path.dirname(meta_json) == parent
- 
-     # Construct temp file names
-@@ -877,6 +876,20 @@ def write_cache(id: str, path: str, tree: MypyFile,
-         data_str = json.dumps(data, sort_keys=True)
-     interface_hash = compute_hash(data_str)
- 
-+    # Obtain and set up metadata
-+    try:
-+        st = manager.get_stat(path)
-+    except OSError as err:
-+        manager.log("Cannot get stat for {}: {}".format(path, err))
-+        # Remove apparently-invalid cache files.
-+        for filename in [data_json, meta_json]:
-+            try:
-+                os.remove(filename)
-+            except OSError:
-+                pass
-+        # Still return the interface hash we computed.
-+        return interface_hash
-+
-     # Write data cache file, if applicable
-     if old_interface_hash == interface_hash:
-         # If the interface is unchanged, the cached data is guaranteed
-@@ -891,8 +904,6 @@ def write_cache(id: str, path: str, tree: MypyFile,
-         os.replace(data_json_tmp, data_json)
-         manager.trace("Interface for {} has changed".format(id))
- 
--    # Obtain and set up metadata
--    st = manager.get_stat(path)  # TODO: Handle errors
-     mtime = st.st_mtime
-     size = st.st_size
-     options = manager.options.clone_for_module(id)
-@@ -1524,26 +1535,26 @@ def valid_references(self) -> Set[str]:
-         return valid_refs
- 
-     def write_cache(self) -> None:
--        ok = self.path and self.options.incremental
--        if ok:
--            if self.manager.options.quick_and_dirty:
--                is_errors = self.manager.errors.is_errors_for_file(self.path)
--            else:
--                is_errors = self.manager.errors.is_errors()
--            ok = not is_errors
--        if ok:
--            dep_prios = [self.priorities.get(dep, PRI_HIGH) for dep in self.dependencies]
--            new_interface_hash = write_cache(
--                self.id, self.path, self.tree,
--                list(self.dependencies), list(self.suppressed), list(self.child_modules),
--                dep_prios, self.interface_hash,
--                self.manager)
--            if new_interface_hash == self.interface_hash:
--                self.manager.log("Cached module {} has same interface".format(self.id))
--            else:
--                self.manager.log("Cached module {} has changed interface".format(self.id))
--                self.mark_interface_stale()
--                self.interface_hash = new_interface_hash
-+        if not self.path or self.options.cache_dir == os.devnull:
-+            return
-+        if self.manager.options.quick_and_dirty:
-+            is_errors = self.manager.errors.is_errors_for_file(self.path)
-+        else:
-+            is_errors = self.manager.errors.is_errors()
-+        if is_errors:
-+            return
-+        dep_prios = [self.priorities.get(dep, PRI_HIGH) for dep in self.dependencies]
-+        new_interface_hash = write_cache(
-+            self.id, self.path, self.tree,
-+            list(self.dependencies), list(self.suppressed), list(self.child_modules),
-+            dep_prios, self.interface_hash,
-+            self.manager)
-+        if new_interface_hash == self.interface_hash:
-+            self.manager.log("Cached module {} has same interface".format(self.id))
-+        else:
-+            self.manager.log("Cached module {} has changed interface".format(self.id))
-+            self.mark_interface_stale()
-+            self.interface_hash = new_interface_hash
- 
- 
- def dispatch(sources: List[BuildSource], manager: BuildManager) -> Graph:
 diff --git a/mypy/checker.py b/mypy/checker.py
-index 32a7595059..f391c0a8b9 100644
+index 32a7595059..f391c0a8b9 100755
 --- a/mypy/checker.py
 +++ b/mypy/checker.py
 @@ -2685,6 +2685,21 @@ def or_conditional_maps(m1: TypeMap, m2: TypeMap) -> TypeMap:
@@ -340,7 +192,7 @@ index 32a7595059..f391c0a8b9 100644
      return False, method
  
 diff --git a/mypy/checkexpr.py b/mypy/checkexpr.py
-index b115181309..24ff6bc455 100644
+index b115181309..24ff6bc455 100755
 --- a/mypy/checkexpr.py
 +++ b/mypy/checkexpr.py
 @@ -21,8 +21,7 @@
@@ -362,24 +214,8 @@ index b115181309..24ff6bc455 100644
                      new_args[i] = AnyType()
              else:
                  new_args[i] = self.replace_tvars_any(arg)
-diff --git a/mypy/erasetype.py b/mypy/erasetype.py
-index 330df74d94..49035accf9 100644
---- a/mypy/erasetype.py
-+++ b/mypy/erasetype.py
-@@ -26,10 +26,8 @@ def erase_type(typ: Type) -> Type:
- 
- 
- class EraseTypeVisitor(TypeVisitor[Type]):
--    def visit_unbound_type(self, t: UnboundType) -> Type:
--        assert False, 'Not supported'
- 
--    def visit_type_list(self, t: TypeList) -> Type:
-+    def visit_unbound_type(self, t: UnboundType) -> Type:
-         assert False, 'Not supported'
- 
-     def visit_any(self, t: AnyType) -> Type:
 diff --git a/mypy/errors.py b/mypy/errors.py
-index f0fadaeed0..55f6f2b716 100644
+index f0fadaeed0..55f6f2b716 100755
 --- a/mypy/errors.py
 +++ b/mypy/errors.py
 @@ -7,6 +7,7 @@
@@ -398,22 +234,8 @@ index f0fadaeed0..55f6f2b716 100644
            file=sys.stderr)
  
      # If requested, drop into pdb. This overrides show_tb.
-diff --git a/mypy/expandtype.py b/mypy/expandtype.py
-index a526ddd2e0..1830119194 100644
---- a/mypy/expandtype.py
-+++ b/mypy/expandtype.py
-@@ -63,9 +63,6 @@ def __init__(self, variables: Mapping[TypeVarId, Type]) -> None:
-     def visit_unbound_type(self, t: UnboundType) -> Type:
-         return t
- 
--    def visit_type_list(self, t: TypeList) -> Type:
--        assert False, 'Not supported'
--
-     def visit_any(self, t: AnyType) -> Type:
-         return t
- 
 diff --git a/mypy/experiments.py b/mypy/experiments.py
-index 11706c6fd6..03a4cebbbc 100644
+index 11706c6fd6..03a4cebbbc 100755
 --- a/mypy/experiments.py
 +++ b/mypy/experiments.py
 @@ -3,6 +3,7 @@
@@ -425,87 +247,22 @@ index 11706c6fd6..03a4cebbbc 100644
  def strict_optional_set(value: bool) -> Iterator[None]:
      global STRICT_OPTIONAL
 diff --git a/mypy/fixup.py b/mypy/fixup.py
-index 58c1abad53..3d7fae415c 100644
+index b9ac5db1c1..3d7fae415c 100755
 --- a/mypy/fixup.py
 +++ b/mypy/fixup.py
-@@ -15,6 +15,8 @@
- )
- from mypy.visitor import NodeVisitor
- 
-+from mypy.semanal import rev_module_rename_map
-+
- 
- def fixup_module_pass_one(tree: MypyFile, modules: Dict[str, MypyFile],
-                           quick_and_dirty: bool) -> None:
-@@ -177,9 +179,6 @@ def visit_callable_type(self, ct: CallableType) -> None:
-                     val.accept(self)
-             v.upper_bound.accept(self)
- 
--    def visit_ellipsis_type(self, e: EllipsisType) -> None:
--        pass  # Nothing to descend into.
--
-     def visit_overloaded(self, t: Overloaded) -> None:
-         for ct in t.items():
-             ct.accept(self)
-@@ -210,10 +209,6 @@ def visit_typeddict_type(self, tdt: TypedDictType) -> None:
-         if tdt.fallback is not None:
-             tdt.fallback.accept(self)
- 
--    def visit_type_list(self, tl: TypeList) -> None:
--        for t in tl.items:
--            t.accept(self)
--
-     def visit_type_var(self, tvt: TypeVarType) -> None:
-         if tvt.values:
-             for vt in tvt.values:
-@@ -248,6 +243,9 @@ def lookup_qualified(modules: Dict[str, MypyFile], name: str,
+@@ -243,7 +243,9 @@ def lookup_qualified(modules: Dict[str, MypyFile], name: str,
  
  def lookup_qualified_stnode(modules: Dict[str, MypyFile], name: str,
                              quick_and_dirty: bool) -> Optional[SymbolTableNode]:
+-    name = rev_module_rename_map.get(name, name)
 +    if '_importlib_modulespec' in modules:
 +        # we are using python 3, so renaming is necessary
 +        name = rev_module_rename_map.get(name, name)
      head = name
      rest = []
      while True:
-diff --git a/mypy/indirection.py b/mypy/indirection.py
-index cf22648b66..332eb43579 100644
---- a/mypy/indirection.py
-+++ b/mypy/indirection.py
-@@ -2,7 +2,7 @@
- from abc import abstractmethod
- 
- from mypy.visitor import NodeVisitor
--from mypy.types import TypeVisitor
-+from mypy.types import SyntheticTypeVisitor
- from mypy.nodes import MODULE_REF
- import mypy.nodes as nodes
- import mypy.types as types
-@@ -19,7 +19,7 @@ def extract_module_names(type_name: Optional[str]) -> List[str]:
-         return []
- 
- 
--class TypeIndirectionVisitor(TypeVisitor[Set[str]]):
-+class TypeIndirectionVisitor(SyntheticTypeVisitor[Set[str]]):
-     """Returns all module references within a particular type."""
- 
-     def __init__(self) -> None:
-diff --git a/mypy/join.py b/mypy/join.py
-index e0275f0ada..b4866bdbc6 100644
---- a/mypy/join.py
-+++ b/mypy/join.py
-@@ -107,9 +107,6 @@ def visit_union_type(self, t: UnionType) -> Type:
-         else:
-             return UnionType.make_simplified_union([self.s, t])
- 
--    def visit_type_list(self, t: TypeList) -> Type:
--        assert False, 'Not supported'
--
-     def visit_any(self, t: AnyType) -> Type:
-         return t
- 
 diff --git a/mypy/main.py b/mypy/main.py
-index 2dfd30209e..b90d82a309 100644
+index 2dfd30209e..b90d82a309 100755
 --- a/mypy/main.py
 +++ b/mypy/main.py
 @@ -272,8 +272,6 @@ def add_invertible_flag(flag: str,
@@ -536,22 +293,8 @@ index 2dfd30209e..b90d82a309 100644
      if special_opts.almost_silent:
          print("Warning: --almost-silent has been replaced by "
                "--follow-imports=errors", file=sys.stderr)
-diff --git a/mypy/meet.py b/mypy/meet.py
-index 58c5b579fb..71a4dc85d0 100644
---- a/mypy/meet.py
-+++ b/mypy/meet.py
-@@ -139,9 +139,6 @@ def visit_unbound_type(self, t: UnboundType) -> Type:
-         else:
-             return AnyType()
- 
--    def visit_type_list(self, t: TypeList) -> Type:
--        assert False, 'Not supported'
--
-     def visit_any(self, t: AnyType) -> Type:
-         return self.s
- 
 diff --git a/mypy/nodes.py b/mypy/nodes.py
-index 43adc6d2d6..0f4ae878cf 100644
+index 43adc6d2d6..0f4ae878cf 100755
 --- a/mypy/nodes.py
 +++ b/mypy/nodes.py
 @@ -39,12 +39,12 @@ def get_column(self) -> int: pass
@@ -632,22 +375,8 @@ index 43adc6d2d6..0f4ae878cf 100644
          if 'module_public' in data:
              stnode.module_public = data['module_public']
          return stnode
-diff --git a/mypy/sametypes.py b/mypy/sametypes.py
-index f1a697ced4..0531ecc2d4 100644
---- a/mypy/sametypes.py
-+++ b/mypy/sametypes.py
-@@ -55,9 +55,6 @@ def __init__(self, right: Type) -> None:
-     def visit_unbound_type(self, left: UnboundType) -> bool:
-         return True
- 
--    def visit_type_list(self, t: TypeList) -> bool:
--        assert False, 'Not supported'
--
-     def visit_any(self, left: AnyType) -> bool:
-         return isinstance(self.right, AnyType)
- 
 diff --git a/mypy/semanal.py b/mypy/semanal.py
-index 2ed5a64c0c..d9630ce9e1 100644
+index 9bcdb2426c..d9630ce9e1 100755
 --- a/mypy/semanal.py
 +++ b/mypy/semanal.py
 @@ -45,8 +45,9 @@
@@ -691,7 +420,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  )
  from mypy.exprtotype import expr_to_unanalyzed_type, TypeTranslationError
  from mypy.sametypes import is_same_type
-@@ -114,13 +118,20 @@
+@@ -114,13 +118,18 @@
      'typing.typevar': 'typing.TypeVar',
  }
  
@@ -707,12 +436,10 @@ index 2ed5a64c0c..d9630ce9e1 100644
 +# Must not be used in python 2 (it will replace correct names with incorrect)
 +# The check for version is currently made at the point of use
 +# TODO: consider moving these maps from global scope to somewhere where python version is known
-+rev_module_rename_map = {v: k for (k, v) in module_rename_map.items()}
-+
+ rev_module_rename_map = {v: k for (k, v) in module_rename_map.items()}
+ 
  # Hard coded type promotions (shared between all Python versions).
- # These add extra ad-hoc edges to the subtyping relation. For example,
- # int is considered a subtype of float, even though there is no
-@@ -191,15 +202,13 @@ class SemanticAnalyzer(NodeVisitor):
+@@ -193,15 +202,13 @@ class SemanticAnalyzer(NodeVisitor):
      type_stack = None  # type: List[TypeInfo]
      # Type variables that are bound by the directly enclosing class
      bound_tvars = None  # type: List[SymbolTableNode]
@@ -730,7 +457,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  
      # Status of postponing analysis of nested function bodies. By using this we
      # can have mutually recursive nested functions. Values are FUNCTION_x
-@@ -228,10 +237,8 @@ def __init__(self,
+@@ -230,10 +237,8 @@ def __init__(self,
          self.imports = set()
          self.type = None
          self.type_stack = []
@@ -742,7 +469,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          self.block_depth = [0]
          self.loop_depth = 0
          self.lib_path = lib_path
-@@ -324,12 +331,15 @@ def file_context(self, file_node: MypyFile, fnam: str, options: Options,
+@@ -326,12 +331,15 @@ def file_context(self, file_node: MypyFile, fnam: str, options: Options,
          del self.options
  
      def visit_func_def(self, defn: FuncDef) -> None:
@@ -759,7 +486,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
              self.errors.pop_function()
              self.function_stack.pop()
  
-@@ -423,72 +433,15 @@ def set_original_def(self, previous: Node, new: FuncDef) -> bool:
+@@ -425,72 +433,15 @@ def set_original_def(self, previous: Node, new: FuncDef) -> bool:
          else:
              return False
  
@@ -836,7 +563,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  
      def visit_overloaded_func_def(self, defn: OverloadedFuncDef) -> None:
          # OverloadedFuncDef refers to any legitimate situation where you have
-@@ -602,60 +555,54 @@ def analyze_property_with_multi_part_definition(self, defn: OverloadedFuncDef) -
+@@ -604,60 +555,54 @@ def analyze_property_with_multi_part_definition(self, defn: OverloadedFuncDef) -
              else:
                  self.fail("Decorated property not supported", item)
  
@@ -943,7 +670,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  
      def check_classvar_in_signature(self, typ: Type) -> None:
          t = None  # type: Type
-@@ -671,36 +618,6 @@ def check_classvar_in_signature(self, typ: Type) -> None:
+@@ -673,36 +618,6 @@ def check_classvar_in_signature(self, typ: Type) -> None:
                  # Show only one error per signature
                  break
  
@@ -980,7 +707,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
      def check_function_signature(self, fdef: FuncItem) -> None:
          sig = fdef.type
          assert isinstance(sig, CallableType)
-@@ -720,36 +637,31 @@ def visit_class_def(self, defn: ClassDef) -> None:
+@@ -722,36 +637,31 @@ def visit_class_def(self, defn: ClassDef) -> None:
  
      @contextmanager
      def analyze_class_body(self, defn: ClassDef) -> Iterator[bool]:
@@ -1038,7 +765,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  
      def enter_class(self, defn: ClassDef) -> None:
          # Remember previous active class
-@@ -766,24 +678,6 @@ def leave_class(self) -> None:
+@@ -768,24 +678,6 @@ def leave_class(self) -> None:
          self.locals.pop()
          self.type = self.type_stack.pop()
  
@@ -1063,7 +790,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
      def analyze_class_decorator(self, defn: ClassDef, decorator: Expression) -> None:
          decorator.accept(self)
  
-@@ -846,8 +740,7 @@ def clean_up_bases_and_infer_type_variables(self, defn: ClassDef) -> None:
+@@ -848,8 +740,7 @@ def clean_up_bases_and_infer_type_variables(self, defn: ClassDef) -> None:
          Note that this is performed *before* semantic analysis.
          """
          removed = []  # type: List[int]
@@ -1073,7 +800,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          for i, base_expr in enumerate(defn.base_type_exprs):
              try:
                  base = expr_to_unanalyzed_type(base_expr)
-@@ -863,26 +756,26 @@ def clean_up_bases_and_infer_type_variables(self, defn: ClassDef) -> None:
+@@ -865,26 +756,26 @@ def clean_up_bases_and_infer_type_variables(self, defn: ClassDef) -> None:
  
          all_tvars = self.get_all_bases_tvars(defn, removed)
          if declared_tvars:
@@ -1110,7 +837,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          if not isinstance(t, UnboundType):
              return None
          unbound = t
-@@ -890,7 +783,7 @@ def analyze_typevar_declaration(self, t: Type) -> Optional[List[Tuple[str, TypeV
+@@ -892,7 +783,7 @@ def analyze_typevar_declaration(self, t: Type) -> Optional[List[Tuple[str, TypeV
          if sym is None or sym.node is None:
              return None
          if sym.node.fullname() == 'typing.Generic':
@@ -1119,7 +846,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
              for arg in unbound.args:
                  tvar = self.analyze_unbound_tvar(arg)
                  if tvar:
-@@ -906,14 +799,17 @@ def analyze_unbound_tvar(self, t: Type) -> Tuple[str, TypeVarExpr]:
+@@ -908,14 +799,17 @@ def analyze_unbound_tvar(self, t: Type) -> Tuple[str, TypeVarExpr]:
              return None
          unbound = t
          sym = self.lookup_qualified(unbound.name, unbound)
@@ -1142,7 +869,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          for i, base_expr in enumerate(defn.base_type_exprs):
              if i not in removed:
                  try:
-@@ -921,34 +817,9 @@ def get_all_bases_tvars(self, defn: ClassDef,
+@@ -923,34 +817,9 @@ def get_all_bases_tvars(self, defn: ClassDef,
                  except TypeTranslationError:
                      # This error will be caught later.
                      continue
@@ -1180,7 +907,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
  
      def analyze_namedtuple_classdef(self, defn: ClassDef) -> bool:
          # special case for NamedTuple
-@@ -1218,14 +1089,6 @@ def named_type_or_none(self, qualified_name: str, args: List[Type] = None) -> In
+@@ -1220,14 +1089,6 @@ def named_type_or_none(self, qualified_name: str, args: List[Type] = None) -> In
          assert isinstance(sym.node, TypeInfo)
          return Instance(sym.node, args or [])
  
@@ -1195,7 +922,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
      def is_typeddict(self, expr: Expression) -> bool:
          return (isinstance(expr, RefExpr) and isinstance(expr.node, TypeInfo) and
                  expr.node.typeddict_type is not None)
-@@ -1518,16 +1381,31 @@ def visit_block_maybe(self, b: Block) -> None:
+@@ -1520,16 +1381,31 @@ def visit_block_maybe(self, b: Block) -> None:
          if b:
              self.visit_block(b)
  
@@ -1234,7 +961,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          else:
              return None
  
-@@ -1538,7 +1416,7 @@ def visit_assignment_stmt(self, s: AssignmentStmt) -> None:
+@@ -1540,7 +1416,7 @@ def visit_assignment_stmt(self, s: AssignmentStmt) -> None:
          s.rvalue.accept(self)
          if s.type:
              allow_tuple_literal = isinstance(s.lvalues[-1], (TupleExpr, ListExpr))
@@ -1243,7 +970,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          else:
              # For simple assignments, allow binding type aliases.
              # Also set the type if the rvalue is a simple literal.
-@@ -1549,6 +1427,7 @@ def visit_assignment_stmt(self, s: AssignmentStmt) -> None:
+@@ -1551,6 +1427,7 @@ def visit_assignment_stmt(self, s: AssignmentStmt) -> None:
                  res = analyze_type_alias(s.rvalue,
                                           self.lookup_qualified,
                                           self.lookup_fully_qualified,
@@ -1251,7 +978,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
                                           self.fail, allow_unnormalized=True)
                  if res and (not isinstance(res, Instance) or res.args):
                      # TODO: What if this gets reassigned?
-@@ -1931,7 +1810,7 @@ def process_typevar_declaration(self, s: AssignmentStmt) -> None:
+@@ -1933,7 +1810,7 @@ def process_typevar_declaration(self, s: AssignmentStmt) -> None:
  
          # Yes, it's a valid type variable definition! Add it to the symbol table.
          node = self.lookup(name, s)
@@ -1260,7 +987,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
          TypeVar = TypeVarExpr(name, node.fullname, values, upper_bound, variance)
          TypeVar.line = call.line
          call.analyzed = TypeVar
-@@ -2639,7 +2518,7 @@ def visit_for_stmt(self, s: ForStmt) -> None:
+@@ -2641,7 +2518,7 @@ def visit_for_stmt(self, s: ForStmt) -> None:
              if self.is_classvar(s.index_type):
                  self.fail_invalid_classvar(s.index)
              allow_tuple_literal = isinstance(s.index, (TupleExpr, ListExpr))
@@ -1269,7 +996,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
              self.store_declared_types(s.index, s.index_type)
  
          self.loop_depth += 1
-@@ -2716,7 +2595,7 @@ def visit_with_stmt(self, s: WithStmt) -> None:
+@@ -2718,7 +2595,7 @@ def visit_with_stmt(self, s: WithStmt) -> None:
                      if self.is_classvar(t):
                          self.fail_invalid_classvar(n)
                      allow_tuple_literal = isinstance(n, (TupleExpr, ListExpr))
@@ -1278,7 +1005,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
                      new_types.append(t)
                      self.store_declared_types(n, t)
  
-@@ -2787,7 +2666,7 @@ def visit_exec_stmt(self, s: ExecStmt) -> None:
+@@ -2789,7 +2666,7 @@ def visit_exec_stmt(self, s: ExecStmt) -> None:
      def visit_name_expr(self, expr: NameExpr) -> None:
          n = self.lookup(expr.name, expr)
          if n:
@@ -1287,7 +1014,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
                  self.fail("'{}' is a type variable and only valid in type "
                            "context".format(expr.name), expr)
              else:
-@@ -3012,6 +2891,7 @@ def visit_index_expr(self, expr: IndexExpr) -> None:
+@@ -3014,6 +2891,7 @@ def visit_index_expr(self, expr: IndexExpr) -> None:
              res = analyze_type_alias(expr,
                                       self.lookup_qualified,
                                       self.lookup_fully_qualified,
@@ -1295,7 +1022,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
                                       self.fail, allow_unnormalized=self.is_stub_file)
              expr.analyzed = TypeAliasExpr(res, fallback=self.alias_fallback(res),
                                            in_runtime=True)
-@@ -3157,6 +3037,13 @@ def visit_await_expr(self, expr: AwaitExpr) -> None:
+@@ -3159,6 +3037,13 @@ def visit_await_expr(self, expr: AwaitExpr) -> None:
      # Helpers
      #
  
@@ -1309,7 +1036,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
      def lookup(self, name: str, ctx: Context) -> SymbolTableNode:
          """Look up an unqualified name in all active namespaces."""
          # 1a. Name declared using 'global x' takes precedence
-@@ -3463,7 +3350,8 @@ def visit_file(self, file: MypyFile, fnam: str, mod_id: str, options: Options) -
+@@ -3465,7 +3350,8 @@ def visit_file(self, file: MypyFile, fnam: str, mod_id: str, options: Options) -
              if mod_id == 'builtins':
                  literal_types = [
                      ('None', NoneTyp()),
@@ -1319,7 +1046,7 @@ index 2ed5a64c0c..d9630ce9e1 100644
                      ('reveal_type', AnyType()),
                  ]  # type: List[Tuple[str, Type]]
  
-@@ -3864,18 +3752,6 @@ def find_duplicate(list: List[T]) -> T:
+@@ -3866,18 +3752,6 @@ def find_duplicate(list: List[T]) -> T:
      return None
  
  
@@ -1338,22 +1065,8 @@ index 2ed5a64c0c..d9630ce9e1 100644
  def remove_imported_names_from_symtable(names: SymbolTable,
                                          module: str) -> None:
      """Remove all imported names from the symbol table of a module."""
-diff --git a/mypy/server/astdiff.py b/mypy/server/astdiff.py
-index 8b05928a1e..9da9056c56 100644
---- a/mypy/server/astdiff.py
-+++ b/mypy/server/astdiff.py
-@@ -136,9 +136,6 @@ def __init__(self, right: Type) -> None:
-     def visit_unbound_type(self, left: UnboundType) -> bool:
-         return False
- 
--    def visit_type_list(self, t: TypeList) -> bool:
--        assert False, 'Not supported'
--
-     def visit_any(self, left: AnyType) -> bool:
-         return isinstance(self.right, AnyType)
- 
 diff --git a/mypy/sharedparse.py b/mypy/sharedparse.py
-index 1643aaccf3..157bb3f369 100644
+index 1643aaccf3..157bb3f369 100755
 --- a/mypy/sharedparse.py
 +++ b/mypy/sharedparse.py
 @@ -87,6 +87,7 @@
@@ -1365,20 +1078,10 @@ index 1643aaccf3..157bb3f369 100644
  
  MAGIC_METHODS_POS_ARGS_ONLY = MAGIC_METHODS - MAGIC_METHODS_ALLOWING_KWARGS
 diff --git a/mypy/subtypes.py b/mypy/subtypes.py
-index 4b86abb6dc..8aac5c2802 100644
+index a76f223c36..8aac5c2802 100755
 --- a/mypy/subtypes.py
 +++ b/mypy/subtypes.py
-@@ -109,9 +109,6 @@ def __init__(self, right: Type,
-     def visit_unbound_type(self, left: UnboundType) -> bool:
-         return True
- 
--    def visit_type_list(self, t: TypeList) -> bool:
--        assert False, 'Not supported'
--
-     def visit_any(self, left: AnyType) -> bool:
-         return True
- 
-@@ -138,11 +135,14 @@ def visit_instance(self, left: Instance) -> bool:
+@@ -135,11 +135,14 @@ def visit_instance(self, left: Instance) -> bool:
          if isinstance(right, TupleType) and right.fallback.type.is_enum:
              return is_subtype(left, right.fallback)
          if isinstance(right, Instance):
@@ -1398,18 +1101,8 @@ index 4b86abb6dc..8aac5c2802 100644
              rname = right.type.fullname()
              if not left.type.has_base(rname) and rname != 'builtins.object':
                  return False
-@@ -563,9 +563,6 @@ def visit_unbound_type(self, left: UnboundType) -> bool:
-         # from unions, which could filter out some bogus messages.
-         return True
- 
--    def visit_type_list(self, left: TypeList) -> bool:
--        assert False, 'Should not happen'
--
-     def visit_any(self, left: AnyType) -> bool:
-         return isinstance(self.right, AnyType)
- 
 diff --git a/mypy/tvar_scope.py b/mypy/tvar_scope.py
-new file mode 100644
+new file mode 100755
 index 0000000000..3cdb67bbf9
 --- /dev/null
 +++ b/mypy/tvar_scope.py
@@ -1497,10 +1190,10 @@ index 0000000000..3cdb67bbf9
 +            return me
 +        return "{} <- {}".format(str(self.parent), me)
 diff --git a/mypy/typeanal.py b/mypy/typeanal.py
-index 3414144f27..164bbe8c50 100644
+index 5244c8e70d..164bbe8c50 100755
 --- a/mypy/typeanal.py
 +++ b/mypy/typeanal.py
-@@ -1,19 +1,24 @@
+@@ -1,20 +1,24 @@
  """Semantic analysis of types"""
  
  from collections import OrderedDict
@@ -1513,7 +1206,7 @@ index 3414144f27..164bbe8c50 100644
  from mypy.types import (
      Type, UnboundType, TypeVarType, TupleType, TypedDictType, UnionType, Instance,
      AnyType, CallableType, NoneTyp, DeletedType, TypeList, TypeVarDef, TypeVisitor,
-+    SyntheticTypeVisitor,
+     SyntheticTypeVisitor,
      StarType, PartialType, EllipsisType, UninhabitedType, TypeType, get_typ_args, set_typ_args,
 -    get_type_vars, union_items
 +    get_type_vars, TypeQuery, union_items,
@@ -1529,7 +1222,7 @@ index 3414144f27..164bbe8c50 100644
  from mypy.sametypes import is_same_type
  from mypy.exprtotype import expr_to_unanalyzed_type, TypeTranslationError
  from mypy.subtypes import is_subtype
-@@ -21,6 +26,9 @@
+@@ -22,6 +26,9 @@
  from mypy import experiments
  
  
@@ -1539,7 +1232,7 @@ index 3414144f27..164bbe8c50 100644
  type_constructors = {
      'typing.Callable',
      'typing.Optional',
-@@ -33,6 +41,7 @@
+@@ -34,6 +41,7 @@
  def analyze_type_alias(node: Expression,
                         lookup_func: Callable[[str, Context], SymbolTableNode],
                         lookup_fqn_func: Callable[[str], SymbolTableNode],
@@ -1547,7 +1240,7 @@ index 3414144f27..164bbe8c50 100644
                         fail_func: Callable[[str, Context], None],
                         allow_unnormalized: bool = False) -> Type:
      """Return type if node is valid as a type alias rvalue.
-@@ -46,7 +55,7 @@ def analyze_type_alias(node: Expression,
+@@ -47,7 +55,7 @@ def analyze_type_alias(node: Expression,
          # Note that this misses the case where someone tried to use a
          # class-referenced type variable as a type alias.  It's easier to catch
          # that one in checkmember.py
@@ -1556,7 +1249,7 @@ index 3414144f27..164bbe8c50 100644
              fail_func('Type variable "{}" is invalid as target for type alias'.format(
                  node.fullname), node)
              return None
-@@ -76,7 +85,7 @@ def analyze_type_alias(node: Expression,
+@@ -77,7 +85,7 @@ def analyze_type_alias(node: Expression,
      except TypeTranslationError:
          fail_func('Invalid type alias', node)
          return None
@@ -1565,16 +1258,7 @@ index 3414144f27..164bbe8c50 100644
                              allow_unnormalized=allow_unnormalized)
      return type.accept(analyzer)
  
-@@ -89,7 +98,7 @@ def no_subscript_builtin_alias(name: str, propose_alt: bool = True) -> str:
-     return msg
- 
- 
--class TypeAnalyser(TypeVisitor[Type]):
-+class TypeAnalyser(SyntheticTypeVisitor[Type]):
-     """Semantic analyzer for types (semantic analysis pass 2).
- 
-     Converts unbound types into bound types.
-@@ -98,6 +107,7 @@ class TypeAnalyser(TypeVisitor[Type]):
+@@ -99,6 +107,7 @@ class TypeAnalyser(SyntheticTypeVisitor[Type]):
      def __init__(self,
                   lookup_func: Callable[[str, Context], SymbolTableNode],
                   lookup_fqn_func: Callable[[str], SymbolTableNode],
@@ -1582,7 +1266,7 @@ index 3414144f27..164bbe8c50 100644
                   fail_func: Callable[[str, Context], None], *,
                   aliasing: bool = False,
                   allow_tuple_literal: bool = False,
-@@ -105,6 +115,7 @@ def __init__(self,
+@@ -106,6 +115,7 @@ def __init__(self,
          self.lookup = lookup_func
          self.lookup_fqn_func = lookup_fqn_func
          self.fail = fail_func
@@ -1590,7 +1274,7 @@ index 3414144f27..164bbe8c50 100644
          self.aliasing = aliasing
          self.allow_tuple_literal = allow_tuple_literal
          # Positive if we are analyzing arguments of another (outer) type
-@@ -128,12 +139,12 @@ def visit_unbound_type(self, t: UnboundType) -> Type:
+@@ -129,12 +139,12 @@ def visit_unbound_type(self, t: UnboundType) -> Type:
              if (fullname in nongen_builtins and t.args and
                      not sym.normalized and not self.allow_unnormalized):
                  self.fail(no_subscript_builtin_alias(fullname), t)
@@ -1606,7 +1290,7 @@ index 3414144f27..164bbe8c50 100644
              elif fullname == 'builtins.None':
                  return NoneTyp()
              elif fullname == 'typing.Any' or fullname == 'builtins.Any':
-@@ -209,7 +220,8 @@ def visit_unbound_type(self, t: UnboundType) -> Type:
+@@ -210,7 +220,8 @@ def visit_unbound_type(self, t: UnboundType) -> Type:
                      # is pretty minor.
                      return AnyType()
                  # Allow unbound type variables when defining an alias
@@ -1616,7 +1300,7 @@ index 3414144f27..164bbe8c50 100644
                      self.fail('Invalid type "{}"'.format(name), t)
                  return t
              info = sym.node  # type: TypeInfo
-@@ -251,30 +263,15 @@ def get_type_var_names(self, tp: Type) -> List[str]:
+@@ -252,30 +263,15 @@ def get_type_var_names(self, tp: Type) -> List[str]:
          """Get all type variable names that are present in a generic type alias
          in order of textual appearance (recursively, if needed).
          """
@@ -1651,7 +1335,7 @@ index 3414144f27..164bbe8c50 100644
              return t.name
          return None
  
-@@ -317,11 +314,18 @@ def visit_instance(self, t: Instance) -> Type:
+@@ -318,11 +314,18 @@ def visit_instance(self, t: Instance) -> Type:
      def visit_type_var(self, t: TypeVarType) -> Type:
          return t
  
@@ -1675,7 +1359,7 @@ index 3414144f27..164bbe8c50 100644
  
      def visit_tuple_type(self, t: TupleType) -> Type:
          # Types such as (t1, t2, ...) only allowed in assignment statements. They'll
-@@ -368,36 +372,91 @@ def analyze_callable_type(self, t: UnboundType) -> Type:
+@@ -369,36 +372,91 @@ def analyze_callable_type(self, t: UnboundType) -> Type:
          fallback = self.builtin_type('builtins.function')
          if len(t.args) == 0:
              # Callable (bare). Treat as Callable[..., Any].
@@ -1788,7 +1472,7 @@ index 3414144f27..164bbe8c50 100644
  
      def anal_array(self, a: List[Type], nested: bool = True) -> List[Type]:
          res = []  # type: List[Type]
-@@ -482,8 +541,8 @@ def visit_instance(self, t: Instance) -> None:
+@@ -483,8 +541,8 @@ def visit_instance(self, t: Instance) -> None:
              t.invalid = True
          elif info.defn.type_vars:
              # Check type argument values.
@@ -1799,7 +1483,7 @@ index 3414144f27..164bbe8c50 100644
                      if isinstance(arg, TypeVarType):
                          arg_values = arg.values
                          if not arg_values:
-@@ -494,11 +553,11 @@ def visit_instance(self, t: Instance) -> None:
+@@ -495,11 +553,11 @@ def visit_instance(self, t: Instance) -> None:
                      else:
                          arg_values = [arg]
                      self.check_type_var_values(info, arg_values,
@@ -1814,7 +1498,7 @@ index 3414144f27..164bbe8c50 100644
          for arg in t.args:
              arg.accept(self)
  
-@@ -564,6 +623,64 @@ def visit_type_type(self, t: TypeType) -> None:
+@@ -565,6 +623,64 @@ def visit_type_type(self, t: TypeType) -> None:
          pass
  
  
@@ -1880,14 +1564,10 @@ index 3414144f27..164bbe8c50 100644
      """Return the type corresponding to Optional[t].
  
 diff --git a/mypy/types.py b/mypy/types.py
-index 62e37cfeb5..96027d649a 100644
+index a85d4d3db7..96027d649a 100755
 --- a/mypy/types.py
 +++ b/mypy/types.py
-@@ -239,17 +239,11 @@ def __init__(self, items: List[Type], line: int = -1, column: int = -1) -> None:
-         self.items = items
- 
-     def accept(self, visitor: 'TypeVisitor[T]') -> T:
-+        assert isinstance(visitor, SyntheticTypeVisitor)
+@@ -243,14 +243,7 @@ def accept(self, visitor: 'TypeVisitor[T]') -> T:
          return visitor.visit_type_list(self)
  
      def serialize(self) -> JsonDict:
@@ -1903,11 +1583,8 @@ index 62e37cfeb5..96027d649a 100644
  
  
  class AnyType(Type):
-@@ -976,8 +970,12 @@ def __init__(self, type: Type, line: int = -1, column: int = -1) -> None:
-         super().__init__(line, column)
- 
-     def accept(self, visitor: 'TypeVisitor[T]') -> T:
-+        assert isinstance(visitor, SyntheticTypeVisitor)
+@@ -980,6 +973,9 @@ def accept(self, visitor: 'TypeVisitor[T]') -> T:
+         assert isinstance(visitor, SyntheticTypeVisitor)
          return visitor.visit_star_type(self)
  
 +    def serialize(self) -> JsonDict:
@@ -1916,7 +1593,7 @@ index 62e37cfeb5..96027d649a 100644
  
  class UnionType(Type):
      """The union type Union[T1, ..., Tn] (at least one type argument)."""
-@@ -1066,9 +1064,7 @@ def has_readable_member(self, name: str) -> bool:
+@@ -1068,9 +1064,7 @@ def has_readable_member(self, name: str) -> bool:
                     for x in self.relevant_items())
  
      def relevant_items(self) -> List[Type]:
@@ -1927,11 +1604,7 @@ index 62e37cfeb5..96027d649a 100644
          if experiments.STRICT_OPTIONAL:
              return self.items
          else:
-@@ -1126,15 +1122,11 @@ class EllipsisType(Type):
-     """
- 
-     def accept(self, visitor: 'TypeVisitor[T]') -> T:
-+        assert isinstance(visitor, SyntheticTypeVisitor)
+@@ -1132,12 +1126,7 @@ def accept(self, visitor: 'TypeVisitor[T]') -> T:
          return visitor.visit_ellipsis_type(self)
  
      def serialize(self) -> JsonDict:
@@ -1945,60 +1618,16 @@ index 62e37cfeb5..96027d649a 100644
  
  
  class TypeType(Type):
-@@ -1209,9 +1201,6 @@ def _notimplemented_helper(self, name: str) -> NotImplementedError:
-     def visit_unbound_type(self, t: UnboundType) -> T:
-         pass
- 
--    def visit_type_list(self, t: TypeList) -> T:
--        raise self._notimplemented_helper('type_list')
--
-     @abstractmethod
-     def visit_any(self, t: AnyType) -> T:
-         pass
-@@ -1254,9 +1243,6 @@ def visit_tuple_type(self, t: TupleType) -> T:
-     def visit_typeddict_type(self, t: TypedDictType) -> T:
-         pass
- 
--    def visit_star_type(self, t: StarType) -> T:
--        raise self._notimplemented_helper('star_type')
--
-     @abstractmethod
-     def visit_union_type(self, t: UnionType) -> T:
-         pass
-@@ -1265,14 +1251,29 @@ def visit_union_type(self, t: UnionType) -> T:
-     def visit_partial_type(self, t: PartialType) -> T:
-         pass
- 
--    def visit_ellipsis_type(self, t: EllipsisType) -> T:
--        raise self._notimplemented_helper('ellipsis_type')
--
-     @abstractmethod
-     def visit_type_type(self, t: TypeType) -> T:
+@@ -1285,7 +1274,7 @@ def visit_ellipsis_type(self, t: EllipsisType) -> T:
          pass
  
  
-+class SyntheticTypeVisitor(TypeVisitor[T]):
-+    """A TypeVisitor that also knows how to visit synthetic AST constructs.
-+
-+       Not just real types."""
-+
-+    @abstractmethod
-+    def visit_star_type(self, t: StarType) -> T:
-+        pass
-+
-+    @abstractmethod
-+    def visit_type_list(self, t: TypeList) -> T:
-+        pass
-+
-+    @abstractmethod
-+    def visit_ellipsis_type(self, t: EllipsisType) -> T:
-+        pass
-+
-+
- class TypeTranslator(TypeVisitor[Type]):
+-class TypeTranslator(SyntheticTypeVisitor[Type]):
++class TypeTranslator(TypeVisitor[Type]):
      """Identity type transformation.
  
-@@ -1283,9 +1284,6 @@ class TypeTranslator(TypeVisitor[Type]):
+     Subclass this and override some methods to implement a non-trivial
+@@ -1295,9 +1284,6 @@ class TypeTranslator(SyntheticTypeVisitor[Type]):
      def visit_unbound_type(self, t: UnboundType) -> Type:
          return t
  
@@ -2008,7 +1637,7 @@ index 62e37cfeb5..96027d649a 100644
      def visit_any(self, t: AnyType) -> Type:
          return t
  
-@@ -1331,15 +1329,9 @@ def visit_typeddict_type(self, t: TypedDictType) -> Type:
+@@ -1343,15 +1329,9 @@ def visit_typeddict_type(self, t: TypedDictType) -> Type:
                               cast(Any, t.fallback.accept(self)),
                               t.line, t.column)
  
@@ -2024,26 +1653,8 @@ index 62e37cfeb5..96027d649a 100644
      def translate_types(self, types: List[Type]) -> List[Type]:
          return [t.accept(self) for t in types]
  
-@@ -1361,7 +1353,7 @@ def visit_type_type(self, t: TypeType) -> Type:
-         return TypeType(t.item.accept(self), line=t.line, column=t.column)
- 
- 
--class TypeStrVisitor(TypeVisitor[str]):
-+class TypeStrVisitor(SyntheticTypeVisitor[str]):
-     """Visitor for pretty-printing types into strings.
- 
-     This is mostly for debugging/testing.
-@@ -1520,7 +1512,7 @@ def keywords_str(self, a: Iterable[Tuple[str, Type]]) -> str:
-         ])
- 
- 
--class TypeQuery(Generic[T], TypeVisitor[T]):
-+class TypeQuery(SyntheticTypeVisitor[T]):
-     """Visitor for performing queries of types.
- 
-     strategy is used to combine results for a series of types
 diff --git a/test-data/unit/check-functions.test b/test-data/unit/check-functions.test
-index 0099d501b9..33fc51d3b0 100644
+index 0099d501b9..33fc51d3b0 100755
 --- a/test-data/unit/check-functions.test
 +++ b/test-data/unit/check-functions.test
 @@ -1703,3 +1703,81 @@ def f(a, (b, c), d): pass
@@ -2129,7 +1740,7 @@ index 0099d501b9..33fc51d3b0 100644
 +bad = make_list()  # E: Need type annotation for variable
 +[builtins fixtures/list.pyi]
 diff --git a/test-data/unit/check-generics.test b/test-data/unit/check-generics.test
-index 9d1a0ae889..4aa4bf49c2 100644
+index 9d1a0ae889..4aa4bf49c2 100755
 --- a/test-data/unit/check-generics.test
 +++ b/test-data/unit/check-generics.test
 @@ -1347,7 +1347,17 @@ class A(Generic[T]):
@@ -2152,7 +1763,7 @@ index 9d1a0ae889..4aa4bf49c2 100644
  
  -- Callable subtyping with generic functions
 diff --git a/test-data/unit/check-isinstance.test b/test-data/unit/check-isinstance.test
-index 29bb39b606..fe02d3f6a9 100644
+index 29bb39b606..fe02d3f6a9 100755
 --- a/test-data/unit/check-isinstance.test
 +++ b/test-data/unit/check-isinstance.test
 @@ -1423,6 +1423,213 @@ def f(x: Union[int, A], a: Type[A]) -> None:
@@ -2370,7 +1981,7 @@ index 29bb39b606..fe02d3f6a9 100644
  from typing import Iterable, TypeVar
  x = 1
 diff --git a/test-data/unit/check-kwargs.test b/test-data/unit/check-kwargs.test
-index 728c344a7c..61c0a5a0d5 100644
+index 728c344a7c..61c0a5a0d5 100755
 --- a/test-data/unit/check-kwargs.test
 +++ b/test-data/unit/check-kwargs.test
 @@ -258,6 +258,28 @@ class A: pass
@@ -2403,7 +2014,7 @@ index 728c344a7c..61c0a5a0d5 100644
  from typing import Dict
  def f( **kwargs: 'A') -> None: pass
 diff --git a/test-data/unit/cmdline.test b/test-data/unit/cmdline.test
-index 50410cd950..a78bc1b2cb 100644
+index 50410cd950..a78bc1b2cb 100755
 --- a/test-data/unit/cmdline.test
 +++ b/test-data/unit/cmdline.test
 @@ -247,9 +247,9 @@ mypy.ini: [mypy]: ignore_missing_imports: Not a boolean: nah
@@ -2419,7 +2030,7 @@ index 50410cd950..a78bc1b2cb 100644
  [case testCoberturaParser]
  # cmd: mypy --cobertura-xml-report build pkg
 diff --git a/test-data/unit/fixtures/isinstancelist.pyi b/test-data/unit/fixtures/isinstancelist.pyi
-index 9096961b06..7d0c8a02b1 100644
+index 9096961b06..7d0c8a02b1 100755
 --- a/test-data/unit/fixtures/isinstancelist.pyi
 +++ b/test-data/unit/fixtures/isinstancelist.pyi
 @@ -12,6 +12,7 @@ class tuple: pass
@@ -2431,7 +2042,7 @@ index 9096961b06..7d0c8a02b1 100644
  @builtinclass
  class int:
 diff --git a/test-data/unit/semanal-types.test b/test-data/unit/semanal-types.test
-index 4c3033191d..ee164c6a97 100644
+index 4c3033191d..ee164c6a97 100755
 --- a/test-data/unit/semanal-types.test
 +++ b/test-data/unit/semanal-types.test
 @@ -1407,7 +1407,7 @@ MypyFile:1(
@@ -2461,10 +2072,3 @@ index 4c3033191d..ee164c6a97 100644
  
  [case testInvalidOptionalType]
  from typing import Optional
-diff --git a/typeshed b/typeshed
-index 359c8cc313..397f998368 160000
---- a/typeshed
-+++ b/typeshed
-@@ -1 +1 @@
--Subproject commit 359c8cc313d18e309a80548c1d4643506302a525
-+Subproject commit 397f99836842494de2e9561001d16cbe64b3b937

@@ -1,32 +1,5 @@
-diff --git a/benchmarks/bench_isolation_forest.py b/benchmarks/bench_isolation_forest.py
-index 547b4f3ed2dd..585ead9a3be8 100644
---- a/benchmarks/bench_isolation_forest.py
-+++ b/benchmarks/bench_isolation_forest.py
-@@ -119,7 +119,8 @@ def print_outlier_ratio(y):
-     y_test = y[n_samples_train:]
- 
-     print('--- Fitting the IsolationForest estimator...')
--    model = IsolationForest(n_jobs=-1, random_state=random_state)
-+    model = IsolationForest(behaviour='new', n_jobs=-1,
-+                            random_state=random_state)
-     tstart = time()
-     model.fit(X_train)
-     fit_time = time() - tstart
-diff --git a/doc/Makefile b/doc/Makefile
-index 557eeaa188d2..fcb547d14e2b 100644
---- a/doc/Makefile
-+++ b/doc/Makefile
-@@ -98,7 +98,7 @@ doctest:
- 	      "results in $(BUILDDIR)/doctest/output.txt."
- 
- download-data:
--	python -c "from sklearn.datasets.lfw import check_fetch_lfw; check_fetch_lfw()"
-+	python -c "from sklearn.datasets.lfw import _check_fetch_lfw; _check_fetch_lfw()"
- 
- # Optimize PNG files. Needs OptiPNG. Change the -P argument to the number of
- # cores you have available, so -P 64 if you have a real computer ;)
 diff --git a/doc/datasets/index.rst b/doc/datasets/index.rst
-index 8979f74f09af..2f061aabe8d3 100644
+index 8979f74f09..2f061aabe8 100755
 --- a/doc/datasets/index.rst
 +++ b/doc/datasets/index.rst
 @@ -130,6 +130,7 @@ They can be loaded using the following functions:
@@ -65,1292 +38,11 @@ index 8979f74f09af..2f061aabe8d3 100644
  
  .. _sample_generators:
  
-diff --git a/doc/datasets/kddcup99.rst b/doc/datasets/kddcup99.rst
-deleted file mode 100644
-index e770a9a2d60e..000000000000
---- a/doc/datasets/kddcup99.rst
-+++ /dev/null
-@@ -1,35 +0,0 @@
--.. _kddcup99:
--
--Kddcup 99 dataset
-------------------
--
--The KDD Cup '99 dataset was created by processing the tcpdump portions
--of the 1998 DARPA Intrusion Detection System (IDS) Evaluation dataset,
--created by MIT Lincoln Lab. The artificial data (described on the `dataset's
--homepage <http://kdd.ics.uci.edu/databases/kddcup99/kddcup99.html>`__) was
--generated using a closed network and hand-injected attacks to produce a
--large number of different types of attack with normal activity in the
--background. As the initial goal was to produce a large training set for
--supervised learning algorithms, there is a large proportion (80.1%) of
--abnormal data which is unrealistic in real world, and inappropriate for
--unsupervised anomaly detection which aims at detecting 'abnormal' data, ie
--1) qualitatively different from normal data
--2) in large minority among the observations.
--We thus transform the KDD Data set into two different data sets: SA and SF.
--
---SA is obtained by simply selecting all the normal data, and a small
--proportion of abnormal data to gives an anomaly proportion of 1%.
--
---SF is obtained as in [2]
--by simply picking up the data whose attribute logged_in is positive, thus
--focusing on the intrusion attack, which gives a proportion of 0.3% of
--attack.
--
---http and smtp are two subsets of SF corresponding with third feature
--equal to 'http' (resp. to 'smtp')
--
--:func:`sklearn.datasets.fetch_kddcup99` will load the kddcup99 dataset;
--it returns a dictionary-like object
--with the feature matrix in the ``data`` member
--and the target values in ``target``.
--The dataset will be downloaded from the web if necessary.
-diff --git a/doc/datasets/rcv1.rst b/doc/datasets/rcv1.rst
-deleted file mode 100644
-index afbe797cc0c0..000000000000
---- a/doc/datasets/rcv1.rst
-+++ /dev/null
-@@ -1,52 +0,0 @@
--
--.. _rcv1:
--
--RCV1 dataset
--------------
--
--Reuters Corpus Volume I (RCV1) is an archive of over 800,000 manually categorized newswire stories made available by Reuters, Ltd. for research purposes. The dataset is extensively described in [1]_.
--
--:func:`sklearn.datasets.fetch_rcv1` will load the following version: RCV1-v2, vectors, full sets, topics multilabels::
--
--    >>> from sklearn.datasets import fetch_rcv1
--    >>> rcv1 = fetch_rcv1()
--
--It returns a dictionary-like object, with the following attributes:
--
--``data``:
--The feature matrix is a scipy CSR sparse matrix, with 804414 samples and
--47236 features. Non-zero values contains cosine-normalized, log TF-IDF vectors.
--A nearly chronological split is proposed in [1]_: The first 23149 samples are the training set. The last 781265 samples are the testing set. This follows the official LYRL2004 chronological split.
--The array has 0.16% of non zero values::
--
--    >>> rcv1.data.shape
--    (804414, 47236)
--
--``target``:
--The target values are stored in a scipy CSR sparse matrix, with 804414 samples and 103 categories. Each sample has a value of 1 in its categories, and 0 in others. The array has 3.15% of non zero values::
--
--    >>> rcv1.target.shape
--    (804414, 103)
--
--``sample_id``:
--Each sample can be identified by its ID, ranging (with gaps) from 2286 to 810596::
--
--    >>> rcv1.sample_id[:3]
--    array([2286, 2287, 2288], dtype=uint32)
--
--``target_names``:
--The target values are the topics of each sample. Each sample belongs to at least one topic, and to up to 17 topics.
--There are 103 topics, each represented by a string. Their corpus frequencies span five orders of magnitude, from 5 occurrences for 'GMIL', to 381327 for 'CCAT'::
--
--    >>> rcv1.target_names[:3].tolist()  # doctest: +SKIP
--    ['E11', 'ECAT', 'M11']
--
--The dataset will be downloaded from the `rcv1 homepage`_ if necessary.
--The compressed size is about 656 MB.
--
--.. _rcv1 homepage: http://jmlr.csail.mit.edu/papers/volume5/lewis04a/
--
--
--.. topic:: References
--
--    .. [1] Lewis, D. D., Yang, Y., Rose, T. G., & Li, F. (2004). RCV1: A new benchmark collection for text categorization research. The Journal of Machine Learning Research, 5, 361-397.
-diff --git a/doc/modules/clustering.rst b/doc/modules/clustering.rst
-index 70b38aa77027..e9dcebff10a3 100644
---- a/doc/modules/clustering.rst
-+++ b/doc/modules/clustering.rst
-@@ -802,9 +802,10 @@ by black points below.
-     be used (e.g. with sparse matrices). This matrix will consume n^2 floats.
-     A couple of mechanisms for getting around this are:
- 
--    - Use OPTICS clustering in conjunction with the `extract_dbscan` method. OPTICS
--      clustering also calculates the full pairwise matrix, but only keeps one row in
--      memory at a time (memory complexity n).
-+    - Use :ref:`OPTICS <optics>` clustering in conjunction with the
-+      `extract_dbscan` method. OPTICS clustering also calculates the full
-+      pairwise matrix, but only keeps one row in memory at a time (memory
-+      complexity n).
- 
-     - A sparse radius neighborhood graph (where missing entries are presumed to
-       be out of eps) can be precomputed in a memory-efficient way and dbscan
-diff --git a/doc/modules/compose.rst b/doc/modules/compose.rst
-index 8817b6d83a38..7ef7fac1ae5c 100644
---- a/doc/modules/compose.rst
-+++ b/doc/modules/compose.rst
-@@ -423,7 +423,8 @@ By default, the remaining rating columns are ignored (``remainder='drop'``)::
-   ...      remainder='drop')
- 
-   >>> column_trans.fit(X) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
--  ColumnTransformer(n_jobs=1, remainder='drop', transformer_weights=None,
-+  ColumnTransformer(n_jobs=1, remainder='drop', sparse_threshold=0.3,
-+      transformer_weights=None,
-       transformers=...)
- 
-   >>> column_trans.get_feature_names()
-@@ -461,7 +462,7 @@ transformation::
-   ...      ('title_bow', CountVectorizer(), 'title')],
-   ...      remainder='passthrough')
- 
--  >>> column_trans.fit_transform(X).toarray()
-+  >>> column_trans.fit_transform(X)
-   ... # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-   array([[1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 5, 4],
-          [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 3, 5],
-@@ -478,7 +479,7 @@ the transformation::
-   ...      ('title_bow', CountVectorizer(), 'title')],
-   ...      remainder=MinMaxScaler())
- 
--  >>> column_trans.fit_transform(X)[:, -2:].toarray()
-+  >>> column_trans.fit_transform(X)[:, -2:]
-   ... # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-   array([[1. , 0.5],
-          [0. , 1. ],
-@@ -495,7 +496,8 @@ above example would be::
-   ...     ('city', CountVectorizer(analyzer=lambda x: [x])),
-   ...     ('title', CountVectorizer()))
-   >>> column_trans # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
--  ColumnTransformer(n_jobs=1, remainder='drop', transformer_weights=None,
-+  ColumnTransformer(n_jobs=1, remainder='drop', sparse_threshold=0.3,
-+           transformer_weights=None,
-            transformers=[('countvectorizer-1', ...)
- 
- .. topic:: Examples:
-diff --git a/doc/modules/naive_bayes.rst b/doc/modules/naive_bayes.rst
-index f3abe5720540..229ce6654d7c 100644
---- a/doc/modules/naive_bayes.rst
-+++ b/doc/modules/naive_bayes.rst
-@@ -85,7 +85,7 @@ classification. The likelihood of the features is assumed to be Gaussian:
- 
- .. math::
- 
--   P(x_i \mid y) &= \frac{1}{\sqrt{2\pi\sigma^2_y}} \exp\left(-\frac{(x_i - \mu_y)^2}{2\sigma^2_y}\right)
-+   P(x_i \mid y) = \frac{1}{\sqrt{2\pi\sigma^2_y}} \exp\left(-\frac{(x_i - \mu_y)^2}{2\sigma^2_y}\right)
- 
- The parameters :math:`\sigma_y` and :math:`\mu_y`
- are estimated using maximum likelihood.
-@@ -125,7 +125,7 @@ version of maximum likelihood, i.e. relative frequency counting:
- where :math:`N_{yi} = \sum_{x \in T} x_i` is
- the number of times feature :math:`i` appears in a sample of class :math:`y`
- in the training set :math:`T`,
--and :math:`N_{y} = \sum_{i=1}^{|T|} N_{yi}` is the total count of
-+and :math:`N_{y} = \sum_{i=1}^{n} N_{yi}` is the total count of
- all features for class :math:`y`.
- 
- The smoothing priors :math:`\alpha \ge 0` accounts for
-diff --git a/doc/whats_new/v0.20.rst b/doc/whats_new/v0.20.rst
-index 1efe39f8b5e5..1adc4077ec2b 100644
---- a/doc/whats_new/v0.20.rst
-+++ b/doc/whats_new/v0.20.rst
-@@ -913,6 +913,17 @@ Outlier Detection models
-   the ``fit_predict`` method is avaiable.
-   By :user:`Albert Thomas <albertcthomas>`.
- 
-+ - A ``behaviour`` parameter has been introduced in :class:`ensemble.IsolationForest`
-+  to ensure backward compatibility.
-+  In the old behaviour, the ``decision_function`` is independent of the ``contamination``
-+  parameter. A threshold attribute depending on the ``contamination`` parameter is thus
-+  used.
-+  In the new behaviour the ``decision_function`` is dependent on the ``contamination``
-+  parameter, in such a way that 0 becomes its natural threshold to detect outliers.
-+  Setting behaviour to "old" is deprecated and will not be possible in version 0.22.
-+  Beside, the behaviour parameter will be removed in 0.24.
-+  :issue:`11553` by `Nicolas Goix`_.
-+
- Covariance
- 
- - The :func:`covariance.graph_lasso`, :class:`covariance.GraphLasso` and
-diff --git a/examples/applications/wikipedia_principal_eigenvector.py b/examples/applications/wikipedia_principal_eigenvector.py
-index a051a847e04c..e4a0ce003603 100644
---- a/examples/applications/wikipedia_principal_eigenvector.py
-+++ b/examples/applications/wikipedia_principal_eigenvector.py
-@@ -207,7 +207,7 @@ def centrality_scores(X, alpha=0.85, max_iter=100, tol=1e-10):
-     dangle = np.asarray(np.where(np.isclose(X.sum(axis=1), 0),
-                                  1.0 / n, 0)).ravel()
- 
--    scores = np.ones(n, dtype=np.float32) / n  # initial guess
-+    scores = np.full(n, 1. / n, dtype=np.float32)  # initial guess
-     for i in range(max_iter):
-         print("power iteration #%d" % i)
-         prev_scores = scores
-diff --git a/examples/cluster/plot_optics.py b/examples/cluster/plot_optics.py
-index 964ca49f6983..19fd683dddc3 100755
---- a/examples/cluster/plot_optics.py
-+++ b/examples/cluster/plot_optics.py
-@@ -68,8 +68,8 @@
-     Rk = reachability[labels == k]
-     ax1.plot(Xk, Rk, c, alpha=0.3)
- ax1.plot(space[labels == -1], reachability[labels == -1], 'k.', alpha=0.3)
--ax1.plot(space, np.ones_like(space) * 0.75, 'k-', alpha=0.5)
--ax1.plot(space, np.ones_like(space) * 0.25, 'k-.', alpha=0.5)
-+ax1.plot(space, np.full_like(space, 0.75), 'k-', alpha=0.5)
-+ax1.plot(space, np.full_like(space, 0.25), 'k-.', alpha=0.5)
- ax1.set_ylabel('Reachability (epsilon distance)')
- ax1.set_title('Reachability Plot')
- 
-diff --git a/examples/cluster/plot_segmentation_toy.py b/examples/cluster/plot_segmentation_toy.py
-index aa66c811eda8..a6980c5f271e 100644
---- a/examples/cluster/plot_segmentation_toy.py
-+++ b/examples/cluster/plot_segmentation_toy.py
-@@ -74,7 +74,7 @@
- # Force the solver to be arpack, since amg is numerically
- # unstable on this example
- labels = spectral_clustering(graph, n_clusters=4, eigen_solver='arpack')
--label_im = -np.ones(mask.shape)
-+label_im = np.full(mask.shape, -1.)
- label_im[mask] = labels
- 
- plt.matshow(img)
-@@ -92,7 +92,7 @@
- graph.data = np.exp(-graph.data / graph.data.std())
- 
- labels = spectral_clustering(graph, n_clusters=2, eigen_solver='arpack')
--label_im = -np.ones(mask.shape)
-+label_im = np.full(mask.shape, -1.)
- label_im[mask] = labels
- 
- plt.matshow(img)
-diff --git a/examples/covariance/plot_mahalanobis_distances.py b/examples/covariance/plot_mahalanobis_distances.py
-index 21f295ce5830..816ad2ec2cc5 100644
---- a/examples/covariance/plot_mahalanobis_distances.py
-+++ b/examples/covariance/plot_mahalanobis_distances.py
-@@ -119,9 +119,9 @@
- emp_mahal = emp_cov.mahalanobis(X - np.mean(X, 0)) ** (0.33)
- subfig2 = plt.subplot(2, 2, 3)
- subfig2.boxplot([emp_mahal[:-n_outliers], emp_mahal[-n_outliers:]], widths=.25)
--subfig2.plot(1.26 * np.ones(n_samples - n_outliers),
-+subfig2.plot(np.full(n_samples - n_outliers, 1.26),
-              emp_mahal[:-n_outliers], '+k', markeredgewidth=1)
--subfig2.plot(2.26 * np.ones(n_outliers),
-+subfig2.plot(np.full(n_outliers, 2.26),
-              emp_mahal[-n_outliers:], '+k', markeredgewidth=1)
- subfig2.axes.set_xticklabels(('inliers', 'outliers'), size=15)
- subfig2.set_ylabel(r"$\sqrt[3]{\rm{(Mahal. dist.)}}$", size=16)
-@@ -132,9 +132,9 @@
- subfig3 = plt.subplot(2, 2, 4)
- subfig3.boxplot([robust_mahal[:-n_outliers], robust_mahal[-n_outliers:]],
-                 widths=.25)
--subfig3.plot(1.26 * np.ones(n_samples - n_outliers),
-+subfig3.plot(np.full(n_samples - n_outliers, 1.26),
-              robust_mahal[:-n_outliers], '+k', markeredgewidth=1)
--subfig3.plot(2.26 * np.ones(n_outliers),
-+subfig3.plot(np.full(n_outliers, 2.26),
-              robust_mahal[-n_outliers:], '+k', markeredgewidth=1)
- subfig3.axes.set_xticklabels(('inliers', 'outliers'), size=15)
- subfig3.set_ylabel(r"$\sqrt[3]{\rm{(Mahal. dist.)}}$", size=16)
-diff --git a/examples/ensemble/plot_isolation_forest.py b/examples/ensemble/plot_isolation_forest.py
-index b43ee95c5820..1b79072dff64 100644
---- a/examples/ensemble/plot_isolation_forest.py
-+++ b/examples/ensemble/plot_isolation_forest.py
-@@ -40,7 +40,8 @@
- X_outliers = rng.uniform(low=-4, high=4, size=(20, 2))
- 
- # fit the model
--clf = IsolationForest(max_samples=100, random_state=rng, contamination='auto')
-+clf = IsolationForest(behaviour='new', max_samples=100,
-+                      random_state=rng, contamination='auto')
- clf.fit(X_train)
- y_pred_train = clf.predict(X_train)
- y_pred_test = clf.predict(X_test)
-diff --git a/examples/linear_model/plot_ard.py b/examples/linear_model/plot_ard.py
-index 38c334a217df..177bd8ce24ad 100644
---- a/examples/linear_model/plot_ard.py
-+++ b/examples/linear_model/plot_ard.py
-@@ -76,7 +76,7 @@
- plt.figure(figsize=(6, 5))
- plt.title("Histogram of the weights")
- plt.hist(clf.coef_, bins=n_features, color='navy', log=True)
--plt.scatter(clf.coef_[relevant_features], 5 * np.ones(len(relevant_features)),
-+plt.scatter(clf.coef_[relevant_features], np.full(len(relevant_features), 5.),
-             color='gold', marker='o', label="Relevant features")
- plt.ylabel("Features")
- plt.xlabel("Values of the weights")
-diff --git a/examples/linear_model/plot_bayesian_ridge.py b/examples/linear_model/plot_bayesian_ridge.py
-index 4359c421ea86..43925e72c591 100644
---- a/examples/linear_model/plot_bayesian_ridge.py
-+++ b/examples/linear_model/plot_bayesian_ridge.py
-@@ -74,7 +74,7 @@
- plt.title("Histogram of the weights")
- plt.hist(clf.coef_, bins=n_features, color='gold', log=True,
-          edgecolor='black')
--plt.scatter(clf.coef_[relevant_features], 5 * np.ones(len(relevant_features)),
-+plt.scatter(clf.coef_[relevant_features], np.full(len(relevant_features), 5.),
-             color='navy', label="Relevant features")
- plt.ylabel("Features")
- plt.xlabel("Values of the weights")
-diff --git a/examples/manifold/plot_mds.py b/examples/manifold/plot_mds.py
-index 29d9c548e1a2..6398e2f7a624 100644
---- a/examples/manifold/plot_mds.py
-+++ b/examples/manifold/plot_mds.py
-@@ -82,7 +82,7 @@
-                     zorder=0, cmap=plt.cm.Blues,
-                     norm=plt.Normalize(0, values.max()))
- lc.set_array(similarities.flatten())
--lc.set_linewidths(0.5 * np.ones(len(segments)))
-+lc.set_linewidths(np.full(len(segments), 0.5))
- ax.add_collection(lc)
- 
- plt.show()
-diff --git a/examples/mixture/plot_concentration_prior.py b/examples/mixture/plot_concentration_prior.py
-index b7e121c7cb30..14930a6eafdb 100644
---- a/examples/mixture/plot_concentration_prior.py
-+++ b/examples/mixture/plot_concentration_prior.py
-@@ -116,7 +116,7 @@ def plot_results(ax1, ax2, estimator, X, y, title, plot_title=False):
- X = np.vstack([
-     rng.multivariate_normal(means[j], covars[j], samples[j])
-     for j in range(n_components)])
--y = np.concatenate([j * np.ones(samples[j], dtype=int)
-+y = np.concatenate([np.full(samples[j], j, dtype=int)
-                     for j in range(n_components)])
- 
- # Plot results in two different figures
-diff --git a/examples/neighbors/plot_kde_1d.py b/examples/neighbors/plot_kde_1d.py
-index 77ce5232da4f..aac5e6ea3e7f 100644
---- a/examples/neighbors/plot_kde_1d.py
-+++ b/examples/neighbors/plot_kde_1d.py
-@@ -67,7 +67,7 @@
- ax[1, 1].text(-3.5, 0.31, "Gaussian Kernel Density")
- 
- for axi in ax.ravel():
--    axi.plot(X[:, 0], np.zeros(X.shape[0]) - 0.01, '+k')
-+    axi.plot(X[:, 0], np.full(X.shape[0], -0.01), '+k')
-     axi.set_xlim(-4, 9)
-     axi.set_ylim(-0.02, 0.34)
- 
-diff --git a/examples/neighbors/plot_species_kde.py b/examples/neighbors/plot_species_kde.py
-index d3669e8fee79..a79805bd8f1e 100644
---- a/examples/neighbors/plot_species_kde.py
-+++ b/examples/neighbors/plot_species_kde.py
-@@ -87,7 +87,7 @@
-     kde.fit(Xtrain[ytrain == i])
- 
-     # evaluate only on the land: -9999 indicates ocean
--    Z = -9999 + np.zeros(land_mask.shape[0])
-+    Z = np.full(land_mask.shape[0], -9999, dtype='int')
-     Z[land_mask] = np.exp(kde.score_samples(xy))
-     Z = Z.reshape(X.shape)
- 
-diff --git a/examples/plot_anomaly_comparison.py b/examples/plot_anomaly_comparison.py
-index 201c466db71d..f3dc0f1dddff 100644
---- a/examples/plot_anomaly_comparison.py
-+++ b/examples/plot_anomaly_comparison.py
-@@ -80,7 +80,8 @@
-     ("Robust covariance", EllipticEnvelope(contamination=outliers_fraction)),
-     ("One-Class SVM", svm.OneClassSVM(nu=outliers_fraction, kernel="rbf",
-                                       gamma=0.1)),
--    ("Isolation Forest", IsolationForest(contamination=outliers_fraction,
-+    ("Isolation Forest", IsolationForest(behaviour='new',
-+                                         contamination=outliers_fraction,
-                                          random_state=42)),
-     ("Local Outlier Factor", LocalOutlierFactor(
-         n_neighbors=35, contamination=outliers_fraction))]
-diff --git a/examples/plot_isotonic_regression.py b/examples/plot_isotonic_regression.py
-index 2411aa1d9512..1a240913b982 100644
---- a/examples/plot_isotonic_regression.py
-+++ b/examples/plot_isotonic_regression.py
-@@ -46,7 +46,7 @@
- segments = [[[i, y[i]], [i, y_[i]]] for i in range(n)]
- lc = LineCollection(segments, zorder=0)
- lc.set_array(np.ones(len(y)))
--lc.set_linewidths(0.5 * np.ones(n))
-+lc.set_linewidths(np.full(n, 0.5))
- 
- fig = plt.figure()
- plt.plot(x, y, 'r.', markersize=12)
-diff --git a/examples/semi_supervised/plot_label_propagation_structure.py b/examples/semi_supervised/plot_label_propagation_structure.py
-index 6363653077d9..ad9270307a39 100644
---- a/examples/semi_supervised/plot_label_propagation_structure.py
-+++ b/examples/semi_supervised/plot_label_propagation_structure.py
-@@ -24,7 +24,7 @@
- n_samples = 200
- X, y = make_circles(n_samples=n_samples, shuffle=False)
- outer, inner = 0, 1
--labels = -np.ones(n_samples)
-+labels = np.full(n_samples, -1.)
- labels[0] = outer
- labels[-1] = inner
- 
-diff --git a/sklearn/cluster/_hierarchical.pyx b/sklearn/cluster/_hierarchical.pyx
-index 5d42d8494495..0a87b8222981 100644
---- a/sklearn/cluster/_hierarchical.pyx
-+++ b/sklearn/cluster/_hierarchical.pyx
-@@ -343,7 +343,7 @@ cdef class UnionFind(object):
-     cdef ITYPE_t[:] size
- 
-     def __init__(self, N):
--        self.parent = -1 * np.ones(2 * N - 1, dtype=ITYPE, order='C')
-+        self.parent = np.full(2 * N - 1, -1., dtype=ITYPE, order='C')
-         self.next_label = N
-         self.size = np.hstack((np.ones(N, dtype=ITYPE),
-                                np.zeros(N - 1, dtype=ITYPE)))
-@@ -448,4 +448,4 @@ def single_linkage_label(L):
-     if not is_sorted(L[:, 2]):
-         raise ValueError("Input MST array must be sorted by weight")
- 
--    return _single_linkage_label(L)
-\ No newline at end of file
-+    return _single_linkage_label(L)
-diff --git a/sklearn/cluster/bicluster.py b/sklearn/cluster/bicluster.py
-index 81f2f411a7f4..3be4f6cabfd6 100644
---- a/sklearn/cluster/bicluster.py
-+++ b/sklearn/cluster/bicluster.py
-@@ -258,6 +258,22 @@ class SpectralCoclustering(BaseSpectral):
-     column_labels_ : array-like, shape (n_cols,)
-         The bicluster label of each column.
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import SpectralCoclustering
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 1], [2, 1], [1, 0],
-+    ...               [4, 7], [3, 5], [3, 6]])
-+    >>> clustering = SpectralCoclustering(n_clusters=2, random_state=0).fit(X)
-+    >>> clustering.row_labels_
-+    array([0, 1, 1, 0, 0, 0], dtype=int32)
-+    >>> clustering.column_labels_
-+    array([0, 0], dtype=int32)
-+    >>> clustering # doctest: +NORMALIZE_WHITESPACE
-+    SpectralCoclustering(init='k-means++', mini_batch=False, n_clusters=2,
-+               n_init=10, n_jobs=1, n_svd_vecs=None, random_state=0,
-+               svd_method='randomized')
-+
-     References
-     ----------
- 
-@@ -389,6 +405,23 @@ class SpectralBiclustering(BaseSpectral):
-     column_labels_ : array-like, shape (n_cols,)
-         Column partition labels.
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import SpectralBiclustering
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 1], [2, 1], [1, 0],
-+    ...               [4, 7], [3, 5], [3, 6]])
-+    >>> clustering = SpectralBiclustering(n_clusters=2, random_state=0).fit(X)
-+    >>> clustering.row_labels_
-+    array([1, 1, 1, 0, 0, 0], dtype=int32)
-+    >>> clustering.column_labels_
-+    array([0, 1], dtype=int32)
-+    >>> clustering # doctest: +NORMALIZE_WHITESPACE
-+    SpectralBiclustering(init='k-means++', method='bistochastic',
-+               mini_batch=False, n_best=3, n_clusters=2, n_components=6,
-+               n_init=10, n_jobs=1, n_svd_vecs=None, random_state=0,
-+               svd_method='randomized')
-+
-     References
-     ----------
- 
-diff --git a/sklearn/cluster/birch.py b/sklearn/cluster/birch.py
-index f50e7356ae63..2af3ab7890e8 100644
---- a/sklearn/cluster/birch.py
-+++ b/sklearn/cluster/birch.py
-@@ -394,7 +394,7 @@ class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
-     >>> X = [[0, 1], [0.3, 1], [-0.3, 1], [0, -1], [0.3, -1], [-0.3, -1]]
-     >>> brc = Birch(branching_factor=50, n_clusters=None, threshold=0.5,
-     ... compute_labels=True)
--    >>> brc.fit(X)
-+    >>> brc.fit(X) # doctest: +NORMALIZE_WHITESPACE
-     Birch(branching_factor=50, compute_labels=True, copy=True, n_clusters=None,
-        threshold=0.5)
-     >>> brc.predict(X)
-diff --git a/sklearn/cluster/dbscan_.py b/sklearn/cluster/dbscan_.py
-index ea4e02badbfc..91324907f53a 100644
---- a/sklearn/cluster/dbscan_.py
-+++ b/sklearn/cluster/dbscan_.py
-@@ -87,6 +87,14 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski', metric_params=None,
-     labels : array [n_samples]
-         Cluster labels for each point.  Noisy samples are given the label -1.
- 
-+    See also
-+    --------
-+    DBSCAN
-+        An estimator interface for this clustering algorithm.
-+    optics
-+        A similar clustering at multiple values of eps. Our implementation
-+        is optimized for memory usage.
-+
-     Notes
-     -----
-     For an example, see :ref:`examples/cluster/plot_dbscan.py
-@@ -107,6 +115,9 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski', metric_params=None,
-     Another way to reduce memory and computation time is to remove
-     (near-)duplicate points and use ``sample_weight`` instead.
- 
-+    :func:`cluster.optics` provides a similar clustering with lower memory
-+    usage.
-+
-     References
-     ----------
-     Ester, M., H. P. Kriegel, J. Sander, and X. Xu, "A Density-Based
-@@ -158,7 +169,7 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski', metric_params=None,
-                                 for neighbors in neighborhoods])
- 
-     # Initially, all samples are noise.
--    labels = -np.ones(X.shape[0], dtype=np.intp)
-+    labels = np.full(X.shape[0], -1, dtype=np.intp)
- 
-     # A list of all core samples found.
-     core_samples = np.asarray(n_neighbors >= min_samples, dtype=np.uint8)
-@@ -233,6 +244,25 @@ class DBSCAN(BaseEstimator, ClusterMixin):
-         Cluster labels for each point in the dataset given to fit().
-         Noisy samples are given the label -1.
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import DBSCAN
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 2], [2, 2], [2, 3],
-+    ...               [8, 7], [8, 8], [25, 80]])
-+    >>> clustering = DBSCAN(eps=3, min_samples=2).fit(X)
-+    >>> clustering.labels_
-+    array([ 0,  0,  0,  1,  1, -1])
-+    >>> clustering # doctest: +NORMALIZE_WHITESPACE
-+    DBSCAN(algorithm='auto', eps=3, leaf_size=30, metric='euclidean',
-+        metric_params=None, min_samples=2, n_jobs=1, p=None)
-+
-+    See also
-+    --------
-+    OPTICS
-+        A similar clustering at multiple values of eps. Our implementation
-+        is optimized for memory usage.
-+
-     Notes
-     -----
-     For an example, see :ref:`examples/cluster/plot_dbscan.py
-@@ -253,6 +283,9 @@ class DBSCAN(BaseEstimator, ClusterMixin):
-     Another way to reduce memory and computation time is to remove
-     (near-)duplicate points and use ``sample_weight`` instead.
- 
-+    :class:`cluster.OPTICS` provides a similar clustering with lower memory
-+    usage.
-+
-     References
-     ----------
-     Ester, M., H. P. Kriegel, J. Sander, and X. Xu, "A Density-Based
-diff --git a/sklearn/cluster/hierarchical.py b/sklearn/cluster/hierarchical.py
-index db1b2c36dfea..1d6755fd7206 100644
---- a/sklearn/cluster/hierarchical.py
-+++ b/sklearn/cluster/hierarchical.py
-@@ -93,7 +93,7 @@ def _single_linkage_tree(connectivity, n_samples, n_nodes, n_clusters,
-     connectivity = connectivity.astype('float64')
- 
-     # Ensure zero distances aren't ignored by setting them to "epsilon"
--    epsilon_value = np.nextafter(0, 1, dtype=connectivity.data.dtype)
-+    epsilon_value = np.finfo(dtype=connectivity.data.dtype).eps
-     connectivity.data[connectivity.data == 0] = epsilon_value
- 
-     # Use scipy.sparse.csgraph to generate a minimum spanning tree
-@@ -917,6 +917,22 @@ class FeatureAgglomeration(AgglomerativeClustering, AgglomerationTransform):
-         node and has children `children_[i - n_features]`. Alternatively
-         at the i-th iteration, children[i][0] and children[i][1]
-         are merged to form node `n_features + i`
-+
-+    Examples
-+    --------
-+    >>> import numpy as np
-+    >>> from sklearn import datasets, cluster
-+    >>> digits = datasets.load_digits()
-+    >>> images = digits.images
-+    >>> X = np.reshape(images, (len(images), -1))
-+    >>> agglo = cluster.FeatureAgglomeration(n_clusters=32)
-+    >>> agglo.fit(X) # doctest: +ELLIPSIS
-+    FeatureAgglomeration(affinity='euclidean', compute_full_tree='auto',
-+               connectivity=None, linkage='ward', memory=None, n_clusters=32,
-+               pooling_func=...)
-+    >>> X_reduced = agglo.transform(X)
-+    >>> X_reduced.shape
-+    (1797, 32)
-     """
- 
-     def __init__(self, n_clusters=2, affinity="euclidean",
-diff --git a/sklearn/cluster/k_means_.py b/sklearn/cluster/k_means_.py
-index fc71ddc8463f..db599e5d0c1c 100644
---- a/sklearn/cluster/k_means_.py
-+++ b/sklearn/cluster/k_means_.py
-@@ -669,7 +669,7 @@ def _labels_inertia(X, sample_weight, x_squared_norms, centers,
-     sample_weight = _check_sample_weight(X, sample_weight)
-     # set the default value of centers to -1 to be able to detect any anomaly
-     # easily
--    labels = -np.ones(n_samples, np.int32)
-+    labels = np.full(n_samples, -1, np.int32)
-     if distances is None:
-         distances = np.zeros(shape=(0,), dtype=X.dtype)
-     # distances will be changed in-place
-@@ -1404,6 +1404,36 @@ class MiniBatchKMeans(KMeans):
-         defined as the sum of square distances of samples to their nearest
-         neighbor.
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import MiniBatchKMeans
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 2], [1, 4], [1, 0],
-+    ...               [4, 2], [4, 0], [4, 4],
-+    ...               [4, 5], [0, 1], [2, 2],
-+    ...               [3, 2], [5, 5], [1, -1]])
-+    >>> # manually fit on batches
-+    >>> kmeans = MiniBatchKMeans(n_clusters=2,
-+    ...         random_state=0,
-+    ...         batch_size=6)
-+    >>> kmeans = kmeans.partial_fit(X[0:6,:])
-+    >>> kmeans = kmeans.partial_fit(X[6:12,:])
-+    >>> kmeans.cluster_centers_
-+    array([[1, 1],
-+           [3, 4]])
-+    >>> kmeans.predict([[0, 0], [4, 4]])
-+    array([0, 1], dtype=int32)
-+    >>> # fit on the whole data
-+    >>> kmeans = MiniBatchKMeans(n_clusters=2,
-+    ...         random_state=0,
-+    ...         batch_size=6,
-+    ...         max_iter=10).fit(X)
-+    >>> kmeans.cluster_centers_
-+    array([[3.95918367, 2.40816327],
-+           [1.12195122, 1.3902439 ]])
-+    >>> kmeans.predict([[0, 0], [4, 4]])
-+    array([1, 0], dtype=int32)
-+
-     See also
-     --------
- 
-diff --git a/sklearn/cluster/mean_shift_.py b/sklearn/cluster/mean_shift_.py
-index 384bb9b73bc5..edd4ee9999f7 100644
---- a/sklearn/cluster/mean_shift_.py
-+++ b/sklearn/cluster/mean_shift_.py
-@@ -351,6 +351,21 @@ class MeanShift(BaseEstimator, ClusterMixin):
-     labels_ :
-         Labels of each point.
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import MeanShift
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 1], [2, 1], [1, 0],
-+    ...               [4, 7], [3, 5], [3, 6]])
-+    >>> clustering = MeanShift(bandwidth=2).fit(X)
-+    >>> clustering.labels_
-+    array([0, 0, 0, 1, 1, 1])
-+    >>> clustering.predict([[0, 0], [5, 5]])
-+    array([0, 1])
-+    >>> clustering # doctest: +NORMALIZE_WHITESPACE
-+    MeanShift(bandwidth=2, bin_seeding=False, cluster_all=True, min_bin_freq=1,
-+         n_jobs=1, seeds=None)
-+
-     Notes
-     -----
- 
-diff --git a/sklearn/cluster/optics_.py b/sklearn/cluster/optics_.py
-index d88b78e77302..ba772bc5452e 100755
---- a/sklearn/cluster/optics_.py
-+++ b/sklearn/cluster/optics_.py
-@@ -34,6 +34,8 @@ def optics(X, min_samples=5, max_bound=np.inf, metric='euclidean',
-     clusters from them. Unlike DBSCAN, keeps cluster hierarchy for a variable
-     neighborhood radius. Optimized for usage on large point datasets.
- 
-+    Read more in the :ref:`User Guide <optics>`.
-+
-     Parameters
-     ----------
-     X : array, shape (n_samples, n_features)
-@@ -100,6 +102,7 @@ def optics(X, min_samples=5, max_bound=np.inf, metric='euclidean',
- 
-     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
-         Algorithm used to compute the nearest neighbors:
-+
-         - 'ball_tree' will use :class:`BallTree`
-         - 'kd_tree' will use :class:`KDTree`
-         - 'brute' will use a brute-force search.
-@@ -127,6 +130,14 @@ def optics(X, min_samples=5, max_bound=np.inf, metric='euclidean',
-     labels_ : array, shape (n_samples,)
-         The estimated labels.
- 
-+    See also
-+    --------
-+    OPTICS
-+        An estimator interface for this clustering algorithm.
-+    dbscan
-+        A similar clustering for a specified neighborhood radius (eps).
-+        Our implementation is optimized for runtime.
-+
-     References
-     ----------
-     Ankerst, Mihael, Markus M. Breunig, Hans-Peter Kriegel, and Jörg Sander.
-@@ -151,6 +162,8 @@ class OPTICS(BaseEstimator, ClusterMixin):
-     clusters from them. Unlike DBSCAN, keeps cluster hierarchy for a variable
-     neighborhood radius. Optimized for usage on large point datasets.
- 
-+    Read more in the :ref:`User Guide <optics>`.
-+
-     Parameters
-     ----------
-     min_samples : int
-@@ -214,6 +227,7 @@ class OPTICS(BaseEstimator, ClusterMixin):
- 
-     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
-         Algorithm used to compute the nearest neighbors:
-+
-         - 'ball_tree' will use :class:`BallTree`
-         - 'kd_tree' will use :class:`KDTree`
-         - 'brute' will use a brute-force search.
-@@ -256,11 +270,8 @@ class OPTICS(BaseEstimator, ClusterMixin):
-     --------
- 
-     DBSCAN
--        CPU optimized algorithm that clusters at specified neighborhood
--        radius (eps).
--    HDBSCAN
--        Related clustering algorithm that calculates the minimum spanning tree
--        across mutual reachability space.
-+        A similar clustering for a specified neighborhood radius (eps).
-+        Our implementation is optimized for runtime.
- 
-     References
-     ----------
-@@ -320,7 +331,7 @@ def fit(self, X, y=None):
-         self.core_distances_ = np.empty(n_samples)
-         self.core_distances_.fill(np.nan)
-         # Start all points as noise ##
--        self.labels_ = -np.ones(n_samples, dtype=int)
-+        self.labels_ = np.full(n_samples, -1, dtype=int)
-         self.ordering_ = []
- 
-         # Check for valid n_samples relative to min_samples
-@@ -540,7 +551,7 @@ def _extract_optics(ordering, reachability, maxima_ratio=.75,
-     clustid = 0
-     n_samples = len(reachability)
-     is_core = np.zeros(n_samples, dtype=bool)
--    labels = -np.ones(n_samples, dtype=int)
-+    labels = np.full(n_samples, -1, dtype=int)
-     # Start all points as non-core noise
-     for leaf in leaves:
-         index = ordering[leaf.start:leaf.end]
-diff --git a/sklearn/cluster/spectral.py b/sklearn/cluster/spectral.py
-index 58ef1ba6c9d0..fd4334a2779b 100644
---- a/sklearn/cluster/spectral.py
-+++ b/sklearn/cluster/spectral.py
-@@ -371,6 +371,23 @@ class SpectralClustering(BaseEstimator, ClusterMixin):
-     labels_ :
-         Labels of each point
- 
-+    Examples
-+    --------
-+    >>> from sklearn.cluster import SpectralClustering
-+    >>> import numpy as np
-+    >>> X = np.array([[1, 1], [2, 1], [1, 0],
-+    ...               [4, 7], [3, 5], [3, 6]])
-+    >>> clustering = SpectralClustering(n_clusters=2,
-+    ...         assign_labels="discretize",
-+    ...         random_state=0).fit(X)
-+    >>> clustering.labels_
-+    array([1, 1, 1, 0, 0, 0])
-+    >>> clustering # doctest: +NORMALIZE_WHITESPACE
-+    SpectralClustering(affinity='rbf', assign_labels='discretize', coef0=1,
-+              degree=3, eigen_solver=None, eigen_tol=0.0, gamma=1.0,
-+              kernel_params=None, n_clusters=2, n_init=10, n_jobs=1,
-+              n_neighbors=10, random_state=0)
-+
-     Notes
-     -----
-     If you have an affinity matrix, such as a distance matrix,
-diff --git a/sklearn/cluster/tests/test_dbscan.py b/sklearn/cluster/tests/test_dbscan.py
-index f2d6c5836db8..f25cc8d7310d 100644
---- a/sklearn/cluster/tests/test_dbscan.py
-+++ b/sklearn/cluster/tests/test_dbscan.py
-@@ -339,7 +339,7 @@ def test_dbscan_core_samples_toy(algorithm):
-     core_samples, labels = dbscan(X, algorithm=algorithm, eps=1,
-                                   min_samples=4)
-     assert_array_equal(core_samples, [])
--    assert_array_equal(labels, -np.ones(n_samples))
-+    assert_array_equal(labels, np.full(n_samples, -1.))
- 
- 
- def test_dbscan_precomputed_metric_with_degenerate_input_arrays():
-diff --git a/sklearn/cluster/tests/test_hierarchical.py b/sklearn/cluster/tests/test_hierarchical.py
-index 9f79e2e759d3..6f03f9aa3210 100644
---- a/sklearn/cluster/tests/test_hierarchical.py
-+++ b/sklearn/cluster/tests/test_hierarchical.py
-@@ -506,7 +506,7 @@ def test_int_float_dict():
-         assert d[key] == value
- 
-     other_keys = np.arange(50).astype(np.intp)[::2]
--    other_values = 0.5 * np.ones(50)[::2]
-+    other_values = np.full(50, 0.5)[::2]
-     other = IntFloatDict(other_keys, other_values)
-     # Complete smoke test
-     max_merge(d, other, mask=np.ones(100, dtype=np.intp), n_a=1, n_b=1)
-diff --git a/sklearn/cluster/tests/test_k_means.py b/sklearn/cluster/tests/test_k_means.py
-index c6bac2bb1da8..7935e7134d24 100644
---- a/sklearn/cluster/tests/test_k_means.py
-+++ b/sklearn/cluster/tests/test_k_means.py
-@@ -68,7 +68,7 @@ def test_labels_assignment_and_inertia():
-     # implementation
-     rng = np.random.RandomState(42)
-     noisy_centers = centers + rng.normal(size=centers.shape)
--    labels_gold = - np.ones(n_samples, dtype=np.int)
-+    labels_gold = np.full(n_samples, -1, dtype=np.int)
-     mindist = np.empty(n_samples)
-     mindist.fill(np.infty)
-     for center_id in range(n_clusters):
-diff --git a/sklearn/compose/_column_transformer.py b/sklearn/compose/_column_transformer.py
-index 7c5cd2750a4d..2e5c070062ce 100644
---- a/sklearn/compose/_column_transformer.py
-+++ b/sklearn/compose/_column_transformer.py
-@@ -6,6 +6,8 @@
- # Author: Andreas Mueller
- #         Joris Van den Bossche
- # License: BSD
-+from __future__ import division
-+
- from itertools import chain
- 
- import numpy as np
-@@ -71,7 +73,7 @@ class ColumnTransformer(_BaseComposition, TransformerMixin):
-             A callable is passed the input data `X` and can return any of the
-             above.
- 
--    remainder : {'passthrough', 'drop'} or estimator, default 'drop'
-+    remainder : {'drop', 'passthrough'} or estimator, default 'drop'
-         By default, only the specified columns in `transformers` are
-         transformed and combined in the output, and the non-specified
-         columns are dropped. (default of ``'drop'``).
-@@ -83,6 +85,14 @@ class ColumnTransformer(_BaseComposition, TransformerMixin):
-         non-specified columns will use the ``remainder`` estimator. The
-         estimator must support `fit` and `transform`.
- 
-+    sparse_threshold : float, default = 0.3
-+        If the transformed output consists of a mix of sparse and dense data,
-+        it will be stacked as a sparse matrix if the density is lower than this
-+        value. Use ``sparse_threshold=0`` to always return dense.
-+        When the transformed output consists of all sparse or all dense data,
-+        the stacked result will be sparse or dense, respectively, and this
-+        keyword will be ignored.
-+
-     n_jobs : int, optional
-         Number of jobs to run in parallel (default 1).
- 
-@@ -108,6 +118,11 @@ class ColumnTransformer(_BaseComposition, TransformerMixin):
-         Keys are transformer names and values are the fitted transformer
-         objects.
- 
-+    sparse_output_ : boolean
-+        Boolean flag indicating wether the output of ``transform`` is a
-+        sparse matrix or a dense numpy array, which depends on the output
-+        of the individual transformers and the `sparse_threshold` keyword.
-+
-     Notes
-     -----
-     The order of the columns in the transformed feature matrix follows the
-@@ -141,10 +156,11 @@ class ColumnTransformer(_BaseComposition, TransformerMixin):
- 
-     """
- 
--    def __init__(self, transformers, remainder='drop', n_jobs=1,
--                 transformer_weights=None):
-+    def __init__(self, transformers, remainder='drop', sparse_threshold=0.3,
-+                 n_jobs=1, transformer_weights=None):
-         self.transformers = transformers
-         self.remainder = remainder
-+        self.sparse_threshold = sparse_threshold
-         self.n_jobs = n_jobs
-         self.transformer_weights = transformer_weights
- 
-@@ -374,12 +390,9 @@ def fit(self, X, y=None):
-             This estimator
- 
-         """
--        self._validate_remainder(X)
--        self._validate_transformers()
--
--        transformers = self._fit_transform(X, y, _fit_one_transformer)
--        self._update_fitted_transformers(transformers)
--
-+        # we use fit_transform to make sure to set sparse_output_ (for which we
-+        # need the transformed data) to have consistent output type in predict
-+        self.fit_transform(X, y=y)
-         return self
- 
-     def fit_transform(self, X, y=None):
-@@ -409,15 +422,28 @@ def fit_transform(self, X, y=None):
-         result = self._fit_transform(X, y, _fit_transform_one)
- 
-         if not result:
-+            self._update_fitted_transformers([])
-             # All transformers are None
-             return np.zeros((X.shape[0], 0))
- 
-         Xs, transformers = zip(*result)
- 
-+        # determine if concatenated output will be sparse or not
-+        if all(sparse.issparse(X) for X in Xs):
-+            self.sparse_output_ = True
-+        elif any(sparse.issparse(X) for X in Xs):
-+            nnz = sum(X.nnz if sparse.issparse(X) else X.size for X in Xs)
-+            total = sum(X.shape[0] * X.shape[1] if sparse.issparse(X)
-+                        else X.size for X in Xs)
-+            density = nnz / total
-+            self.sparse_output_ = density < self.sparse_threshold
-+        else:
-+            self.sparse_output_ = False
-+
-         self._update_fitted_transformers(transformers)
-         self._validate_output(Xs)
- 
--        return _hstack(list(Xs))
-+        return _hstack(list(Xs), self.sparse_output_)
- 
-     def transform(self, X):
-         """Transform X separately by each transformer, concatenate results.
-@@ -445,7 +471,7 @@ def transform(self, X):
-             # All transformers are None
-             return np.zeros((X.shape[0], 0))
- 
--        return _hstack(list(Xs))
-+        return _hstack(list(Xs), self.sparse_output_)
- 
- 
- def _check_key_type(key, superclass):
-@@ -479,16 +505,17 @@ def _check_key_type(key, superclass):
-     return False
- 
- 
--def _hstack(X):
-+def _hstack(X, sparse_):
-     """
-     Stacks X horizontally.
- 
-     Supports input types (X): list of
-         numpy arrays, sparse arrays and DataFrames
-     """
--    if any(sparse.issparse(f) for f in X):
-+    if sparse_:
-         return sparse.hstack(X).tocsr()
-     else:
-+        X = [f.toarray() if sparse.issparse(f) else f for f in X]
-         return np.hstack(X)
- 
- 
-@@ -625,14 +652,14 @@ def make_column_transformer(*transformers, **kwargs):
-     ----------
-     *transformers : tuples of column selections and transformers
- 
--    remainder : {'passthrough', 'drop'} or estimator, default 'passthrough'
--        By default, all remaining columns that were not specified in
--        `transformers` will be automatically passed through (default of
--        ``'passthrough'``). This subset of columns is concatenated with the
--        output of the transformers.
--        By using ``remainder='drop'``, only the specified columns in
--        `transformers` are transformed and combined in the output, and the
--        non-specified columns are dropped.
-+    remainder : {'drop', 'passthrough'} or estimator, default 'drop'
-+        By default, only the specified columns in `transformers` are
-+        transformed and combined in the output, and the non-specified
-+        columns are dropped. (default of ``'drop'``).
-+        By specifying ``remainder='passthrough'``, all remaining columns that
-+        were not specified in `transformers` will be automatically passed
-+        through. This subset of columns is concatenated with the output of
-+        the transformers.
-         By setting ``remainder`` to be an estimator, the remaining
-         non-specified columns will use the ``remainder`` estimator. The
-         estimator must support `fit` and `transform`.
-@@ -658,7 +685,8 @@ def make_column_transformer(*transformers, **kwargs):
-     ...     (['numerical_column'], StandardScaler()),
-     ...     (['categorical_column'], OneHotEncoder()))
-     ...     # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
--    ColumnTransformer(n_jobs=1, remainder='drop', transformer_weights=None,
-+    ColumnTransformer(n_jobs=1, remainder='drop', sparse_threshold=0.3,
-+             transformer_weights=None,
-              transformers=[('standardscaler',
-                             StandardScaler(...),
-                             ['numerical_column']),
-diff --git a/sklearn/compose/tests/test_column_transformer.py b/sklearn/compose/tests/test_column_transformer.py
-index 02a3b21d4c72..e6bf5577650f 100644
---- a/sklearn/compose/tests/test_column_transformer.py
-+++ b/sklearn/compose/tests/test_column_transformer.py
-@@ -19,7 +19,7 @@
- from sklearn.externals import six
- from sklearn.compose import ColumnTransformer, make_column_transformer
- from sklearn.exceptions import NotFittedError
--from sklearn.preprocessing import StandardScaler, Normalizer
-+from sklearn.preprocessing import StandardScaler, Normalizer, OneHotEncoder
- from sklearn.feature_extraction import DictVectorizer
- 
- 
-@@ -262,14 +262,16 @@ def test_column_transformer_sparse_array():
-         for remainder, res in [('drop', X_res_first),
-                                ('passthrough', X_res_both)]:
-             ct = ColumnTransformer([('trans', Trans(), col)],
--                                   remainder=remainder)
-+                                   remainder=remainder,
-+                                   sparse_threshold=0.8)
-             assert_true(sparse.issparse(ct.fit_transform(X_sparse)))
-             assert_allclose_dense_sparse(ct.fit_transform(X_sparse), res)
-             assert_allclose_dense_sparse(ct.fit(X_sparse).transform(X_sparse),
-                                          res)
- 
-     for col in [[0, 1], slice(0, 2)]:
--        ct = ColumnTransformer([('trans', Trans(), col)])
-+        ct = ColumnTransformer([('trans', Trans(), col)],
-+                               sparse_threshold=0.8)
-         assert_true(sparse.issparse(ct.fit_transform(X_sparse)))
-         assert_allclose_dense_sparse(ct.fit_transform(X_sparse), X_res_both)
-         assert_allclose_dense_sparse(ct.fit(X_sparse).transform(X_sparse),
-@@ -279,7 +281,8 @@ def test_column_transformer_sparse_array():
- def test_column_transformer_sparse_stacking():
-     X_array = np.array([[0, 1, 2], [2, 4, 6]]).T
-     col_trans = ColumnTransformer([('trans1', Trans(), [0]),
--                                   ('trans2', SparseMatrixTrans(), 1)])
-+                                   ('trans2', SparseMatrixTrans(), 1)],
-+                                  sparse_threshold=0.8)
-     col_trans.fit(X_array)
-     X_trans = col_trans.transform(X_array)
-     assert_true(sparse.issparse(X_trans))
-@@ -288,6 +291,57 @@ def test_column_transformer_sparse_stacking():
-     assert len(col_trans.transformers_) == 2
-     assert col_trans.transformers_[-1][0] != 'remainder'
- 
-+    col_trans = ColumnTransformer([('trans1', Trans(), [0]),
-+                                   ('trans2', SparseMatrixTrans(), 1)],
-+                                  sparse_threshold=0.1)
-+    col_trans.fit(X_array)
-+    X_trans = col_trans.transform(X_array)
-+    assert not sparse.issparse(X_trans)
-+    assert X_trans.shape == (X_trans.shape[0], X_trans.shape[0] + 1)
-+    assert_array_equal(X_trans[:, 1:], np.eye(X_trans.shape[0]))
-+
-+
-+def test_column_transformer_sparse_threshold():
-+    X_array = np.array([['a', 'b'], ['A', 'B']], dtype=object).T
-+    # above data has sparsity of 4 / 8 = 0.5
-+
-+    # if all sparse, keep sparse (even if above threshold)
-+    col_trans = ColumnTransformer([('trans1', OneHotEncoder(), [0]),
-+                                   ('trans2', OneHotEncoder(), [1])],
-+                                  sparse_threshold=0.2)
-+    res = col_trans.fit_transform(X_array)
-+    assert sparse.issparse(res)
-+    assert col_trans.sparse_output_
-+
-+    # mixed -> sparsity of (4 + 2) / 8 = 0.75
-+    for thres in [0.75001, 1]:
-+        col_trans = ColumnTransformer(
-+            [('trans1', OneHotEncoder(sparse=True), [0]),
-+             ('trans2', OneHotEncoder(sparse=False), [1])],
-+            sparse_threshold=thres)
-+        res = col_trans.fit_transform(X_array)
-+        assert sparse.issparse(res)
-+        assert col_trans.sparse_output_
-+
-+    for thres in [0.75, 0]:
-+        col_trans = ColumnTransformer(
-+            [('trans1', OneHotEncoder(sparse=True), [0]),
-+             ('trans2', OneHotEncoder(sparse=False), [1])],
-+            sparse_threshold=thres)
-+        res = col_trans.fit_transform(X_array)
-+        assert not sparse.issparse(res)
-+        assert not col_trans.sparse_output_
-+
-+    # if nothing is sparse -> no sparse
-+    for thres in [0.33, 0, 1]:
-+        col_trans = ColumnTransformer(
-+            [('trans1', OneHotEncoder(sparse=False), [0]),
-+             ('trans2', OneHotEncoder(sparse=False), [1])],
-+            sparse_threshold=thres)
-+        res = col_trans.fit_transform(X_array)
-+        assert not sparse.issparse(res)
-+        assert not col_trans.sparse_output_
-+
- 
- def test_column_transformer_error_msg_1D():
-     X_array = np.array([[0., 1., 2.], [2., 4., 6.]]).T
-@@ -311,9 +365,9 @@ def test_2D_transformer_output():
-                             ('trans2', TransNo2D(), 1)])
-     assert_raise_message(ValueError, "the 'trans2' transformer should be 2D",
-                          ct.fit_transform, X_array)
--    ct.fit(X_array)
-+    # because fit is also doing transform, this raises already on fit
-     assert_raise_message(ValueError, "the 'trans2' transformer should be 2D",
--                         ct.transform, X_array)
-+                         ct.fit, X_array)
- 
- 
- def test_2D_transformer_output_pandas():
-@@ -326,9 +380,9 @@ def test_2D_transformer_output_pandas():
-     ct = ColumnTransformer([('trans1', TransNo2D(), 'col1')])
-     assert_raise_message(ValueError, "the 'trans1' transformer should be 2D",
-                          ct.fit_transform, X_df)
--    ct.fit(X_df)
-+    # because fit is also doing transform, this raises already on fit
-     assert_raise_message(ValueError, "the 'trans1' transformer should be 2D",
--                         ct.transform, X_df)
-+                         ct.fit, X_df)
- 
- 
- @pytest.mark.parametrize("remainder", ['drop', 'passthrough'])
-@@ -406,6 +460,7 @@ def test_column_transformer_get_set_params():
- 
-     exp = {'n_jobs': 1,
-            'remainder': 'drop',
-+           'sparse_threshold': 0.3,
-            'trans1': ct.transformers[0][1],
-            'trans1__copy': True,
-            'trans1__with_mean': True,
-@@ -425,6 +480,7 @@ def test_column_transformer_get_set_params():
-     ct.set_params(trans1='passthrough')
-     exp = {'n_jobs': 1,
-            'remainder': 'drop',
-+           'sparse_threshold': 0.3,
-            'trans1': 'passthrough',
-            'trans2': ct.transformers[1][1],
-            'trans2__copy': True,
-@@ -708,7 +764,8 @@ def test_column_transformer_sparse_remainder_transformer():
-                         [8, 6, 4]]).T
- 
-     ct = ColumnTransformer([('trans1', Trans(), [0])],
--                           remainder=SparseMatrixTrans())
-+                           remainder=SparseMatrixTrans(),
-+                           sparse_threshold=0.8)
- 
-     X_trans = ct.fit_transform(X_array)
-     assert sparse.issparse(X_trans)
-@@ -730,7 +787,8 @@ def test_column_transformer_drop_all_sparse_remainder_transformer():
-                         [2, 4, 6],
-                         [8, 6, 4]]).T
-     ct = ColumnTransformer([('trans1', 'drop', [0])],
--                           remainder=SparseMatrixTrans())
-+                           remainder=SparseMatrixTrans(),
-+                           sparse_threshold=0.8)
- 
-     X_trans = ct.fit_transform(X_array)
-     assert sparse.issparse(X_trans)
-@@ -753,6 +811,7 @@ def test_column_transformer_get_set_params_with_remainder():
-            'remainder__copy': True,
-            'remainder__with_mean': True,
-            'remainder__with_std': True,
-+           'sparse_threshold': 0.3,
-            'trans1': ct.transformers[0][1],
-            'trans1__copy': True,
-            'trans1__with_mean': True,
-@@ -771,6 +830,7 @@ def test_column_transformer_get_set_params_with_remainder():
-            'remainder__copy': True,
-            'remainder__with_mean': True,
-            'remainder__with_std': False,
-+           'sparse_threshold': 0.3,
-            'trans1': 'passthrough',
-            'transformers': ct.transformers,
-            'transformer_weights': None}
-diff --git a/sklearn/covariance/elliptic_envelope.py b/sklearn/covariance/elliptic_envelope.py
-index 1e00192289b7..7ea17b65aaee 100644
---- a/sklearn/covariance/elliptic_envelope.py
-+++ b/sklearn/covariance/elliptic_envelope.py
-@@ -179,7 +179,7 @@ def predict(self, X):
-             Returns -1 for anomalies/outliers and +1 for inliers.
-         """
-         X = check_array(X)
--        is_inlier = -np.ones(X.shape[0], dtype=int)
-+        is_inlier = np.full(X.shape[0], -1, dtype=int)
-         values = self.decision_function(X)
-         is_inlier[values >= 0] = 1
- 
-diff --git a/sklearn/covariance/robust_covariance.py b/sklearn/covariance/robust_covariance.py
-index 8b211425141c..bcd561319a05 100644
---- a/sklearn/covariance/robust_covariance.py
-+++ b/sklearn/covariance/robust_covariance.py
-@@ -7,6 +7,8 @@
- # Author: Virgile Fritsch <virgile.fritsch@inria.fr>
- #
- # License: BSD 3 clause
-+from __future__ import division
-+
- import warnings
- import numbers
- import numpy as np
-@@ -161,8 +163,12 @@ def _c_step(X, n_support, random_state, remaining_iterations=30,
-         results = location, covariance, det, support, dist
-     elif det > previous_det:
-         # determinant has increased (should not happen)
--        warnings.warn("Warning! det > previous_det (%.15f > %.15f)"
--                      % (det, previous_det), RuntimeWarning)
-+        warnings.warn("Determinant has increased; this should not happen: "
-+                      "log(det) > log(previous_det) (%.15f > %.15f). "
-+                      "You may want to try with a higher value of "
-+                      "support_fraction (current value: %.3f)."
-+                      % (det, previous_det, n_support / n_samples),
-+                      RuntimeWarning)
-         results = previous_location, previous_covariance, \
-             previous_det, previous_support, previous_dist
- 
-diff --git a/sklearn/covariance/tests/test_robust_covariance.py b/sklearn/covariance/tests/test_robust_covariance.py
-index b00069ffe973..39caa4dd18df 100644
---- a/sklearn/covariance/tests/test_robust_covariance.py
-+++ b/sklearn/covariance/tests/test_robust_covariance.py
-@@ -10,6 +10,7 @@
- 
- from sklearn.utils.testing import assert_array_almost_equal
- from sklearn.utils.testing import assert_raise_message
-+from sklearn.utils.testing import assert_warns_message
- 
- from sklearn import datasets
- from sklearn.covariance import empirical_covariance, MinCovDet
-@@ -133,3 +134,35 @@ def test_mcd_support_covariance_is_zero():
-            'increase support_fraction')
-     for X in [X_1, X_2]:
-         assert_raise_message(ValueError, msg, MinCovDet().fit, X)
-+
-+
-+def test_mcd_increasing_det_warning():
-+    # Check that a warning is raised if we observe increasing determinants
-+    # during the c_step. In theory the sequence of determinants should be
-+    # decreasing. Increasing determinants are likely due to ill-conditioned
-+    # covariance matrices that result in poor precision matrices.
-+
-+    X = [[5.1, 3.5, 1.4, 0.2],
-+         [4.9, 3.0, 1.4, 0.2],
-+         [4.7, 3.2, 1.3, 0.2],
-+         [4.6, 3.1, 1.5, 0.2],
-+         [5.0, 3.6, 1.4, 0.2],
-+         [4.6, 3.4, 1.4, 0.3],
-+         [5.0, 3.4, 1.5, 0.2],
-+         [4.4, 2.9, 1.4, 0.2],
-+         [4.9, 3.1, 1.5, 0.1],
-+         [5.4, 3.7, 1.5, 0.2],
-+         [4.8, 3.4, 1.6, 0.2],
-+         [4.8, 3.0, 1.4, 0.1],
-+         [4.3, 3.0, 1.1, 0.1],
-+         [5.1, 3.5, 1.4, 0.3],
-+         [5.7, 3.8, 1.7, 0.3],
-+         [5.4, 3.4, 1.7, 0.2],
-+         [4.6, 3.6, 1.0, 0.2],
-+         [5.0, 3.0, 1.6, 0.2],
-+         [5.2, 3.5, 1.5, 0.2]]
-+
-+    mcd = MinCovDet(random_state=1)
-+    assert_warns_message(RuntimeWarning,
-+                         "Determinant has increased",
-+                         mcd.fit, X)
 diff --git a/sklearn/datasets/base.py b/sklearn/datasets/base.py
-index f19ee5e58641..6f1ceef70aaa 100644
+index 9060ad5cbe..6f1ceef70a 100755
 --- a/sklearn/datasets/base.py
 +++ b/sklearn/datasets/base.py
-@@ -211,6 +211,9 @@ def load_data(module_path, data_file_name):
- 
-     Parameters
-     ----------
-+    module_path : string
-+        The module path.
-+
-     data_file_name : string
-         Name of csv file to be loaded from
-         module_path/data/data_file_name. For example 'wine_data.csv'.
-@@ -261,7 +264,7 @@ def load_wine(return_X_y=False):
+@@ -264,7 +264,7 @@ def load_wine(return_X_y=False):
      Features            real, positive
      =================   ==============
  
@@ -1359,7 +51,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
  
      Parameters
      ----------
-@@ -336,7 +339,7 @@ def load_iris(return_X_y=False):
+@@ -339,7 +339,7 @@ def load_iris(return_X_y=False):
      Features            real, positive
      =================   ==============
  
@@ -1368,7 +60,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
  
      Parameters
      ----------
-@@ -411,6 +414,8 @@ def load_breast_cancer(return_X_y=False):
+@@ -414,6 +414,8 @@ def load_breast_cancer(return_X_y=False):
      Features            real, positive
      =================   ==============
  
@@ -1377,7 +69,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
      Parameters
      ----------
      return_X_y : boolean, default=False
-@@ -495,7 +500,7 @@ def load_digits(n_class=10, return_X_y=False):
+@@ -498,7 +500,7 @@ def load_digits(n_class=10, return_X_y=False):
      Features             integers 0-16
      =================   ==============
  
@@ -1386,7 +78,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
  
      Parameters
      ----------
-@@ -572,7 +577,7 @@ def load_diabetes(return_X_y=False):
+@@ -575,7 +577,7 @@ def load_diabetes(return_X_y=False):
      Targets             integer 25 - 346
      ==============      ==================
  
@@ -1395,7 +87,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
  
      Parameters
      ----------
-@@ -625,6 +630,8 @@ def load_linnerud(return_X_y=False):
+@@ -628,6 +630,8 @@ def load_linnerud(return_X_y=False):
      Targets           integer
      ==============    ============================
  
@@ -1404,7 +96,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
      Parameters
      ----------
      return_X_y : boolean, default=False.
-@@ -687,6 +694,8 @@ def load_boston(return_X_y=False):
+@@ -690,6 +694,8 @@ def load_boston(return_X_y=False):
      Targets             real 5. - 50.
      ==============     ==============
  
@@ -1413,7 +105,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
      Parameters
      ----------
      return_X_y : boolean, default=False.
-@@ -757,6 +766,8 @@ def load_sample_images():
+@@ -760,6 +766,8 @@ def load_sample_images():
  
      Loads both, ``china`` and ``flower``.
  
@@ -1422,7 +114,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
      Returns
      -------
      data : Bunch
-@@ -798,6 +809,8 @@ def load_sample_images():
+@@ -801,6 +809,8 @@ def load_sample_images():
  def load_sample_image(image_name):
      """Load the numpy array of a single sample image
  
@@ -1432,7 +124,7 @@ index f19ee5e58641..6f1ceef70aaa 100644
      -----------
      image_name : {`china.jpg`, `flower.jpg`}
 diff --git a/sklearn/datasets/california_housing.py b/sklearn/datasets/california_housing.py
-index 8973ba59ad21..76cb27dadd7a 100644
+index 8973ba59ad..76cb27dadd 100755
 --- a/sklearn/datasets/california_housing.py
 +++ b/sklearn/datasets/california_housing.py
 @@ -21,7 +21,7 @@
@@ -1489,7 +181,7 @@ index 8973ba59ad21..76cb27dadd7a 100644
 -                 DESCR=MODULE_DOCS)
 +                 DESCR=descr)
 diff --git a/sklearn/datasets/covtype.py b/sklearn/datasets/covtype.py
-index c7b880b116ea..a08f61f02b0c 100644
+index c7b880b116..a08f61f02b 100755
 --- a/sklearn/datasets/covtype.py
 +++ b/sklearn/datasets/covtype.py
 @@ -16,7 +16,7 @@
@@ -1536,8 +228,8 @@ index c7b880b116ea..a08f61f02b0c 100644
 -    return Bunch(data=X, target=y, DESCR=__doc__)
 +    return Bunch(data=X, target=y, DESCR=fdescr)
 diff --git a/sklearn/datasets/descr/california_housing.rst b/sklearn/datasets/descr/california_housing.rst
-new file mode 100644
-index 000000000000..9ab3b679b68f
+new file mode 100755
+index 0000000000..9ab3b679b6
 --- /dev/null
 +++ b/sklearn/datasets/descr/california_housing.rst
 @@ -0,0 +1,40 @@
@@ -1581,23 +273,26 @@ index 000000000000..9ab3b679b68f
 +
 +    - Pace, R. Kelley and Ronald Barry, Sparse Spatial Autoregressions,
 +      Statistics and Probability Letters, 33 (1997) 291-297
-diff --git a/doc/datasets/covtype.rst b/sklearn/datasets/descr/covtype.rst
-similarity index 73%
-rename from doc/datasets/covtype.rst
-rename to sklearn/datasets/descr/covtype.rst
-index 4b31eff69cf0..08447403ebba 100644
---- a/doc/datasets/covtype.rst
+diff --git a/sklearn/datasets/descr/covtype.rst b/sklearn/datasets/descr/covtype.rst
+new file mode 100755
+index 0000000000..08447403eb
+--- /dev/null
 +++ b/sklearn/datasets/descr/covtype.rst
-@@ -1,4 +1,4 @@
--.. _covtype:
+@@ -0,0 +1,28 @@
 +.. _covtype_dataset:
- 
- Forest covertypes
- -----------------
-@@ -12,6 +12,15 @@ Each sample has 54 features, described on the
- Some of the features are boolean indicators,
- while others are discrete or continuous measurements.
- 
++
++Forest covertypes
++-----------------
++
++The samples in this dataset correspond to 30×30m patches of forest in the US,
++collected for the task of predicting each patch's cover type,
++i.e. the dominant species of tree.
++There are seven covertypes, making this a multiclass classification problem.
++Each sample has 54 features, described on the
++`dataset's homepage <http://archive.ics.uci.edu/ml/datasets/Covertype>`__.
++Some of the features are boolean indicators,
++while others are discrete or continuous measurements.
++
 +**Data Set Characteristics:**
 +
 +    =================   ============
@@ -1607,12 +302,14 @@ index 4b31eff69cf0..08447403ebba 100644
 +    Features                     int
 +    =================   ============
 +
- :func:`sklearn.datasets.fetch_covtype` will load the covertype dataset;
- it returns a dictionary-like object
- with the feature matrix in the ``data`` member
++:func:`sklearn.datasets.fetch_covtype` will load the covertype dataset;
++it returns a dictionary-like object
++with the feature matrix in the ``data`` member
++and the target values in ``target``.
++The dataset will be downloaded from the web if necessary.
 diff --git a/sklearn/datasets/descr/kddcup99.rst b/sklearn/datasets/descr/kddcup99.rst
-new file mode 100644
-index 000000000000..6e942246ea2e
+new file mode 100755
+index 0000000000..6e942246ea
 --- /dev/null
 +++ b/sklearn/datasets/descr/kddcup99.rst
 @@ -0,0 +1,95 @@
@@ -1711,23 +408,37 @@ index 000000000000..6e942246ea2e
 +           ACM SIGKDD international conference on Knowledge discovery
 +           and data mining, pages 320-324. ACM Press, 2000.
 +
-diff --git a/doc/datasets/labeled_faces.rst b/sklearn/datasets/descr/lfw.rst
-similarity index 91%
-rename from doc/datasets/labeled_faces.rst
-rename to sklearn/datasets/descr/lfw.rst
-index a7b592ae1a94..e7fc35c3caab 100644
---- a/doc/datasets/labeled_faces.rst
+diff --git a/sklearn/datasets/descr/lfw.rst b/sklearn/datasets/descr/lfw.rst
+new file mode 100755
+index 0000000000..e7fc35c3ca
+--- /dev/null
 +++ b/sklearn/datasets/descr/lfw.rst
-@@ -1,4 +1,4 @@
--.. _labeled_faces_in_the_wild:
+@@ -0,0 +1,126 @@
 +.. _labeled_faces_in_the_wild_dataset:
- 
- The Labeled Faces in the Wild face recognition dataset
- ------------------------------------------------------
-@@ -23,6 +23,14 @@ most popular model for Face Detection is called Viola-Jones and is
- implemented in the OpenCV library. The LFW faces were extracted by this
- face detector from various online websites.
- 
++
++The Labeled Faces in the Wild face recognition dataset
++------------------------------------------------------
++
++This dataset is a collection of JPEG pictures of famous people collected
++over the internet, all details are available on the official website:
++
++    http://vis-www.cs.umass.edu/lfw/
++
++Each picture is centered on a single face. The typical task is called
++Face Verification: given a pair of two pictures, a binary classifier
++must predict whether the two images are from the same person.
++
++An alternative task, Face Recognition or Face Identification is:
++given the picture of the face of an unknown person, identify the name
++of the person by referring to a gallery of previously seen pictures of
++identified persons.
++
++Both Face Verification and Face Recognition are tasks that are typically
++performed on the output of a model trained to perform Face Detection. The
++most popular model for Face Detection is called Viola-Jones and is
++implemented in the OpenCV library. The LFW faces were extracted by this
++face detector from various online websites.
++
 +**Data Set Characteristics:**
 +
 +    =================   =======================
@@ -1736,38 +447,124 @@ index a7b592ae1a94..e7fc35c3caab 100644
 +    Dimensionality                         5828
 +    Features            real, between 0 and 255
 +    =================   =======================
- 
- Usage
- ~~~~~
-diff --git a/doc/datasets/olivetti_faces.rst b/sklearn/datasets/descr/olivetti_faces.rst
-similarity index 68%
-rename from doc/datasets/olivetti_faces.rst
-rename to sklearn/datasets/descr/olivetti_faces.rst
-index 71be4f66a2fc..c6193d505653 100644
---- a/doc/datasets/olivetti_faces.rst
++
++Usage
++~~~~~
++
++``scikit-learn`` provides two loaders that will automatically download,
++cache, parse the metadata files, decode the jpeg and convert the
++interesting slices into memmapped numpy arrays. This dataset size is more
++than 200 MB. The first load typically takes more than a couple of minutes
++to fully decode the relevant part of the JPEG files into numpy arrays. If
++the dataset has  been loaded once, the following times the loading times
++less than 200ms by using a memmapped version memoized on the disk in the
++``~/scikit_learn_data/lfw_home/`` folder using ``joblib``.
++
++The first loader is used for the Face Identification task: a multi-class
++classification task (hence supervised learning)::
++
++  >>> from sklearn.datasets import fetch_lfw_people
++  >>> lfw_people = fetch_lfw_people(min_faces_per_person=70, resize=0.4)
++
++  >>> for name in lfw_people.target_names:
++  ...     print(name)
++  ...
++  Ariel Sharon
++  Colin Powell
++  Donald Rumsfeld
++  George W Bush
++  Gerhard Schroeder
++  Hugo Chavez
++  Tony Blair
++
++The default slice is a rectangular shape around the face, removing
++most of the background::
++
++  >>> lfw_people.data.dtype
++  dtype('float32')
++
++  >>> lfw_people.data.shape
++  (1288, 1850)
++
++  >>> lfw_people.images.shape
++  (1288, 50, 37)
++
++Each of the ``1140`` faces is assigned to a single person id in the ``target``
++array::
++
++  >>> lfw_people.target.shape
++  (1288,)
++
++  >>> list(lfw_people.target[:10])
++  [5, 6, 3, 1, 0, 1, 3, 4, 3, 0]
++
++The second loader is typically used for the face verification task: each sample
++is a pair of two picture belonging or not to the same person::
++
++  >>> from sklearn.datasets import fetch_lfw_pairs
++  >>> lfw_pairs_train = fetch_lfw_pairs(subset='train')
++
++  >>> list(lfw_pairs_train.target_names)
++  ['Different persons', 'Same person']
++
++  >>> lfw_pairs_train.pairs.shape
++  (2200, 2, 62, 47)
++
++  >>> lfw_pairs_train.data.shape
++  (2200, 5828)
++
++  >>> lfw_pairs_train.target.shape
++  (2200,)
++
++Both for the :func:`sklearn.datasets.fetch_lfw_people` and
++:func:`sklearn.datasets.fetch_lfw_pairs` function it is
++possible to get an additional dimension with the RGB color channels by
++passing ``color=True``, in that case the shape will be
++``(2200, 2, 62, 47, 3)``.
++
++The :func:`sklearn.datasets.fetch_lfw_pairs` datasets is subdivided into
++3 subsets: the development ``train`` set, the development ``test`` set and
++an evaluation ``10_folds`` set meant to compute performance metrics using a
++10-folds cross validation scheme.
++
++.. topic:: References:
++
++ * `Labeled Faces in the Wild: A Database for Studying Face Recognition
++   in Unconstrained Environments.
++   <http://vis-www.cs.umass.edu/lfw/lfw.pdf>`_
++   Gary B. Huang, Manu Ramesh, Tamara Berg, and Erik Learned-Miller.
++   University of Massachusetts, Amherst, Technical Report 07-49, October, 2007.
++
++
++Examples
++~~~~~~~~
++
++:ref:`sphx_glr_auto_examples_applications_plot_face_recognition.py`
+diff --git a/sklearn/datasets/descr/olivetti_faces.rst b/sklearn/datasets/descr/olivetti_faces.rst
+new file mode 100755
+index 0000000000..c6193d5056
+--- /dev/null
 +++ b/sklearn/datasets/descr/olivetti_faces.rst
-@@ -1,12 +1,10 @@
--
--.. _olivetti_faces:
+@@ -0,0 +1,44 @@
 +.. _olivetti_faces_dataset:
- 
- The Olivetti faces dataset
- --------------------------
- 
--
--`This dataset contains a set of face images`_ taken between April 1992 and April
--1994 at AT&T Laboratories Cambridge. The
++
++The Olivetti faces dataset
++--------------------------
++
 +`This dataset contains a set of face images`_ taken between April 1992 and 
 +April 1994 at AT&T Laboratories Cambridge. The
- :func:`sklearn.datasets.fetch_olivetti_faces` function is the data
- fetching / caching function that downloads the data
- archive from AT&T.
-@@ -19,12 +17,21 @@ As described on the original website:
-     subjects, the images were taken at different times, varying the lighting,
-     facial expressions (open / closed eyes, smiling / not smiling) and facial
-     details (glasses / no glasses). All the images were taken against a dark
--    homogeneous background with the subjects in an upright, frontal position (with
--    tolerance for some side movement).
++:func:`sklearn.datasets.fetch_olivetti_faces` function is the data
++fetching / caching function that downloads the data
++archive from AT&T.
++
++.. _This dataset contains a set of face images: http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
++
++As described on the original website:
++
++    There are ten different images of each of 40 distinct subjects. For some
++    subjects, the images were taken at different times, varying the lighting,
++    facial expressions (open / closed eyes, smiling / not smiling) and facial
++    details (glasses / no glasses). All the images were taken against a dark
 +    homogeneous background with the subjects in an upright, frontal position 
 +    (with tolerance for some side movement).
 +
@@ -1779,19 +576,23 @@ index 71be4f66a2fc..c6193d505653 100644
 +    Dimensionality                       4096
 +    Features            real, between 0 and 1
 +    =================   =====================
- 
--The image is quantized to 256 grey levels and stored as unsigned 8-bit integers;
--the loader will convert these to floating point values on the interval [0, 1],
--which are easier to work with for many algorithms.
++
 +The image is quantized to 256 grey levels and stored as unsigned 8-bit 
 +integers; the loader will convert these to floating point values on the 
 +interval [0, 1], which are easier to work with for many algorithms.
- 
- The "target" for this database is an integer from 0 to 39 indicating the
- identity of the person pictured; however, with only 10 examples per class, this
++
++The "target" for this database is an integer from 0 to 39 indicating the
++identity of the person pictured; however, with only 10 examples per class, this
++relatively small dataset is more interesting from an unsupervised or
++semi-supervised perspective.
++
++The original dataset consisted of 92 x 112, while the version available here
++consists of 64x64 images.
++
++When using these images, please give credit to AT&T Laboratories Cambridge.
 diff --git a/sklearn/datasets/descr/rcv1.rst b/sklearn/datasets/descr/rcv1.rst
-new file mode 100644
-index 000000000000..afaadbfb45af
+new file mode 100755
+index 0000000000..afaadbfb45
 --- /dev/null
 +++ b/sklearn/datasets/descr/rcv1.rst
 @@ -0,0 +1,72 @@
@@ -1867,23 +668,32 @@ index 000000000000..afaadbfb45af
 +    .. [1] Lewis, D. D., Yang, Y., Rose, T. G., & Li, F. (2004). 
 +           RCV1: A new benchmark collection for text categorization research. 
 +           The Journal of Machine Learning Research, 5, 361-397.
-diff --git a/doc/datasets/twenty_newsgroups.rst b/sklearn/datasets/descr/twenty_newsgroups.rst
-similarity index 94%
-rename from doc/datasets/twenty_newsgroups.rst
-rename to sklearn/datasets/descr/twenty_newsgroups.rst
-index 5aaca66c5d67..a9747d322409 100644
---- a/doc/datasets/twenty_newsgroups.rst
+diff --git a/sklearn/datasets/descr/twenty_newsgroups.rst b/sklearn/datasets/descr/twenty_newsgroups.rst
+new file mode 100755
+index 0000000000..a9747d3224
+--- /dev/null
 +++ b/sklearn/datasets/descr/twenty_newsgroups.rst
-@@ -1,4 +1,4 @@
--.. _20newsgroups:
+@@ -0,0 +1,233 @@
 +.. _20newsgroups_dataset:
- 
- The 20 newsgroups text dataset
- ------------------------------
-@@ -18,6 +18,15 @@ The second one, :func:`sklearn.datasets.fetch_20newsgroups_vectorized`,
- returns ready-to-use features, i.e., it is not necessary to use a feature
- extractor.
- 
++
++The 20 newsgroups text dataset
++------------------------------
++
++The 20 newsgroups dataset comprises around 18000 newsgroups posts on
++20 topics split in two subsets: one for training (or development)
++and the other one for testing (or for performance evaluation). The split
++between the train and test set is based upon a messages posted before
++and after a specific date.
++
++This module contains two loaders. The first one,
++:func:`sklearn.datasets.fetch_20newsgroups`,
++returns a list of the raw texts that can be fed to text feature
++extractors such as :class:`sklearn.feature_extraction.text.CountVectorizer`
++with custom parameters so as to extract feature vectors.
++The second one, :func:`sklearn.datasets.fetch_20newsgroups_vectorized`,
++returns ready-to-use features, i.e., it is not necessary to use a feature
++extractor.
++
 +**Data Set Characteristics:**
 +
 +    =================   ==========
@@ -1893,61 +703,212 @@ index 5aaca66c5d67..a9747d322409 100644
 +    Features                  text
 +    =================   ==========
 +
- Usage
- ~~~~~
- 
-@@ -104,11 +113,11 @@ The extracted TF-IDF vectors are very sparse, with an average of 159 non-zero
- components by sample in a more than 30000-dimensional space
- (less than .5% non-zero features)::
- 
--  >>> vectors.nnz / float(vectors.shape[0])
++Usage
++~~~~~
++
++The :func:`sklearn.datasets.fetch_20newsgroups` function is a data
++fetching / caching functions that downloads the data archive from
++the original `20 newsgroups website`_, extracts the archive contents
++in the ``~/scikit_learn_data/20news_home`` folder and calls the
++:func:`sklearn.datasets.load_files` on either the training or
++testing set folder, or both of them::
++
++  >>> from sklearn.datasets import fetch_20newsgroups
++  >>> newsgroups_train = fetch_20newsgroups(subset='train')
++
++  >>> from pprint import pprint
++  >>> pprint(list(newsgroups_train.target_names))
++  ['alt.atheism',
++   'comp.graphics',
++   'comp.os.ms-windows.misc',
++   'comp.sys.ibm.pc.hardware',
++   'comp.sys.mac.hardware',
++   'comp.windows.x',
++   'misc.forsale',
++   'rec.autos',
++   'rec.motorcycles',
++   'rec.sport.baseball',
++   'rec.sport.hockey',
++   'sci.crypt',
++   'sci.electronics',
++   'sci.med',
++   'sci.space',
++   'soc.religion.christian',
++   'talk.politics.guns',
++   'talk.politics.mideast',
++   'talk.politics.misc',
++   'talk.religion.misc']
++
++The real data lies in the ``filenames`` and ``target`` attributes. The target
++attribute is the integer index of the category::
++
++  >>> newsgroups_train.filenames.shape
++  (11314,)
++  >>> newsgroups_train.target.shape
++  (11314,)
++  >>> newsgroups_train.target[:10]
++  array([ 7,  4,  4,  1, 14, 16, 13,  3,  2,  4])
++
++It is possible to load only a sub-selection of the categories by passing the
++list of the categories to load to the
++:func:`sklearn.datasets.fetch_20newsgroups` function::
++
++  >>> cats = ['alt.atheism', 'sci.space']
++  >>> newsgroups_train = fetch_20newsgroups(subset='train', categories=cats)
++
++  >>> list(newsgroups_train.target_names)
++  ['alt.atheism', 'sci.space']
++  >>> newsgroups_train.filenames.shape
++  (1073,)
++  >>> newsgroups_train.target.shape
++  (1073,)
++  >>> newsgroups_train.target[:10]
++  array([0, 1, 1, 1, 0, 1, 1, 0, 0, 0])
++
++Converting text to vectors
++~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++In order to feed predictive or clustering models with the text data,
++one first need to turn the text into vectors of numerical values suitable
++for statistical analysis. This can be achieved with the utilities of the
++``sklearn.feature_extraction.text`` as demonstrated in the following
++example that extract `TF-IDF`_ vectors of unigram tokens
++from a subset of 20news::
++
++  >>> from sklearn.feature_extraction.text import TfidfVectorizer
++  >>> categories = ['alt.atheism', 'talk.religion.misc',
++  ...               'comp.graphics', 'sci.space']
++  >>> newsgroups_train = fetch_20newsgroups(subset='train',
++  ...                                       categories=categories)
++  >>> vectorizer = TfidfVectorizer()
++  >>> vectors = vectorizer.fit_transform(newsgroups_train.data)
++  >>> vectors.shape
++  (2034, 34118)
++
++The extracted TF-IDF vectors are very sparse, with an average of 159 non-zero
++components by sample in a more than 30000-dimensional space
++(less than .5% non-zero features)::
++
 +  >>> vectors.nnz / float(vectors.shape[0])       # doctest: +ELLIPSIS
-   159.01327...
- 
--:func:`sklearn.datasets.fetch_20newsgroups_vectorized` is a function which returns
--ready-to-use tfidf features instead of file names.
++  159.01327...
++
 +:func:`sklearn.datasets.fetch_20newsgroups_vectorized` is a function which 
 +returns ready-to-use tfidf features instead of file names.
- 
- .. _`20 newsgroups website`: http://people.csail.mit.edu/jrennie/20Newsgroups/
- .. _`TF-IDF`: https://en.wikipedia.org/wiki/Tf-idf
-@@ -135,7 +144,7 @@ which is fast to train and achieves a decent F-score::
-   MultinomialNB(alpha=0.01, class_prior=None, fit_prior=True)
- 
-   >>> pred = clf.predict(vectors_test)
--  >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')
-+  >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')  # doctest: +ELLIPSIS
-   0.88213...
- 
- (The example :ref:`sphx_glr_auto_examples_text_plot_document_classification_20newsgroups.py` shuffles
-@@ -158,6 +167,7 @@ Let's take a look at what the most informative features are:
-   sci.space: edu it that is in and space to of the
-   talk.religion.misc: not it you in is that and to of the
- 
 +
- You can now see many things that these features have overfit to:
- 
- - Almost every group is distinguished by whether headers such as
-@@ -185,7 +195,7 @@ blocks, and quotation blocks respectively.
-   ...                                      categories=categories)
-   >>> vectors_test = vectorizer.transform(newsgroups_test.data)
-   >>> pred = clf.predict(vectors_test)
--  >>> metrics.f1_score(pred, newsgroups_test.target, average='macro')
-+  >>> metrics.f1_score(pred, newsgroups_test.target, average='macro')  # doctest: +ELLIPSIS
-   0.77310...
- 
- This classifier lost over a lot of its F-score, just because we removed
-@@ -202,7 +212,7 @@ It loses even more if we also strip this metadata from the training data:
- 
-   >>> vectors_test = vectorizer.transform(newsgroups_test.data)
-   >>> pred = clf.predict(vectors_test)
--  >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')
++.. _`20 newsgroups website`: http://people.csail.mit.edu/jrennie/20Newsgroups/
++.. _`TF-IDF`: https://en.wikipedia.org/wiki/Tf-idf
++
++
++Filtering text for more realistic training
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++It is easy for a classifier to overfit on particular things that appear in the
++20 Newsgroups data, such as newsgroup headers. Many classifiers achieve very
++high F-scores, but their results would not generalize to other documents that
++aren't from this window of time.
++
++For example, let's look at the results of a multinomial Naive Bayes classifier,
++which is fast to train and achieves a decent F-score::
++
++  >>> from sklearn.naive_bayes import MultinomialNB
++  >>> from sklearn import metrics
++  >>> newsgroups_test = fetch_20newsgroups(subset='test',
++  ...                                      categories=categories)
++  >>> vectors_test = vectorizer.transform(newsgroups_test.data)
++  >>> clf = MultinomialNB(alpha=.01)
++  >>> clf.fit(vectors, newsgroups_train.target)
++  MultinomialNB(alpha=0.01, class_prior=None, fit_prior=True)
++
++  >>> pred = clf.predict(vectors_test)
 +  >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')  # doctest: +ELLIPSIS
-   0.76995...
- 
- Some other classifiers cope better with this harder version of the task. Try
++  0.88213...
++
++(The example :ref:`sphx_glr_auto_examples_text_plot_document_classification_20newsgroups.py` shuffles
++the training and test data, instead of segmenting by time, and in that case
++multinomial Naive Bayes gets a much higher F-score of 0.88. Are you suspicious
++yet of what's going on inside this classifier?)
++
++Let's take a look at what the most informative features are:
++
++  >>> import numpy as np
++  >>> def show_top10(classifier, vectorizer, categories):
++  ...     feature_names = np.asarray(vectorizer.get_feature_names())
++  ...     for i, category in enumerate(categories):
++  ...         top10 = np.argsort(classifier.coef_[i])[-10:]
++  ...         print("%s: %s" % (category, " ".join(feature_names[top10])))
++  ...
++  >>> show_top10(clf, vectorizer, newsgroups_train.target_names)
++  alt.atheism: edu it and in you that is of to the
++  comp.graphics: edu in graphics it is for and of to the
++  sci.space: edu it that is in and space to of the
++  talk.religion.misc: not it you in is that and to of the
++
++
++You can now see many things that these features have overfit to:
++
++- Almost every group is distinguished by whether headers such as
++  ``NNTP-Posting-Host:`` and ``Distribution:`` appear more or less often.
++- Another significant feature involves whether the sender is affiliated with
++  a university, as indicated either by their headers or their signature.
++- The word "article" is a significant feature, based on how often people quote
++  previous posts like this: "In article [article ID], [name] <[e-mail address]>
++  wrote:"
++- Other features match the names and e-mail addresses of particular people who
++  were posting at the time.
++
++With such an abundance of clues that distinguish newsgroups, the classifiers
++barely have to identify topics from text at all, and they all perform at the
++same high level.
++
++For this reason, the functions that load 20 Newsgroups data provide a
++parameter called **remove**, telling it what kinds of information to strip out
++of each file. **remove** should be a tuple containing any subset of
++``('headers', 'footers', 'quotes')``, telling it to remove headers, signature
++blocks, and quotation blocks respectively.
++
++  >>> newsgroups_test = fetch_20newsgroups(subset='test',
++  ...                                      remove=('headers', 'footers', 'quotes'),
++  ...                                      categories=categories)
++  >>> vectors_test = vectorizer.transform(newsgroups_test.data)
++  >>> pred = clf.predict(vectors_test)
++  >>> metrics.f1_score(pred, newsgroups_test.target, average='macro')  # doctest: +ELLIPSIS
++  0.77310...
++
++This classifier lost over a lot of its F-score, just because we removed
++metadata that has little to do with topic classification.
++It loses even more if we also strip this metadata from the training data:
++
++  >>> newsgroups_train = fetch_20newsgroups(subset='train',
++  ...                                       remove=('headers', 'footers', 'quotes'),
++  ...                                       categories=categories)
++  >>> vectors = vectorizer.fit_transform(newsgroups_train.data)
++  >>> clf = MultinomialNB(alpha=.01)
++  >>> clf.fit(vectors, newsgroups_train.target)
++  MultinomialNB(alpha=0.01, class_prior=None, fit_prior=True)
++
++  >>> vectors_test = vectorizer.transform(newsgroups_test.data)
++  >>> pred = clf.predict(vectors_test)
++  >>> metrics.f1_score(newsgroups_test.target, pred, average='macro')  # doctest: +ELLIPSIS
++  0.76995...
++
++Some other classifiers cope better with this harder version of the task. Try
++running :ref:`sphx_glr_auto_examples_model_selection_grid_search_text_feature_extraction.py` with and without
++the ``--filter`` option to compare the results.
++
++.. topic:: Recommendation
++
++  When evaluating text classifiers on the 20 Newsgroups data, you
++  should strip newsgroup-related metadata. In scikit-learn, you can do this by
++  setting ``remove=('headers', 'footers', 'quotes')``. The F-score will be
++  lower because it is more realistic.
++
++.. topic:: Examples
++
++   * :ref:`sphx_glr_auto_examples_model_selection_grid_search_text_feature_extraction.py`
++
++   * :ref:`sphx_glr_auto_examples_text_plot_document_classification_20newsgroups.py`
 diff --git a/sklearn/datasets/kddcup99.py b/sklearn/datasets/kddcup99.py
-index 77175a1710f6..c8ed0e30884a 100644
+index 77175a1710..c8ed0e3088 100755
 --- a/sklearn/datasets/kddcup99.py
 +++ b/sklearn/datasets/kddcup99.py
 @@ -13,7 +13,7 @@
@@ -2104,7 +1065,7 @@ index 77175a1710f6..c8ed0e30884a 100644
  
  def _mkdirp(d):
 diff --git a/sklearn/datasets/lfw.py b/sklearn/datasets/lfw.py
-index d68024bd6a6d..cf09f366cafb 100644
+index b1cd055b1b..cf09f366ca 100755
 --- a/sklearn/datasets/lfw.py
 +++ b/sklearn/datasets/lfw.py
 @@ -1,30 +1,15 @@
@@ -2140,71 +1101,20 @@ index d68024bd6a6d..cf09f366cafb 100644
  
  import logging
  from distutils.version import LooseVersion
-@@ -32,6 +17,7 @@
- import numpy as np
- 
- from .base import get_data_home, _fetch_remote, RemoteFileMetadata
-+from ..utils import deprecated
- from ..utils import Bunch
- from ..utils import Memory
- from ..utils._joblib import __version__ as joblib_version
-@@ -80,20 +66,36 @@
- )
- 
- 
-+@deprecated('This function was deprecated in version 0.20 and will be removed '
-+            'in 0.22.')
- def scale_face(face):
--    """Scale back to 0-1 range in case of normalization for plotting"""
-+    """Scale back to 0-1 range in case of normalization for plotting.
-+
-+    .. deprecated:: 0.20
-+    This function was deprecated in version 0.20 and will be removed in 0.22.
-+
-+
-+    Parameters
-+    ----------
-+    face : array_like
-+        The array to scale
-+
-+    Returns
-+    -------
-+    array_like
-+        The scaled array
-+    """
-     scaled = face - face.min()
-     scaled /= scaled.max()
-     return scaled
- 
--
- #
- # Common private utilities for data fetching from the original LFW website
- # local disk caching, and image decoding.
- #
- 
- 
--def check_fetch_lfw(data_home=None, funneled=True, download_if_missing=True):
-+def _check_fetch_lfw(data_home=None, funneled=True, download_if_missing=True):
-     """Helper function to download any missing LFW data"""
- 
-     data_home = get_data_home(data_home=data_home)
-@@ -242,23 +244,19 @@ def fetch_lfw_people(data_home=None, funneled=True, resize=0.5,
+@@ -259,23 +244,19 @@ def fetch_lfw_people(data_home=None, funneled=True, resize=0.5,
                       min_faces_per_person=0, color=False,
                       slice_=(slice(70, 195), slice(78, 172)),
                       download_if_missing=True, return_X_y=False):
 -    """Loader for the Labeled Faces in the Wild (LFW) people dataset
--
--    This dataset is a collection of JPEG pictures of famous people
--    collected on the internet, all details are available on the
--    official website:
 +    """Load the Labeled Faces in the Wild (LFW) people dataset \
 +(classification).
  
--        http://vis-www.cs.umass.edu/lfw/
+-    This dataset is a collection of JPEG pictures of famous people
+-    collected on the internet, all details are available on the
+-    official website:
 +    Download it if necessary.
  
--    Each picture is centered on a single face. Each pixel of each channel
--    (color in RGB) is encoded by a float in range 0.0 - 1.0.
+-        http://vis-www.cs.umass.edu/lfw/
 +    =================   =======================
 +    Classes                                5749
 +    Samples total                         13233
@@ -2212,6 +1122,9 @@ index d68024bd6a6d..cf09f366cafb 100644
 +    Features            real, between 0 and 255
 +    =================   =======================
  
+-    Each picture is centered on a single face. Each pixel of each channel
+-    (color in RGB) is encoded by a float in range 0.0 - 1.0.
+-
 -    The task is called Face Recognition (or Identification): given the
 -    picture of a face, find the name of the person given a training set
 -    (gallery).
@@ -2222,16 +1135,7 @@ index d68024bd6a6d..cf09f366cafb 100644
  
      Parameters
      ----------
-@@ -323,7 +321,7 @@ def fetch_lfw_people(data_home=None, funneled=True, resize=0.5,
-         .. versionadded:: 0.20
- 
-     """
--    lfw_home, data_folder_path = check_fetch_lfw(
-+    lfw_home, data_folder_path = _check_fetch_lfw(
-         data_home=data_home, funneled=funneled,
-         download_if_missing=download_if_missing)
-     logger.debug('Loading LFW people faces from %s', lfw_home)
-@@ -344,13 +342,17 @@ def fetch_lfw_people(data_home=None, funneled=True, resize=0.5,
+@@ -361,13 +342,17 @@ def fetch_lfw_people(data_home=None, funneled=True, resize=0.5,
  
      X = faces.reshape(len(faces), -1)
  
@@ -2250,7 +1154,7 @@ index d68024bd6a6d..cf09f366cafb 100644
  
  
  #
-@@ -412,20 +414,16 @@ def _fetch_lfw_pairs(index_file_path, data_folder_path, slice_=None,
+@@ -429,20 +414,16 @@ def _fetch_lfw_pairs(index_file_path, data_folder_path, slice_=None,
  def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
                      color=False, slice_=(slice(70, 195), slice(78, 172)),
                      download_if_missing=True):
@@ -2279,7 +1183,7 @@ index d68024bd6a6d..cf09f366cafb 100644
  
      In the official `README.txt`_ this task is described as the
      "Restricted" task.  As I am not sure as to implement the
-@@ -436,7 +434,7 @@ def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
+@@ -453,7 +434,7 @@ def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
      The original images are 250 x 250 pixels, but the default slice and resize
      arguments reduce them to 62 x 47.
  
@@ -2288,16 +1192,7 @@ index d68024bd6a6d..cf09f366cafb 100644
  
      Parameters
      ----------
-@@ -494,7 +492,7 @@ def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
-         Description of the Labeled Faces in the Wild (LFW) dataset.
- 
-     """
--    lfw_home, data_folder_path = check_fetch_lfw(
-+    lfw_home, data_folder_path = _check_fetch_lfw(
-         data_home=data_home, funneled=funneled,
-         download_if_missing=download_if_missing)
-     logger.debug('Loading %s LFW pairs from %s', subset, lfw_home)
-@@ -524,7 +522,11 @@ def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
+@@ -541,7 +522,11 @@ def fetch_lfw_pairs(subset='train', data_home=None, funneled=True, resize=0.5,
          index_file_path, data_folder_path, resize=resize, color=color,
          slice_=slice_)
  
@@ -2311,7 +1206,7 @@ index d68024bd6a6d..cf09f366cafb 100644
 -                 DESCR="'%s' segment of the LFW pairs dataset" % subset)
 +                 DESCR=fdescr)
 diff --git a/sklearn/datasets/olivetti_faces.py b/sklearn/datasets/olivetti_faces.py
-index fd1bea512840..74915c6c6957 100644
+index fd1bea5128..74915c6c69 100755
 --- a/sklearn/datasets/olivetti_faces.py
 +++ b/sklearn/datasets/olivetti_faces.py
 @@ -1,6 +1,6 @@
@@ -2410,7 +1305,7 @@ index fd1bea512840..74915c6c6957 100644
 -                 DESCR=MODULE_DOCS)
 +                 DESCR=fdescr)
 diff --git a/sklearn/datasets/rcv1.py b/sklearn/datasets/rcv1.py
-index b0ef91972a72..7890d7e18a88 100644
+index b0ef91972a..7890d7e18a 100755
 --- a/sklearn/datasets/rcv1.py
 +++ b/sklearn/datasets/rcv1.py
 @@ -1,4 +1,8 @@
@@ -2491,21 +1386,8 @@ index b0ef91972a72..7890d7e18a88 100644
  
  
  def _inverse_permutation(p):
-diff --git a/sklearn/datasets/samples_generator.py b/sklearn/datasets/samples_generator.py
-index f019139130fb..04415f799bc7 100644
---- a/sklearn/datasets/samples_generator.py
-+++ b/sklearn/datasets/samples_generator.py
-@@ -807,7 +807,7 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
-                          "and cluster_std = {}".format(centers, cluster_std))
- 
-     if isinstance(cluster_std, numbers.Real):
--        cluster_std = np.ones(len(centers)) * cluster_std
-+        cluster_std = np.full(len(centers), cluster_std)
- 
-     X = []
-     y = []
 diff --git a/sklearn/datasets/twenty_newsgroups.py b/sklearn/datasets/twenty_newsgroups.py
-index 6eed41f0de88..50c28c270f89 100644
+index 38739e6e60..50c28c270f 100755
 --- a/sklearn/datasets/twenty_newsgroups.py
 +++ b/sklearn/datasets/twenty_newsgroups.py
 @@ -20,22 +20,12 @@
@@ -2532,73 +1414,15 @@ index 6eed41f0de88..50c28c270f89 100644
  import logging
  import tarfile
  import pickle
-@@ -52,6 +42,7 @@
- from .base import _fetch_remote
- from .base import RemoteFileMetadata
- from ..utils import check_random_state, Bunch
-+from ..utils import deprecated
- from ..feature_extraction.text import CountVectorizer
- from ..preprocessing import normalize
- from ..externals import joblib
-@@ -71,7 +62,14 @@
- TEST_FOLDER = "20news-bydate-test"
- 
- 
-+@deprecated("Function 'download_20newsgroups' was renamed to "
-+            "'_download_20newsgroups' in version 0.20 and will be removed in "
-+            "release 0.22.")
- def download_20newsgroups(target_dir, cache_path):
-+    return _download_20newsgroups(target_dir, cache_path)
-+
-+
-+def _download_20newsgroups(target_dir, cache_path):
-     """Download the 20 newsgroups data and stored it as a zipped pickle."""
-     train_path = os.path.join(target_dir, TRAIN_FOLDER)
-     test_path = os.path.join(target_dir, TEST_FOLDER)
-@@ -101,6 +99,11 @@ def strip_newsgroup_header(text):
-     """
-     Given text in "news" format, strip the headers, by removing everything
-     before the first blank line.
-+
-+    Parameters
-+    ----------
-+    text : string
-+        The text from which to remove the signature block.
-     """
-     _before, _blankline, after = text.partition('\n\n')
-     return after
-@@ -115,6 +118,11 @@ def strip_newsgroup_quoting(text):
-     Given text in "news" format, strip lines beginning with the quote
-     characters > or |, plus lines that often introduce a quoted section
-     (for example, because they contain the string 'writes:'.)
-+
-+    Parameters
-+    ----------
-+    text : string
-+        The text from which to remove the signature block.
-     """
-     good_lines = [line for line in text.split('\n')
-                   if not _QUOTE_RE.search(line)]
-@@ -128,6 +136,11 @@ def strip_newsgroup_footer(text):
-     As a rough heuristic, we assume that signatures are set apart by either
-     a blank line or a line made of hyphens, and that it is the last such line
-     in the file (disregarding blank lines at the end).
-+
-+    Parameters
-+    ----------
-+    text : string
-+        The text from which to remove the signature block.
-     """
-     lines = text.strip().split('\n')
-     for line_num in range(len(lines) - 1, -1, -1):
-@@ -145,9 +158,19 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
+@@ -168,9 +158,19 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
                         shuffle=True, random_state=42,
                         remove=(),
                         download_if_missing=True):
 -    """Load the filenames and data from the 20 newsgroups dataset.
 +    """Load the filenames and data from the 20 newsgroups dataset \
 +(classification).
-+
+ 
+-    Read more in the :ref:`User Guide <20newsgroups>`.
 +    Download it if necessary.
 +
 +    =================   ==========
@@ -2607,13 +1431,12 @@ index 6eed41f0de88..50c28c270f89 100644
 +    Dimensionality               1
 +    Features                  text
 +    =================   ==========
- 
--    Read more in the :ref:`User Guide <20newsgroups>`.
++
 +    Read more in the :ref:`User Guide <20newsgroups_dataset>`.
  
      Parameters
      ----------
-@@ -190,6 +213,14 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
+@@ -213,6 +213,14 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
      download_if_missing : optional, True by default
          If False, raise an IOError if the data is not locally available
          instead of trying to download the data from the source site.
@@ -2628,18 +1451,7 @@ index 6eed41f0de88..50c28c270f89 100644
      """
  
      data_home = get_data_home(data_home=data_home)
-@@ -213,8 +244,8 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
-         if download_if_missing:
-             logger.info("Downloading 20news dataset. "
-                         "This may take a few minutes.")
--            cache = download_20newsgroups(target_dir=twenty_home,
--                                          cache_path=cache_path)
-+            cache = _download_20newsgroups(target_dir=twenty_home,
-+                                           cache_path=cache_path)
-         else:
-             raise IOError('20Newsgroups dataset not found')
- 
-@@ -237,7 +268,11 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
+@@ -260,7 +268,11 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
          raise ValueError(
              "subset can only be 'train', 'test' or 'all', got '%s'" % subset)
  
@@ -2652,7 +1464,7 @@ index 6eed41f0de88..50c28c270f89 100644
  
      if 'headers' in remove:
          data.data = [strip_newsgroup_header(text) for text in data.data]
-@@ -278,14 +313,24 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
+@@ -301,14 +313,24 @@ def fetch_20newsgroups(data_home=None, subset='train', categories=None,
  
  def fetch_20newsgroups_vectorized(subset="train", remove=(), data_home=None,
                                    download_if_missing=True, return_X_y=False):
@@ -2679,7 +1491,7 @@ index 6eed41f0de88..50c28c270f89 100644
  
      Parameters
      ----------
-@@ -323,6 +368,7 @@ def fetch_20newsgroups_vectorized(subset="train", remove=(), data_home=None,
+@@ -346,6 +368,7 @@ def fetch_20newsgroups_vectorized(subset="train", remove=(), data_home=None,
          bunch.data: sparse matrix, shape [n_samples, n_features]
          bunch.target: array, shape [n_samples]
          bunch.target_names: list, length [n_classes]
@@ -2687,7 +1499,7 @@ index 6eed41f0de88..50c28c270f89 100644
  
      (data, target) : tuple if ``return_X_y`` is True
  
-@@ -381,7 +427,14 @@ def fetch_20newsgroups_vectorized(subset="train", remove=(), data_home=None,
+@@ -404,7 +427,14 @@ def fetch_20newsgroups_vectorized(subset="train", remove=(), data_home=None,
          raise ValueError("%r is not a valid subset: should be one of "
                           "['train', 'test', 'all']" % subset)
  
@@ -2703,21 +1515,8 @@ index 6eed41f0de88..50c28c270f89 100644
 +                 target=target,
 +                 target_names=target_names,
 +                 DESCR=fdescr)
-diff --git a/sklearn/decomposition/nmf.py b/sklearn/decomposition/nmf.py
-index fac0c43d5215..990d31bf2ccc 100644
---- a/sklearn/decomposition/nmf.py
-+++ b/sklearn/decomposition/nmf.py
-@@ -1018,7 +1018,7 @@ def non_negative_factorization(X, W=None, H=None, n_components=None,
-         # 'mu' solver should not be initialized by zeros
-         if solver == 'mu':
-             avg = np.sqrt(X.mean() / n_components)
--            W = avg * np.ones((n_samples, n_components))
-+            W = np.full((n_samples, n_components), avg)
-         else:
-             W = np.zeros((n_samples, n_components))
-     else:
 diff --git a/sklearn/decomposition/sparse_pca.py b/sklearn/decomposition/sparse_pca.py
-index d2c700a7303c..6b70826c8276 100644
+index d2c700a730..6b70826c82 100755
 --- a/sklearn/decomposition/sparse_pca.py
 +++ b/sklearn/decomposition/sparse_pca.py
 @@ -434,7 +434,6 @@ def fit(self, X, y=None):
@@ -2728,1726 +1527,3 @@ index d2c700a7303c..6b70826c8276 100644
          if self.n_components is None:
              n_components = X.shape[1]
          else:
-diff --git a/sklearn/decomposition/tests/test_nmf.py b/sklearn/decomposition/tests/test_nmf.py
-index 207da5ff196e..87fb4ef8c30b 100644
---- a/sklearn/decomposition/tests/test_nmf.py
-+++ b/sklearn/decomposition/tests/test_nmf.py
-@@ -86,8 +86,8 @@ def test_initialize_variants():
- @ignore_warnings(category=UserWarning)
- def test_nmf_fit_nn_output():
-     # Test that the decomposition does not contain negative values
--    A = np.c_[5 * np.ones(5) - np.arange(1, 6),
--              5 * np.ones(5) + np.arange(1, 6)]
-+    A = np.c_[5. - np.arange(1, 6),
-+              5. + np.arange(1, 6)]
-     for solver in ('cd', 'mu'):
-         for init in (None, 'nndsvd', 'nndsvda', 'nndsvdar', 'random'):
-             model = NMF(n_components=2, solver=solver, init=init,
-diff --git a/sklearn/decomposition/tests/test_online_lda.py b/sklearn/decomposition/tests/test_online_lda.py
-index b8b636d5a6fd..f3354cba375c 100644
---- a/sklearn/decomposition/tests/test_online_lda.py
-+++ b/sklearn/decomposition/tests/test_online_lda.py
-@@ -30,7 +30,7 @@ def _build_sparse_mtx():
-     # Create 3 topics and each topic has 3 distinct words.
-     # (Each word only belongs to a single topic.)
-     n_components = 3
--    block = n_components * np.ones((3, 3))
-+    block = np.full((3, 3), n_components, dtype=np.int)
-     blocks = [block] * n_components
-     X = block_diag(*blocks)
-     X = csr_matrix(X)
-@@ -176,7 +176,7 @@ def test_invalid_params():
- 
- def test_lda_negative_input():
-     # test pass dense matrix with sparse negative input.
--    X = -np.ones((5, 10))
-+    X = np.full((5, 10), -1.)
-     lda = LatentDirichletAllocation()
-     regex = r"^Negative values in data passed"
-     assert_raises_regexp(ValueError, regex, lda.fit, X)
-diff --git a/sklearn/dummy.py b/sklearn/dummy.py
-index f9a4762806f1..f2c866413183 100644
---- a/sklearn/dummy.py
-+++ b/sklearn/dummy.py
-@@ -469,7 +469,8 @@ def predict(self, X, return_std=False):
-         check_is_fitted(self, "constant_")
-         n_samples = _num_samples(X)
- 
--        y = np.ones((n_samples, self.n_outputs_)) * self.constant_
-+        y = np.full((n_samples, self.n_outputs_), self.constant_,
-+                    dtype=np.array(self.constant_).dtype)
-         y_std = np.zeros((n_samples, self.n_outputs_))
- 
-         if self.n_outputs_ == 1 and not self.output_2d_:
-diff --git a/sklearn/ensemble/base.py b/sklearn/ensemble/base.py
-index 2477cc1c21c7..806a4e4ceaa2 100644
---- a/sklearn/ensemble/base.py
-+++ b/sklearn/ensemble/base.py
-@@ -153,8 +153,8 @@ def _partition_estimators(n_estimators, n_jobs):
-     n_jobs = min(_get_n_jobs(n_jobs), n_estimators)
- 
-     # Partition estimators between jobs
--    n_estimators_per_job = (n_estimators // n_jobs) * np.ones(n_jobs,
--                                                              dtype=np.int)
-+    n_estimators_per_job = np.full(n_jobs, n_estimators // n_jobs,
-+                                   dtype=np.int)
-     n_estimators_per_job[:n_estimators % n_jobs] += 1
-     starts = np.cumsum(n_estimators_per_job)
- 
-diff --git a/sklearn/ensemble/gradient_boosting.py b/sklearn/ensemble/gradient_boosting.py
-index ad25a1965b26..c76a5722c521 100644
---- a/sklearn/ensemble/gradient_boosting.py
-+++ b/sklearn/ensemble/gradient_boosting.py
-@@ -1513,7 +1513,7 @@ def _fit_stages(self, X, y, y_pred, sample_weight, random_state,
-         X_csr = csr_matrix(X) if issparse(X) else None
- 
-         if self.n_iter_no_change is not None:
--            loss_history = np.ones(self.n_iter_no_change) * np.inf
-+            loss_history = np.full(self.n_iter_no_change, np.inf)
-             # We create a generator to get the predictions for X_val after
-             # the addition of each successive stage
-             y_val_pred_iter = self._staged_decision_function(X_val)
-diff --git a/sklearn/ensemble/iforest.py b/sklearn/ensemble/iforest.py
-index eafdcbe9de1c..97e60d755ad3 100644
---- a/sklearn/ensemble/iforest.py
-+++ b/sklearn/ensemble/iforest.py
-@@ -89,6 +89,26 @@ class IsolationForest(BaseBagging, OutlierMixin):
-         The number of jobs to run in parallel for both `fit` and `predict`.
-         If -1, then the number of jobs is set to the number of cores.
- 
-+    behaviour : str, default='old'
-+        Behaviour of the ``decision_function`` which can be either 'old' or
-+        'new'. Passing ``behaviour='new'`` makes the ``decision_function``
-+        change to match other anomaly detection algorithm API which will be
-+        the default behaviour in the future. As explained in details in the
-+        ``offset_`` attribute documentation, the ``decision_function`` becomes
-+        dependent on the contamination parameter, in such a way that 0 becomes
-+        its natural threshold to detect outliers.
-+
-+        .. versionadded:: 0.20
-+           ``behaviour`` is added in 0.20 for back-compatibility purpose.
-+
-+        .. deprecated:: 0.20
-+           ``behaviour='old'`` is deprecated in 0.20 and will not be possible
-+           in 0.22.
-+
-+        .. deprecated:: 0.22
-+           ``behaviour`` parameter will be deprecated in 0.22 and removed in
-+           0.24.
-+
-     random_state : int, RandomState instance or None, optional (default=None)
-         If int, random_state is the seed used by the random number generator;
-         If RandomState instance, random_state is the random number generator;
-@@ -114,12 +134,16 @@ class IsolationForest(BaseBagging, OutlierMixin):
-     offset_ : float
-         Offset used to define the decision function from the raw scores.
-         We have the relation: ``decision_function = score_samples - offset_``.
-+        Assuming behaviour == 'new', offset_ is defined as follows.
-         When the contamination parameter is set to "auto", the offset is equal
-         to -0.5 as the scores of inliers are close to 0 and the scores of
-         outliers are close to -1. When a contamination parameter different
-         than "auto" is provided, the offset is defined in such a way we obtain
-         the expected number of outliers (samples with decision function < 0)
-         in training.
-+        Assuming the behaviour parameter is set to 'old', we always have
-+        offset_ = -0.5, making the decision function independent from the
-+        contamination parameter.
- 
-     References
-     ----------
-@@ -138,6 +162,7 @@ def __init__(self,
-                  max_features=1.,
-                  bootstrap=False,
-                  n_jobs=1,
-+                 behaviour='old',
-                  random_state=None,
-                  verbose=0):
-         super(IsolationForest, self).__init__(
-@@ -154,6 +179,8 @@ def __init__(self,
-             n_jobs=n_jobs,
-             random_state=random_state,
-             verbose=verbose)
-+
-+        self.behaviour = behaviour
-         self.contamination = contamination
- 
-     def _set_oob_score(self, X, y):
-@@ -185,6 +212,13 @@ def fit(self, X, y=None, sample_weight=None):
-         else:
-             self._contamination = self.contamination
- 
-+        if self.behaviour == 'old':
-+            warnings.warn('behaviour="old" is deprecated and will be removed '
-+                          'in version 0.22. Please use behaviour="new", which '
-+                          'makes the decision_function change to match '
-+                          'other anomaly detection algorithm API.',
-+                          FutureWarning)
-+
-         X = check_array(X, accept_sparse=['csc'])
-         if issparse(X):
-             # Pre-sort indices to avoid that each individual tree of the
-@@ -226,16 +260,29 @@ def fit(self, X, y=None, sample_weight=None):
-                                           max_depth=max_depth,
-                                           sample_weight=sample_weight)
- 
-+        if self.behaviour == 'old':
-+            # in this case, decision_function = 0.5 + self.score_samples(X):
-+            if self._contamination == "auto":
-+                raise ValueError("contamination parameter cannot be set to "
-+                                 "'auto' when behaviour == 'old'.")
-+
-+            self.offset_ = -0.5
-+            self._threshold_ = sp.stats.scoreatpercentile(
-+                self.decision_function(X), 100. * self._contamination)
-+
-+            return self
-+
-+        # else, self.behaviour == 'new':
-         if self._contamination == "auto":
-             # 0.5 plays a special role as described in the original paper.
-             # we take the opposite as we consider the opposite of their score.
-             self.offset_ = -0.5
--            # need to save (depreciated) threshold_ in this case:
--            self._threshold_ = sp.stats.scoreatpercentile(
--                self.score_samples(X), 100. * 0.1)
--        else:
--            self.offset_ = sp.stats.scoreatpercentile(
--                self.score_samples(X), 100. * self._contamination)
-+            return self
-+
-+        # else, define offset_ wrt contamination parameter, so that the
-+        # threshold_ attribute is implicitly 0 and is not needed anymore:
-+        self.offset_ = sp.stats.scoreatpercentile(
-+            self.score_samples(X), 100. * self._contamination)
- 
-         return self
- 
-@@ -258,7 +305,8 @@ def predict(self, X):
-         check_is_fitted(self, ["offset_"])
-         X = check_array(X, accept_sparse='csr')
-         is_inlier = np.ones(X.shape[0], dtype=int)
--        is_inlier[self.decision_function(X) < 0] = -1
-+        threshold = self.threshold_ if self.behaviour == 'old' else 0
-+        is_inlier[self.decision_function(X) < threshold] = -1
-         return is_inlier
- 
-     def decision_function(self, X):
-@@ -359,11 +407,12 @@ def score_samples(self, X):
- 
-     @property
-     def threshold_(self):
-+        if self.behaviour != 'old':
-+            raise AttributeError("threshold_ attribute does not exist when "
-+                                 "behaviour != 'old'")
-         warnings.warn("threshold_ attribute is deprecated in 0.20 and will"
-                       " be removed in 0.22.", DeprecationWarning)
--        if self.contamination == 'auto':
--            return self._threshold_
--        return self.offset_
-+        return self._threshold_
- 
- 
- def _average_path_length(n_samples_leaf):
-diff --git a/sklearn/ensemble/tests/test_iforest.py b/sklearn/ensemble/tests/test_iforest.py
-index bfeb689a78f0..634f45a25cf4 100644
---- a/sklearn/ensemble/tests/test_iforest.py
-+++ b/sklearn/ensemble/tests/test_iforest.py
-@@ -15,6 +15,7 @@
- from sklearn.utils.testing import assert_array_equal
- from sklearn.utils.testing import assert_array_almost_equal
- from sklearn.utils.testing import assert_raises
-+from sklearn.utils.testing import assert_raises_regex
- from sklearn.utils.testing import assert_warns_message
- from sklearn.utils.testing import assert_equal
- from sklearn.utils.testing import assert_greater
-@@ -47,6 +48,7 @@
- boston.target = boston.target[perm]
- 
- 
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
- def test_iforest():
-     """Check Isolation Forest for various parameter settings."""
-     X_train = np.array([[0, 1], [1, 2]])
-@@ -63,6 +65,8 @@ def test_iforest():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_iforest_sparse():
-     """Check IForest for various parameter settings on sparse input."""
-     rng = check_random_state(0)
-@@ -91,6 +95,8 @@ def test_iforest_sparse():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_iforest_error():
-     """Test that it gives proper exception on deficient input."""
-     X = iris.data
-@@ -128,8 +134,14 @@ def test_iforest_error():
-     # test X_test n_features match X_train one:
-     assert_raises(ValueError, IsolationForest().fit(X).predict, X[:, 1:])
- 
-+    # test threshold_ attribute error when behaviour is not old:
-+    msg = "threshold_ attribute does not exist when behaviour != 'old'"
-+    assert_raises_regex(AttributeError, msg, getattr,
-+                        IsolationForest(behaviour='new'), 'threshold_')
-+
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_recalculate_max_depth():
-     """Check max_depth recalculation when max_samples is reset to n_samples"""
-     X = iris.data
-@@ -139,6 +151,7 @@ def test_recalculate_max_depth():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_max_samples_attribute():
-     X = iris.data
-     clf = IsolationForest().fit(X)
-@@ -155,6 +168,8 @@ def test_max_samples_attribute():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_iforest_parallel_regression():
-     """Check parallel regression."""
-     rng = check_random_state(0)
-@@ -180,6 +195,7 @@ def test_iforest_parallel_regression():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_iforest_performance():
-     """Test Isolation Forest performs well"""
- 
-@@ -204,13 +220,15 @@ def test_iforest_performance():
-     assert_greater(roc_auc_score(y_test, y_pred), 0.98)
- 
- 
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
- def test_iforest_works():
-     # toy sample (the last two samples are outliers)
-     X = [[-2, -1], [-1, -1], [-1, -2], [1, 1], [1, 2], [2, 1], [6, 3], [-4, 7]]
- 
-     # Test IsolationForest
-     for contamination in [0.25, "auto"]:
--        clf = IsolationForest(random_state=rng, contamination=contamination)
-+        clf = IsolationForest(behaviour='new', random_state=rng,
-+                              contamination=contamination)
-         clf.fit(X)
-         decision_func = - clf.decision_function(X)
-         pred = clf.predict(X)
-@@ -220,6 +238,7 @@ def test_iforest_works():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_max_samples_consistency():
-     # Make sure validated max_samples in iforest and BaseBagging are identical
-     X = iris.data
-@@ -228,6 +247,8 @@ def test_max_samples_consistency():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:threshold_ attribute')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_iforest_subsampled_features():
-     # It tests non-regression for #5732 which failed at predict.
-     rng = check_random_state(0)
-@@ -253,6 +274,7 @@ def test_iforest_average_path_length():
- 
- 
- @pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_score_samples():
-     X_train = [[1, 1], [1, 2], [2, 1]]
-     clf1 = IsolationForest(contamination=0.1).fit(X_train)
-@@ -265,6 +287,8 @@ def test_score_samples():
-                        clf2.score_samples([[2., 2.]]))
- 
- 
-+@pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
- def test_deprecation():
-     X = [[0.0], [1.0]]
-     clf = IsolationForest()
-@@ -274,8 +298,23 @@ def test_deprecation():
-                          'in version 0.22 to "auto"',
-                          clf.fit, X)
- 
--    clf = IsolationForest(contamination='auto').fit(X)
-+    assert_warns_message(FutureWarning,
-+                         'behaviour="old" is deprecated and will be removed '
-+                         'in version 0.22',
-+                         clf.fit, X)
-+
-+    clf = IsolationForest().fit(X)
-     assert_warns_message(DeprecationWarning,
-                          "threshold_ attribute is deprecated in 0.20 and will"
-                          " be removed in 0.22.",
-                          getattr, clf, "threshold_")
-+
-+
-+@pytest.mark.filterwarnings('ignore:default contamination')
-+@pytest.mark.filterwarnings('ignore:behaviour="old"')
-+def test_behaviour_param():
-+    X_train = [[1, 1], [1, 2], [2, 1]]
-+    clf1 = IsolationForest(behaviour='old').fit(X_train)
-+    clf2 = IsolationForest(behaviour='new', contamination='auto').fit(X_train)
-+    assert_array_equal(clf1.decision_function([[2., 2.]]),
-+                       clf2.decision_function([[2., 2.]]))
-diff --git a/sklearn/gaussian_process/kernels.py b/sklearn/gaussian_process/kernels.py
-index 7ab1ad8c90ee..79d913bca1cb 100644
---- a/sklearn/gaussian_process/kernels.py
-+++ b/sklearn/gaussian_process/kernels.py
-@@ -1010,11 +1010,13 @@ def __call__(self, X, Y=None, eval_gradient=False):
-         elif eval_gradient:
-             raise ValueError("Gradient can only be evaluated when Y is None.")
- 
--        K = self.constant_value * np.ones((X.shape[0], Y.shape[0]))
-+        K = np.full((X.shape[0], Y.shape[0]), self.constant_value,
-+                    dtype=np.array(self.constant_value).dtype)
-         if eval_gradient:
-             if not self.hyperparameter_constant_value.fixed:
--                return (K, self.constant_value
--                        * np.ones((X.shape[0], X.shape[0], 1)))
-+                return (K, np.full((X.shape[0], X.shape[0], 1),
-+                                   self.constant_value,
-+                                   dtype=np.array(self.constant_value).dtype))
-             else:
-                 return K, np.empty((X.shape[0], X.shape[0], 0))
-         else:
-@@ -1037,7 +1039,8 @@ def diag(self, X):
-         K_diag : array, shape (n_samples_X,)
-             Diagonal of kernel k(X, X)
-         """
--        return self.constant_value * np.ones(X.shape[0])
-+        return np.full(X.shape[0], self.constant_value,
-+                       dtype=np.array(self.constant_value).dtype)
- 
-     def __repr__(self):
-         return "{0:.3g}**2".format(np.sqrt(self.constant_value))
-@@ -1132,7 +1135,8 @@ def diag(self, X):
-         K_diag : array, shape (n_samples_X,)
-             Diagonal of kernel k(X, X)
-         """
--        return self.noise_level * np.ones(X.shape[0])
-+        return np.full(X.shape[0], self.noise_level,
-+                       dtype=np.array(self.noise_level).dtype)
- 
-     def __repr__(self):
-         return "{0}(noise_level={1:.3g})".format(self.__class__.__name__,
-diff --git a/sklearn/linear_model/base.py b/sklearn/linear_model/base.py
-index a363493019d2..6a6c4118c736 100644
---- a/sklearn/linear_model/base.py
-+++ b/sklearn/linear_model/base.py
-@@ -166,7 +166,8 @@ def _preprocess_data(X, y, fit_intercept, normalize=False, copy=True,
- def _rescale_data(X, y, sample_weight):
-     """Rescale data so as to support sample_weight"""
-     n_samples = X.shape[0]
--    sample_weight = sample_weight * np.ones(n_samples)
-+    sample_weight = np.full(n_samples, sample_weight,
-+                            dtype=np.array(sample_weight).dtype)
-     sample_weight = np.sqrt(sample_weight)
-     sw_matrix = sparse.dia_matrix((sample_weight, 0),
-                                   shape=(n_samples, n_samples))
-diff --git a/sklearn/linear_model/bayes.py b/sklearn/linear_model/bayes.py
-index 7c220a67772c..9e85fd7641b9 100644
---- a/sklearn/linear_model/bayes.py
-+++ b/sklearn/linear_model/bayes.py
-@@ -212,7 +212,8 @@ def fit(self, X, y, sample_weight=None):
-                     U / (eigen_vals_ + lambda_ / alpha_)[None, :], U.T))
-                 coef_ = np.dot(coef_, y)
-                 if self.compute_score:
--                    logdet_sigma_ = lambda_ * np.ones(n_features)
-+                    logdet_sigma_ = np.full(n_features, lambda_,
-+                                            dtype=np.array(lambda_).dtype)
-                     logdet_sigma_[:n_samples] += alpha_ * eigen_vals_
-                     logdet_sigma_ = - np.sum(np.log(logdet_sigma_))
- 
-diff --git a/sklearn/linear_model/coordinate_descent.py b/sklearn/linear_model/coordinate_descent.py
-index 13e3a3e09ddf..3f21a84306e0 100644
---- a/sklearn/linear_model/coordinate_descent.py
-+++ b/sklearn/linear_model/coordinate_descent.py
-@@ -826,9 +826,9 @@ class Lasso(ElasticNet):
-         reasons, using ``alpha = 0`` with the ``Lasso`` object is not advised.
-         Given this, you should use the :class:`LinearRegression` object.
- 
--    fit_intercept : boolean
--        whether to calculate the intercept for this model. If set
--        to false, no intercept will be used in calculations
-+    fit_intercept : boolean, optional, default True
-+        Whether to calculate the intercept for this model. If set
-+        to False, no intercept will be used in calculations
-         (e.g. data is expected to be already centered).
- 
-     normalize : boolean, optional, default False
-diff --git a/sklearn/linear_model/tests/test_bayes.py b/sklearn/linear_model/tests/test_bayes.py
-index 443f856fa728..61ac7395cb52 100644
---- a/sklearn/linear_model/tests/test_bayes.py
-+++ b/sklearn/linear_model/tests/test_bayes.py
-@@ -86,8 +86,10 @@ def test_prediction_bayesian_ridge_ard_with_constant_input():
-     random_state = check_random_state(42)
-     constant_value = random_state.rand()
-     X = random_state.random_sample((n_samples, n_features))
--    y = np.full(n_samples, constant_value)
--    expected = np.full(n_samples, constant_value)
-+    y = np.full(n_samples, constant_value,
-+                dtype=np.array(constant_value).dtype)
-+    expected = np.full(n_samples, constant_value,
-+                       dtype=np.array(constant_value).dtype)
- 
-     for clf in [BayesianRidge(), ARDRegression()]:
-         y_pred = clf.fit(X, y).predict(X)
-@@ -103,7 +105,8 @@ def test_std_bayesian_ridge_ard_with_constant_input():
-     random_state = check_random_state(42)
-     constant_value = random_state.rand()
-     X = random_state.random_sample((n_samples, n_features))
--    y = np.full(n_samples, constant_value)
-+    y = np.full(n_samples, constant_value,
-+                dtype=np.array(constant_value).dtype)
-     expected_upper_boundary = 0.01
- 
-     for clf in [BayesianRidge(), ARDRegression()]:
-diff --git a/sklearn/linear_model/tests/test_logistic.py b/sklearn/linear_model/tests/test_logistic.py
-index ec9e1f5ba6be..8677ec80ade1 100644
---- a/sklearn/linear_model/tests/test_logistic.py
-+++ b/sklearn/linear_model/tests/test_logistic.py
-@@ -429,7 +429,7 @@ def test_logistic_grad_hess():
-     X_sp[X_sp < .1] = 0
-     X_sp = sp.csr_matrix(X_sp)
-     for X in (X_ref, X_sp):
--        w = .1 * np.ones(n_features)
-+        w = np.full(n_features, .1)
- 
-         # First check that _logistic_grad_hess is consistent
-         # with _logistic_loss_and_grad
-diff --git a/sklearn/manifold/locally_linear.py b/sklearn/manifold/locally_linear.py
-index 570b0402cd77..0d174e785ff3 100644
---- a/sklearn/manifold/locally_linear.py
-+++ b/sklearn/manifold/locally_linear.py
-@@ -448,7 +448,7 @@ def locally_linear_embedding(
-             # compute Householder matrix which satisfies
-             #  Hi*Vi.T*ones(n_neighbors) = alpha_i*ones(s)
-             # using prescription from paper
--            h = alpha_i * np.ones(s_i) - np.dot(Vi.T, np.ones(n_neighbors))
-+            h = np.full(s_i, alpha_i) - np.dot(Vi.T, np.ones(n_neighbors))
- 
-             norm_h = np.linalg.norm(h)
-             if norm_h < modified_tol:
-diff --git a/sklearn/metrics/base.py b/sklearn/metrics/base.py
-index 74d016518779..1877ee4e43f7 100644
---- a/sklearn/metrics/base.py
-+++ b/sklearn/metrics/base.py
-@@ -49,6 +49,8 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
-         ``'samples'``:
-             Calculate metrics for each instance, and find their average.
- 
-+        Will be ignored when ``y_true`` is binary.
-+
-     sample_weight : array-like of shape = [n_samples], optional
-         Sample weights.
- 
-diff --git a/sklearn/metrics/classification.py b/sklearn/metrics/classification.py
-index a26ffcce1a24..29dbb8f240af 100644
---- a/sklearn/metrics/classification.py
-+++ b/sklearn/metrics/classification.py
-@@ -1452,7 +1452,9 @@ def classification_report(y_true, y_pred, labels=None, target_names=None,
-         Sample weights.
- 
-     digits : int
--        Number of digits for formatting output floating point values
-+        Number of digits for formatting output floating point values.
-+        When ``output_dict`` is ``True``, this will be ignored and the
-+        returned values will not be rounded.
- 
-     output_dict : bool (default = False)
-         If True, return output as dict
-diff --git a/sklearn/metrics/pairwise.py b/sklearn/metrics/pairwise.py
-index 9e16fa6d0b5c..01c3cde04a35 100644
---- a/sklearn/metrics/pairwise.py
-+++ b/sklearn/metrics/pairwise.py
-@@ -491,7 +491,7 @@ def manhattan_distances(X, Y=None, sum_over_features=True,
-            [4., 4.]])
-     >>> import numpy as np
-     >>> X = np.ones((1, 2))
--    >>> y = 2 * np.ones((2, 2))
-+    >>> y = np.full((2, 2), 2.)
-     >>> manhattan_distances(X, y, sum_over_features=False)#doctest:+ELLIPSIS
-     array([[1., 1.],
-            [1., 1.]])
-diff --git a/sklearn/metrics/ranking.py b/sklearn/metrics/ranking.py
-index fd6e28a20ae0..2037f4237478 100644
---- a/sklearn/metrics/ranking.py
-+++ b/sklearn/metrics/ranking.py
-@@ -175,6 +175,8 @@ def average_precision_score(y_true, y_score, average="macro", pos_label=1,
-         ``'samples'``:
-             Calculate metrics for each instance, and find their average.
- 
-+        Will be ignored when ``y_true`` is binary.
-+
-     pos_label : int or str (default=1)
-         The label of the positive class. Only applied to binary ``y_true``.
-         For multilabel-indicator ``y_true``, ``pos_label`` is fixed to 1.
-@@ -272,6 +274,8 @@ def roc_auc_score(y_true, y_score, average="macro", sample_weight=None,
-         ``'samples'``:
-             Calculate metrics for each instance, and find their average.
- 
-+        Will be ignored when ``y_true`` is binary.
-+
-     sample_weight : array-like of shape = [n_samples], optional
-         Sample weights.
- 
-diff --git a/sklearn/metrics/tests/test_classification.py b/sklearn/metrics/tests/test_classification.py
-index 8db86dea2ef5..951afdcaa0f2 100644
---- a/sklearn/metrics/tests/test_classification.py
-+++ b/sklearn/metrics/tests/test_classification.py
-@@ -708,13 +708,13 @@ def test_confusion_matrix_dtype():
-         assert_equal(cm.dtype, np.float64)
- 
-     # np.iinfo(np.uint32).max should be accumulated correctly
--    weight = np.ones(len(y), dtype=np.uint32) * 4294967295
-+    weight = np.full(len(y), 4294967295, dtype=np.uint32)
-     cm = confusion_matrix(y, y, sample_weight=weight)
-     assert_equal(cm[0, 0], 4294967295)
-     assert_equal(cm[1, 1], 8589934590)
- 
-     # np.iinfo(np.int64).max should cause an overflow
--    weight = np.ones(len(y), dtype=np.int64) * 9223372036854775807
-+    weight = np.full(len(y), 9223372036854775807, dtype=np.int64)
-     cm = confusion_matrix(y, y, sample_weight=weight)
-     assert_equal(cm[0, 0], 9223372036854775807)
-     assert_equal(cm[1, 1], -2)
-diff --git a/sklearn/metrics/tests/test_ranking.py b/sklearn/metrics/tests/test_ranking.py
-index 33406e35ae89..b921fb1124ae 100644
---- a/sklearn/metrics/tests/test_ranking.py
-+++ b/sklearn/metrics/tests/test_ranking.py
-@@ -276,8 +276,7 @@ def test_roc_curve_one_label():
-     w = UndefinedMetricWarning
-     fpr, tpr, thresholds = assert_warns(w, roc_curve, y_true, y_pred)
-     # all true labels, all fpr should be nan
--    assert_array_equal(fpr,
--                       np.nan * np.ones(len(thresholds)))
-+    assert_array_equal(fpr, np.full(len(thresholds), np.nan))
-     assert_equal(fpr.shape, tpr.shape)
-     assert_equal(fpr.shape, thresholds.shape)
- 
-@@ -286,8 +285,7 @@ def test_roc_curve_one_label():
-                                         [1 - x for x in y_true],
-                                         y_pred)
-     # all negative labels, all tpr should be nan
--    assert_array_equal(tpr,
--                       np.nan * np.ones(len(thresholds)))
-+    assert_array_equal(tpr, np.full(len(thresholds), np.nan))
-     assert_equal(fpr.shape, tpr.shape)
-     assert_equal(fpr.shape, thresholds.shape)
- 
-@@ -485,7 +483,7 @@ def test_auc_score_non_binary_class():
-     y_true = np.ones(10, dtype="int")
-     assert_raise_message(ValueError, "ROC AUC score is not defined",
-                          roc_auc_score, y_true, y_pred)
--    y_true = -np.ones(10, dtype="int")
-+    y_true = np.full(10, -1, dtype="int")
-     assert_raise_message(ValueError, "ROC AUC score is not defined",
-                          roc_auc_score, y_true, y_pred)
-     # y_true contains three different class values
-@@ -504,7 +502,7 @@ def test_auc_score_non_binary_class():
-         y_true = np.ones(10, dtype="int")
-         assert_raise_message(ValueError, "ROC AUC score is not defined",
-                              roc_auc_score, y_true, y_pred)
--        y_true = -np.ones(10, dtype="int")
-+        y_true = np.full(10, -1, dtype="int")
-         assert_raise_message(ValueError, "ROC AUC score is not defined",
-                              roc_auc_score, y_true, y_pred)
- 
-diff --git a/sklearn/mixture/base.py b/sklearn/mixture/base.py
-index 49265e437930..8f16bf6c0ab4 100644
---- a/sklearn/mixture/base.py
-+++ b/sklearn/mixture/base.py
-@@ -435,7 +435,7 @@ def sample(self, n_samples=1):
-                 for (mean, covariance, sample) in zip(
-                     self.means_, self.covariances_, n_samples_comp)])
- 
--        y = np.concatenate([j * np.ones(sample, dtype=int)
-+        y = np.concatenate([np.full(sample, j, dtype=int)
-                            for j, sample in enumerate(n_samples_comp)])
- 
-         return (X, y)
-diff --git a/sklearn/mixture/tests/test_gaussian_mixture.py b/sklearn/mixture/tests/test_gaussian_mixture.py
-index 2f0a01b4a684..cabe4b67d7f2 100644
---- a/sklearn/mixture/tests/test_gaussian_mixture.py
-+++ b/sklearn/mixture/tests/test_gaussian_mixture.py
-@@ -96,7 +96,8 @@ def __init__(self, rng, n_samples=500, n_components=2, n_features=2,
-         self.X = dict(zip(COVARIANCE_TYPE, [generate_data(
-             n_samples, n_features, self.weights, self.means, self.covariances,
-             covar_type) for covar_type in COVARIANCE_TYPE]))
--        self.Y = np.hstack([k * np.ones(int(np.round(w * n_samples)))
-+        self.Y = np.hstack([np.full(int(np.round(w * n_samples)), k,
-+                                    dtype=np.int)
-                             for k, w in enumerate(self.weights)])
- 
- 
-@@ -287,8 +288,8 @@ def test_check_precisions():
-     precisions_not_positive = {
-         'full': precisions_not_pos,
-         'tied': precisions_not_pos[0],
--        'diag': -1. * np.ones((n_components, n_features)),
--        'spherical': -1. * np.ones(n_components)}
-+        'diag': np.full((n_components, n_features), -1.),
-+        'spherical': np.full(n_components, -1.)}
- 
-     not_positive_errors = {
-         'full': 'symmetric, positive-definite',
-diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py
-index f815c29987e4..50b2ce871166 100644
---- a/sklearn/model_selection/_split.py
-+++ b/sklearn/model_selection/_split.py
-@@ -434,7 +434,7 @@ def _iter_test_indices(self, X, y=None, groups=None):
-             check_random_state(self.random_state).shuffle(indices)
- 
-         n_splits = self.n_splits
--        fold_sizes = (n_samples // n_splits) * np.ones(n_splits, dtype=np.int)
-+        fold_sizes = np.full(n_splits, n_samples // n_splits, dtype=np.int)
-         fold_sizes[:n_samples % n_splits] += 1
-         current = 0
-         for fold_size in fold_sizes:
-diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
-index dd415cee7d2a..01909adb8d75 100644
---- a/sklearn/model_selection/tests/test_search.py
-+++ b/sklearn/model_selection/tests/test_search.py
-@@ -553,7 +553,7 @@ def test_grid_search_bad_param_grid():
-         "(but not a string) or np.ndarray.",
-         GridSearchCV, clf, param_dict)
- 
--    param_dict = {"C": np.ones(6).reshape(3, 2)}
-+    param_dict = {"C": np.ones((3, 2))}
-     clf = SVC(gamma="scale")
-     assert_raises(ValueError, GridSearchCV, clf, param_dict)
- 
-diff --git a/sklearn/model_selection/tests/test_split.py b/sklearn/model_selection/tests/test_split.py
-index 5d63701e625f..9ba26c0fdf44 100644
---- a/sklearn/model_selection/tests/test_split.py
-+++ b/sklearn/model_selection/tests/test_split.py
-@@ -757,7 +757,7 @@ def test_stratified_shuffle_split_multilabel_many_labels():
- 
- def test_predefinedsplit_with_kfold_split():
-     # Check that PredefinedSplit can reproduce a split generated by Kfold.
--    folds = -1 * np.ones(10)
-+    folds = np.full(10, -1.)
-     kf_train = []
-     kf_test = []
-     for i, (train_ind, test_ind) in enumerate(KFold(5, shuffle=True).split(X)):
-diff --git a/sklearn/model_selection/tests/test_validation.py b/sklearn/model_selection/tests/test_validation.py
-index 7e7c0d398620..375ab240b48e 100644
---- a/sklearn/model_selection/tests/test_validation.py
-+++ b/sklearn/model_selection/tests/test_validation.py
-@@ -620,7 +620,7 @@ def assert_fit_params(clf):
-         assert_equal(clf.dummy_obj, DUMMY_OBJ)
- 
-     fit_params = {'sample_weight': np.ones(n_samples),
--                  'class_prior': np.ones(n_classes) / n_classes,
-+                  'class_prior': np.full(n_classes, 1. / n_classes),
-                   'sparse_sample_weight': W_sparse,
-                   'sparse_param': P_sparse,
-                   'dummy_int': DUMMY_INT,
-diff --git a/sklearn/naive_bayes.py b/sklearn/naive_bayes.py
-index ddbc7e7a5467..cf2c65b3acc0 100644
---- a/sklearn/naive_bayes.py
-+++ b/sklearn/naive_bayes.py
-@@ -465,7 +465,7 @@ def _update_class_log_prior(self, class_prior=None):
-             self.class_log_prior_ = (np.log(self.class_count_) -
-                                      np.log(self.class_count_.sum()))
-         else:
--            self.class_log_prior_ = np.zeros(n_classes) - np.log(n_classes)
-+            self.class_log_prior_ = np.full(n_classes, -np.log(n_classes))
- 
-     def _check_alpha(self):
-         if np.min(self.alpha) < 0:
-diff --git a/sklearn/neighbors/binary_tree.pxi b/sklearn/neighbors/binary_tree.pxi
-index 3e17f1b93d6c..ede29c2bb4d6 100755
---- a/sklearn/neighbors/binary_tree.pxi
-+++ b/sklearn/neighbors/binary_tree.pxi
-@@ -591,8 +591,8 @@ cdef class NeighborsHeap:
-         self.indices = get_memview_ITYPE_2D(self.indices_arr)
- 
-     def __init__(self, n_pts, n_nbrs):
--        self.distances_arr = np.inf + np.zeros((n_pts, n_nbrs), dtype=DTYPE,
--                                               order='C')
-+        self.distances_arr = np.full((n_pts, n_nbrs), np.inf, dtype=DTYPE,
-+                                     order='C')
-         self.indices_arr = np.zeros((n_pts, n_nbrs), dtype=ITYPE, order='C')
-         self.distances = get_memview_DTYPE_2D(self.distances_arr)
-         self.indices = get_memview_ITYPE_2D(self.indices_arr)
-@@ -1336,7 +1336,7 @@ cdef class BinaryTree:
-                 self._query_dual_breadthfirst(other, heap, nodeheap)
-             else:
-                 reduced_dist_LB = min_rdist_dual(self, 0, other, 0)
--                bounds = np.inf + np.zeros(other.node_data.shape[0])
-+                bounds = np.full(other.node_data.shape[0], np.inf)
-                 self._query_dual_depthfirst(0, other, 0, bounds,
-                                             heap, reduced_dist_LB)
- 
-@@ -1446,7 +1446,7 @@ cdef class BinaryTree:
-         r = np.asarray(r, dtype=DTYPE, order='C')
-         r = np.atleast_1d(r)
-         if r.shape == (1,):
--            r = r[0] + np.zeros(X.shape[:X.ndim - 1], dtype=DTYPE)
-+            r = np.full(X.shape[:X.ndim - 1], r[0], dtype=DTYPE)
-         else:
-             if r.shape != X.shape[:X.ndim - 1]:
-                 raise ValueError("r must be broadcastable to X.shape")
-@@ -1654,7 +1654,7 @@ cdef class BinaryTree:
-         #       this is difficult because of the need to cache values
-         #       computed between node pairs.
-         if breadth_first:
--            node_log_min_bounds_arr = -np.inf + np.zeros(self.n_nodes)
-+            node_log_min_bounds_arr = np.full(self.n_nodes, -np.inf)
-             node_log_min_bounds = get_memview_DTYPE_1D(node_log_min_bounds_arr)
-             node_bound_widths_arr = np.zeros(self.n_nodes)
-             node_bound_widths = get_memview_DTYPE_1D(node_bound_widths_arr)
-@@ -1970,7 +1970,7 @@ cdef class BinaryTree:
-         """Non-recursive dual-tree k-neighbors query, breadth-first"""
-         cdef ITYPE_t i, i1, i2, i_node1, i_node2, i_pt
-         cdef DTYPE_t dist_pt, reduced_dist_LB
--        cdef DTYPE_t[::1] bounds = np.inf + np.zeros(other.node_data.shape[0])
-+        cdef DTYPE_t[::1] bounds = np.full(other.node_data.shape[0], np.inf)
-         cdef NodeData_t* node_data1 = &self.node_data[0]
-         cdef NodeData_t* node_data2 = &other.node_data[0]
-         cdef NodeData_t node_info1, node_info2
-diff --git a/sklearn/neighbors/tests/test_kde.py b/sklearn/neighbors/tests/test_kde.py
-index f4a8be244889..022cbce1365a 100644
---- a/sklearn/neighbors/tests/test_kde.py
-+++ b/sklearn/neighbors/tests/test_kde.py
-@@ -159,7 +159,7 @@ def test_kde_pipeline_gridsearch():
- def test_kde_sample_weights():
-     n_samples = 400
-     size_test = 20
--    weights_neutral = 3 * np.ones(n_samples)
-+    weights_neutral = np.full(n_samples, 3.)
-     for d in [1, 2, 10]:
-         rng = np.random.RandomState(0)
-         X = rng.rand(n_samples, d)
-diff --git a/sklearn/neighbors/tests/test_neighbors.py b/sklearn/neighbors/tests/test_neighbors.py
-index db786a3588c2..9b244cde0953 100644
---- a/sklearn/neighbors/tests/test_neighbors.py
-+++ b/sklearn/neighbors/tests/test_neighbors.py
-@@ -684,7 +684,7 @@ def test_radius_neighbors_regressor(n_samples=40,
-                                                    weights=weights,
-                                                    algorithm='auto')
-         neigh.fit(X, y)
--        X_test_nan = np.ones((1, n_features))*-1
-+        X_test_nan = np.full((1, n_features), -1.)
-         empty_warning_msg = ("One or more samples have no neighbors "
-                              "within specified radius; predicting NaN.")
-         pred = assert_warns_message(UserWarning,
-diff --git a/sklearn/preprocessing/_discretization.py b/sklearn/preprocessing/_discretization.py
-index 1ce7a9ced198..e10aa51d31a1 100644
---- a/sklearn/preprocessing/_discretization.py
-+++ b/sklearn/preprocessing/_discretization.py
-@@ -211,7 +211,7 @@ def _validate_n_bins(self, n_features):
-                 raise ValueError("{} received an invalid number "
-                                  "of bins. Received {}, expected at least 2."
-                                  .format(KBinsDiscretizer.__name__, orig_bins))
--            return np.ones(n_features, dtype=np.int) * orig_bins
-+            return np.full(n_features, orig_bins, dtype=np.int)
- 
-         n_bins = check_array(orig_bins, dtype=np.int, copy=True,
-                              ensure_2d=False)
-diff --git a/sklearn/preprocessing/data.py b/sklearn/preprocessing/data.py
-index 1256b6522e92..226dbc823bc0 100644
---- a/sklearn/preprocessing/data.py
-+++ b/sklearn/preprocessing/data.py
-@@ -1874,7 +1874,7 @@ def add_dummy_feature(X, value=1.0):
-             # Row indices of dummy feature are 0, ..., n_samples-1.
-             row = np.concatenate((np.arange(n_samples), X.row))
-             # Prepend the dummy feature n_samples times.
--            data = np.concatenate((np.ones(n_samples) * value, X.data))
-+            data = np.concatenate((np.full(n_samples, value), X.data))
-             return sparse.coo_matrix((data, (row, col)), shape)
-         elif sparse.isspmatrix_csc(X):
-             # Shift index pointers since we need to add n_samples elements.
-@@ -1884,13 +1884,13 @@ def add_dummy_feature(X, value=1.0):
-             # Row indices of dummy feature are 0, ..., n_samples-1.
-             indices = np.concatenate((np.arange(n_samples), X.indices))
-             # Prepend the dummy feature n_samples times.
--            data = np.concatenate((np.ones(n_samples) * value, X.data))
-+            data = np.concatenate((np.full(n_samples, value), X.data))
-             return sparse.csc_matrix((data, indices, indptr), shape)
-         else:
-             klass = X.__class__
-             return klass(add_dummy_feature(X.tocoo(), value))
-     else:
--        return np.hstack((np.ones((n_samples, 1)) * value, X))
-+        return np.hstack((np.full((n_samples, 1), value), X))
- 
- 
- class QuantileTransformer(BaseEstimator, TransformerMixin):
-diff --git a/sklearn/preprocessing/tests/test_data.py b/sklearn/preprocessing/tests/test_data.py
-index f5ea7a9dd8ed..f4d0b5af9799 100644
---- a/sklearn/preprocessing/tests/test_data.py
-+++ b/sklearn/preprocessing/tests/test_data.py
-@@ -210,7 +210,7 @@ def test_standard_scaler_1d():
-         assert_array_almost_equal(X_scaled_back, X)
- 
-     # Constant feature
--    X = np.ones(5).reshape(5, 1)
-+    X = np.ones((5, 1))
-     scaler = StandardScaler()
-     X_scaled = scaler.fit(X).transform(X, copy=True)
-     assert_almost_equal(scaler.mean_, 1.)
-@@ -238,7 +238,7 @@ def test_standard_scaler_numerical_stability():
-     # np.log(1e-5) is taken because of its floating point representation
-     # was empirically found to cause numerical problems with np.mean & np.std.
- 
--    x = np.zeros(8, dtype=np.float64) + np.log(1e-5, dtype=np.float64)
-+    x = np.full(8, np.log(1e-5), dtype=np.float64)
-     if LooseVersion(np.__version__) >= LooseVersion('1.9'):
-         # This does not raise a warning as the number of samples is too low
-         # to trigger the problem in recent numpy
-@@ -250,17 +250,17 @@ def test_standard_scaler_numerical_stability():
-         assert_array_almost_equal(x_scaled, np.zeros(8))
- 
-     # with 2 more samples, the std computation run into numerical issues:
--    x = np.zeros(10, dtype=np.float64) + np.log(1e-5, dtype=np.float64)
-+    x = np.full(10, np.log(1e-5), dtype=np.float64)
-     w = "standard deviation of the data is probably very close to 0"
-     x_scaled = assert_warns_message(UserWarning, w, scale, x)
-     assert_array_almost_equal(x_scaled, np.zeros(10))
- 
--    x = np.ones(10, dtype=np.float64) * 1e-100
-+    x = np.full(10, 1e-100, dtype=np.float64)
-     x_small_scaled = assert_no_warnings(scale, x)
-     assert_array_almost_equal(x_small_scaled, np.zeros(10))
- 
-     # Large values can cause (often recoverable) numerical stability issues:
--    x_big = np.ones(10, dtype=np.float64) * 1e100
-+    x_big = np.full(10, 1e100, dtype=np.float64)
-     w = "Dataset may contain too large values"
-     x_big_scaled = assert_warns_message(UserWarning, w, scale, x_big)
-     assert_array_almost_equal(x_big_scaled, np.zeros(10))
-@@ -511,7 +511,7 @@ def test_standard_scaler_trasform_with_partial_fit():
-         assert_array_almost_equal(X_sofar, right_input)
- 
-         zero = np.zeros(X.shape[1])
--        epsilon = np.nextafter(0, 1)
-+        epsilon = np.finfo(float).eps
-         assert_array_less(zero, scaler_incr.var_ + epsilon)  # as less or equal
-         assert_array_less(zero, scaler_incr.scale_ + epsilon)
-         # (i+1) because the Scaler has been already fitted
-@@ -622,7 +622,7 @@ def test_min_max_scaler_1d():
-         assert_array_almost_equal(X_scaled_back, X)
- 
-     # Constant feature
--    X = np.ones(5).reshape(5, 1)
-+    X = np.ones((5, 1))
-     scaler = MinMaxScaler()
-     X_scaled = scaler.fit(X).transform(X)
-     assert_greater_equal(X_scaled.min(), 0.)
-@@ -1578,7 +1578,7 @@ def test_maxabs_scaler_1d():
-         assert_array_almost_equal(X_scaled_back, X)
- 
-     # Constant feature
--    X = np.ones(5).reshape(5, 1)
-+    X = np.ones((5, 1))
-     scaler = MaxAbsScaler()
-     X_scaled = scaler.fit(X).transform(X)
-     assert_array_almost_equal(np.abs(X_scaled.max(axis=0)), 1.)
-diff --git a/sklearn/preprocessing/tests/test_discretization.py b/sklearn/preprocessing/tests/test_discretization.py
-index 367e5f3e6c53..052061dfd7c2 100644
---- a/sklearn/preprocessing/tests/test_discretization.py
-+++ b/sklearn/preprocessing/tests/test_discretization.py
-@@ -52,7 +52,7 @@ def test_invalid_n_bins():
- 
- def test_invalid_n_bins_array():
-     # Bad shape
--    n_bins = np.ones((2, 4)) * 2
-+    n_bins = np.full((2, 4), 2.)
-     est = KBinsDiscretizer(n_bins=n_bins)
-     assert_raise_message(ValueError,
-                          "n_bins must be a scalar or array of shape "
-diff --git a/sklearn/svm/bounds.py b/sklearn/svm/bounds.py
-index 4dbcc705c708..f1897e3d8e7d 100644
---- a/sklearn/svm/bounds.py
-+++ b/sklearn/svm/bounds.py
-@@ -61,7 +61,8 @@ def l1_min_c(X, y, loss='squared_hinge', fit_intercept=True,
-     # maximum absolute value over classes and features
-     den = np.max(np.abs(safe_sparse_dot(Y, X)))
-     if fit_intercept:
--        bias = intercept_scaling * np.ones((np.size(y), 1))
-+        bias = np.full((np.size(y), 1), intercept_scaling,
-+                       dtype=np.array(intercept_scaling).dtype)
-         den = max(den, abs(np.dot(Y, bias)).max())
- 
-     if den == 0.0:
-diff --git a/sklearn/svm/classes.py b/sklearn/svm/classes.py
-index c595e8a12ea7..4bb423e79048 100644
---- a/sklearn/svm/classes.py
-+++ b/sklearn/svm/classes.py
-@@ -543,7 +543,7 @@ class SVC(BaseSVC):
-         non-trivial. See the section about multi-class classification in the
-         SVM section of the User Guide for details.
- 
--    coef_ : array, shape = [n_class-1, n_features]
-+    coef_ : array, shape = [n_class * (n_class-1) / 2, n_features]
-         Weights assigned to the features (coefficients in the primal
-         problem). This is only available in the case of a linear kernel.
- 
-@@ -707,7 +707,7 @@ class NuSVC(BaseSVC):
-         non-trivial. See the section about multi-class classification in
-         the SVM section of the User Guide for details.
- 
--    coef_ : array, shape = [n_class-1, n_features]
-+    coef_ : array, shape = [n_class * (n_class-1) / 2, n_features]
-         Weights assigned to the features (coefficients in the primal
-         problem). This is only available in the case of a linear kernel.
- 
-diff --git a/sklearn/tests/test_docstring_parameters.py b/sklearn/tests/test_docstring_parameters.py
-index df139743d7c0..648de6b6e6ca 100644
---- a/sklearn/tests/test_docstring_parameters.py
-+++ b/sklearn/tests/test_docstring_parameters.py
-@@ -23,21 +23,6 @@
-                                                         path=sklearn.__path__)
-                       if not ("._" in pckg[1] or ".tests." in pckg[1])])
- 
--# TODO Uncomment all modules and fix doc inconsistencies everywhere
--# The list of modules that are not tested for now
--IGNORED_MODULES = (
--    'cluster',
--    'datasets',
--    'model_selection',
--    'multioutput',
--    'setup',
--    'utils',
--    # Deprecated modules
--    'cross_validation',
--    'grid_search',
--    'learning_curve',
--)
--
- 
- # functions to ignore args / docstring of
- _DOCSTRING_IGNORES = [
-@@ -76,8 +61,6 @@ def test_docstring_parameters():
- 
-     incorrect = []
-     for name in PUBLIC_MODULES:
--        if name.startswith('_') or name.split(".")[1] in IGNORED_MODULES:
--            continue
-         with warnings.catch_warnings(record=True):
-             module = importlib.import_module(name)
-         classes = inspect.getmembers(module, inspect.isclass)
-diff --git a/sklearn/tests/test_random_projection.py b/sklearn/tests/test_random_projection.py
-index 975922a34116..bac639bb199f 100644
---- a/sklearn/tests/test_random_projection.py
-+++ b/sklearn/tests/test_random_projection.py
-@@ -77,7 +77,7 @@ def test_input_size_jl_min_dim():
-                   2 * [0.9])
- 
-     johnson_lindenstrauss_min_dim(np.random.randint(1, 10, size=(10, 10)),
--                                  0.5 * np.ones((10, 10)))
-+                                  np.full((10, 10), 0.5))
- 
- 
- ###############################################################################
-diff --git a/sklearn/tree/tests/test_tree.py b/sklearn/tree/tests/test_tree.py
-index 508819e23947..10fb73b181c3 100644
---- a/sklearn/tree/tests/test_tree.py
-+++ b/sklearn/tree/tests/test_tree.py
-@@ -215,7 +215,7 @@ def test_weighted_classification_toy():
-         assert_array_equal(clf.predict(T), true_result,
-                            "Failed with {0}".format(name))
- 
--        clf.fit(X, y, sample_weight=np.ones(len(X)) * 0.5)
-+        clf.fit(X, y, sample_weight=np.full(len(X), 0.5))
-         assert_array_equal(clf.predict(T), true_result,
-                            "Failed with {0}".format(name))
- 
-@@ -1281,13 +1281,13 @@ def test_with_only_one_non_constant_features():
-         est = TreeEstimator(random_state=0, max_features=1)
-         est.fit(X, y)
-         assert_equal(est.tree_.max_depth, 1)
--        assert_array_equal(est.predict_proba(X), 0.5 * np.ones((4, 2)))
-+        assert_array_equal(est.predict_proba(X), np.full((4, 2), 0.5))
- 
-     for name, TreeEstimator in REG_TREES.items():
-         est = TreeEstimator(random_state=0, max_features=1)
-         est.fit(X, y)
-         assert_equal(est.tree_.max_depth, 1)
--        assert_array_equal(est.predict(X), 0.5 * np.ones((4, )))
-+        assert_array_equal(est.predict(X), np.full((4, ), 0.5))
- 
- 
- def test_big_input():
-diff --git a/sklearn/utils/__init__.py b/sklearn/utils/__init__.py
-index 84f7ceae5dd5..c5db6633b64c 100644
---- a/sklearn/utils/__init__.py
-+++ b/sklearn/utils/__init__.py
-@@ -120,6 +120,21 @@ def axis0_safe_slice(X, mask, len_mask):
-     is not going to be the bottleneck, since the number of outliers
-     and non_outliers are typically non-zero and it makes the code
-     tougher to follow.
-+
-+    Parameters
-+    ----------
-+    X : {array-like, sparse matrix}
-+        Data on which to apply mask.
-+
-+    mask : array
-+        Mask to be used on X.
-+
-+    len_mask : int
-+        The length of the mask.
-+
-+    Returns
-+    -------
-+        mask
-     """
-     if len_mask != 0:
-         return X[safe_mask(X, mask), :]
-@@ -183,6 +198,8 @@ def resample(*arrays, **options):
-         Indexable data-structures can be arrays, lists, dataframes or scipy
-         sparse matrices with consistent first dimension.
- 
-+    Other Parameters
-+    ----------------
-     replace : boolean, True by default
-         Implements resampling with replacement. If False, this will implement
-         (sliced) random permutations.
-@@ -293,6 +310,8 @@ def shuffle(*arrays, **options):
-         Indexable data-structures can be arrays, lists, dataframes or scipy
-         sparse matrices with consistent first dimension.
- 
-+    Other Parameters
-+    ----------------
-     random_state : int, RandomState instance or None, optional (default=None)
-         The seed of the pseudo random number generator to use when shuffling
-         the data.  If int, random_state is the seed used by the random number
-@@ -384,6 +403,16 @@ def gen_batches(n, batch_size):
-     The last slice may contain less than batch_size elements, when batch_size
-     does not divide n.
- 
-+    Parameters
-+    ----------
-+    n : int
-+    batch_size : int
-+        Number of element in each batch
-+
-+    Yields
-+    ------
-+    slice of batch_size elements
-+
-     Examples
-     --------
-     >>> from sklearn.utils import gen_batches
-@@ -406,8 +435,19 @@ def gen_batches(n, batch_size):
- def gen_even_slices(n, n_packs, n_samples=None):
-     """Generator to create n_packs slices going up to n.
- 
--    Pass n_samples when the slices are to be used for sparse matrix indexing;
--    slicing off-the-end raises an exception, while it works for NumPy arrays.
-+    Parameters
-+    ----------
-+    n : int
-+    n_packs : int
-+        Number of slices to generate.
-+    n_samples : int or None (default = None)
-+        Number of samples. Pass n_samples when the slices are to be used for
-+        sparse matrix indexing; slicing off-the-end raises an exception, while
-+        it works for NumPy arrays.
-+
-+    Yields
-+    ------
-+    slice
- 
-     Examples
-     --------
-diff --git a/sklearn/utils/bench.py b/sklearn/utils/bench.py
-index 82267d00e65b..1a04ed2bb9f8 100644
---- a/sklearn/utils/bench.py
-+++ b/sklearn/utils/bench.py
-@@ -10,6 +10,15 @@ def total_seconds(delta):
- 
-     http://docs.python.org/library/datetime.html\
- #datetime.timedelta.total_seconds
-+
-+    Parameters
-+    ----------
-+    delta : datetime object
-+
-+    Returns
-+    -------
-+    int
-+        The number of seconds contained in delta
-     """
- 
-     mu_sec = 1e-6  # number of seconds in one microseconds
-diff --git a/sklearn/utils/deprecation.py b/sklearn/utils/deprecation.py
-index fc06f9bc84d3..b84e0bd9b4fa 100644
---- a/sklearn/utils/deprecation.py
-+++ b/sklearn/utils/deprecation.py
-@@ -126,6 +126,15 @@ def __getitem__(self, key):
-         return super(DeprecationDict, self).__getitem__(key)
- 
-     def get(self, key, default=None):
-+        """Return the value corresponding to key, else default.
-+
-+        Parameters
-+        ----------
-+        key : any hashable object
-+            The key
-+        default : object, optional
-+            The default returned when key is not in dict
-+        """
-         # dict does not implement it like this, hence it needs to be overridden
-         try:
-             return self[key]
-@@ -133,5 +142,11 @@ def get(self, key, default=None):
-             return default
- 
-     def add_warning(self, key, *args, **kwargs):
--        """Add a warning to be triggered when the specified key is read"""
-+        """Add a warning to be triggered when the specified key is read
-+
-+        Parameters
-+        ----------
-+        key : any hashable object
-+            The key
-+        """
-         self._deprecations[key] = (args, kwargs)
-diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
-index f15f8e5c86f9..dac884a317bc 100644
---- a/sklearn/utils/estimator_checks.py
-+++ b/sklearn/utils/estimator_checks.py
-@@ -155,7 +155,7 @@ def check_supervised_y_no_nan(name, estimator_orig):
-     estimator = clone(estimator_orig)
-     rng = np.random.RandomState(888)
-     X = rng.randn(10, 5)
--    y = np.ones(10) * np.inf
-+    y = np.full(10, np.inf)
-     y = multioutput_estimator_convert_y_2d(estimator, y)
- 
-     errmsg = "Input contains NaN, infinity or a value too large for " \
-@@ -368,6 +368,13 @@ def set_checking_parameters(estimator):
-     if estimator.__class__.__name__ == "TheilSenRegressor":
-         estimator.max_subpopulation = 100
- 
-+    if estimator.__class__.__name__ == "IsolationForest":
-+        # XXX to be removed in 0.22.
-+        # this is used because the old IsolationForest does not
-+        # respect the outlier detection API and thus and does not
-+        # pass the outlier detection common tests.
-+        estimator.set_params(behaviour='new')
-+
-     if isinstance(estimator, BaseRandomProjection):
-         # Due to the jl lemma and often very few samples, the number
-         # of components of the random matrix projection will be probably
-@@ -382,7 +389,13 @@ def set_checking_parameters(estimator):
- 
- 
- class NotAnArray(object):
--    " An object that is convertable to an array"
-+    """An object that is convertible to an array
-+
-+    Parameters
-+    ----------
-+    data : array_like
-+        The data.
-+    """
- 
-     def __init__(self, data):
-         self.data = data
-diff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py
-index 68a93a2a9120..95e464f07164 100644
---- a/sklearn/utils/extmath.py
-+++ b/sklearn/utils/extmath.py
-@@ -40,8 +40,17 @@ def norm(x):
- def squared_norm(x):
-     """Squared Euclidean or Frobenius norm of x.
- 
--    Returns the Euclidean norm when x is a vector, the Frobenius norm when x
--    is a matrix (2-d array). Faster than norm(x) ** 2.
-+    Faster than norm(x) ** 2.
-+
-+    Parameters
-+    ----------
-+    x : array_like
-+
-+    Returns
-+    -------
-+    float
-+        The Euclidean norm when x is a vector, the Frobenius norm when x
-+        is a matrix (2-d array).
-     """
-     x = np.ravel(x, order='K')
-     if np.issubdtype(x.dtype, np.integer):
-@@ -58,6 +67,18 @@ def row_norms(X, squared=False):
-     matrices and does not create an X.shape-sized temporary.
- 
-     Performs no input validation.
-+
-+    Parameters
-+    ----------
-+    X : array_like
-+        The input array
-+    squared : bool, optional (default = False)
-+        If True, return squared norms.
-+
-+    Returns
-+    -------
-+    array_like
-+        The row-wise (squared) Euclidean norm of X.
-     """
-     if sparse.issparse(X):
-         if not isinstance(X, sparse.csr_matrix):
-@@ -76,6 +97,11 @@ def fast_logdet(A):
- 
-     Equivalent to : np.log(nl.det(A)) but more robust.
-     It returns -Inf if det(A) is non positive or is not defined.
-+
-+    Parameters
-+    ----------
-+    A : array_like
-+        The matrix
-     """
-     sign, ld = np.linalg.slogdet(A)
-     if not sign > 0:
-@@ -102,7 +128,15 @@ def fast_dot(a, b, out=None):
- def density(w, **kwargs):
-     """Compute density of a sparse vector
- 
--    Return a value between 0 and 1
-+    Parameters
-+    ----------
-+    w : array_like
-+        The sparse vector
-+
-+    Returns
-+    -------
-+    float
-+        The density of w, between 0 and 1
-     """
-     if hasattr(w, "toarray"):
-         d = float(w.nnz) / (w.shape[0] * w.shape[1])
-@@ -428,7 +462,7 @@ def weighted_mode(a, w, axis=0):
-         w = np.asarray(w)
- 
-     if a.shape != w.shape:
--        w = np.zeros(a.shape, dtype=w.dtype) + w
-+        w = np.full(a.shape, w, dtype=w.dtype)
- 
-     scores = np.unique(np.ravel(a))       # get ALL unique values
-     testshape = list(a.shape)
-@@ -509,7 +543,12 @@ def svd_flip(u, v, u_based_decision=True):
- 
-     Parameters
-     ----------
--    u, v : ndarray
-+    u : ndarray
-+        u and v are the output of `linalg.svd` or
-+        `sklearn.utils.extmath.randomized_svd`, with matching inner dimensions
-+        so one can compute `np.dot(u * s, v)`.
-+
-+    v : ndarray
-         u and v are the output of `linalg.svd` or
-         `sklearn.utils.extmath.randomized_svd`, with matching inner dimensions
-         so one can compute `np.dot(u * s, v)`.
-@@ -624,6 +663,15 @@ def safe_min(X):
- 
-     Adapated from http://stackoverflow.com/q/13426580
- 
-+    Parameters
-+    ----------
-+    X : array_like
-+        The input array or sparse matrix
-+
-+    Returns
-+    -------
-+    Float
-+        The min value of X
-     """
-     if sparse.issparse(X):
-         if len(X.data) == 0:
-@@ -635,7 +683,25 @@ def safe_min(X):
- 
- 
- def make_nonnegative(X, min_value=0):
--    """Ensure `X.min()` >= `min_value`."""
-+    """Ensure `X.min()` >= `min_value`.
-+
-+    Parameters
-+    ----------
-+    X : array_like
-+        The matrix to make non-negative
-+    min_value : float
-+        The threshold value
-+
-+    Returns
-+    -------
-+    array_like
-+        The thresholded array
-+
-+    Raises
-+    ------
-+    ValueError
-+        When X is sparse
-+    """
-     min_ = safe_min(X)
-     if min_ < min_value:
-         if sparse.issparse(X):
-diff --git a/sklearn/utils/fixes.py b/sklearn/utils/fixes.py
-index 12ac3ae8e55e..070afbdbb952 100644
---- a/sklearn/utils/fixes.py
-+++ b/sklearn/utils/fixes.py
-@@ -199,7 +199,16 @@ def _argmax(arr_or_matrix, axis=None):
- 
- 
- def parallel_helper(obj, methodname, *args, **kwargs):
--    """Workaround for Python 2 limitations of pickling instance methods"""
-+    """Workaround for Python 2 limitations of pickling instance methods
-+
-+    Parameters
-+    ----------
-+    obj
-+    methodname
-+    *args
-+    **kwargs
-+
-+    """
-     return getattr(obj, methodname)(*args, **kwargs)
- 
- 
-diff --git a/sklearn/utils/mocking.py b/sklearn/utils/mocking.py
-index 06d5a7cbd367..db2e2ef31936 100644
---- a/sklearn/utils/mocking.py
-+++ b/sklearn/utils/mocking.py
-@@ -6,6 +6,11 @@
- 
- 
- class ArraySlicingWrapper(object):
-+    """
-+    Parameters
-+    ----------
-+    array
-+    """
-     def __init__(self, array):
-         self.array = array
- 
-@@ -14,8 +19,12 @@ def __getitem__(self, aslice):
- 
- 
- class MockDataFrame(object):
--
--    # have shape an length but don't support indexing.
-+    """
-+    Parameters
-+    ----------
-+    array
-+    """
-+    # have shape and length but don't support indexing.
-     def __init__(self, array):
-         self.array = array
-         self.values = array
-@@ -46,6 +55,13 @@ class CheckingClassifier(BaseEstimator, ClassifierMixin):
-     Checks some property of X and y in fit / predict.
-     This allows testing whether pipelines / cross-validation or metaestimators
-     changed the input.
-+
-+    Parameters
-+    ----------
-+    check_y
-+    check_X
-+    foo_param
-+    expected_fit_params
-     """
-     def __init__(self, check_y=None, check_X=None, foo_param=0,
-                  expected_fit_params=None):
-@@ -55,6 +71,22 @@ def __init__(self, check_y=None, check_X=None, foo_param=0,
-         self.expected_fit_params = expected_fit_params
- 
-     def fit(self, X, y, **fit_params):
-+        """
-+        Fit classifier
-+
-+        Parameters
-+        ----------
-+        X : array-like, shape = [n_samples, n_features]
-+            Training vector, where n_samples is the number of samples and
-+            n_features is the number of features.
-+
-+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
-+            Target relative to X for classification or regression;
-+            None for unsupervised learning.
-+
-+        **fit_params : dict of string -> object
-+            Parameters passed to the ``fit`` method of the estimator
-+        """
-         assert_true(len(X) == len(y))
-         if self.check_X is not None:
-             assert_true(self.check_X(X))
-@@ -74,11 +106,27 @@ def fit(self, X, y, **fit_params):
-         return self
- 
-     def predict(self, T):
-+        """
-+        Parameters
-+        -----------
-+        T : indexable, length n_samples
-+        """
-         if self.check_X is not None:
-             assert_true(self.check_X(T))
-         return self.classes_[np.zeros(_num_samples(T), dtype=np.int)]
- 
-     def score(self, X=None, Y=None):
-+        """
-+        Parameters
-+        ----------
-+        X : array-like, shape = [n_samples, n_features]
-+            Input data, where n_samples is the number of samples and
-+            n_features is the number of features.
-+
-+        Y : array-like, shape = [n_samples] or [n_samples, n_output], optional
-+            Target relative to X for classification or regression;
-+            None for unsupervised learning.
-+        """
-         if self.foo_param > 1:
-             score = 1.
-         else:
-diff --git a/sklearn/utils/sparsefuncs_fast.pyx b/sklearn/utils/sparsefuncs_fast.pyx
-index 7de906cdaa14..d49c0683ae86 100644
---- a/sklearn/utils/sparsefuncs_fast.pyx
-+++ b/sklearn/utils/sparsefuncs_fast.pyx
-@@ -308,7 +308,7 @@ def _incr_mean_variance_axis0(np.ndarray[floating, ndim=1] X_data,
-         np.ndarray[np.int64_t, ndim=1] counts_nan
- 
-     # Obtain new stats first
--    new_n = np.ones(n_features, dtype=np.int64) * n_samples
-+    new_n = np.full(n_features, n_samples, dtype=np.int64)
-     updated_n = np.zeros_like(new_n, dtype=np.int64)
-     last_over_new_n = np.zeros_like(new_n, dtype=dtype)
- 
-diff --git a/sklearn/utils/testing.py b/sklearn/utils/testing.py
-index ff91aa962417..9c7483973266 100644
---- a/sklearn/utils/testing.py
-+++ b/sklearn/utils/testing.py
-@@ -233,6 +233,12 @@ def assert_warns_div0(func, *args, **kw):
-     """Assume that numpy's warning for divide by zero is raised
- 
-     Handles the case of platforms that do not support warning on divide by zero
-+
-+    Parameters
-+    ----------
-+    func
-+    *args
-+    **kw
-     """
- 
-     with np.errstate(divide='warn', invalid='warn'):
-@@ -248,6 +254,13 @@ def assert_warns_div0(func, *args, **kw):
- 
- # To remove when we support numpy 1.7
- def assert_no_warnings(func, *args, **kw):
-+    """
-+    Parameters
-+    ----------
-+    func
-+    *args
-+    **kw
-+    """
-     # very important to avoid uncontrolled state propagation
-     clean_warning_registry()
-     with warnings.catch_warnings(record=True) as w:
-@@ -515,6 +528,12 @@ def __init__(self, mock_datasets):
-         self.mock_datasets = mock_datasets
- 
-     def __call__(self, urlname):
-+        """
-+        Parameters
-+        ----------
-+        urlname : string
-+            The url
-+        """
-         dataset_name = urlname.split('/')[-1]
-         if dataset_name in self.mock_datasets:
-             resource_name = '_' + dataset_name
-@@ -535,6 +554,16 @@ def __call__(self, urlname):
- 
- 
- def install_mldata_mock(mock_datasets):
-+    """
-+    Parameters
-+    ----------
-+    mock_datasets : dict
-+        A dictionary of {dataset_name: data_dict}, or
-+        {dataset_name: (data_dict, ordering). `data_dict` itself is a
-+        dictionary of {column_name: data_array}, and `ordering` is a list of
-+        column_names to determine the ordering in the data set (see
-+        :func:`fake_mldata` for details).
-+    """
-     # Lazy import to avoid mutually recursive imports
-     from sklearn import datasets
-     datasets.mldata.urlopen = mock_mldata_urlopen(mock_datasets)
-@@ -597,9 +626,6 @@ def all_estimators(include_meta_estimators=False,
-         not be default-constructed sensibly. These are currently
-         Pipeline, FeatureUnion and GridSearchCV
- 
--    include_dont_test : boolean, default=False
--        Whether to include "special" label estimator or test processors.
--
-     type_filter : string, list of string,  or None, default=None
-         Which kind of estimators should be returned. If None, no filter is
-         applied and all estimators are returned.  Possible values are
-@@ -607,6 +633,9 @@ def all_estimators(include_meta_estimators=False,
-         estimators only of these specific types, or a list of these to
-         get the estimators that fit at least one of the types.
- 
-+    include_dont_test : boolean, default=False
-+        Whether to include "special" label estimator or test processors.
-+
-     Returns
-     -------
-     estimators : list of tuples
-@@ -680,13 +709,28 @@ def is_abstract(c):
- 
- def set_random_state(estimator, random_state=0):
-     """Set random state of an estimator if it has the `random_state` param.
-+
-+    Parameters
-+    ----------
-+    estimator : object
-+        The estimator
-+    random_state : int, RandomState instance or None, optional, default=0
-+        Pseudo random number generator state.  If int, random_state is the seed
-+        used by the random number generator; If RandomState instance,
-+        random_state is the random number generator; If None, the random number
-+        generator is the RandomState instance used by `np.random`.
-     """
-     if "random_state" in estimator.get_params():
-         estimator.set_params(random_state=random_state)
- 
- 
- def if_matplotlib(func):
--    """Test decorator that skips test if matplotlib not installed."""
-+    """Test decorator that skips test if matplotlib not installed.
-+
-+    Parameters
-+    ----------
-+    func
-+    """
-     @wraps(func)
-     def run_test(*args, **kwargs):
-         try:
-@@ -775,6 +819,12 @@ def _delete_folder(folder_path, warn=False):
- 
- 
- class TempMemmap(object):
-+    """
-+    Parameters
-+    ----------
-+    data
-+    mmap_mode
-+    """
-     def __init__(self, data, mmap_mode='r'):
-         self.mmap_mode = mmap_mode
-         self.data = data
-@@ -789,6 +839,13 @@ def __exit__(self, exc_type, exc_val, exc_tb):
- 
- 
- def create_memmap_backed_data(data, mmap_mode='r', return_folder=False):
-+    """
-+    Parameters
-+    ----------
-+    data
-+    mmap_mode
-+    return_folder
-+    """
-     temp_folder = tempfile.mkdtemp(prefix='sklearn_testing_')
-     atexit.register(functools.partial(_delete_folder, temp_folder, warn=True))
-     filename = op.join(temp_folder, 'data.pkl')
-@@ -882,6 +939,12 @@ def check_docstring_parameters(func, doc=None, ignore=None, class_name=None):
-     # Don't check docstring for property-functions
-     if inspect.isdatadescriptor(func):
-         return incorrect
-+    # Don't check docstring for setup / teardown pytest functions
-+    if func_name.split('.')[-1] in ('setup_module', 'teardown_module'):
-+        return incorrect
-+    # Dont check estimator_checks module
-+    if func_name.split('.')[2] == 'estimator_checks':
-+        return incorrect
-     args = list(filter(lambda x: x not in ignore, _get_args(func)))
-     # drop self
-     if len(args) > 0 and args[0] == 'self':
-diff --git a/sklearn/utils/tests/test_extmath.py b/sklearn/utils/tests/test_extmath.py
-index ee08e016abe6..3de67e5a2130 100644
---- a/sklearn/utils/tests/test_extmath.py
-+++ b/sklearn/utils/tests/test_extmath.py
-@@ -500,7 +500,7 @@ def test_incremental_variance_update_formulas():
- 
-     old_means = X1.mean(axis=0)
-     old_variances = X1.var(axis=0)
--    old_sample_count = np.ones(X1.shape[1], dtype=np.int32) * X1.shape[0]
-+    old_sample_count = np.full(X1.shape[1], X1.shape[0], dtype=np.int32)
-     final_means, final_variances, final_count = \
-         _incremental_mean_and_var(X2, old_means, old_variances,
-                                   old_sample_count)
-@@ -575,8 +575,8 @@ def naive_mean_variance_update(x, last_mean, last_variance,
-     n_samples = 10000
-     x1 = np.array(1e8, dtype=np.float64)
-     x2 = np.log(1e-5, dtype=np.float64)
--    A0 = x1 * np.ones((n_samples // 2, n_features), dtype=np.float64)
--    A1 = x2 * np.ones((n_samples // 2, n_features), dtype=np.float64)
-+    A0 = np.full((n_samples // 2, n_features), x1, dtype=np.float64)
-+    A1 = np.full((n_samples // 2, n_features), x2, dtype=np.float64)
-     A = np.vstack((A0, A1))
- 
-     # Older versions of numpy have different precision
-@@ -603,7 +603,7 @@ def naive_mean_variance_update(x, last_mean, last_variance,
- 
-     # Robust implementation: <tol (177)
-     mean, var = A0[0, :], np.zeros(n_features)
--    n = np.ones(n_features, dtype=np.int32) * (n_samples // 2)
-+    n = np.full(n_features, n_samples // 2, dtype=np.int32)
-     for i in range(A1.shape[0]):
-         mean, var, n = \
-             _incremental_mean_and_var(A1[i, :].reshape((1, A1.shape[1])),
-@@ -630,8 +630,8 @@ def test_incremental_variance_ddof():
-                 incremental_variances = batch.var(axis=0)
-                 # Assign this twice so that the test logic is consistent
-                 incremental_count = batch.shape[0]
--                sample_count = (np.ones(batch.shape[1], dtype=np.int32) *
--                                batch.shape[0])
-+                sample_count = np.full(batch.shape[1], batch.shape[0],
-+                                       dtype=np.int32)
-             else:
-                 result = _incremental_mean_and_var(
-                     batch, incremental_means, incremental_variances,
-diff --git a/sklearn/utils/tests/test_murmurhash.py b/sklearn/utils/tests/test_murmurhash.py
-index f51c5f7e26c3..d59ec6cecad7 100644
---- a/sklearn/utils/tests/test_murmurhash.py
-+++ b/sklearn/utils/tests/test_murmurhash.py
-@@ -75,6 +75,6 @@ def test_uniform_distribution():
-         bins[murmurhash3_32(i, positive=True) % n_bins] += 1
- 
-     means = bins / n_samples
--    expected = np.ones(n_bins) / n_bins
-+    expected = np.full(n_bins, 1. / n_bins)
- 
-     assert_array_almost_equal(means / expected, np.ones(n_bins), 2)
-diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
-index 1e40ce609938..facc51e2c565 100644
---- a/sklearn/utils/validation.py
-+++ b/sklearn/utils/validation.py
-@@ -817,7 +817,7 @@ def has_fit_parameter(estimator, parameter):
-     estimator : object
-         An estimator to inspect.
- 
--    parameter: str
-+    parameter : str
-         The searched parameter.
- 
-     Returns

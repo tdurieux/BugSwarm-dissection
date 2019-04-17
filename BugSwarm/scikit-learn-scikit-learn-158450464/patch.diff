@@ -1,5 +1,5 @@
 diff --git a/doc/developers/utilities.rst b/doc/developers/utilities.rst
-index 9ef9f6cd3a88..8dbe46063592 100644
+index 9ef9f6cd3a..8dbe460635 100755
 --- a/doc/developers/utilities.rst
 +++ b/doc/developers/utilities.rst
 @@ -188,11 +188,6 @@ Backports
@@ -15,7 +15,7 @@ index 9ef9f6cd3a88..8dbe46063592 100644
  ARPACK
  ------
 diff --git a/doc/modules/classes.rst b/doc/modules/classes.rst
-index d1d8eec4dd4e..cc2ebd6dfadb 100644
+index d1d8eec4dd..cc2ebd6dfa 100755
 --- a/doc/modules/classes.rst
 +++ b/doc/modules/classes.rst
 @@ -164,14 +164,14 @@ Splitter Classes
@@ -38,7 +38,7 @@ index d1d8eec4dd4e..cc2ebd6dfadb 100644
     model_selection.PredefinedSplit
     model_selection.TimeSeriesSplit
 diff --git a/doc/modules/cross_validation.rst b/doc/modules/cross_validation.rst
-index 872844cd0cc2..cb81b2d34017 100644
+index 872844cd0c..cb81b2d340 100755
 --- a/doc/modules/cross_validation.rst
 +++ b/doc/modules/cross_validation.rst
 @@ -1,3 +1,4 @@
@@ -451,7 +451,7 @@ index 872844cd0cc2..cb81b2d34017 100644
  independently and identically distributed. For example, if samples correspond
  to news articles, and are ordered by their time of publication, then shuffling
 diff --git a/doc/modules/mixture.rst b/doc/modules/mixture.rst
-index cf9c3ea7e7e5..2449901e90cd 100644
+index cf9c3ea7e7..2449901e90 100755
 --- a/doc/modules/mixture.rst
 +++ b/doc/modules/mixture.rst
 @@ -8,7 +8,7 @@ Gaussian mixture models
@@ -809,7 +809,7 @@ index cf9c3ea7e7e5..2449901e90cd 100644
 -
 -    dp-derivation.rst
 diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
-index 690e85f9150b..a44e753fb289 100644
+index 690e85f915..a44e753fb2 100755
 --- a/doc/modules/model_evaluation.rst
 +++ b/doc/modules/model_evaluation.rst
 @@ -49,36 +49,37 @@ Common cases: predefined values
@@ -920,7 +920,7 @@ index 690e85f9150b..a44e753fb289 100644
  
  Confusion matrix
 diff --git a/doc/modules/neural_networks_supervised.rst b/doc/modules/neural_networks_supervised.rst
-index 036ea71cce76..6f083ab4a83f 100644
+index 036ea71cce..6f083ab4a8 100755
 --- a/doc/modules/neural_networks_supervised.rst
 +++ b/doc/modules/neural_networks_supervised.rst
 @@ -107,14 +107,6 @@ contains the weight matrices that constitute the model parameters::
@@ -971,7 +971,7 @@ index 036ea71cce76..6f083ab4a83f 100644
      MLPClassifier(activation='relu', algorithm='l-bfgs', alpha=1e-05,
             batch_size='auto', beta_1=0.9, beta_2=0.999, early_stopping=False,
 diff --git a/doc/tutorial/statistical_inference/model_selection.rst b/doc/tutorial/statistical_inference/model_selection.rst
-index ef3568ffb0bc..6158846b27fc 100644
+index ef3568ffb0..6158846b27 100755
 --- a/doc/tutorial/statistical_inference/model_selection.rst
 +++ b/doc/tutorial/statistical_inference/model_selection.rst
 @@ -110,7 +110,7 @@ scoring method.
@@ -1034,7 +1034,7 @@ index ef3568ffb0bc..6158846b27fc 100644
      - Leave one observation out.
  
 diff --git a/doc/whats_new.rst b/doc/whats_new.rst
-index 7ac7c5fcc824..9e4e9bfebde8 100644
+index 7ac7c5fcc8..9e4e9bfebd 100755
 --- a/doc/whats_new.rst
 +++ b/doc/whats_new.rst
 @@ -64,16 +64,41 @@ Model Selection Enhancements and API Changes
@@ -1149,129 +1149,9 @@ index 7ac7c5fcc824..9e4e9bfebde8 100644
  
  
  .. currentmodule:: sklearn
-diff --git a/examples/mixture/plot_bayesian_gaussian_mixture.py b/examples/mixture/plot_bayesian_gaussian_mixture.py
-deleted file mode 100644
-index 9efea3f04c7f..000000000000
---- a/examples/mixture/plot_bayesian_gaussian_mixture.py
-+++ /dev/null
-@@ -1,114 +0,0 @@
--"""
--======================================================
--Bayesian Gaussian Mixture Concentration Prior Analysis
--======================================================
--
--Plot the resulting ellipsoids of a mixture of three Gaussians with
--variational Bayesian Gaussian Mixture for three different values on the
--prior the dirichlet concentration.
--
--For all models, the Variationnal Bayesian Gaussian Mixture adapts its number of
--mixture automatically. The parameter `dirichlet_concentration_prior` has a
--direct link with the resulting number of components. Specifying a high value of
--`dirichlet_concentration_prior` leads more often to uniformly-sized mixture
--components, while specifying small (under 0.1) values will lead to some mixture
--components getting almost all the points while most mixture components will be
--centered on just a few of the remaining points.
--"""
--# Author: Thierry Guillemot <thierry.guillemot.work@gmail.com>
--# License: BSD 3 clause
--
--import numpy as np
--import matplotlib as mpl
--import matplotlib.pyplot as plt
--import matplotlib.gridspec as gridspec
--
--from sklearn.mixture import BayesianGaussianMixture
--
--print(__doc__)
--
--
--def plot_ellipses(ax, weights, means, covars):
--    for n in range(means.shape[0]):
--        v, w = np.linalg.eigh(covars[n][:2, :2])
--        u = w[0] / np.linalg.norm(w[0])
--        angle = np.arctan2(u[1], u[0])
--        angle = 180 * angle / np.pi  # convert to degrees
--        v = 2 * np.sqrt(2) * np.sqrt(v)
--        ell = mpl.patches.Ellipse(means[n, :2], v[0], v[1], 180 + angle)
--        ell.set_clip_box(ax.bbox)
--        ell.set_alpha(weights[n])
--        ax.add_artist(ell)
--
--
--def plot_results(ax1, ax2, estimator, dirichlet_concentration_prior, X, y, plot_title=False):
--    estimator.dirichlet_concentration_prior = dirichlet_concentration_prior
--    estimator.fit(X)
--    ax1.set_title("Bayesian Gaussian Mixture for "
--                  r"$dc_0=%.1e$" % dirichlet_concentration_prior)
--    # ax1.axis('equal')
--    ax1.scatter(X[:, 0], X[:, 1], s=5, marker='o', color=colors[y], alpha=0.8)
--    ax1.set_xlim(-2., 2.)
--    ax1.set_ylim(-3., 3.)
--    ax1.set_xticks(())
--    ax1.set_yticks(())
--    plot_ellipses(ax1, estimator.weights_, estimator.means_,
--                  estimator.covariances_)
--
--    ax2.get_xaxis().set_tick_params(direction='out')
--    ax2.yaxis.grid(True, alpha=0.7)
--    for k, w in enumerate(estimator.weights_):
--        ax2.bar(k - .45, w, width=0.9, color='royalblue', zorder=3)
--        ax2.text(k, w + 0.007, "%.1f%%" % (w * 100.),
--                 horizontalalignment='center')
--    ax2.set_xlim(-.6, 2 * n_components - .4)
--    ax2.set_ylim(0., 1.1)
--    ax2.tick_params(axis='y', which='both', left='off',
--                    right='off', labelleft='off')
--    ax2.tick_params(axis='x', which='both', top='off')
--
--    if plot_title:
--        ax1.set_ylabel('Estimated Mixtures')
--        ax2.set_ylabel('Weight of each component')
--
--# Parameters
--random_state = 2
--n_components, n_features = 3, 2
--colors = np.array(['mediumseagreen', 'royalblue', 'r', 'gold',
--                   'orchid', 'indigo', 'darkcyan', 'tomato'])
--dirichlet_concentration_prior = np.logspace(-3, 3, 3)
--covars = np.array([[[.7, .0], [.0, .1]],
--                   [[.5, .0], [.0, .1]],
--                   [[.5, .0], [.0, .1]]])
--samples = np.array([200, 500, 200])
--means = np.array([[.0, -.70],
--                  [.0, .0],
--                  [.0, .70]])
--
--
--# Here we put beta_prior to 0.8 to minimize the influence of the prior for this
--# dataset
--estimator = BayesianGaussianMixture(n_components=2 * n_components,
--                                    init_params='random', max_iter=1500,
--                                    mean_precision_prior=.8, tol=1e-9,
--                                    random_state=random_state)
--
--# Generate data
--rng = np.random.RandomState(random_state)
--X = np.vstack([
--    rng.multivariate_normal(means[j], covars[j], samples[j])
--    for j in range(n_components)])
--y = np.concatenate([j * np.ones(samples[j], dtype=int)
--                    for j in range(n_components)])
--
--# Plot Results
--plt.figure(figsize=(4.7 * 3, 8))
--plt.subplots_adjust(bottom=.04, top=0.95, hspace=.05, wspace=.05,
--                    left=.03, right=.97)
--
--gs = gridspec.GridSpec(3, len(dirichlet_concentration_prior))
--for k, dc in enumerate(dirichlet_concentration_prior):
--    plot_results(plt.subplot(gs[0:2, k]), plt.subplot(gs[2, k]),
--                 estimator, dc, X, y, plot_title=k == 0)
--
--plt.show()
 diff --git a/examples/mixture/plot_concentration_prior.py b/examples/mixture/plot_concentration_prior.py
-new file mode 100644
-index 000000000000..49d9e6211b35
+new file mode 100755
+index 0000000000..49d9e6211b
 --- /dev/null
 +++ b/examples/mixture/plot_concentration_prior.py
 @@ -0,0 +1,135 @@
@@ -1411,7 +1291,7 @@ index 000000000000..49d9e6211b35
 +
 +plt.show()
 diff --git a/examples/mixture/plot_gmm.py b/examples/mixture/plot_gmm.py
-index d6b0839c193a..5f2f8596d4bb 100644
+index d6b0839c19..5f2f8596d4 100755
 --- a/examples/mixture/plot_gmm.py
 +++ b/examples/mixture/plot_gmm.py
 @@ -3,16 +3,18 @@
@@ -1466,7 +1346,7 @@ index d6b0839c193a..5f2f8596d4bb 100644
  
  plt.show()
 diff --git a/examples/mixture/plot_gmm_sin.py b/examples/mixture/plot_gmm_sin.py
-index cc9217740a19..f5fb2ded4512 100644
+index cc9217740a..f5fb2ded45 100755
 --- a/examples/mixture/plot_gmm_sin.py
 +++ b/examples/mixture/plot_gmm_sin.py
 @@ -3,15 +3,40 @@
@@ -1629,7 +1509,7 @@ index cc9217740a19..f5fb2ded4512 100644
 -             'Dirichlet Process,alpha=100.')
  plt.show()
 diff --git a/examples/model_selection/plot_underfitting_overfitting.py b/examples/model_selection/plot_underfitting_overfitting.py
-index ff454664c7b1..538a8eb58124 100644
+index ff454664c7..538a8eb581 100755
 --- a/examples/model_selection/plot_underfitting_overfitting.py
 +++ b/examples/model_selection/plot_underfitting_overfitting.py
 @@ -52,7 +52,7 @@
@@ -1642,7 +1522,7 @@ index ff454664c7b1..538a8eb58124 100644
      X_test = np.linspace(0, 1, 100)
      plt.plot(X_test, pipeline.predict(X_test[:, np.newaxis]), label="Model")
 diff --git a/examples/plot_kernel_ridge_regression.py b/examples/plot_kernel_ridge_regression.py
-index 0f1943d555ce..fe372aa0b987 100644
+index 0f1943d555..fe372aa0b9 100755
 --- a/examples/plot_kernel_ridge_regression.py
 +++ b/examples/plot_kernel_ridge_regression.py
 @@ -154,14 +154,14 @@
@@ -1665,7 +1545,7 @@ index 0f1943d555ce..fe372aa0b987 100644
  plt.xlabel("Train size")
  plt.ylabel("Mean Squared Error")
 diff --git a/sklearn/base.py b/sklearn/base.py
-index c2b36887bbea..d1628f39b372 100644
+index c2b36887bb..d1628f39b3 100755
 --- a/sklearn/base.py
 +++ b/sklearn/base.py
 @@ -12,6 +12,7 @@
@@ -1702,7 +1582,7 @@ index c2b36887bbea..d1628f39b372 100644
  ###############################################################################
  class ClassifierMixin(object):
 diff --git a/sklearn/cross_validation.py b/sklearn/cross_validation.py
-index 508b0460ec15..010f7106a487 100644
+index 508b0460ec..010f7106a4 100755
 --- a/sklearn/cross_validation.py
 +++ b/sklearn/cross_validation.py
 @@ -27,6 +27,7 @@
@@ -1838,7 +1718,7 @@ index 508b0460ec15..010f7106a487 100644
              test = rng.permutation(test)
  
 diff --git a/sklearn/decomposition/pca.py b/sklearn/decomposition/pca.py
-index aecab027b7db..2a6f0dd01385 100644
+index aecab027b7..2a6f0dd013 100755
 --- a/sklearn/decomposition/pca.py
 +++ b/sklearn/decomposition/pca.py
 @@ -108,9 +108,12 @@ class PCA(_BasePCA):
@@ -1875,7 +1755,7 @@ index aecab027b7db..2a6f0dd01385 100644
          arpack :
              run SVD truncated to n_components calling ARPACK solver via
 diff --git a/sklearn/isotonic.py b/sklearn/isotonic.py
-index 827a2ef2da3d..0585438e8708 100644
+index 827a2ef2da..0585438e87 100755
 --- a/sklearn/isotonic.py
 +++ b/sklearn/isotonic.py
 @@ -412,8 +412,7 @@ def predict(self, T):
@@ -1897,7 +1777,7 @@ index 827a2ef2da3d..0585438e8708 100644
          if hasattr(self, '_necessary_X_') and hasattr(self, '_necessary_y_'):
              self._build_f(self._necessary_X_, self._necessary_y_)
 diff --git a/sklearn/linear_model/tests/test_ridge.py b/sklearn/linear_model/tests/test_ridge.py
-index ff54bba9716c..fefb914d763e 100644
+index ff54bba971..fefb914d76 100755
 --- a/sklearn/linear_model/tests/test_ridge.py
 +++ b/sklearn/linear_model/tests/test_ridge.py
 @@ -352,7 +352,7 @@ def _test_ridge_loo(filter_):
@@ -1910,7 +1790,7 @@ index ff54bba9716c..fefb914d763e 100644
      ridge_gcv4.fit(filter_(X_diabetes), y_diabetes)
      assert_equal(ridge_gcv4.alpha_, alpha_)
 diff --git a/sklearn/metrics/classification.py b/sklearn/metrics/classification.py
-index 50d3d3b7523f..2a7be716ee48 100644
+index 50d3d3b752..2a7be716ee 100755
 --- a/sklearn/metrics/classification.py
 +++ b/sklearn/metrics/classification.py
 @@ -623,9 +623,10 @@ def f1_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
@@ -2083,7 +1963,7 @@ index 50d3d3b7523f..2a7be716ee48 100644
          Sample weights.
  
 diff --git a/sklearn/metrics/ranking.py b/sklearn/metrics/ranking.py
-index 03bee6e5064f..12f35d2adf32 100644
+index 03bee6e506..12f35d2adf 100755
 --- a/sklearn/metrics/ranking.py
 +++ b/sklearn/metrics/ranking.py
 @@ -27,7 +27,7 @@
@@ -2116,7 +1996,7 @@ index 03bee6e5064f..12f35d2adf32 100644
          fps = 1 + threshold_idxs - tps
      return fps, tps, y_score[threshold_idxs]
 diff --git a/sklearn/metrics/scorer.py b/sklearn/metrics/scorer.py
-index 83975f925e9d..324c3ce6587c 100644
+index 83975f925e..324c3ce658 100755
 --- a/sklearn/metrics/scorer.py
 +++ b/sklearn/metrics/scorer.py
 @@ -19,6 +19,7 @@
@@ -2248,7 +2128,7 @@ index 83975f925e9d..324c3ce6587c 100644
  
  for name, metric in [('precision', precision_score),
 diff --git a/sklearn/metrics/tests/test_classification.py b/sklearn/metrics/tests/test_classification.py
-index 576c3a362b29..dc8a7c0686b5 100644
+index 576c3a362b..dc8a7c0686 100755
 --- a/sklearn/metrics/tests/test_classification.py
 +++ b/sklearn/metrics/tests/test_classification.py
 @@ -130,10 +130,8 @@ def test_precision_recall_f1_score_binary():
@@ -2435,7 +2315,7 @@ index 576c3a362b29..dc8a7c0686b5 100644
  
  def test__check_targets():
 diff --git a/sklearn/metrics/tests/test_common.py b/sklearn/metrics/tests/test_common.py
-index 4974d29356be..fa4c7e8d3124 100644
+index 4974d29356..fa4c7e8d31 100755
 --- a/sklearn/metrics/tests/test_common.py
 +++ b/sklearn/metrics/tests/test_common.py
 @@ -217,6 +217,13 @@
@@ -2528,7 +2408,7 @@ index 4974d29356be..fa4c7e8d3124 100644
  
              metric = ALL_METRICS[name]
 diff --git a/sklearn/metrics/tests/test_ranking.py b/sklearn/metrics/tests/test_ranking.py
-index 19739d720d99..0ba1d858ab7d 100644
+index 19739d720d..0ba1d858ab 100755
 --- a/sklearn/metrics/tests/test_ranking.py
 +++ b/sklearn/metrics/tests/test_ranking.py
 @@ -7,7 +7,6 @@
@@ -2600,7 +2480,7 @@ index 19739d720d99..0ba1d858ab7d 100644
  
  
 diff --git a/sklearn/metrics/tests/test_regression.py b/sklearn/metrics/tests/test_regression.py
-index 046a01cd4ca2..600bcc135a20 100644
+index 046a01cd4c..600bcc135a 100755
 --- a/sklearn/metrics/tests/test_regression.py
 +++ b/sklearn/metrics/tests/test_regression.py
 @@ -47,7 +47,6 @@ def test_multioutput_regression():
@@ -2612,7 +2492,7 @@ index 046a01cd4ca2..600bcc135a20 100644
      assert_almost_equal(mean_squared_error([0.], [0.]), 0.00, 2)
      assert_almost_equal(mean_absolute_error([0.], [0.]), 0.00, 2)
 diff --git a/sklearn/metrics/tests/test_score_objects.py b/sklearn/metrics/tests/test_score_objects.py
-index df5f0de3d29b..c3643e81031a 100644
+index df5f0de3d2..c3643e8103 100755
 --- a/sklearn/metrics/tests/test_score_objects.py
 +++ b/sklearn/metrics/tests/test_score_objects.py
 @@ -13,6 +13,7 @@
@@ -2676,7 +2556,7 @@ index df5f0de3d29b..c3643e81031a 100644
 +                             warning_msg,
 +                             cross_val_score, clf, X, y, scoring=name)
 diff --git a/sklearn/mixture/base.py b/sklearn/mixture/base.py
-index 062d40322885..38ee12e92569 100644
+index 062d403228..38ee12e925 100755
 --- a/sklearn/mixture/base.py
 +++ b/sklearn/mixture/base.py
 @@ -130,15 +130,17 @@ def _check_parameters(self, X):
@@ -2777,7 +2657,7 @@ index 062d40322885..38ee12e92569 100644
          """Estimate the weighted log-probabilities, log P(X | Z) + log weights.
  
 diff --git a/sklearn/mixture/bayesian_mixture.py b/sklearn/mixture/bayesian_mixture.py
-index 2b5d4458c879..97aaacb4564c 100644
+index 2b5d4458c8..97aaacb456 100755
 --- a/sklearn/mixture/bayesian_mixture.py
 +++ b/sklearn/mixture/bayesian_mixture.py
 @@ -5,7 +5,7 @@
@@ -3080,7 +2960,7 @@ index 2b5d4458c879..97aaacb4564c 100644
              self.precisions_ = np.array([
                  np.dot(prec_chol, prec_chol.T)
 diff --git a/sklearn/mixture/dpgmm.py b/sklearn/mixture/dpgmm.py
-index ee2bd6491116..a8a1e2d928b1 100644
+index ee2bd64911..a8a1e2d928 100755
 --- a/sklearn/mixture/dpgmm.py
 +++ b/sklearn/mixture/dpgmm.py
 @@ -10,6 +10,13 @@
@@ -3126,7 +3006,7 @@ index ee2bd6491116..a8a1e2d928b1 100644
  class VBGMM(_DPGMMBase):
      """Variational Inference for the Gaussian Mixture Model
 diff --git a/sklearn/mixture/gaussian_mixture.py b/sklearn/mixture/gaussian_mixture.py
-index 749af6c82fd6..94c3a07d9307 100644
+index 749af6c82f..94c3a07d93 100755
 --- a/sklearn/mixture/gaussian_mixture.py
 +++ b/sklearn/mixture/gaussian_mixture.py
 @@ -439,6 +439,11 @@ class GaussianMixture(BaseMixture):
@@ -3176,7 +3056,7 @@ index 749af6c82fd6..94c3a07d9307 100644
  
      def __init__(self, n_components=1, covariance_type='full', tol=1e-3,
 diff --git a/sklearn/mixture/gmm.py b/sklearn/mixture/gmm.py
-index e5c8734c770b..d1a4eb818a6c 100644
+index e5c8734c77..d1a4eb818a 100755
 --- a/sklearn/mixture/gmm.py
 +++ b/sklearn/mixture/gmm.py
 @@ -9,6 +9,13 @@
@@ -3204,7 +3084,7 @@ index e5c8734c770b..d1a4eb818a6c 100644
                      random_state=None):
      """Generate random samples from a Gaussian distribution.
 diff --git a/sklearn/mixture/tests/test_bayesian_mixture.py b/sklearn/mixture/tests/test_bayesian_mixture.py
-index 3003a9444669..e678c07d9236 100644
+index 3003a94446..e678c07d92 100755
 --- a/sklearn/mixture/tests/test_bayesian_mixture.py
 +++ b/sklearn/mixture/tests/test_bayesian_mixture.py
 @@ -19,15 +19,16 @@
@@ -3505,7 +3385,7 @@ index 3003a9444669..e678c07d9236 100644
 +            assert_almost_equal(bgmm1.weights_, bgmm2.weights_)
 +            assert_almost_equal(bgmm1.covariances_, bgmm2.covariances_)
 diff --git a/sklearn/mixture/tests/test_dpgmm.py b/sklearn/mixture/tests/test_dpgmm.py
-index 363d31bc29f4..8ca38626b4ce 100644
+index 363d31bc29..8ca38626b4 100755
 --- a/sklearn/mixture/tests/test_dpgmm.py
 +++ b/sklearn/mixture/tests/test_dpgmm.py
 @@ -1,3 +1,9 @@
@@ -3554,7 +3434,7 @@ index 363d31bc29f4..8ca38626b4ce 100644
  
  class VBGMMTester(GMMTester):
 diff --git a/sklearn/mixture/tests/test_gaussian_mixture.py b/sklearn/mixture/tests/test_gaussian_mixture.py
-index 194248ac7a0d..43d61e010a3a 100644
+index 194248ac7a..43d61e010a 100755
 --- a/sklearn/mixture/tests/test_gaussian_mixture.py
 +++ b/sklearn/mixture/tests/test_gaussian_mixture.py
 @@ -33,6 +33,7 @@
@@ -3636,7 +3516,7 @@ index 194248ac7a0d..43d61e010a3a 100644
 +
 +    assert_greater(gmm2.lower_bound_, gmm1.lower_bound_)
 diff --git a/sklearn/mixture/tests/test_gmm.py b/sklearn/mixture/tests/test_gmm.py
-index 66e581a582e0..55f0dfb83f22 100644
+index 66e581a582..55f0dfb83f 100755
 --- a/sklearn/mixture/tests/test_gmm.py
 +++ b/sklearn/mixture/tests/test_gmm.py
 @@ -1,5 +1,9 @@
@@ -3652,7 +3532,7 @@ index 66e581a582e0..55f0dfb83f22 100644
  import copy
  import sys
 diff --git a/sklearn/model_selection/__init__.py b/sklearn/model_selection/__init__.py
-index c2acf500aff5..f5ab0d7526cc 100644
+index c2acf500af..f5ab0d7526 100755
 --- a/sklearn/model_selection/__init__.py
 +++ b/sklearn/model_selection/__init__.py
 @@ -1,14 +1,14 @@
@@ -3691,7 +3571,7 @@ index c2acf500aff5..f5ab0d7526cc 100644
             'ParameterGrid',
             'ParameterSampler',
 diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
-index c96ee7f19d70..f1880555df33 100644
+index c96ee7f19d..f1880555df 100755
 --- a/sklearn/model_selection/_search.py
 +++ b/sklearn/model_selection/_search.py
 @@ -528,15 +528,15 @@ def inverse_transform(self, Xt):
@@ -3769,7 +3649,7 @@ index c96ee7f19d70..f1880555df33 100644
 -        return self._fit(X, y, labels, sampled_params)
 +        return self._fit(X, y, groups, sampled_params)
 diff --git a/sklearn/model_selection/_split.py b/sklearn/model_selection/_split.py
-index 5989edd30b10..3570d688ff70 100644
+index 5989edd30b..3570d688ff 100755
 --- a/sklearn/model_selection/_split.py
 +++ b/sklearn/model_selection/_split.py
 @@ -30,18 +30,19 @@
@@ -4793,7 +4673,7 @@ index 5989edd30b10..3570d688ff70 100644
      Returns
      -------
 diff --git a/sklearn/model_selection/_validation.py b/sklearn/model_selection/_validation.py
-index 183f16a10fdd..1ed36d9b7b88 100644
+index 183f16a10f..1ed36d9b7b 100755
 --- a/sklearn/model_selection/_validation.py
 +++ b/sklearn/model_selection/_validation.py
 @@ -27,41 +27,13 @@
@@ -5061,7 +4941,7 @@ index 183f16a10fdd..1ed36d9b7b88 100644
      out = np.asarray(out)[:, :2]
      n_params = len(param_range)
 diff --git a/sklearn/model_selection/tests/test_search.py b/sklearn/model_selection/tests/test_search.py
-index 03eafdafb1d3..141c1a21b46e 100644
+index 03eafdafb1..141c1a21b4 100755
 --- a/sklearn/model_selection/tests/test_search.py
 +++ b/sklearn/model_selection/tests/test_search.py
 @@ -37,10 +37,10 @@
@@ -5120,7 +5000,7 @@ index 03eafdafb1d3..141c1a21b46e 100644
          # Should not raise an error
          gs.fit(X, y)
 diff --git a/sklearn/model_selection/tests/test_split.py b/sklearn/model_selection/tests/test_split.py
-index d28148efe695..ec4f07aef8e9 100644
+index d28148efe6..ec4f07aef8 100755
 --- a/sklearn/model_selection/tests/test_split.py
 +++ b/sklearn/model_selection/tests/test_split.py
 @@ -29,14 +29,14 @@
@@ -5591,7 +5471,7 @@ index d28148efe695..ec4f07aef8e9 100644
  
  def test_build_repr():
 diff --git a/sklearn/model_selection/tests/test_validation.py b/sklearn/model_selection/tests/test_validation.py
-index 62a86000562f..67937711ec2d 100644
+index 62a8600056..67937711ec 100755
 --- a/sklearn/model_selection/tests/test_validation.py
 +++ b/sklearn/model_selection/tests/test_validation.py
 @@ -29,10 +29,10 @@
@@ -5694,7 +5574,7 @@ index 62a86000562f..67937711ec2d 100644
                  yield np.array([0, 1, 2, 3]), np.array([4, 5, 6, 7, 8])
  
 diff --git a/sklearn/neural_network/multilayer_perceptron.py b/sklearn/neural_network/multilayer_perceptron.py
-index 72562aafce02..e1838dea6c5e 100644
+index dba71b00c5..e1838dea6c 100755
 --- a/sklearn/neural_network/multilayer_perceptron.py
 +++ b/sklearn/neural_network/multilayer_perceptron.py
 @@ -13,7 +13,6 @@
@@ -5705,17 +5585,16 @@ index 72562aafce02..e1838dea6c5e 100644
  from ._base import ACTIVATIONS, DERIVATIVES, LOSS_FUNCTIONS
  from ._stochastic_optimizers import SGDOptimizer, AdamOptimizer
  from ..model_selection import train_test_split
-@@ -25,7 +24,8 @@
+@@ -25,7 +24,7 @@
  from ..exceptions import ConvergenceWarning
  from ..utils.extmath import safe_sparse_dot
  from ..utils.validation import check_is_fitted
 -from ..utils.multiclass import _check_partial_fit_first_call
 +from ..utils.multiclass import _check_partial_fit_first_call, unique_labels
-+from ..utils.multiclass import type_of_target
+ from ..utils.multiclass import type_of_target
  
  
- _STOCHASTIC_ALGOS = ['sgd', 'adam']
-@@ -81,7 +81,7 @@ def _unpack(self, packed_parameters):
+@@ -82,7 +81,7 @@ def _unpack(self, packed_parameters):
              start, end = self._intercept_indptr[i]
              self.intercepts_[i] = packed_parameters[start:end]
  
@@ -5724,7 +5603,7 @@ index 72562aafce02..e1838dea6c5e 100644
          """Perform a forward pass on the network by computing the values
          of the neurons in the hidden layers and the output layer.
  
-@@ -107,9 +107,8 @@ def _forward_pass(self, activations, with_output_activation=True):
+@@ -108,9 +107,8 @@ def _forward_pass(self, activations, with_output_activation=True):
                  activations[i + 1] = hidden_activation(activations[i + 1])
  
          # For the last layer
@@ -5736,7 +5615,7 @@ index 72562aafce02..e1838dea6c5e 100644
  
          return activations
  
-@@ -222,7 +221,10 @@ def _backprop(self, X, y, activations, deltas, coef_grads,
+@@ -223,7 +221,10 @@ def _backprop(self, X, y, activations, deltas, coef_grads,
          activations = self._forward_pass(activations)
  
          # Get loss
@@ -5748,7 +5627,7 @@ index 72562aafce02..e1838dea6c5e 100644
          # Add L2 regularization term to loss
          values = np.sum(
              np.array([np.dot(s.ravel(), s.ravel()) for s in self.coefs_]))
-@@ -267,23 +269,19 @@ def _initialize(self, y, layer_units):
+@@ -268,23 +269,19 @@ def _initialize(self, y, layer_units):
          if not isinstance(self, ClassifierMixin):
              self.out_activation_ = 'identity'
          # Output for multi class
@@ -5774,7 +5653,7 @@ index 72562aafce02..e1838dea6c5e 100644
              self.coefs_.append(coef_init)
              self.intercepts_.append(intercept_init)
  
-@@ -296,7 +294,7 @@ def _initialize(self, y, layer_units):
+@@ -297,7 +294,7 @@ def _initialize(self, y, layer_units):
              else:
                  self.best_loss_ = np.inf
  
@@ -5783,7 +5662,7 @@ index 72562aafce02..e1838dea6c5e 100644
          if self.activation == 'logistic':
              # Use the initialization method recommended by
              # Glorot et al.
-@@ -308,8 +306,10 @@ def _init_coef(self, fan_in, fan_out, rng):
+@@ -309,8 +306,10 @@ def _init_coef(self, fan_in, fan_out, rng):
              raise ValueError("Unknown activation function %s" %
                               self.activation)
  
@@ -5796,7 +5675,7 @@ index 72562aafce02..e1838dea6c5e 100644
          return coef_init, intercept_init
  
      def _fit(self, X, y, incremental=False):
-@@ -337,6 +337,9 @@ def _fit(self, X, y, incremental=False):
+@@ -338,6 +337,9 @@ def _fit(self, X, y, incremental=False):
          layer_units = ([n_features] + hidden_layer_sizes +
                         [self.n_outputs_])
  
@@ -5806,7 +5685,7 @@ index 72562aafce02..e1838dea6c5e 100644
          if not hasattr(self, 'coefs_') or (not self.warm_start and not
                                             incremental):
              # First time training the model
-@@ -419,9 +422,11 @@ def _validate_hyperparameters(self):
+@@ -420,9 +422,11 @@ def _validate_hyperparameters(self):
          if self.learning_rate not in ["constant", "invscaling", "adaptive"]:
              raise ValueError("learning rate %s is not supported. " %
                               self.learning_rate)
@@ -5821,7 +5700,7 @@ index 72562aafce02..e1838dea6c5e 100644
  
      def _fit_lbfgs(self, X, y, activations, deltas, coef_grads,
                     intercept_grads, layer_units):
-@@ -465,7 +470,6 @@ def _fit_lbfgs(self, X, y, activations, deltas, coef_grads,
+@@ -466,7 +470,6 @@ def _fit_lbfgs(self, X, y, activations, deltas, coef_grads,
  
      def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
                          intercept_grads, layer_units, incremental):
@@ -5829,7 +5708,7 @@ index 72562aafce02..e1838dea6c5e 100644
  
          if not incremental or not hasattr(self, '_optimizer'):
              params = self.coefs_ + self.intercepts_
-@@ -483,10 +487,10 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+@@ -484,10 +487,10 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
          early_stopping = self.early_stopping and not incremental
          if early_stopping:
              X, X_val, y, y_val = train_test_split(
@@ -5842,7 +5721,7 @@ index 72562aafce02..e1838dea6c5e 100644
          else:
              X_val = None
              y_val = None
-@@ -500,7 +504,7 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
+@@ -501,7 +504,7 @@ def _fit_stochastic(self, X, y, activations, deltas, coef_grads,
  
          try:
              for it in range(self.max_iter):
@@ -5851,7 +5730,7 @@ index 72562aafce02..e1838dea6c5e 100644
                  accumulated_loss = 0.0
                  for batch_slice in gen_batches(n_samples, batch_size):
                      activations[0] = X[batch_slice]
-@@ -629,14 +633,14 @@ def partial_fit(self):
+@@ -630,14 +633,14 @@ def partial_fit(self):
          """
          if self.algorithm not in _STOCHASTIC_ALGOS:
              raise AttributeError("partial_fit is only available for stochastic"
@@ -5868,7 +5747,7 @@ index 72562aafce02..e1838dea6c5e 100644
          """Predict using the trained model
  
          Parameters
-@@ -667,7 +671,7 @@ def _decision_scores(self, X):
+@@ -668,7 +671,7 @@ def _decision_scores(self, X):
              activations.append(np.empty((X.shape[0],
                                           layer_units[i + 1])))
          # forward propagate
@@ -5877,7 +5756,7 @@ index 72562aafce02..e1838dea6c5e 100644
          y_pred = activations[-1]
  
          return y_pred
-@@ -817,9 +821,6 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
+@@ -818,9 +821,6 @@ class MLPClassifier(BaseMultilayerPerceptron, ClassifierMixin):
      `loss_` : float
          The current loss computed with the loss function.
  
@@ -5887,7 +5766,7 @@ index 72562aafce02..e1838dea6c5e 100644
      `coefs_` : list, length n_layers - 1
          The ith element in the list represents the weight matrix corresponding
          to layer i.
-@@ -892,48 +893,26 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+@@ -893,47 +893,25 @@ def __init__(self, hidden_layer_sizes=(100,), activation="relu",
                       validation_fraction=validation_fraction,
                       beta_1=beta_1, beta_2=beta_2, epsilon=epsilon)
  
@@ -5898,9 +5777,10 @@ index 72562aafce02..e1838dea6c5e 100644
                           multi_output=True)
          if y.ndim == 2 and y.shape[1] == 1:
              y = column_or_1d(y, warn=True)
--        self.label_binarizer_.fit(y)
- 
+-            
++
          if not hasattr(self, 'classes_') or not incremental:
+-            self.label_binarizer_.fit(y)
 -            self.classes_ = self.label_binarizer_.classes_
 +            self._label_binarizer = LabelBinarizer()
 +            self._label_binarizer.fit(y)
@@ -5913,14 +5793,13 @@ index 72562aafce02..e1838dea6c5e 100644
                  raise ValueError("`y` has classes not in `self.classes_`."
                                   " `self.classes_` has %s. 'y' has %s." %
                                   (self.classes_, classes))
- 
+-        
 -        y = self.label_binarizer_.transform(y)
-+        y = self._label_binarizer.transform(y)
-         return X, y
- 
+-        return X, y
+-
 -    def decision_function(self, X):
 -        """Decision function of the mlp model
--
+ 
 -        Parameters
 -        ----------
 -        X : {array-like, sparse matrix}, shape (n_samples, n_features)
@@ -5938,27 +5817,28 @@ index 72562aafce02..e1838dea6c5e 100644
 -            return y_scores.ravel()
 -        else:
 -            return y_scores
--
++        y = self._label_binarizer.transform(y)
++        return X, y
+ 
      def predict(self, X):
          """Predict using the multi-layer perceptron classifier
- 
-@@ -948,10 +927,12 @@ def predict(self, X):
+@@ -949,10 +927,12 @@ def predict(self, X):
              The predicted classes.
          """
          check_is_fitted(self, "coefs_")
 -        y_scores = self.decision_function(X)
 -        y_scores = ACTIVATIONS[self.out_activation_](y_scores)
 +        y_pred = self._predict(X)
- 
--        return self.label_binarizer_.inverse_transform(y_scores)
++
 +        if self.n_outputs_ == 1:
 +            y_pred = y_pred.ravel()
-+
+ 
+-        return self.label_binarizer_.inverse_transform(y_scores)
 +        return self._label_binarizer.inverse_transform(y_pred)
  
      @property
      def partial_fit(self):
-@@ -979,12 +960,17 @@ def partial_fit(self):
+@@ -980,17 +960,17 @@ def partial_fit(self):
          """
          if self.algorithm not in _STOCHASTIC_ALGOS:
              raise AttributeError("partial_fit is only available for stochastic"
@@ -5969,16 +5849,19 @@ index 72562aafce02..e1838dea6c5e 100644
  
      def _partial_fit(self, X, y, classes=None):
 -        _check_partial_fit_first_call(self, classes)
+-        if not hasattr(self.label_binarizer_, "classes_"):
 +        if _check_partial_fit_first_call(self, classes):
 +            self._label_binarizer = LabelBinarizer()
-+            if type_of_target(y).startswith('multilabel'):
+             if type_of_target(y).startswith('multilabel'):
+-                self.label_binarizer_.fit(y)
 +                self._label_binarizer.fit(y)
-+            else:
+             else:
+-                self.label_binarizer_.fit(classes)
 +                self._label_binarizer.fit(classes)
  
          super(MLPClassifier, self)._partial_fit(X, y)
  
-@@ -1022,13 +1008,16 @@ def predict_proba(self, X):
+@@ -1028,13 +1008,16 @@ def predict_proba(self, X):
              The predicted probability of the sample for each class in the
              model, where classes are ordered as they are in `self.classes_`.
          """
@@ -6000,7 +5883,7 @@ index 72562aafce02..e1838dea6c5e 100644
  
  
  class MLPRegressor(BaseMultilayerPerceptron, RegressorMixin):
-@@ -1258,7 +1247,7 @@ def predict(self, X):
+@@ -1264,7 +1247,7 @@ def predict(self, X):
              The predicted values.
          """
          check_is_fitted(self, "coefs_")
@@ -6010,7 +5893,7 @@ index 72562aafce02..e1838dea6c5e 100644
              return y_pred.ravel()
          return y_pred
 diff --git a/sklearn/neural_network/tests/test_mlp.py b/sklearn/neural_network/tests/test_mlp.py
-index e4f080058173..3f17ff82e04d 100644
+index 5713cb150d..3f17ff82e0 100755
 --- a/sklearn/neural_network/tests/test_mlp.py
 +++ b/sklearn/neural_network/tests/test_mlp.py
 @@ -51,7 +51,7 @@
@@ -6103,25 +5986,16 @@ index e4f080058173..3f17ff82e04d 100644
      X = [[3, 2]]
      y = [0]
      clf = MLPClassifier(algorithm='sgd')
-@@ -344,6 +342,17 @@ def test_partial_fit_classification():
-         assert_greater(mlp.score(X, y), 0.95)
+@@ -348,7 +346,7 @@ def test_partial_fit_unseen_classes():
+     # Non regression test for bug 6994
+     # Tests for labeling errors in partial fit
  
- 
-+def test_partial_fit_unseen_classes():
-+    # Non regression test for bug 6994
-+    # Tests for labeling errors in partial fit
-+
+-    clf = MLPClassifier()
 +    clf = MLPClassifier(random_state=0)
-+    clf.partial_fit([[1], [2], [3]], ["a", "b", "c"],
-+                    classes=["a", "b", "c", "d"])
-+    clf.partial_fit([[4]], ["d"])
-+    assert_greater(clf.score([[1], [2], [3], [4]], ["a", "b", "c", "d"]), 0)
-+
-+
- def test_partial_fit_regression():
-     # Test partial_fit on regression.
-     # `partial_fit` should yield the same results as 'fit' for regression.
-@@ -371,7 +380,7 @@ def test_partial_fit_regression():
+     clf.partial_fit([[1], [2], [3]], ["a", "b", "c"],
+                     classes=["a", "b", "c", "d"])
+     clf.partial_fit([[4]], ["d"])
+@@ -382,7 +380,7 @@ def test_partial_fit_regression():
  
  
  def test_partial_fit_errors():
@@ -6130,7 +6004,7 @@ index e4f080058173..3f17ff82e04d 100644
      X = [[3, 2], [1, 6]]
      y = [1, 0]
  
-@@ -387,7 +396,7 @@ def test_partial_fit_errors():
+@@ -398,7 +396,7 @@ def test_partial_fit_errors():
  
  
  def test_params_errors():
@@ -6139,7 +6013,7 @@ index e4f080058173..3f17ff82e04d 100644
      X = [[3, 2], [1, 6]]
      y = [1, 0]
      clf = MLPClassifier
-@@ -397,6 +406,17 @@ def test_params_errors():
+@@ -408,6 +406,17 @@ def test_params_errors():
      assert_raises(ValueError, clf(shuffle='true').fit, X, y)
      assert_raises(ValueError, clf(alpha=-1).fit, X, y)
      assert_raises(ValueError, clf(learning_rate_init=-1).fit, X, y)
@@ -6157,7 +6031,7 @@ index e4f080058173..3f17ff82e04d 100644
  
      assert_raises(ValueError, clf(algorithm='hadoken').fit, X, y)
      assert_raises(ValueError, clf(learning_rate='converge').fit, X, y)
-@@ -404,7 +424,7 @@ def test_params_errors():
+@@ -415,7 +424,7 @@ def test_params_errors():
  
  
  def test_predict_proba_binary():
@@ -6166,7 +6040,7 @@ index e4f080058173..3f17ff82e04d 100644
      X = X_digits_binary[:50]
      y = y_digits_binary[:50]
  
-@@ -426,8 +446,8 @@ def test_predict_proba_binary():
+@@ -437,8 +446,8 @@ def test_predict_proba_binary():
      assert_equal(roc_auc_score(y, y_proba[:, 1]), 1.0)
  
  
@@ -6177,7 +6051,7 @@ index e4f080058173..3f17ff82e04d 100644
      X = X_digits_multi[:10]
      y = y_digits_multi[:10]
  
-@@ -447,17 +467,41 @@ def test_predict_proba_multi():
+@@ -458,17 +467,41 @@ def test_predict_proba_multi():
      assert_array_equal(y_log_proba, np.log(y_proba))
  
  
@@ -6227,7 +6101,7 @@ index e4f080058173..3f17ff82e04d 100644
      pred1 = mlp.predict(X)
      pred2 = mlp.predict(X_sparse)
 diff --git a/sklearn/preprocessing/imputation.py b/sklearn/preprocessing/imputation.py
-index ec401ee1675e..e414e98f424d 100644
+index ec401ee167..e414e98f42 100755
 --- a/sklearn/preprocessing/imputation.py
 +++ b/sklearn/preprocessing/imputation.py
 @@ -309,11 +309,17 @@ def transform(self, X):
@@ -6261,7 +6135,7 @@ index ec401ee1675e..e414e98f424d 100644
          # Delete the invalid rows/columns
          invalid_mask = np.isnan(statistics)
 diff --git a/sklearn/tests/test_base.py b/sklearn/tests/test_base.py
-index ae6d9fdb1334..1c5c9bb7447a 100644
+index ae6d9fdb13..1c5c9bb744 100755
 --- a/sklearn/tests/test_base.py
 +++ b/sklearn/tests/test_base.py
 @@ -6,22 +6,29 @@
@@ -6362,7 +6236,7 @@ index ae6d9fdb1334..1c5c9bb7447a 100644
 +    TreeNoVersion.__module__ = "notsklearn"
 +    assert_no_warnings(pickle.loads, tree_pickle_noversion)
 diff --git a/sklearn/tests/test_cross_validation.py b/sklearn/tests/test_cross_validation.py
-index 0e03cad783e5..4d756bdaa0cf 100644
+index 0e03cad783..4d756bdaa0 100755
 --- a/sklearn/tests/test_cross_validation.py
 +++ b/sklearn/tests/test_cross_validation.py
 @@ -479,7 +479,7 @@ def test_stratified_shuffle_split_init():
@@ -6419,7 +6293,7 @@ index 0e03cad783e5..4d756bdaa0cf 100644
      # Explained variance
      scoring = make_scorer(explained_variance_score)
 diff --git a/sklearn/utils/estimator_checks.py b/sklearn/utils/estimator_checks.py
-index 5c031c881add..672886cca723 100644
+index 5c031c881a..672886cca7 100755
 --- a/sklearn/utils/estimator_checks.py
 +++ b/sklearn/utils/estimator_checks.py
 @@ -835,6 +835,8 @@ def check_estimators_pickle(name, Estimator):
@@ -6432,7 +6306,7 @@ index 5c031c881add..672886cca723 100644
  
      for method in result:
 diff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py
-index be349e1bc73b..cd10e2c0687d 100644
+index be349e1bc7..cd10e2c068 100755
 --- a/sklearn/utils/extmath.py
 +++ b/sklearn/utils/extmath.py
 @@ -842,3 +842,23 @@ def _deterministic_vector_sign_flip(u):
@@ -6460,7 +6334,7 @@ index be349e1bc73b..cd10e2c0687d 100644
 +                           'its last element does not correspond to sum')
 +    return out
 diff --git a/sklearn/utils/fixes.py b/sklearn/utils/fixes.py
-index a10afa6d4d1e..79b12aae9384 100644
+index a10afa6d4d..79b12aae93 100755
 --- a/sklearn/utils/fixes.py
 +++ b/sklearn/utils/fixes.py
 @@ -227,49 +227,6 @@ def combinations_with_replacement(iterable, r):
@@ -6514,7 +6388,7 @@ index a10afa6d4d1e..79b12aae9384 100644
      # Prior to 1.7.0, np.frombuffer wouldn't work for empty first arg.
      def frombuffer_empty(buf, dtype):
 diff --git a/sklearn/utils/random.py b/sklearn/utils/random.py
-index 34738d8653b7..5805f9be2c8f 100644
+index 34738d8653..5805f9be2c 100755
 --- a/sklearn/utils/random.py
 +++ b/sklearn/utils/random.py
 @@ -123,7 +123,7 @@ def choice(a, size=None, replace=True, p=None, random_state=None):
@@ -6545,7 +6419,7 @@ index 34738d8653b7..5805f9be2c8f 100644
                  raise ValueError("Fewer non-zero entries in p than size")
              n_uniq = 0
 diff --git a/sklearn/utils/tests/test_extmath.py b/sklearn/utils/tests/test_extmath.py
-index 5847d0566a9e..55f96cdf1574 100644
+index 5847d0566a..55f96cdf15 100755
 --- a/sklearn/utils/tests/test_extmath.py
 +++ b/sklearn/utils/tests/test_extmath.py
 @@ -17,7 +17,10 @@

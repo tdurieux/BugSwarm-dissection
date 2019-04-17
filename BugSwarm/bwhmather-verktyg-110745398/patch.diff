@@ -1,29 +1,5 @@
-diff --git a/verktyg/testsuite/test_wsgi.py b/verktyg/testsuite/test_wsgi.py
-index c0372a5..e4b419e 100644
---- a/verktyg/testsuite/test_wsgi.py
-+++ b/verktyg/testsuite/test_wsgi.py
-@@ -420,15 +420,16 @@ def test_make_chunk_iter(self):
- 
-     def test_make_chunk_iter_bytes(self):
-         data = [b'abcdefXghi', b'jklXmnopqrstuvwxyzX', b'ABCDEFGHIJK']
--        rv = list(wsgi.make_chunk_iter(data, 'X'))
-+        rv = list(wsgi.make_chunk_iter(data, b'X'))
-         self.assertEqual(
-             rv, [b'abcdef', b'ghijkl', b'mnopqrstuvwxyz', b'ABCDEFGHIJK']
-         )
- 
-         data = b'abcdefXghijklXmnopqrstuvwxyzXABCDEFGHIJK'
-         test_stream = BytesIO(data)
--        rv = list(wsgi.make_chunk_iter(test_stream, 'X', limit=len(data),
--                                       buffer_size=4))
-+        rv = list(wsgi.make_chunk_iter(
-+            test_stream, b'X', limit=len(data), buffer_size=4)
-+        )
-         self.assertEqual(
-             rv, [b'abcdef', b'ghijkl', b'mnopqrstuvwxyz', b'ABCDEFGHIJK']
-         )
 diff --git a/verktyg/wsgi.py b/verktyg/wsgi.py
-index 7d071c9..04b7203 100644
+index 309e973dcf..04b720349e 100755
 --- a/verktyg/wsgi.py
 +++ b/verktyg/wsgi.py
 @@ -22,7 +22,7 @@
@@ -34,12 +10,4 @@ index 7d071c9..04b7203 100644
 +    make_literal_wrapper, to_unicode, wsgi_get_bytes,
  )
  from werkzeug._internal import _empty_stream, _encode_idna
- 
-@@ -890,7 +890,6 @@ def make_chunk_iter(stream, separator, limit=None, buffer_size=10 * 1024):
-         _split = re.compile(r'(%s)' % re.escape(separator)).split
-         _join = ''.join
-     else:
--        separator = to_bytes(separator)
-         _split = re.compile(b'(' + re.escape(separator) + b')').split
-         _join = b''.join
  

@@ -1,5 +1,5 @@
 diff --git a/mypy/build.py b/mypy/build.py
-index c3a2a7c126..edda95a1c2 100644
+index c3a2a7c126..edda95a1c2 100755
 --- a/mypy/build.py
 +++ b/mypy/build.py
 @@ -21,8 +21,10 @@
@@ -26,84 +26,19 @@ index c3a2a7c126..edda95a1c2 100644
          # Initialize module symbol table, which was populated by the
          # semantic analyzer.
 diff --git a/mypy/checker.py b/mypy/checker.py
-index 307afe8568..d8d87116a8 100644
+index ab4080d0ff..d8d87116a8 100755
 --- a/mypy/checker.py
 +++ b/mypy/checker.py
-@@ -36,7 +36,7 @@
- from mypy import messages
- from mypy.subtypes import (
-     is_subtype, is_equivalent, is_proper_subtype, is_more_precise,
--    restrict_subtype_away, is_subtype_ignoring_tvars
-+    restrict_subtype_away, is_subtype_ignoring_tvars, is_callable_subtype
- )
- from mypy.maptype import map_instance_to_supertype
- from mypy.typevars import fill_typevars, has_no_typevars
-@@ -261,29 +261,62 @@ def accept_loop(self, body: Statement, else_body: Statement = None, *,
- 
-     def visit_overloaded_func_def(self, defn: OverloadedFuncDef) -> None:
-         num_abstract = 0
-+        if not defn.items:
-+            # In this case we have already complained about none of these being
-+            # valid overloads.
-+            return None
-+        if len(defn.items) == 1:
-+            self.fail('Single overload definition, multiple required', defn)
-+
-         if defn.is_property:
-             # HACK: Infer the type of the property.
--            self.visit_decorator(defn.items[0])
-+            self.visit_decorator(cast(Decorator, defn.items[0]))
-         for fdef in defn.items:
-+            assert isinstance(fdef, Decorator)
-             self.check_func_item(fdef.func, name=fdef.func.name())
-             if fdef.func.is_abstract:
-                 num_abstract += 1
-         if num_abstract not in (0, len(defn.items)):
-             self.fail(messages.INCONSISTENT_ABSTRACT_OVERLOAD, defn)
-+        if defn.impl:
-+            defn.impl.accept(self)
-         if defn.info:
-             self.check_method_override(defn)
-             self.check_inplace_operator_method(defn)
-         self.check_overlapping_overloads(defn)
-+        return None
- 
-     def check_overlapping_overloads(self, defn: OverloadedFuncDef) -> None:
-+        # At this point we should have set the impl already, and all remaining
-+        # items are decorators
-         for i, item in enumerate(defn.items):
-+            assert isinstance(item, Decorator)
-+            sig1 = self.function_type(item.func)
-             for j, item2 in enumerate(defn.items[i + 1:]):
-                 # TODO overloads involving decorators
--                sig1 = self.function_type(item.func)
-+                assert isinstance(item2, Decorator)
-                 sig2 = self.function_type(item2.func)
-                 if is_unsafe_overlapping_signatures(sig1, sig2):
-                     self.msg.overloaded_signatures_overlap(i + 1, i + j + 2,
-                                                            item.func)
-+            if defn.impl:
-+                if isinstance(defn.impl, FuncDef):
-+                    impl_type = defn.impl.type
-+                elif isinstance(defn.impl, Decorator):
-+                    impl_type = defn.impl.var.type
-+                else:
-+                    assert False, "Impl isn't the right type"
-+                # This can happen if we've got an overload with a different
-+                # decorator too -- we gave up on the types.
+@@ -308,7 +308,7 @@ def check_overlapping_overloads(self, defn: OverloadedFuncDef) -> None:
+                     assert False, "Impl isn't the right type"
+                 # This can happen if we've got an overload with a different
+                 # decorator too -- we gave up on the types.
+-                if impl_type is None or sig1 is None:
 +                if impl_type is None or isinstance(impl_type, AnyType) or sig1 is None:
-+                    return
-+
-+                assert isinstance(impl_type, CallableType)
-+                assert isinstance(sig1, CallableType)
-+                if not is_callable_subtype(impl_type, sig1, ignore_return=True):
-+                    self.msg.overloaded_signatures_arg_specific(i + 1, defn.impl)
-+                if not is_subtype(sig1.ret_type, impl_type.ret_type):
-+                    self.msg.overloaded_signatures_ret_specific(i + 1, defn.impl)
+                     return
  
-     # Here's the scoop about generators and coroutines.
-     #
-@@ -2107,9 +2140,7 @@ def visit_decorator(self, e: Decorator) -> None:
+                 assert isinstance(impl_type, CallableType)
+@@ -2140,9 +2140,7 @@ def visit_decorator(self, e: Decorator) -> None:
          e.func.accept(self)
          sig = self.function_type(e.func)  # type: Type
          # Process decorators from the inside out.
@@ -114,120 +49,52 @@ index 307afe8568..d8d87116a8 100644
              if isinstance(d, NameExpr) and d.fullname == 'typing.overload':
                  self.fail('Single overload definition, multiple required', e)
                  continue
-@@ -2133,7 +2164,8 @@ def check_incompatible_property_override(self, e: Decorator) -> None:
-                     continue
-                 if (isinstance(base_attr.node, OverloadedFuncDef) and
-                         base_attr.node.is_property and
--                        base_attr.node.items[0].var.is_settable_property):
-+                        cast(Decorator,
-+                             base_attr.node.items[0]).var.is_settable_property):
-                     self.fail(messages.READ_ONLY_PROPERTY_OVERRIDES_READ_WRITE, e)
- 
-     def visit_with_stmt(self, s: WithStmt) -> None:
-diff --git a/mypy/checkmember.py b/mypy/checkmember.py
-index b84a1a9ad0..401660c348 100644
---- a/mypy/checkmember.py
-+++ b/mypy/checkmember.py
-@@ -75,7 +75,8 @@ def analyze_member_access(name: str,
-         if method:
-             if method.is_property:
-                 assert isinstance(method, OverloadedFuncDef)
--                return analyze_var(name, method.items[0].var, typ, info, node, is_lvalue, msg,
-+                first_item = cast(Decorator, method.items[0])
-+                return analyze_var(name, first_item.var, typ, info, node, is_lvalue, msg,
-                                    original_type, not_ready_callback)
-             if is_lvalue:
-                 msg.cant_assign_to_method(node)
 diff --git a/mypy/fastparse.py b/mypy/fastparse.py
-index 935ef67b9c..a40ff68c7b 100644
+index 10c4343ab1..a40ff68c7b 100755
 --- a/mypy/fastparse.py
 +++ b/mypy/fastparse.py
-@@ -2,9 +2,12 @@
- import sys
- 
- from typing import Tuple, Union, TypeVar, Callable, Sequence, Optional, Any, cast, List, Set
--from mypy.sharedparse import special_function_elide_names, argument_elide_name
-+from mypy.sharedparse import (
-+    special_function_elide_names, argument_elide_name,
-+)
- from mypy.nodes import (
--    MypyFile, Node, ImportBase, Import, ImportAll, ImportFrom, FuncDef, OverloadedFuncDef,
-+    MypyFile, Node, ImportBase, Import, ImportAll, ImportFrom, FuncDef,
-+    OverloadedFuncDef, OverloadPart,
-     ClassDef, Decorator, Block, Var, OperatorAssignmentStmt,
-     ExpressionStmt, AssignmentStmt, ReturnStmt, RaiseStmt, AssertStmt,
-     DelStmt, BreakStmt, ContinueStmt, PassStmt, GlobalDecl,
-@@ -222,11 +225,12 @@ def as_block(self, stmts: List[ast3.stmt], lineno: int) -> Block:
- 
-     def fix_function_overloads(self, stmts: List[Statement]) -> List[Statement]:
-         ret = []  # type: List[Statement]
--        current_overload = []
-+        current_overload = []  # type: List[OverloadPart]
+@@ -228,15 +228,10 @@ def fix_function_overloads(self, stmts: List[Statement]) -> List[Statement]:
+         current_overload = []  # type: List[OverloadPart]
          current_overload_name = None
--        # mypy doesn't actually check that the decorator is literally @overload
          for stmt in stmts:
--            if isinstance(stmt, Decorator) and stmt.name() == current_overload_name:
+-            if (isinstance(stmt, Decorator)
 +            if (current_overload_name is not None
 +                    and isinstance(stmt, (Decorator, FuncDef))
-+                    and stmt.name() == current_overload_name):
+                     and stmt.name() == current_overload_name):
                  current_overload.append(stmt)
+-            elif (isinstance(stmt, FuncDef)
+-                  and stmt.name() == current_overload_name
+-                  and stmt.name() is not None):
+-                ret.append(OverloadedFuncDef(current_overload + [stmt]))
+-                current_overload = []
+-                current_overload_name = None
              else:
                  if len(current_overload) == 1:
+                     ret.append(current_overload[0])
 diff --git a/mypy/fastparse2.py b/mypy/fastparse2.py
-index 10965f1902..602f5d57e4 100644
+index 19f9652b0f..602f5d57e4 100755
 --- a/mypy/fastparse2.py
 +++ b/mypy/fastparse2.py
-@@ -18,7 +18,9 @@
- import sys
- 
- from typing import Tuple, Union, TypeVar, Callable, Sequence, Optional, Any, cast, List, Set
--from mypy.sharedparse import special_function_elide_names, argument_elide_name
-+from mypy.sharedparse import (
-+    special_function_elide_names, argument_elide_name,
-+)
- from mypy.nodes import (
-     MypyFile, Node, ImportBase, Import, ImportAll, ImportFrom, FuncDef, OverloadedFuncDef,
-     ClassDef, Decorator, Block, Var, OperatorAssignmentStmt,
-@@ -31,7 +33,7 @@
-     UnaryExpr, FuncExpr, ComparisonExpr, DictionaryComprehension,
-     SetComprehension, ComplexExpr, EllipsisExpr, YieldExpr, Argument,
-     Expression, Statement, BackquoteExpr, PrintStmt, ExecStmt,
--    ARG_POS, ARG_OPT, ARG_STAR, ARG_NAMED, ARG_STAR2
-+    ARG_POS, ARG_OPT, ARG_STAR, ARG_NAMED, ARG_STAR2, OverloadPart,
- )
- from mypy.types import (
-     Type, CallableType, AnyType, UnboundType, EllipsisType
-@@ -225,11 +227,12 @@ def as_block(self, stmts: List[ast27.stmt], lineno: int) -> Block:
- 
-     def fix_function_overloads(self, stmts: List[Statement]) -> List[Statement]:
-         ret = []  # type: List[Statement]
--        current_overload = []
-+        current_overload = []  # type: List[OverloadPart]
+@@ -230,15 +230,10 @@ def fix_function_overloads(self, stmts: List[Statement]) -> List[Statement]:
+         current_overload = []  # type: List[OverloadPart]
          current_overload_name = None
--        # mypy doesn't actually check that the decorator is literally @overload
          for stmt in stmts:
--            if isinstance(stmt, Decorator) and stmt.name() == current_overload_name:
+-            if (isinstance(stmt, Decorator)
 +            if (current_overload_name is not None
 +                    and isinstance(stmt, (Decorator, FuncDef))
-+                    and stmt.name() == current_overload_name):
+                     and stmt.name() == current_overload_name):
                  current_overload.append(stmt)
+-            elif (isinstance(stmt, FuncDef)
+-                  and stmt.name() == current_overload_name
+-                  and stmt.name() is not None):
+-                ret.append(OverloadedFuncDef(current_overload + [stmt]))
+-                current_overload = []
+-                current_overload_name = None
              else:
                  if len(current_overload) == 1:
-diff --git a/mypy/fixup.py b/mypy/fixup.py
-index c271bd1507..58c1abad53 100644
---- a/mypy/fixup.py
-+++ b/mypy/fixup.py
-@@ -106,6 +106,8 @@ def visit_overloaded_func_def(self, o: OverloadedFuncDef) -> None:
-             o.type.accept(self.type_fixer)
-         for item in o.items:
-             item.accept(self)
-+        if o.impl:
-+            o.impl.accept(self)
- 
-     def visit_decorator(self, d: Decorator) -> None:
-         if self.current_info is not None:
+                     ret.append(current_overload[0])
 diff --git a/mypy/meet.py b/mypy/meet.py
-index 7aa479c0ee..03b8d1b58c 100644
+index 7aa479c0ee..03b8d1b58c 100755
 --- a/mypy/meet.py
 +++ b/mypy/meet.py
 @@ -69,6 +69,10 @@ class C(A, B): ...
@@ -241,36 +108,13 @@ index 7aa479c0ee..03b8d1b58c 100644
      # Since we are effectively working with the erased types, we only
      # need to handle occurrences of TypeVarType at the top level.
      if isinstance(t, TypeVarType):
-diff --git a/mypy/messages.py b/mypy/messages.py
-index 782df03f5b..cb22230c77 100644
---- a/mypy/messages.py
-+++ b/mypy/messages.py
-@@ -833,6 +833,14 @@ def overloaded_signatures_overlap(self, index1: int, index2: int,
-         self.fail('Overloaded function signatures {} and {} overlap with '
-                   'incompatible return types'.format(index1, index2), context)
- 
-+    def overloaded_signatures_arg_specific(self, index1: int, context: Context) -> None:
-+        self.fail('Overloaded function implementation does not accept all possible arguments '
-+                  'of signature {}'.format(index1), context)
-+
-+    def overloaded_signatures_ret_specific(self, index1: int, context: Context) -> None:
-+        self.fail('Overloaded function implementation cannot produce return type '
-+                  'of signature {}'.format(index1), context)
-+
-     def operator_method_signatures_overlap(
-             self, reverse_class: str, reverse_method: str, forward_class: str,
-             forward_method: str, context: Context) -> None:
 diff --git a/mypy/nodes.py b/mypy/nodes.py
-index 1346581ef8..f6b130359a 100644
+index 83cc6958b1..f6b130359a 100755
 --- a/mypy/nodes.py
 +++ b/mypy/nodes.py
-@@ -382,21 +382,30 @@ def fullname(self) -> str:
-         return self._fullname
+@@ -386,10 +386,14 @@ def fullname(self) -> str:
  
  
-+OverloadPart = Union['FuncDef', 'Decorator']
-+
-+
  class OverloadedFuncDef(FuncBase, SymbolNode, Statement):
 -    """A logical node representing all the variants of an overloaded function.
 +    """A logical node representing all the variants of a multi-declaration function.
@@ -283,87 +127,55 @@ index 1346581ef8..f6b130359a 100644
 +
      """
  
--    items = None  # type: List[Decorator]
-+    items = None  # type: List[OverloadPart]
-+    impl = None  # type: Optional[OverloadPart]
- 
--    def __init__(self, items: List['Decorator']) -> None:
-+    def __init__(self, items: List['OverloadPart']) -> None:
-         self.items = items
-+        self.impl = None
-         self.set_line(items[0].line)
- 
-     def name(self) -> str:
--        return self.items[0].func.name()
-+        return self.items[0].name()
- 
+     items = None  # type: List[OverloadPart]
+@@ -559,9 +563,6 @@ def name(self) -> str:
      def accept(self, visitor: StatementVisitor[T]) -> T:
-         return visitor.visit_overloaded_func_def(self)
-@@ -407,12 +416,17 @@ def serialize(self) -> JsonDict:
-                 'type': None if self.type is None else self.type.serialize(),
-                 'fullname': self._fullname,
-                 'is_property': self.is_property,
-+                'impl': None if self.impl is None else self.impl.serialize()
-                 }
+         return visitor.visit_func_def(self)
  
-     @classmethod
-     def deserialize(cls, data: JsonDict) -> 'OverloadedFuncDef':
-         assert data['.class'] == 'OverloadedFuncDef'
--        res = OverloadedFuncDef([Decorator.deserialize(d) for d in data['items']])
-+        res = OverloadedFuncDef([
-+            cast(OverloadPart, SymbolNode.deserialize(d))
-+            for d in data['items']])
-+        if data.get('impl') is not None:
-+            res.impl = cast(OverloadPart, SymbolNode.deserialize(data['impl']))
-         if data.get('type') is not None:
-             res.type = mypy.types.deserialize_type(data['type'])
-         res._fullname = data['fullname']
-@@ -597,6 +611,7 @@ class Decorator(SymbolNode, Statement):
-     func = None  # type: FuncDef                # Decorated function
-     decorators = None  # type: List[Expression] # Decorators, at least one  # XXX Not true
-     var = None  # type: Var                     # Represents the decorated function obj
-+    type = None  # type: mypy.types.Type
-     is_overload = False
+-    def get_body(self) -> Optional['Block']:
+-        return self.body
+-
+     def serialize(self) -> JsonDict:
+         # We're deliberating omitting arguments and storing only arg_names and
+         # arg_kinds for space-saving reasons (arguments is not used in later
+@@ -623,9 +624,6 @@ def __init__(self, func: FuncDef, decorators: List[Expression],
+     def name(self) -> str:
+         return self.func.name()
  
-     def __init__(self, func: FuncDef, decorators: List[Expression],
+-    def get_body(self) -> Optional['Block']:
+-        return self.func.body
+-
+     def fullname(self) -> str:
+         return self.func.fullname()
+ 
 diff --git a/mypy/semanal.py b/mypy/semanal.py
-index 0236bddf52..4e5c84ffe4 100644
+index dbd45077d7..4e5c84ffe4 100755
 --- a/mypy/semanal.py
 +++ b/mypy/semanal.py
-@@ -426,25 +426,88 @@ def is_defined_type_var(self, tvar: str, context: Context) -> bool:
-         return self.lookup_qualified(tvar, context).kind == BOUND_TVAR
- 
-     def visit_overloaded_func_def(self, defn: OverloadedFuncDef) -> None:
+@@ -434,51 +434,57 @@ def visit_overloaded_func_def(self, defn: OverloadedFuncDef) -> None:
+         # Decide whether to analyze this as a property or an overload.  If an
+         # overload, and we're outside a stub, find the impl and set it.  Remove
+         # the impl from the item list, it's special.
 -        t = []  # type: List[CallableType]
++        types = []  # type: List[CallableType]
+         non_overload_indexes = []
 -        for i, item in enumerate(defn.items):
 -            # TODO support decorated overloaded functions properly
 -            item.is_overload = True
--            item.func.is_overload = True
 -            item.accept(self)
--            callable = function_type(item.func, self.builtin_type('builtins.function'))
--            assert isinstance(callable, CallableType)
--            t.append(callable)
--            if item.func.is_property and i == 0:
--                # This defines a property, probably with a setter and/or deleter.
--                self.analyze_property_with_multi_part_definition(defn)
--                break
--            if not [dec for dec in item.decorators
--                    if refers_to_fullname(dec, 'typing.overload')]:
--                self.fail("'overload' decorator expected", item)
--
--        defn.type = Overloaded(t)
--        defn.type.line = defn.line
-+        # OverloadedFuncDef refers to any legitimate situation where you have
-+        # more than one declaration for the same function in a row.  This occurs
-+        # with a @property with a setter or a deleter, and for a classic
-+        # @overload.
-+
-+        # Decide whether to analyze this as a property or an overload.  If an
-+        # overload, and we're outside a stub, find the impl and set it.  Remove
-+        # the impl from the item list, it's special.
-+        types = []  # type: List[CallableType]
-+        non_overload_indexes = []
-+
+ 
+-            if isinstance(item, Decorator):
+-                item.func.is_overload = True
+-                callable = function_type(item.func, self.builtin_type('builtins.function'))
+-                assert isinstance(callable, CallableType)
+-                if item.func.is_property and i == 0:
+-                    # This defines a property, probably with a setter and/or
+-                    # deleter.
+-                    t.append(callable)
+-                    self.analyze_property_with_multi_part_definition(defn)
+-                    break
+-                elif not any(refers_to_fullname(dec, 'typing.overload')
+-                             for dec in item.decorators):
 +        # See if the first item is a property (and not an overload)
 +        first_item = defn.items[0]
 +        first_item.is_overload = True
@@ -399,291 +211,68 @@ index 0236bddf52..4e5c84ffe4 100644
 +                    else:
 +                        types.append(callable)
 +                elif isinstance(item, FuncDef):
-+                    if i == len(defn.items) - 1 and not self.is_stub_file:
-+                        defn.impl = item
-+                    else:
-+                        non_overload_indexes.append(i)
-+            if non_overload_indexes:
+                     if i == len(defn.items) - 1 and not self.is_stub_file:
+-                        # Last item outside a stub is impl
+                         defn.impl = item
+                     else:
+-                        # Oops it wasn't an overload after all. A clear error
+-                        # will vary based on where in the list it is, record
+-                        # that.
+                         non_overload_indexes.append(i)
+-                else:
+-                    t.append(callable)
+-            elif isinstance(item, FuncDef):
+-                if i == len(defn.items) - 1 and not self.is_stub_file:
+-                    defn.impl = item
+-                else:
+-                    non_overload_indexes.append(i)
+-        else:
+-            # No break, so it was an overload.
+             if non_overload_indexes:
+-                if t:
 +                if types:
-+                    # Some of them were overloads, but not all.
-+                    for idx in non_overload_indexes:
-+                        if self.is_stub_file:
+                     # Some of them were overloads, but not all.
+                     for idx in non_overload_indexes:
+                         if self.is_stub_file:
+-                            self.fail("Implementations of overloaded functions "
+-                                      "not allowed in stub files", defn.items[idx])
 +                            self.fail("An implementation for an overloaded function "
 +                                      "is not allowed in a stub file", defn.items[idx])
-+                        else:
+                         else:
+-                            self.fail("Implementations of overloaded functions "
 +                            self.fail("The implementation for an overloaded function "
-+                                      "must come last", defn.items[idx])
-+                else:
-+                    for idx in non_overload_indexes[1:]:
-+                        self.name_already_defined(defn.name(), defn.items[idx])
-+                    if defn.impl:
-+                        self.name_already_defined(defn.name(), defn.impl)
-+                # Remove the non-overloads
-+                for idx in reversed(non_overload_indexes):
-+                    del defn.items[idx]
-+            # If we found an implementation, remove it from the overloads to
-+            # consider.
-+            if defn.impl is not None:
-+                assert defn.impl is defn.items[-1]
-+                defn.items = defn.items[:-1]
-+
-+            elif not self.is_stub_file and not non_overload_indexes:
-+                self.fail(
+                                       "must come last", defn.items[idx])
+                 else:
+                     for idx in non_overload_indexes[1:]:
+@@ -496,11 +502,11 @@ def visit_overloaded_func_def(self, defn: OverloadedFuncDef) -> None:
+ 
+             elif not self.is_stub_file and not non_overload_indexes:
+                 self.fail(
+-                    "Overload outside a stub must have implementation",
 +                    "An overloaded function outside a stub file must have an implementation",
-+                    defn)
-+
+                     defn)
+ 
+-        if t:
+-            defn.type = Overloaded(t)
 +        if types:
 +            defn.type = Overloaded(types)
-+            defn.type.line = defn.line
+             defn.type.line = defn.line
  
          if self.is_class_scope():
-             self.type.names[defn.name()] = SymbolTableNode(MDEF, defn,
-@@ -460,18 +523,19 @@ def analyze_property_with_multi_part_definition(self, defn: OverloadedFuncDef) -
-         """
-         defn.is_property = True
-         items = defn.items
-+        first_item = cast(Decorator, defn.items[0])
-         for item in items[1:]:
--            if len(item.decorators) == 1:
-+            if isinstance(item, Decorator) and len(item.decorators) == 1:
-                 node = item.decorators[0]
-                 if isinstance(node, MemberExpr):
-                     if node.name == 'setter':
-                         # The first item represents the entire property.
--                        defn.items[0].var.is_settable_property = True
-+                        first_item.var.is_settable_property = True
-                         # Get abstractness from the original definition.
--                        item.func.is_abstract = items[0].func.is_abstract
-+                        item.func.is_abstract = first_item.func.is_abstract
-+                item.func.accept(self)
-             else:
-                 self.fail("Decorated property not supported", item)
--            item.func.accept(self)
- 
-     def next_function_tvar_id(self) -> int:
-         return self.next_function_tvar_id_stack[-1]
-@@ -2277,6 +2341,7 @@ def visit_decorator(self, dec: Decorator) -> None:
-                     self.fail('Too many arguments', dec.func)
-             elif refers_to_fullname(d, 'typing.no_type_check'):
-                 dec.var.type = AnyType()
-+                dec.type = dec.var.type
-                 no_type_check = True
-         for i in reversed(removed):
-             del dec.decorators[i]
-@@ -3232,6 +3297,26 @@ def visit_overloaded_func_def(self, func: OverloadedFuncDef) -> None:
-         func._fullname = self.sem.qualified_name(func.name())
-         if kind == GDEF:
-             self.sem.globals[func.name()] = SymbolTableNode(kind, func, self.sem.cur_mod_id)
-+        if func.impl:
-+            impl = func.impl
-+            # Also analyze the function body (in case there are conditional imports).
-+            sem = self.sem
-+
-+            if isinstance(impl, FuncDef):
-+                sem.function_stack.append(impl)
-+                sem.errors.push_function(func.name())
-+                sem.enter()
-+                impl.body.accept(self)
-+            elif isinstance(impl, Decorator):
-+                sem.function_stack.append(impl.func)
-+                sem.errors.push_function(func.name())
-+                sem.enter()
-+                impl.func.body.accept(self)
+@@ -3306,6 +3312,8 @@ def visit_overloaded_func_def(self, func: OverloadedFuncDef) -> None:
+                 sem.errors.push_function(func.name())
+                 sem.enter()
+                 impl.func.body.accept(self)
 +            else:
 +                assert False, "Implementation of an overload needs to be FuncDef or Decorator"
-+            sem.leave()
-+            sem.errors.pop_function()
-+            sem.function_stack.pop()
- 
-     def visit_class_def(self, cdef: ClassDef) -> None:
-         kind = self.kind_by_scope()
-diff --git a/mypy/strconv.py b/mypy/strconv.py
-index d7c1e48a81..fffa11e2a3 100644
---- a/mypy/strconv.py
-+++ b/mypy/strconv.py
-@@ -125,6 +125,8 @@ def visit_overloaded_func_def(self, o: 'mypy.nodes.OverloadedFuncDef') -> str:
-         a = o.items[:]  # type: Any
-         if o.type:
-             a.insert(0, o.type)
-+        if o.impl:
-+            a.insert(0, o.impl)
-         return self.dump(a, o)
- 
-     def visit_class_def(self, o: 'mypy.nodes.ClassDef') -> str:
-diff --git a/mypy/test/data.py b/mypy/test/data.py
-index 50c41aa7a2..9ef63b688f 100644
---- a/mypy/test/data.py
-+++ b/mypy/test/data.py
-@@ -2,6 +2,7 @@
- 
- import os.path
- import os
-+import posixpath
- import re
- from os import remove, rmdir
- import shutil
-@@ -27,7 +28,10 @@ def parse_test_cases(
-     myunit and pytest codepaths -- if something looks redundant,
-     that's likely the reason.
-     """
--
-+    if native_sep:
-+        join = os.path.join
-+    else:
-+        join = posixpath.join  # type: ignore
-     if not include_path:
-         include_path = os.path.dirname(path)
-     with open(path, encoding='utf-8') as f:
-@@ -57,7 +61,7 @@ def parse_test_cases(
-                     # Record an extra file needed for the test case.
-                     arg = p[i].arg
-                     assert arg is not None
--                    file_entry = (os.path.join(base_path, arg), '\n'.join(p[i].data))
-+                    file_entry = (join(base_path, arg), '\n'.join(p[i].data))
-                     if p[i].id == 'file':
-                         files.append(file_entry)
-                     elif p[i].id == 'outfile':
-@@ -66,14 +70,14 @@ def parse_test_cases(
-                     # Use a custom source file for the std module.
-                     arg = p[i].arg
-                     assert arg is not None
--                    mpath = os.path.join(os.path.dirname(path), arg)
-+                    mpath = join(os.path.dirname(path), arg)
-                     if p[i].id == 'builtins':
-                         fnam = 'builtins.pyi'
-                     else:
-                         # Python 2
-                         fnam = '__builtin__.pyi'
-                     with open(mpath) as f:
--                        files.append((os.path.join(base_path, fnam), f.read()))
-+                        files.append((join(base_path, fnam), f.read()))
-                 elif p[i].id == 'stale':
-                     arg = p[i].arg
-                     if arg is None:
-@@ -118,6 +122,8 @@ def parse_test_cases(
-             if ok:
-                 input = expand_includes(p[i0].data, include_path)
-                 expand_errors(input, tcout, 'main')
-+                for file_path, contents in files:
-+                    expand_errors(contents.split('\n'), tcout, file_path)
-                 lastline = p[i].line if i < len(p) else p[i - 1].line + 9999
-                 tc = DataDrivenTestCase(p[i0].arg, input, tcout, tcout2, path,
-                                         p[i0].line, lastline, perform,
-diff --git a/mypy/traverser.py b/mypy/traverser.py
-index 35da22a27f..abc4118357 100644
---- a/mypy/traverser.py
-+++ b/mypy/traverser.py
-@@ -49,6 +49,8 @@ def visit_func_def(self, o: FuncDef) -> None:
-     def visit_overloaded_func_def(self, o: OverloadedFuncDef) -> None:
-         for item in o.items:
-             item.accept(self)
-+        if o.impl:
-+            o.impl.accept(self)
- 
-     def visit_class_def(self, o: ClassDef) -> None:
-         for d in o.decorators:
-diff --git a/mypy/treetransform.py b/mypy/treetransform.py
-index b1d26d92bb..300b73ea74 100644
---- a/mypy/treetransform.py
-+++ b/mypy/treetransform.py
-@@ -19,7 +19,7 @@
-     ComparisonExpr, TempNode, StarExpr, Statement, Expression,
-     YieldFromExpr, NamedTupleExpr, TypedDictExpr, NonlocalDecl, SetComprehension,
-     DictionaryComprehension, ComplexExpr, TypeAliasExpr, EllipsisExpr,
--    YieldExpr, ExecStmt, Argument, BackquoteExpr, AwaitExpr,
-+    YieldExpr, ExecStmt, Argument, BackquoteExpr, AwaitExpr, OverloadPart
- )
- from mypy.types import Type, FunctionLike
- from mypy.traverser import TraverserVisitor
-@@ -160,14 +160,15 @@ def copy_function_attributes(self, new: FuncItem,
-         new.line = original.line
- 
-     def visit_overloaded_func_def(self, node: OverloadedFuncDef) -> OverloadedFuncDef:
--        items = [self.visit_decorator(decorator)
--                 for decorator in node.items]
-+        items = [cast(OverloadPart, item.accept(self)) for item in node.items]
-         for newitem, olditem in zip(items, node.items):
-             newitem.line = olditem.line
-         new = OverloadedFuncDef(items)
-         new._fullname = node._fullname
-         new.type = self.type(node.type)
-         new.info = node.info
-+        if node.impl:
-+            new.impl = cast(OverloadPart, node.impl.accept(self))
-         return new
- 
-     def visit_class_def(self, node: ClassDef) -> ClassDef:
-diff --git a/test-data/unit/check-abstract.test b/test-data/unit/check-abstract.test
-index 1caeabf785..b02086714d 100644
---- a/test-data/unit/check-abstract.test
-+++ b/test-data/unit/check-abstract.test
-@@ -410,6 +410,8 @@ class B(object, A): pass \
-       # E: Cannot determine consistent method resolution order (MRO) for "B"
- 
- [case testOverloadedAbstractMethod]
-+from foo import *
-+[file foo.pyi]
- from abc import abstractmethod, ABCMeta
- from typing import overload
- 
-@@ -432,9 +434,11 @@ B().f(1)
- a = B() # type: A
- a.f(1)
- a.f('')
--a.f(B()) # E: No overload variant of "f" of "A" matches argument types [__main__.B]
-+a.f(B()) # E: No overload variant of "f" of "A" matches argument types [foo.B]
- 
- [case testOverloadedAbstractMethodWithAlternativeDecoratorOrder]
-+from foo import *
-+[file foo.pyi]
- from abc import abstractmethod, ABCMeta
- from typing import overload
- 
-@@ -457,9 +461,11 @@ B().f(1)
- a = B() # type: A
- a.f(1)
- a.f('')
--a.f(B()) # E: No overload variant of "f" of "A" matches argument types [__main__.B]
-+a.f(B()) # E: No overload variant of "f" of "A" matches argument types [foo.B]
- 
- [case testOverloadedAbstractMethodVariantMissingDecorator1]
-+from foo import *
-+[file foo.pyi]
- from abc import abstractmethod, ABCMeta
- from typing import overload
- 
-@@ -473,6 +479,8 @@ class A(metaclass=ABCMeta):
- [out]
- 
- [case testOverloadedAbstractMethodVariantMissingDecorator1]
-+from foo import *
-+[file foo.pyi]
- from abc import abstractmethod, ABCMeta
- from typing import overload
- 
+             sem.leave()
+             sem.errors.pop_function()
+             sem.function_stack.pop()
 diff --git a/test-data/unit/check-classes.test b/test-data/unit/check-classes.test
-index 14eac29b65..a9d4ce6938 100644
+index 010967e8a4..a9d4ce6938 100755
 --- a/test-data/unit/check-classes.test
 +++ b/test-data/unit/check-classes.test
-@@ -518,6 +518,8 @@ class A: pass
- A.x # E: "A" has no attribute "x"
- 
- [case testAccessingUndefinedAttributeViaClassWithOverloadedInit]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -527,6 +529,8 @@ class A:
- A.x # E: "A" has no attribute "x"
- 
- [case testAccessMethodOfClassWithOverloadedInit]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- class A:
-     @overload
-@@ -921,6 +925,8 @@ a = A()
+@@ -925,6 +925,8 @@ a = A()
  a.f = a.f
  a.f.x # E: "int" has no attribute "x"
  a.f = '' # E: Incompatible types in assignment (expression has type "str", variable has type "int")
@@ -692,424 +281,8 @@ index 14eac29b65..a9d4ce6938 100644
  [builtins fixtures/property.pyi]
  
  [case testPropertyWithDeleterButNoSetter]
-@@ -1335,6 +1341,8 @@ g(1.1)
- 
- 
- [case testOperatorMethodOverrideIntroducingOverloading]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     def __add__(self, x: int) -> int: pass
-@@ -1368,6 +1376,8 @@ class B(A):
-     def __add__(self, x): pass
- 
- [case testOperatorMethodOverrideWithIdenticalOverloadedType]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -1381,6 +1391,8 @@ class B(A):
-     def __add__(self, x: str) -> 'A': pass
- 
- [case testOverloadedOperatorMethodOverrideWithDynamicallyTypedMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- class A:
-     @overload
-@@ -1393,6 +1405,8 @@ class C(A):
-     def __add__(self, x: Any) -> A: pass
- 
- [case testOverloadedOperatorMethodOverrideWithNewItem]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- class A:
-     @overload
-@@ -1407,9 +1421,11 @@ class B(A):
-     @overload
-     def __add__(self, x: type) -> A: pass
- [out]
--main:8: error: Signature of "__add__" incompatible with supertype "A"
-+tmp/foo.pyi:8: error: Signature of "__add__" incompatible with supertype "A"
- 
- [case testOverloadedOperatorMethodOverrideWithSwitchedItemOrder]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- class A:
-     @overload
-@@ -1422,7 +1438,7 @@ class B(A):
-     @overload
-     def __add__(self, x: 'B') -> 'B': pass
- [out]
--main:8: error: Signature of "__add__" incompatible with supertype "A"
-+tmp/foo.pyi:8: error: Signature of "__add__" incompatible with supertype "A"
- 
- [case testReverseOperatorMethodArgumentType]
- from typing import Any
-@@ -1472,6 +1488,8 @@ class C:
- main:5: error: Forward operator "__add__" is not callable
- 
- [case testOverloadedReverseOperatorMethodArgumentType]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- class A:
-     @overload
-@@ -1481,6 +1499,8 @@ class A:
- [out]
- 
- [case testReverseOperatorMethodArgumentTypeAndOverloadedMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -1503,6 +1523,8 @@ class B:
- [out]
- 
- [case testOperatorMethodsAndOverloadingSpecialCase]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -1514,6 +1536,9 @@ class B:
- [out]
- 
- [case testUnsafeOverlappingWithOperatorMethodsAndOverloading2]
-+from foo import A, B
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     def __add__(self, x: 'A') -> int: pass
-@@ -1525,7 +1550,7 @@ class B:
- class X:
-     def __add__(self, x): pass
- [out]
--main:6: error: Signatures of "__radd__" of "B" and "__add__" of "X" are unsafely overlapping
-+tmp/foo.pyi:6: error: Signatures of "__radd__" of "B" and "__add__" of "X" are unsafely overlapping
- 
- [case testUnsafeOverlappingWithLineNo]
- from typing import TypeVar
-@@ -1552,6 +1577,8 @@ class C(A): pass
- main:5: error: Signatures of "__iadd__" and "__add__" are incompatible
- 
- [case testOverloadedNormalAndInplaceOperatorMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -1572,7 +1599,7 @@ class B:
-     @overload
-     def __iadd__(self, x: str) -> str: pass
- [out]
--main:7: error: Signatures of "__iadd__" and "__add__" are incompatible
-+tmp/foo.pyi:7: error: Signatures of "__iadd__" and "__add__" are incompatible
- 
- [case testIntroducingInplaceOperatorInSubclass]
- import typing
-@@ -1728,6 +1755,8 @@ c.set(1) # E: Argument 1 to "set" of "C" has incompatible type "int"; expected "
- [builtins fixtures/__new__.pyi]
- 
- [case testOverloaded__new__]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class C:
-     @overload
-@@ -2000,6 +2029,8 @@ def foo(arg: Type[int]):
- [out]
- 
- [case testTypeUsingTypeCUnionOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, Union, overload
- class X:
-     @overload
-@@ -2120,6 +2151,8 @@ def foo(arg: Type[Tuple[int]]):  # E: Unsupported type Type["Tuple[int]"]
- [out]
- 
- [case testTypeUsingTypeCOverloadedClass]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, TypeVar, overload
- class User:
-     @overload
-@@ -2141,8 +2174,8 @@ def new(uc: Type[U]) -> U:
- u = new(User)
- [builtins fixtures/classmethod.pyi]
- [out]
--main:16: error: No overload variant of "User" matches argument types [builtins.str]
--main:17: error: Too many arguments for "foo" of "User"
-+tmp/foo.pyi:16: error: No overload variant of "User" matches argument types [builtins.str]
-+tmp/foo.pyi:17: error: Too many arguments for "foo" of "User"
- 
- [case testTypeUsingTypeCInUpperBound]
- from typing import TypeVar, Type
-@@ -2218,6 +2251,8 @@ C1[Type[Any]], C2[type] # both these should not fail
- [out]
- 
- [case testTypeMatchesOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload, Union
- 
- class User: pass
-@@ -2234,6 +2269,8 @@ reveal_type(f(UserType))  # E: Revealed type is 'builtins.int'
- [out]
- 
- [case testTypeMatchesGeneralTypeInOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2253,6 +2290,8 @@ reveal_type(f(1))  # E: Revealed type is 'builtins.str'
- [out]
- 
- [case testTypeMatchesSpecificTypeInOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2270,12 +2309,14 @@ def f(a: int) -> str:
- 
- reveal_type(f(User))  # E: Revealed type is 'builtins.int'
- reveal_type(f(UserType))  # E: Revealed type is 'builtins.int'
--reveal_type(f(User()))  # E: Revealed type is '__main__.User'
-+reveal_type(f(User()))  # E: Revealed type is 'foo.User'
- reveal_type(f(1))  # E: Revealed type is 'builtins.str'
- [builtins fixtures/classmethod.pyi]
- [out]
- 
- [case testMixingTypeTypeInOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2293,14 +2334,16 @@ def f(a: int) -> Type[User]:
- def f(a: str) -> User:
-     return User()
- 
--reveal_type(f(User()))  # E: Revealed type is 'Type[__main__.User]'
--reveal_type(f(User))  # E: Revealed type is '__main__.User'
--reveal_type(f(3))  # E: Revealed type is 'Type[__main__.User]'
--reveal_type(f("hi"))  # E: Revealed type is '__main__.User'
-+reveal_type(f(User()))  # E: Revealed type is 'Type[foo.User]'
-+reveal_type(f(User))  # E: Revealed type is 'foo.User'
-+reveal_type(f(3))  # E: Revealed type is 'Type[foo.User]'
-+reveal_type(f("hi"))  # E: Revealed type is 'foo.User'
- [builtins fixtures/classmethod.pyi]
- [out]
- 
- [case testGeneralTypeDoesNotMatchSpecificTypeInOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2318,6 +2361,8 @@ f(mock())  # E: No overload variant of "f" matches argument types [builtins.type
- [out]
- 
- [case testNonTypeDoesNotMatchOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2332,6 +2377,8 @@ f(3)  # E: No overload variant of "f" matches argument types [builtins.int]
- [out]
- 
- [case testInstancesDoNotMatchTypeInOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2342,11 +2389,13 @@ def f(a: Type[User]) -> None: pass
- def f(a: int) -> None: pass
- 
- f(User)
--f(User())  # E: No overload variant of "f" matches argument types [__main__.User]
-+f(User())  # E: No overload variant of "f" matches argument types [foo.User]
- [builtins fixtures/classmethod.pyi]
- [out]
- 
- [case testTypeCovarianceWithOverloadedFunctions]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class A: pass
-@@ -2361,10 +2410,10 @@ def f(a: Type[B]) -> None: pass
- @overload
- def f(a: int) -> None: pass
- 
--f(A)  # E: No overload variant of "f" matches argument types [def () -> __main__.A]
-+f(A)  # E: No overload variant of "f" matches argument types [def () -> foo.A]
- f(B)
- f(C)
--f(AType)  # E: No overload variant of "f" matches argument types [Type[__main__.A]]
-+f(AType)  # E: No overload variant of "f" matches argument types [Type[foo.A]]
- f(BType)
- f(CType)
- [builtins fixtures/classmethod.pyi]
-@@ -2372,6 +2421,8 @@ f(CType)
- 
- 
- [case testOverloadedCovariantTypesFail]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class A: pass
-@@ -2385,6 +2436,8 @@ def f(a: Type[B]) -> str: pass
- [out]
- 
- [case testDistinctOverloadedCovariantTypesSucceed]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class A: pass
-@@ -2406,14 +2459,16 @@ reveal_type(f(AChild))  # E: Revealed type is 'builtins.int'
- reveal_type(f(B))  # E: Revealed type is 'builtins.str'
- reveal_type(f(BChild))  # E: Revealed type is 'builtins.str'
- 
--reveal_type(f(A()))  # E: Revealed type is '__main__.A'
--reveal_type(f(AChild()))  # E: Revealed type is '__main__.A'
--reveal_type(f(B()))  # E: Revealed type is '__main__.B'
--reveal_type(f(BChild()))  # E: Revealed type is '__main__.B'
-+reveal_type(f(A()))  # E: Revealed type is 'foo.A'
-+reveal_type(f(AChild()))  # E: Revealed type is 'foo.A'
-+reveal_type(f(B()))  # E: Revealed type is 'foo.B'
-+reveal_type(f(BChild()))  # E: Revealed type is 'foo.B'
- [builtins fixtures/classmethod.pyi]
- [out]
- 
- [case testTypeTypeOverlapsWithObjectAndType]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-@@ -2431,6 +2486,8 @@ def g(a: type) -> str: pass
- [out]
- 
- [case testTypeOverlapsWithObject]
-+from foo import *
-+[file foo.pyi]
- from typing import Type, overload
- 
- class User: pass
-diff --git a/test-data/unit/check-expressions.test b/test-data/unit/check-expressions.test
-index c0f5d97d1c..44a6599e19 100644
---- a/test-data/unit/check-expressions.test
-+++ b/test-data/unit/check-expressions.test
-@@ -806,7 +806,8 @@ main:4: error: Incompatible types in assignment (expression has type "A", target
- main:5: error: Unsupported target for indexed assignment
- 
- [case testOverloadedIndexing]
--
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- 
- a, b, c = None, None, None  # type: (A, B, C)
-diff --git a/test-data/unit/check-functions.test b/test-data/unit/check-functions.test
-index 8060986910..fa51904891 100644
---- a/test-data/unit/check-functions.test
-+++ b/test-data/unit/check-functions.test
-@@ -264,6 +264,8 @@ class A:
- def f() -> None: pass
- 
- [case testFunctionTypesWithOverloads]
-+from foo import *
-+[file foo.pyi]
- from typing import Callable, overload
- f = None # type: Callable[[AA], A]
- g = None # type: Callable[[B], B]
-@@ -296,6 +298,8 @@ def j(x: A) -> AA:
-     pass
- 
- [case testOverloadWithThreeItems]
-+from foo import *
-+[file foo.pyi]
- from typing import Callable, overload
- g1 = None # type: Callable[[A], A]
- g2 = None # type: Callable[[B], B]
-@@ -479,6 +483,8 @@ a.f()
- a.f(a) # E: Too many arguments
- 
- [case testOverloadedMethodAsDataAttribute]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class B: pass
- class A:
-@@ -490,7 +496,7 @@ class A:
- a = None # type: A
- a.g()
- a.g(B())
--a.g(a) # E: No overload variant matches argument types [__main__.A]
-+a.g(a) # E: No overload variant matches argument types [foo.A]
- 
- [case testMethodAsDataAttributeInferredFromDynamicallyTypedMethod]
- 
-diff --git a/test-data/unit/check-generics.test b/test-data/unit/check-generics.test
-index f6613701ec..2bc35be4ea 100644
---- a/test-data/unit/check-generics.test
-+++ b/test-data/unit/check-generics.test
-@@ -1256,6 +1256,8 @@ class B: pass
- 
- 
- [case testGenericArgumentInOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, List
- class A: pass
- class B: pass
-@@ -1275,6 +1277,8 @@ b = f(b)
- [builtins fixtures/list.pyi]
- 
- [case testGenericFunctionAsOverloadItem]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar, List
- T = TypeVar('T')
- class A: pass
-diff --git a/test-data/unit/check-inference-context.test b/test-data/unit/check-inference-context.test
-index f93429e821..9482c70a86 100644
---- a/test-data/unit/check-inference-context.test
-+++ b/test-data/unit/check-inference-context.test
-@@ -484,6 +484,8 @@ class D: pass
- [out]
- 
- [case testIntersectionWithInferredGenericArgument]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar, Generic
- T = TypeVar('T')
- f(A())
-@@ -644,6 +646,8 @@ f( # E: Argument 1 to "f" has incompatible type Callable[[A], A]; expected Calla
- 
- 
- [case testMapWithOverloadedFunc]
-+from foo import *
-+[file foo.pyi]
- from typing import TypeVar, Callable, List, overload, Any
- t = TypeVar('t')
- s = TypeVar('s')
 diff --git a/test-data/unit/check-optional.test b/test-data/unit/check-optional.test
-index 35dd128aef..8fe759ac6c 100644
+index d7bcf6a160..8fe759ac6c 100755
 --- a/test-data/unit/check-optional.test
 +++ b/test-data/unit/check-optional.test
 @@ -77,6 +77,15 @@ else:
@@ -1128,39 +301,14 @@ index 35dd128aef..8fe759ac6c 100644
  [case testOrCases]
  from typing import Optional
  x = None  # type: Optional[str]
-@@ -211,6 +220,8 @@ class C:
- [out]
- 
- [case testOverloadWithNone]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: None) -> str: pass
 diff --git a/test-data/unit/check-overloading.test b/test-data/unit/check-overloading.test
-index e173fb27e4..64791a3728 100644
+index 464cb0b661..64791a3728 100755
 --- a/test-data/unit/check-overloading.test
 +++ b/test-data/unit/check-overloading.test
-@@ -1,7 +1,234 @@
- -- Test cases for function overloading
+@@ -17,6 +17,121 @@ class A: pass
+ class B: pass
+ [builtins fixtures/isinstance.pyi]
  
-+[case testTypeCheckOverloadWithImplementation]
-+from typing import overload, Any
-+@overload
-+def f(x: 'A') -> 'B': ...
-+@overload
-+def f(x: 'B') -> 'A': ...
-+
-+def f(x: Any) -> Any:
-+    pass
-+
-+reveal_type(f(A())) # E: Revealed type is '__main__.B'
-+reveal_type(f(B())) # E: Revealed type is '__main__.A'
-+
-+class A: pass
-+class B: pass
-+[builtins fixtures/isinstance.pyi]
-+
 +[case testOverloadNeedsImplementation]
 +from typing import overload, Any
 +@overload  # E: An overloaded function outside a stub file must have an implementation
@@ -1276,1191 +424,86 @@ index e173fb27e4..64791a3728 100644
 +[builtins fixtures/isinstance.pyi]
 +
 +
-+[case testTypeCheckOverloadWithImplementationPy2]
-+# flags: --python-version 2.7
-+
-+from typing import overload
-+@overload
-+def f(x):
-+    # type: (A) -> B
-+    pass
-+
-+@overload
-+def f(x):
-+    # type: (B) -> A
-+    pass
-+
-+def f(x):
-+    pass
-+
-+reveal_type(f(A()))  # E: Revealed type is '__main__.B'
-+reveal_type(f(B()))  # E: Revealed type is '__main__.A'
-+
-+class A: pass
-+class B: pass
-+[builtins fixtures/isinstance.pyi]
-+
-+[case testTypeCheckOverloadWithImplementationError]
-+from typing import overload, Any
-+
-+@overload
-+def f(x: 'A') -> 'B': ...
-+@overload
-+def f(x: 'B') -> 'A': ...
-+
-+def f(x: Any) -> Any:
-+    foo = 1
-+    foo = "bar"  # E: Incompatible types in assignment (expression has type "str", variable has type "int")
-+
-+@overload
-+def g(x: 'A') -> 'B': ...
-+@overload
-+def g(x: 'B') -> 'A': ...
-+
-+def g(x):
-+    foo = 1
-+    foo = "bar"
-+
-+reveal_type(f(A()))  # E: Revealed type is '__main__.B'
-+reveal_type(f(B()))  # E: Revealed type is '__main__.A'
-+
-+class A: pass
-+class B: pass
-+[builtins fixtures/isinstance.pyi]
-+
-+[case testTypeCheckOverloadWithImplTooSpecificArg]
-+from typing import overload, Any
-+
-+class A: pass
-+class B: pass
-+
-+a = A()
-+
-+@overload
-+def f(x: 'A') -> 'B': ...
-+@overload
-+def f(x: 'B') -> 'A': ...
-+
-+def f(x: 'A') -> Any: # E: Overloaded function implementation does not accept all possible arguments of signature 2
-+    pass
-+
-+reveal_type(f(A())) # E: Revealed type is '__main__.B'
-+reveal_type(f(B())) # E: Revealed type is '__main__.A'
-+
-+[builtins fixtures/isinstance.pyi]
-+
-+[case testTypeCheckOverloadWithImplTooSpecificRetType]
-+from typing import overload, Any
-+
-+class A: pass
-+class B: pass
-+
-+a = A()
-+
-+@overload
-+def f(x: 'A') -> 'B': ...
-+@overload
-+def f(x: 'B') -> 'A': ...
-+
-+def f(x: Any) -> 'B': # E: Overloaded function implementation cannot produce return type of signature 2
-+    return B()
-+
-+reveal_type(f(A())) # E: Revealed type is '__main__.B'
-+reveal_type(f(B())) # E: Revealed type is '__main__.A'
-+
-+[builtins fixtures/isinstance.pyi]
+ [case testTypeCheckOverloadWithImplementationPy2]
+ # flags: --python-version 2.7
  
- [case testTypeCheckOverloadedFunctionBody]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: 'A'):
-@@ -16,6 +243,8 @@ class B: pass
- [out]
- 
- [case testTypeCheckOverloadedMethodBody]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -30,8 +259,10 @@ class B: pass
- [out]
- 
- [case testCallToOverloadedFunction]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
--f(C()) # E: No overload variant of "f" matches argument types [__main__.C]
-+f(C()) # E: No overload variant of "f" matches argument types [foo.C]
- f(A())
- f(B())
- 
-@@ -45,6 +276,8 @@ class B: pass
- class C: pass
- 
- [case testOverloadedFunctionReturnValue]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: (A, B)
- b = f(a) # E: Incompatible types in assignment (expression has type "A", variable has type "B")
-@@ -60,8 +293,10 @@ class A: pass
- class B: pass
- 
- [case testCallToOverloadedMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
--A().f(C()) # E: No overload variant of "f" of "A" matches argument types [__main__.C]
-+A().f(C()) # E: No overload variant of "f" of "A" matches argument types [foo.C]
- A().f(A())
- A().f(B())
- 
-@@ -75,6 +310,8 @@ class B: pass
- class C: pass
- 
- [case testOverloadedMethodReturnValue]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: (A, B)
- b = a.f(a) # E: Incompatible types in assignment (expression has type "A", variable has type "B")
-@@ -90,15 +327,17 @@ class A:
- class B: pass
- 
- [case testOverloadsWithDifferentArgumentCounts]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: (A, B)
- a = f(a)
- b = f(a) # E: Incompatible types in assignment (expression has type "A", variable has type "B")
--f(b)     # E: No overload variant of "f" matches argument types [__main__.B]
-+f(b)     # E: No overload variant of "f" matches argument types [foo.B]
- b = f(b, a)
- a = f(b, a) # E: Incompatible types in assignment (expression has type "B", variable has type "A")
--f(a, a)     # E: No overload variant of "f" matches argument types [__main__.A, __main__.A]
--f(b, b)     # E: No overload variant of "f" matches argument types [__main__.B, __main__.B]
-+f(a, a)     # E: No overload variant of "f" matches argument types [foo.A, foo.A]
-+f(b, b)     # E: No overload variant of "f" matches argument types [foo.B, foo.B]
- 
- @overload
- def f(x: 'A') -> 'A': pass
-@@ -108,6 +347,8 @@ class A: pass
- class B: pass
- 
- [case testGenericOverloadVariant]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar, Generic
- t = TypeVar('t')
- ab, ac, b, c = None, None, None, None # type: (A[B], A[C], B, C)
-@@ -125,6 +366,8 @@ class B: pass
- class C: pass
- 
- [case testOverloadedInit]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: (A, B)
- a = A(a)
-@@ -139,6 +382,8 @@ class A:
- class B: pass
- 
- [case testIntersectionTypeCompatibility]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Callable
- o = None # type: object
- a = None # type: A
-@@ -153,6 +398,8 @@ def f(a: Callable[[], None]) -> None: pass
- class A: pass
- 
- [case testCompatibilityOfIntersectionTypeObjectWithStdType]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- t, a = None, None # type: (type, A)
- 
-@@ -167,6 +414,8 @@ class A:
- class B: pass
- 
- [case testOverloadedGetitem]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: int, str
- a = A()[a]
-@@ -181,6 +430,8 @@ class A:
-     def __getitem__(self, b: str) -> str: pass
- 
- [case testOverloadedGetitemWithGenerics]
-+from foo import *
-+[file foo.pyi]
- from typing import TypeVar, Generic, overload
- t = TypeVar('t')
- a, b, c = None, None, None # type: (A, B, C[A])
-@@ -198,6 +449,8 @@ class A: pass
- class B: pass
- 
- [case testImplementingOverloadedMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- from abc import abstractmethod, ABCMeta
- 
-@@ -215,6 +468,8 @@ class A(I):
-     def f(self, a: 'A') -> None: pass
- 
- [case testOverloadWithFunctionType]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Callable
- class A: pass
- @overload
-@@ -226,6 +481,8 @@ f(A())
- [builtins fixtures/function.pyi]
- 
- [case testVarArgsOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Any
- @overload
- def f(x: 'A', *more: Any) -> 'A': pass
-@@ -242,6 +499,8 @@ class B: pass
- [builtins fixtures/list.pyi]
- 
- [case testVarArgsOverload2]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: 'A', *more: 'B') -> 'A': pass
-@@ -249,13 +508,15 @@ def f(x: 'A', *more: 'B') -> 'A': pass
- def f(x: 'B', *more: 'A') -> 'A': pass
- f(A(), B())
- f(A(), B(), B())
--f(A(), A(), B()) # E: No overload variant of "f" matches argument types [__main__.A, __main__.A, __main__.B]
--f(A(), B(), A()) # E: No overload variant of "f" matches argument types [__main__.A, __main__.B, __main__.A]
-+f(A(), A(), B()) # E: No overload variant of "f" matches argument types [foo.A, foo.A, foo.B]
-+f(A(), B(), A()) # E: No overload variant of "f" matches argument types [foo.A, foo.B, foo.A]
- class A: pass
- class B: pass
- [builtins fixtures/list.pyi]
- 
- [case testOverloadWithTypeObject]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(a: 'A', t: type) -> None: pass
-@@ -268,6 +529,8 @@ class B: pass
- [builtins fixtures/function.pyi]
- 
- [case testOverloadedInitAndTypeObjectInOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(t: type) -> 'A': pass
-@@ -287,6 +550,8 @@ class B:
-     pass
- 
- [case testOverlappingErasedSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, List
- @overload
- def f(a: List[int]) -> int: pass
-@@ -305,6 +570,8 @@ f(list_object) # E: Argument 1 to "f" has incompatible type List[object]; expect
- [builtins fixtures/list.pyi]
- 
- [case testOverlappingOverloadSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -314,6 +581,8 @@ def f(x: B) -> int: pass # E: Overloaded function signatures 1 and 2 overlap wit
- def f(x: A) -> str: pass
- 
- [case testContravariantOverlappingOverloadSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -324,6 +593,8 @@ def f(x: B) -> B: pass # This is more specific than the first item, and thus
-                        # will never be called.
- 
- [case testPartiallyCovariantOverlappingOverloadSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -333,6 +604,8 @@ def f(x: B) -> A: pass # E: Overloaded function signatures 1 and 2 overlap with
- def f(x: A) -> B: pass
- 
- [case testPartiallyContravariantOverloadSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -342,6 +615,8 @@ def g(x: A) -> int: pass # Fine, since A us supertype of B.
- def g(x: B) -> str: pass
- 
- [case testCovariantOverlappingOverloadSignatures]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -351,6 +626,8 @@ def g(x: B) -> B: pass
- def g(x: A) -> A: pass
- 
- [case testCovariantOverlappingOverloadSignaturesWithSomeSameArgTypes]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -360,6 +637,8 @@ def g(x: int, y: B) -> B: pass
- def g(x: int, y: A) -> A: pass
- 
- [case testCovariantOverlappingOverloadSignaturesWithAnyType]
-+from foo import *
-+[file foo.pyi]
- from typing import Any, overload
- @overload
- def g(x: int) -> int: pass
-@@ -367,6 +646,8 @@ def g(x: int) -> int: pass
- def g(x: Any) -> Any: pass
- 
- [case testContravariantOverlappingOverloadSignaturesWithAnyType]
-+from foo import *
-+[file foo.pyi]
- from typing import Any, overload
- @overload
- def g(x: Any) -> Any: pass # E: Overloaded function signatures 1 and 2 overlap with incompatible return types
-@@ -374,6 +655,8 @@ def g(x: Any) -> Any: pass # E: Overloaded function signatures 1 and 2 overlap w
- def g(x: int) -> int: pass
- 
- [case testOverloadedLtAndGtMethods]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     def __lt__(self, x: A) -> int: pass
-@@ -395,6 +678,8 @@ A() < object() # E: Unsupported operand types for < ("A" and "object")
- B() < object() # E: No overload variant of "__lt__" of "B" matches argument types [builtins.object]
- 
- [case testOverloadedForwardMethodAndCallingReverseMethod]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A:
-     @overload
-@@ -409,6 +694,8 @@ A() + B()
- A() + '' # E: No overload variant of "__add__" of "A" matches argument types [builtins.str]
- 
- [case testOverrideOverloadedMethodWithMoreGeneralArgumentTypes]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- 
- class IntSub(int): pass
-@@ -427,6 +714,8 @@ class B(A):
- [out]
- 
- [case testOverrideOverloadedMethodWithMoreSpecificArgumentTypes]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- 
- class IntSub(int): pass
-@@ -453,10 +742,12 @@ class D(A):
-     @overload
-     def f(self, x: str) -> str: return ''
- [out]
--main:12: error: Signature of "f" incompatible with supertype "A"
--main:17: error: Signature of "f" incompatible with supertype "A"
-+tmp/foo.pyi:12: error: Signature of "f" incompatible with supertype "A"
-+tmp/foo.pyi:17: error: Signature of "f" incompatible with supertype "A"
- 
- [case testOverloadingAndDucktypeCompatibility]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, _promote
- 
- class A: pass
-@@ -475,6 +766,8 @@ f(B()) + 'x'  # E: Unsupported left operand type for + ("B")
- f(A()) + 'x'  # E: Unsupported left operand type for + ("A")
- 
- [case testOverloadingAndIntFloatSubtyping]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: float) -> None: pass
-@@ -488,6 +781,8 @@ f(()) # E: No overload variant of "f" matches argument types [Tuple[]]
- [out]
- 
- [case testOverloadingVariableInputs]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: int, y: int) -> None: pass
-@@ -501,6 +796,8 @@ f(*z)
- [out]
- 
- [case testTypeInferenceSpecialCaseWithOverloading]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- 
- class A:
-@@ -516,6 +813,8 @@ def f(x: B) -> B: pass
- f(A() + B())() # E: "B" not callable
- 
- [case testKeywordArgOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: int, y: str) -> int: pass
-@@ -525,6 +824,8 @@ f(x=1, y='')() # E: "int" not callable
- f(y=1, x='')() # E: "str" not callable
- 
- [case testIgnoreOverloadVariantBasedOnKeywordArg]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: int) -> int: pass
-@@ -534,6 +835,8 @@ f(x=1)() # E: "int" not callable
- f(y=1)() # E: "str" not callable
- 
- [case testOverloadWithTupleVarArg]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(x: int, y: str) -> int: pass
-@@ -545,6 +848,8 @@ f(*(1, ''))() # E: "int" not callable
- f(*(1, '', 1))() # E: No overload variant of "f" matches argument types [Tuple[builtins.int, builtins.str, builtins.int]]
- 
- [case testPreferExactSignatureMatchInOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, List
- @overload
- def f(x: int, y: List[int] = None) -> int: pass
-@@ -557,6 +862,8 @@ a() # E: "int" not callable
- [builtins fixtures/list.pyi]
- 
- [case testOverloadWithDerivedFromAny]
-+from foo import *
-+[file foo.pyi]
- from typing import Any, overload
- Base = None  # type: Any
- 
-@@ -573,6 +880,8 @@ C(Derived())  # fails without the hack
- C(Base())  # Always ok
- 
- [case testOverloadWithBoundedTypeVar]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar
- T = TypeVar('T', bound=str)
- @overload
-@@ -588,6 +897,8 @@ f(mystr())() # E: "mystr" not callable
- [builtins fixtures/primitives.pyi]
- 
- [case testOverloadedCallWithVariableTypes]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar, List
- T = TypeVar('T', bound=str)
- @overload
-@@ -608,6 +919,8 @@ def g(x: U, y: V) -> None:
- [out]
- 
- [case testOverlapWithTypeVars]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar, Sequence
- T = TypeVar('T', bound=str)
- @overload
-@@ -616,9 +929,11 @@ def f(x: Sequence[T]) -> None: pass
- def f(x: Sequence[int]) -> int: pass
- # These are considered overlapping despite the bound on T due to runtime type erasure.
- [out]
--main:4: error: Overloaded function signatures 1 and 2 overlap with incompatible return types
-+tmp/foo.pyi:4: error: Overloaded function signatures 1 and 2 overlap with incompatible return types
- 
- [case testOverlapWithTypeVarsWithValues]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar
- AnyStr = TypeVar('AnyStr', bytes, str)
- 
-@@ -646,6 +961,8 @@ g(1, 'foo', b'bar') # E: Type argument 1 of "g" has incompatible value "object"
- [builtins fixtures/primitives.pyi]
- 
- [case testBadOverlapWithTypeVarsWithValues]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, TypeVar
- AnyStr = TypeVar('AnyStr', bytes, str)
- 
-@@ -656,6 +973,8 @@ def f(x: str) -> bool: pass
- [builtins fixtures/primitives.pyi]
- 
- [case testOverlappingOverloadCounting]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class A: pass
- class B(A): pass
-@@ -667,6 +986,8 @@ def f(x: B) -> str: pass # E: Overloaded function signatures 2 and 3 overlap wit
- def f(x: A) -> int: pass
- 
- [case testOverloadWithTupleMatchingTypeVar]
-+from foo import *
-+[file foo.pyi]
- from typing import TypeVar, Generic, Tuple, overload
- 
- T = TypeVar('T')
-@@ -683,25 +1004,32 @@ b = A()  # type: A[Tuple[int, int]]
- b.f((0, 0))
- b.f((0, '')) # E: Argument 1 to "f" of "A" has incompatible type "Tuple[int, str]"; expected "Tuple[int, int]"
- 
--[case testSingleOverload]
-+[case testSingleOverloadStub]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
+@@ -898,7 +1013,7 @@ def f(a: int) -> None: pass
  def f(a: int) -> None: pass
--def f(a: str) -> None: pass
-+def f(a: int) -> None: pass
  [out]
--main:2: error: Single overload definition, multiple required
--main:4: error: Name 'f' already defined
-+tmp/foo.pyi:2: error: Single overload definition, multiple required
+ tmp/foo.pyi:2: error: Single overload definition, multiple required
+-tmp/foo.pyi:4: error: Implementations of overloaded functions not allowed in stub files
 +tmp/foo.pyi:4: error: An implementation for an overloaded function is not allowed in a stub file
-+
+ 
  
  [case testSingleOverload2]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- def f(a: int) -> None: pass
+@@ -922,8 +1037,8 @@ def f(a: int) -> None: pass
  @overload
  def f(a: str) -> None: pass
  [out]
--main:3: error: Name 'f' already defined
--main:3: error: Single overload definition, multiple required
-+tmp/foo.pyi:3: error: Name 'f' already defined
-+tmp/foo.pyi:3: error: Single overload definition, multiple required
- 
- [case testNonconsecutiveOverloads]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(a: int) -> None: pass
-@@ -709,31 +1037,37 @@ def f(a: int) -> None: pass
- @overload
- def f(a: str) -> None: pass
- [out]
--main:2: error: Single overload definition, multiple required
--main:5: error: Name 'f' already defined
--main:5: error: Single overload definition, multiple required
-+tmp/foo.pyi:2: error: Single overload definition, multiple required
+-tmp/foo.pyi:5: error: Name 'f' already defined
+ tmp/foo.pyi:2: error: Single overload definition, multiple required
 +tmp/foo.pyi:5: error: Name 'f' already defined
-+tmp/foo.pyi:5: error: Single overload definition, multiple required
+ tmp/foo.pyi:5: error: Single overload definition, multiple required
  
  [case testNonconsecutiveOverloadsMissingFirstOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- def f(a: int) -> None: pass
- 1
- @overload
- def f(a: str) -> None: pass
- [out]
--main:4: error: Name 'f' already defined
--main:4: error: Single overload definition, multiple required
-+tmp/foo.pyi:4: error: Name 'f' already defined
-+tmp/foo.pyi:4: error: Single overload definition, multiple required
- 
- [case testNonconsecutiveOverloadsMissingLaterOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- @overload
- def f(a: int) -> None: pass
+@@ -947,8 +1062,8 @@ def f(a: int) -> None: pass
  1
  def f(a: str) -> None: pass
  [out]
--main:2: error: Single overload definition, multiple required
--main:5: error: Name 'f' already defined
-+tmp/foo.pyi:2: error: Single overload definition, multiple required
+-tmp/foo.pyi:5: error: Name 'f' already defined
+ tmp/foo.pyi:2: error: Single overload definition, multiple required
 +tmp/foo.pyi:5: error: Name 'f' already defined
  
  [case testOverloadTuple]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Tuple
- @overload
- def f(x: int, y: Tuple[str, ...]) -> None: pass
-@@ -751,6 +1085,8 @@ f(1, y) # E: Argument 2 to "f" has incompatible type Tuple[int, ...]; expected T
- [builtins fixtures/tuple.pyi]
- 
- [case testCallableSpecificOverload]
-+from foo import *
-+[file foo.pyi]
- from typing import overload, Callable
- @overload
- def f(a: Callable[[], int]) -> None: pass
-diff --git a/test-data/unit/check-statements.test b/test-data/unit/check-statements.test
-index e42e273002..b4d8752d10 100644
---- a/test-data/unit/check-statements.test
-+++ b/test-data/unit/check-statements.test
-@@ -932,6 +932,8 @@ except exs1 as e: pass # E: Exception type must be derived from BaseException
- [builtins fixtures/exception.pyi]
- 
- [case testOverloadedExceptionType]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- class E(BaseException):
-     @overload
-diff --git a/test-data/unit/check-typevar-values.test b/test-data/unit/check-typevar-values.test
-index 0219c805d9..2252c0d778 100644
---- a/test-data/unit/check-typevar-values.test
-+++ b/test-data/unit/check-typevar-values.test
-@@ -431,6 +431,8 @@ class C(Generic[T]):
-     def f(self, x: int = None) -> None: pass
- 
- [case testTypevarValuesWithOverloadedFunctionSpecialCase]
-+from foo import *
-+[file foo.pyi]
- from typing import TypeVar, overload, Callable
- 
- T = TypeVar('T', int, str)
-@@ -448,8 +450,8 @@ def g(x: int) -> int: return x
- @overload
- def g(x: str) -> str: return x
- [out]
--main:7: error: Incompatible types in assignment (expression has type "object", variable has type "int")
--main:7: error: Incompatible types in assignment (expression has type "object", variable has type "str")
-+tmp/foo.pyi:7: error: Incompatible types in assignment (expression has type "object", variable has type "int")
-+tmp/foo.pyi:7: error: Incompatible types in assignment (expression has type "object", variable has type "str")
- 
- [case testGenericFunctionSubtypingWithTypevarValues]
- from typing import TypeVar
-diff --git a/test-data/unit/check-unions.test b/test-data/unit/check-unions.test
-index c51cb06a00..f6a149e354 100644
---- a/test-data/unit/check-unions.test
-+++ b/test-data/unit/check-unions.test
-@@ -94,11 +94,7 @@ x[2] + 1 # E: Unsupported operand types for + (likely involving Union)
- [builtins fixtures/isinstancelist.pyi]
- 
- [case testUnionAsOverloadArg]
--from typing import Union, overload
--@overload
--def f(x: Union[int, str]) -> int: pass
--@overload
--def f(x: type) -> str: pass
-+from foo import *
- x = 0
- x = f(1)
- x = f('')
-@@ -107,6 +103,13 @@ s = f(int)
- s = f(1)    # E: Incompatible types in assignment (expression has type "int", variable has type "str")
- x = f(int)  # E: Incompatible types in assignment (expression has type "str", variable has type "int")
- 
-+[file foo.pyi]
-+from typing import Union, overload
-+@overload
-+def f(x: Union[int, str]) -> int: pass
-+@overload
-+def f(x: type) -> str: pass
-+
- [case testUnionWithNoneItem]
- from typing import Union
- def f() -> Union[int, None]: pass
+ from foo import *
 diff --git a/test-data/unit/check-unsupported.test b/test-data/unit/check-unsupported.test
-index 7f36e6955e..3406d57d84 100644
+index ea3b50f7e7..3406d57d84 100755
 --- a/test-data/unit/check-unsupported.test
 +++ b/test-data/unit/check-unsupported.test
-@@ -2,6 +2,8 @@
- 
- 
- [case testDecorateOverloadedFunction]
-+from foo import *
-+[file foo.pyi]
- # The error messages are not the most informative ever.
- def d(x): pass
- @d
-@@ -11,5 +13,5 @@ def g(): pass
+@@ -13,5 +13,5 @@ def g(): pass
  @d # E
  def g(x): pass
  [out]
--main:5: error: Name 'f' already defined
--main:7: error: Name 'g' already defined
-+tmp/foo.pyi:5: error: Name 'f' already defined
+-tmp/foo.pyi:7: error: Name 'g' already defined
+ tmp/foo.pyi:5: error: Name 'f' already defined
 +tmp/foo.pyi:7: error: Name 'g' already defined
-diff --git a/test-data/unit/check-varargs.test b/test-data/unit/check-varargs.test
-index f52f850792..c641ca61f7 100644
---- a/test-data/unit/check-varargs.test
-+++ b/test-data/unit/check-varargs.test
-@@ -420,6 +420,8 @@ f(y='x', *(1,))
- 
- 
- [case testIntersectionTypesAndVarArgs]
-+from foo import *
-+[file foo.pyi]
- from typing import overload
- a, b = None, None # type: (A, B)
- 
-diff --git a/test-data/unit/fixtures/isinstance.pyi b/test-data/unit/fixtures/isinstance.pyi
-index c155a9724a..9d87a16139 100644
---- a/test-data/unit/fixtures/isinstance.pyi
-+++ b/test-data/unit/fixtures/isinstance.pyi
-@@ -20,3 +20,4 @@ class float: pass
- class bool(int): pass
- class str:
-     def __add__(self, other: 'str') -> 'str': pass
-+class ellipsis: pass
-diff --git a/test-data/unit/parse.test b/test-data/unit/parse.test
-index 4335fffaa9..14c1944a15 100644
---- a/test-data/unit/parse.test
-+++ b/test-data/unit/parse.test
-@@ -2542,16 +2542,16 @@ MypyFile:1(
-     NameExpr(interface)))
- 
- [case testFunctionOverload]
--@foo
-+@overload
- def f() -> x: pass
--@foo
-+@overload
- def f() -> y: pass
- [out]
- MypyFile:1(
-   OverloadedFuncDef:1(
-     Decorator:1(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:2(
-         f
-         def () -> x?
-@@ -2559,7 +2559,7 @@ MypyFile:1(
-           PassStmt:2())))
-     Decorator:3(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:4(
-         f
-         def () -> y?
-@@ -2568,9 +2568,9 @@ MypyFile:1(
- 
- [case testFunctionOverloadAndOtherStatements]
- x
--@foo
-+@overload
- def f() -> x: pass
--@foo
-+@overload
- def f() -> y: pass
- x
- [out]
-@@ -2580,7 +2580,7 @@ MypyFile:1(
-   OverloadedFuncDef:2(
-     Decorator:2(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:3(
-         f
-         def () -> x?
-@@ -2588,7 +2588,7 @@ MypyFile:1(
-           PassStmt:3())))
-     Decorator:4(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:5(
-         f
-         def () -> y?
-@@ -2598,18 +2598,18 @@ MypyFile:1(
-     NameExpr(x)))
- 
- [case testFunctionOverloadWithThreeVariants]
--@foo
-+@overload
- def f() -> x: pass
--@foo
-+@overload
- def f() -> y: pass
--@foo
-+@overload
- def f(y): pass
- [out]
- MypyFile:1(
-   OverloadedFuncDef:1(
-     Decorator:1(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:2(
-         f
-         def () -> x?
-@@ -2617,7 +2617,7 @@ MypyFile:1(
-           PassStmt:2())))
-     Decorator:3(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:4(
-         f
-         def () -> y?
-@@ -2625,7 +2625,7 @@ MypyFile:1(
-           PassStmt:4())))
-     Decorator:5(
-       Var(f)
--      NameExpr(foo)
-+      NameExpr(overload)
-       FuncDef:6(
-         f
-         Args(
-@@ -2659,9 +2659,9 @@ MypyFile:1(
- 
- [case testFunctionOverloadWithinFunction]
- def f():
--    @foo
-+    @overload
-     def g(): pass
--    @foo
-+    @overload
-     def g() -> x: pass
- [out]
- MypyFile:1(
-@@ -2671,14 +2671,14 @@ MypyFile:1(
-       OverloadedFuncDef:2(
-         Decorator:2(
-           Var(g)
--          NameExpr(foo)
-+          NameExpr(overload)
-           FuncDef:3(
-             g
-             Block:3(
-               PassStmt:3())))
-         Decorator:4(
-           Var(g)
--          NameExpr(foo)
-+          NameExpr(overload)
-           FuncDef:5(
-             g
-             def () -> x?
-diff --git a/test-data/unit/semanal-classes.test b/test-data/unit/semanal-classes.test
-index f292c303b8..bb79b42641 100644
---- a/test-data/unit/semanal-classes.test
-+++ b/test-data/unit/semanal-classes.test
-@@ -186,12 +186,22 @@ class A:
-   def f(self) -> None: self
-   @overload
-   def f(self, x: 'A') -> None: self
-+  def f(self, *args): self
- [out]
- MypyFile:1(
-   ImportFrom:1(typing, [overload])
-   ClassDef:2(
-     A
-     OverloadedFuncDef:3(
-+      FuncDef:7(
-+        f
-+        Args(
-+          Var(self))
-+        VarArg(
-+          Var(args))
-+        Block:7(
-+          ExpressionStmt:7(
-+            NameExpr(self [l]))))
-       Overload(def (self: __main__.A), \
-                def (self: __main__.A, x: __main__.A))
-       Decorator:3(
 diff --git a/test-data/unit/semanal-errors.test b/test-data/unit/semanal-errors.test
-index aa3778a26d..d21c0532ff 100644
+index a1fca13cc7..d21c0532ff 100755
 --- a/test-data/unit/semanal-errors.test
 +++ b/test-data/unit/semanal-errors.test
-@@ -89,6 +89,7 @@ class A: pass
- def f(): pass
- @overload # E: "A" expects no type arguments, but 1 given
- def f(x: A[int]) -> None: pass
-+def f(*args): pass
- [out]
- 
- [case testInvalidNumberOfGenericArgsInBaseType]
-@@ -651,6 +652,7 @@ def f() -> None:
+@@ -652,7 +652,7 @@ def f() -> None:
      x = 1
      def p(): pass # fail
  [out]
+-main:3: error: Overload outside a stub must have implementation
 +main:3: error: An overloaded function outside a stub file must have an implementation
  main:8: error: Name 'p' already defined
  
  [case testNestedFunctionInMethod]
-@@ -1060,16 +1062,16 @@ def f(x: 'int['): pass # E: syntax error in type comment
+@@ -1062,7 +1062,7 @@ def f(x: 'int['): pass # E: syntax error in type comment
  [case testInconsistentOverload]
  from typing import overload
  def dec(x): pass
--@overload
-+@dec  # E: The implementation for an overloaded function must come last
- def f(): pass
--@dec  # E: 'overload' decorator expected
-+@overload
- def f(): pass
- [out]
- 
- [case testInconsistentOverload2]
- from typing import overload
- def dec(x): pass
--@dec  # E: 'overload' decorator expected
+-@dec  # E: Implementations of overloaded functions must come last
 +@dec  # E: The implementation for an overloaded function must come last
  def f(): pass
  @overload
  def f(): pass
-@@ -1078,9 +1080,9 @@ def f(): pass
- [case testMissingOverloadDecorator]
+@@ -1071,7 +1071,7 @@ def f(): pass
+ [case testInconsistentOverload2]
  from typing import overload
  def dec(x): pass
--@dec  # E: 'overload' decorator expected
-+@dec
+-@dec  # E: Implementations of overloaded functions must come last
++@dec  # E: The implementation for an overloaded function must come last
  def f(): pass
--@dec  # E: 'overload' decorator expected
-+@dec  # E: Name 'f' already defined
+ @overload
  def f(): pass
- [out]
- 
-@@ -1152,7 +1154,7 @@ class A:
+@@ -1154,7 +1154,7 @@ class A:
  [case testOverloadedProperty2]
  from typing import overload
  class A:
--    @overload
+-    @overload  # E: Overload outside a stub must have implementation
 +    @overload  # E: An overloaded function outside a stub file must have an implementation
      def f(self) -> int: pass
      @property  # E: Decorated property not supported
      @overload
-diff --git a/test-data/unit/semanal-types.test b/test-data/unit/semanal-types.test
-index beb3cbfa66..d1f1790a87 100644
---- a/test-data/unit/semanal-types.test
-+++ b/test-data/unit/semanal-types.test
-@@ -722,14 +722,25 @@ MypyFile:1(
- [case testOverloadedFunction]
- from typing import overload
- @overload
--def f(o: object) -> int: o
-+def f(a: object) -> int: a
- @overload
- def f(a: str) -> object: a
-+
-+def f(a: Any) -> Any: return a
-+
- [out]
- MypyFile:1(
-   ImportFrom:1(typing, [overload])
-   OverloadedFuncDef:2(
--    Overload(def (o: builtins.object) -> builtins.int, \
-+    FuncDef:7(
-+      f
-+      Args(
-+        Var(a))
-+      def (a: builtins.Any) -> builtins.Any
-+      Block:7(
-+        ReturnStmt:7(
-+          NameExpr(a [l]))))
-+    Overload(def (a: builtins.object) -> builtins.int, \
-              def (a: builtins.str) -> builtins.object)
-     Decorator:2(
-       Var(f)
-@@ -737,11 +748,11 @@ MypyFile:1(
-       FuncDef:3(
-         f
-         Args(
--          Var(o))
--        def (o: builtins.object) -> builtins.int
-+          Var(a))
-+        def (a: builtins.object) -> builtins.int
-         Block:3(
-           ExpressionStmt:3(
--            NameExpr(o [l])))))
-+            NameExpr(a [l])))))
-     Decorator:4(
-       Var(f)
-       NameExpr(overload [typing.overload])
-@@ -760,11 +771,21 @@ from typing import overload
- def f() -> None: pass
- @overload
- def f(x: int) -> None: pass
-+
-+def f(*args) -> None: pass
-+
- x = f
- [out]
- MypyFile:1(
-   ImportFrom:1(typing, [overload])
-   OverloadedFuncDef:2(
-+    FuncDef:7(
-+      f
-+      def (*args: Any)
-+      VarArg(
-+        Var(args))
-+      Block:7(
-+        PassStmt:7()))
-     Overload(def (), def (x: builtins.int))
-     Decorator:2(
-       Var(f)
-@@ -784,7 +805,7 @@ MypyFile:1(
-         def (x: builtins.int)
-         Block:5(
-           PassStmt:5()))))
--  AssignmentStmt:6(
-+  AssignmentStmt:9(
-     NameExpr(x* [__main__.x])
-     NameExpr(f [__main__.f])))
- 
-@@ -795,6 +816,9 @@ def f():
-     def g(): pass
-     @overload
-     def g(x): pass
-+
-+    def g(*args): pass
-+
-     y = g
- [out]
- MypyFile:1(
-@@ -803,6 +827,12 @@ MypyFile:1(
-     f
-     Block:2(
-       OverloadedFuncDef:3(
-+        FuncDef:8(
-+          g
-+          VarArg(
-+            Var(args))
-+          Block:8(
-+            PassStmt:8()))
-         Overload(def () -> Any, def (x: Any) -> Any)
-         Decorator:3(
-           Var(g)
-@@ -820,7 +850,7 @@ MypyFile:1(
-               Var(x))
-             Block:6(
-               PassStmt:6()))))
--      AssignmentStmt:7(
-+      AssignmentStmt:10(
-         NameExpr(y* [l])
-         NameExpr(g [l])))))
- 
-diff --git a/test-data/unit/typexport-basic.test b/test-data/unit/typexport-basic.test
-index 2440fe75ca..4244d5aac3 100644
---- a/test-data/unit/typexport-basic.test
-+++ b/test-data/unit/typexport-basic.test
-@@ -897,10 +897,12 @@ class A:
-     @overload
-     def f(self) -> None: pass
-     @overload
--    def f(self, x: object) -> None: pass
-+    def f(self, __x: object) -> None: pass
-+
-+    def f(self, *args) -> None: pass
- A.f
- [out]
--MemberExpr(8) : Overload(def (self: A), def (self: A, x: builtins.object))
-+MemberExpr(10) : Overload(def (self: A), def (self: A, builtins.object))
- 
- [case testOverloadedUnboundMethodWithImplicitSig]
- ## MemberExpr
-@@ -909,10 +911,12 @@ class A:
-     @overload
-     def f(self): pass
-     @overload
--    def f(self, x): pass
-+    def f(self, __x): pass
-+
-+    def f(self, *args): pass
- A.f
- [out]
--MemberExpr(8) : Overload(def (self: Any) -> Any, def (self: Any, x: Any) -> Any)
-+MemberExpr(10) : Overload(def (self: Any) -> Any, def (self: Any, Any) -> Any)
- 
- [case testUnboundMethodWithInheritance]
- ## MemberExpr
-@@ -961,10 +965,12 @@ class A(Generic[t]):
-     def f(self, x: t) -> t: pass
-     @overload
-     def f(self) -> object: pass
-+    def f(self, *args): pass
-+
- ab, b = None, None # type: (A[B], B)
- A.f(ab, b)
- [out]
--CallExpr(11) : B
-+CallExpr(13) : B
- 
- [case testUnboundMethodOfGenericClassWithImplicitSig]
- ## MemberExpr
-@@ -1059,28 +1065,32 @@ from typing import overload
- def f(x: int) -> str: pass
- @overload
- def f(x: str) -> int: pass
-+def f(x): pass
- f(1)
- f('')
- [out]
--CallExpr(7) : builtins.str
--CallExpr(8) : builtins.int
-+CallExpr(8) : builtins.str
-+CallExpr(9) : builtins.int
- 
- [case testOverlappingOverloadedFunctionType]
- ## CallExpr
--from typing import overload
-+from typing import overload, Any
- class A: pass
- class B(A): pass
- @overload
- def f(x: B) -> B: pass
- @overload
- def f(x: A) -> A: pass
-+
-+def f(x) -> Any: pass
-+
- a = None # type: A
- b = None # type: B
- f(a)
- f(b)
- [out]
--CallExpr(11) : A
--CallExpr(12) : B
-+CallExpr(14) : A
-+CallExpr(15) : B
- 
- 
- 
-diff --git a/typeshed b/typeshed
-index bd5b33f3b1..48b1962951 160000
---- a/typeshed
-+++ b/typeshed
-@@ -1 +1 @@
--Subproject commit bd5b33f3b18fc8811ad2403d35f21ad6aae94b62
-+Subproject commit 48b19629517677de98cb46b1f52fcbe03f0fa2eb

@@ -1,93 +1,45 @@
 diff --git a/src/main/java/org/springframework/hateoas/ResourceSupport.java b/src/main/java/org/springframework/hateoas/ResourceSupport.java
-index 1b187f65..5e30e1dd 100755
+index 39cb2cdee8..5e30e1dd70 100755
 --- a/src/main/java/org/springframework/hateoas/ResourceSupport.java
 +++ b/src/main/java/org/springframework/hateoas/ResourceSupport.java
-@@ -17,7 +17,9 @@
- 
- import java.util.ArrayList;
- import java.util.Arrays;
-+import java.util.HashMap;
- import java.util.List;
-+import java.util.Map;
- import java.util.Optional;
- import java.util.stream.Collectors;
- 
-@@ -26,6 +28,7 @@
+@@ -28,7 +28,6 @@
  import org.springframework.util.Assert;
  
  import com.fasterxml.jackson.annotation.JsonIgnore;
-+import com.fasterxml.jackson.annotation.JsonInclude;
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+ import com.fasterxml.jackson.annotation.JsonInclude;
  import com.fasterxml.jackson.annotation.JsonProperty;
  
- /**
-@@ -36,9 +39,11 @@
+@@ -37,7 +36,6 @@
+  * 
+  * @author Oliver Gierke
+  */
+-@JsonIgnoreProperties({"embeddedResources"})
  public class ResourceSupport implements Identifiable<Link> {
  
  	private final List<Link> links;
-+	private final Map<String, ResourceSupport> embeddedResources;
+diff --git a/src/main/java/org/springframework/hateoas/hal/ResourcesMixin.java b/src/main/java/org/springframework/hateoas/hal/ResourcesMixin.java
+index 73e804e680..7c4a1fbe6e 100755
+--- a/src/main/java/org/springframework/hateoas/hal/ResourcesMixin.java
++++ b/src/main/java/org/springframework/hateoas/hal/ResourcesMixin.java
+@@ -21,7 +21,6 @@
  
- 	public ResourceSupport() {
- 		this.links = new ArrayList<>();
-+		this.embeddedResources = new HashMap<String, ResourceSupport>();
- 	}
+ import org.springframework.hateoas.Resources;
  
- 	/**
-@@ -151,6 +156,24 @@ public Link getRequiredLink(String rel) {
- 				.collect(Collectors.toList());
- 	}
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+ import com.fasterxml.jackson.annotation.JsonInclude;
+ import com.fasterxml.jackson.annotation.JsonInclude.Include;
+ import com.fasterxml.jackson.annotation.JsonProperty;
+@@ -30,7 +29,6 @@
+ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
  
-+	public void addEmbeddedResource(String rel, ResourceSupport embeddableResource) {
-+		this.embeddedResources.put(rel, embeddableResource);
-+	}
-+
-+	public boolean hasEmbeddedResources() {
-+		return !this.embeddedResources.isEmpty();
-+	}
-+
-+	@JsonProperty("embedded")
-+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-+	public Map<String, ResourceSupport> getEmbeddedResources() {
-+		return this.embeddedResources;
-+	}
-+
-+	public ResourceSupport getEmbeddedResource(String rel) {
-+		return this.embeddedResources.get(rel);
-+	}
-+
- 	/* 
- 	 * (non-Javadoc)
- 	 * @see java.lang.Object#toString()
-@@ -188,4 +211,5 @@ public boolean equals(Object obj) {
- 	public int hashCode() {
- 		return this.links.hashCode();
- 	}
-+
- }
-diff --git a/src/main/java/org/springframework/hateoas/hal/ResourceSupportMixin.java b/src/main/java/org/springframework/hateoas/hal/ResourceSupportMixin.java
-index 70a19114..747ed1fb 100644
---- a/src/main/java/org/springframework/hateoas/hal/ResourceSupportMixin.java
-+++ b/src/main/java/org/springframework/hateoas/hal/ResourceSupportMixin.java
-@@ -16,6 +16,7 @@
- package org.springframework.hateoas.hal;
+ @JsonPropertyOrder({ "content", "links" })
+-@JsonIgnoreProperties({"embeddedResources"})
+ public abstract class ResourcesMixin<T> extends Resources<T> {
  
- import java.util.List;
-+import java.util.Map;
- 
- import javax.xml.bind.annotation.XmlElement;
- 
-@@ -37,4 +38,10 @@
- 	@JsonSerialize(using = Jackson2HalModule.HalLinkListSerializer.class)
- 	@JsonDeserialize(using = Jackson2HalModule.HalLinkListDeserializer.class)
- 	public abstract List<Link> getLinks();
-+
-+	@Override
-+	@XmlElement(name = "embedded")
-+	@JsonProperty("_embedded")
-+	@JsonInclude(Include.NON_EMPTY)
-+	public abstract Map<String, ResourceSupport> getEmbeddedResources();
- }
+ 	@Override
 diff --git a/src/test/java/org/springframework/hateoas/Jackson2ResourceIntegrationTest.java b/src/test/java/org/springframework/hateoas/Jackson2ResourceIntegrationTest.java
-index e98a789c..fdc2f5b8 100755
+index e98a789c0e..fdc2f5b804 100755
 --- a/src/test/java/org/springframework/hateoas/Jackson2ResourceIntegrationTest.java
 +++ b/src/test/java/org/springframework/hateoas/Jackson2ResourceIntegrationTest.java
 @@ -2,8 +2,13 @@
@@ -105,10 +57,10 @@ index e98a789c..fdc2f5b8 100755
  
  /**
 diff --git a/src/test/java/org/springframework/hateoas/ResourceSupportUnitTest.java b/src/test/java/org/springframework/hateoas/ResourceSupportUnitTest.java
-index a29cc8e8..a63c9028 100755
+index ecb1fedf76..a63c902821 100755
 --- a/src/test/java/org/springframework/hateoas/ResourceSupportUnitTest.java
 +++ b/src/test/java/org/springframework/hateoas/ResourceSupportUnitTest.java
-@@ -17,10 +17,17 @@
+@@ -17,7 +17,12 @@
  
  import static org.assertj.core.api.Assertions.*;
  
@@ -121,43 +73,8 @@ index a29cc8e8..a63c9028 100755
  
  import org.junit.Test;
  
-+import org.springframework.hateoas.support.Author;
-+
- /**
-  * Unit tests for {@link ResourceSupport}.
-  * 
-@@ -173,4 +180,29 @@ public void addsLinksViaVarargs() {
- 		assertThat(support.hasLink("self")).isTrue();
- 		assertThat(support.hasLink("another")).isTrue();
- 	}
-+
-+	@Test
-+	public void addEmbeddedResource() {
-+
-+		// given
-+		ResourceSupport support = new ResourceSupport();
-+
-+		Author author = new Author("Alan Watts", "January 6, 1915", "November 16, 1973");
-+		author.add(new Link("/people/alan-watts").withSelfRel());
-+
-+		// when
-+		support.addEmbeddedResource("author", author);
-+		support.add(new Link("/blog-post").withSelfRel(), new Link("/people/alan-watts").withRel("author"));
-+
-+		// then
-+		assertThat(support.hasLink("self")).isTrue();
-+		assertThat(support.hasLink("author")).isTrue();
-+
-+		assertThat(support.hasEmbeddedResources()).isTrue();
-+		assertThat(support.getEmbeddedResource("author").hasLink("self")).isTrue();
-+		assertThat(support.getEmbeddedResource("author").getLinks()).contains(new Link("/people/alan-watts", "self"));
-+		assertThat(((Author) support.getEmbeddedResource("author")).getName()).isEqualTo("Alan Watts");
-+		assertThat(((Author) support.getEmbeddedResource("author")).getBorn()).isEqualTo("January 6, 1915");
-+		assertThat(((Author) support.getEmbeddedResource("author")).getDied()).isEqualTo("November 16, 1973");
-+	}
- }
 diff --git a/src/test/java/org/springframework/hateoas/client/TraversonTest.java b/src/test/java/org/springframework/hateoas/client/TraversonTest.java
-index 281b22ab..f2aab48b 100755
+index 281b22ab4d..f2aab48bdf 100755
 --- a/src/test/java/org/springframework/hateoas/client/TraversonTest.java
 +++ b/src/test/java/org/springframework/hateoas/client/TraversonTest.java
 @@ -20,6 +20,10 @@
@@ -196,102 +113,3 @@ index 281b22ab..f2aab48b 100755
  
  		assertThat(itemResource.hasLink("self")).isTrue();
  		assertThat(itemResource.getRequiredLink("self").expand().getHref())
-diff --git a/src/test/java/org/springframework/hateoas/hal/Jackson2HalIntegrationTest.java b/src/test/java/org/springframework/hateoas/hal/Jackson2HalIntegrationTest.java
-index da01bc9c..cc5973e5 100755
---- a/src/test/java/org/springframework/hateoas/hal/Jackson2HalIntegrationTest.java
-+++ b/src/test/java/org/springframework/hateoas/hal/Jackson2HalIntegrationTest.java
-@@ -37,12 +37,14 @@
- import org.springframework.hateoas.PagedResources.PageMetadata;
- import org.springframework.hateoas.Resource;
- import org.springframework.hateoas.ResourceSupport;
-+import org.springframework.hateoas.ResourceSupportUnitTest;
- import org.springframework.hateoas.Resources;
- import org.springframework.hateoas.UriTemplate;
- import org.springframework.hateoas.core.AnnotationRelProvider;
- import org.springframework.hateoas.core.EmbeddedWrappers;
- import org.springframework.hateoas.hal.HalConfiguration.RenderSingleLinks;
- import org.springframework.hateoas.hal.Jackson2HalModule.HalHandlerInstantiator;
-+import org.springframework.hateoas.support.Author;
- 
- import com.fasterxml.jackson.databind.ObjectMapper;
- 
-@@ -58,14 +60,14 @@
- 	static final String SINGLE_LINK_REFERENCE = "{\"_links\":{\"self\":{\"href\":\"localhost\"}}}";
- 	static final String LIST_LINK_REFERENCE = "{\"_links\":{\"self\":[{\"href\":\"localhost\"},{\"href\":\"localhost2\"}]}}";
- 
--	static final String SIMPLE_EMBEDDED_RESOURCE_REFERENCE = "{\"_embedded\":{\"content\":[\"first\",\"second\"]},\"_links\":{\"self\":{\"href\":\"localhost\"}}}";
--	static final String SINGLE_EMBEDDED_RESOURCE_REFERENCE = "{\"_embedded\":{\"content\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]},\"_links\":{\"self\":{\"href\":\"localhost\"}}}";
--	static final String LIST_EMBEDDED_RESOURCE_REFERENCE = "{\"_embedded\":{\"content\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}},{\"text\":\"test2\",\"number\":2,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]},\"_links\":{\"self\":{\"href\":\"localhost\"}}}";
-+	static final String SIMPLE_EMBEDDED_RESOURCE_REFERENCE = "{\"_links\":{\"self\":{\"href\":\"localhost\"}},\"_embedded\":{\"content\":[\"first\",\"second\"]}}";
-+	static final String SINGLE_EMBEDDED_RESOURCE_REFERENCE = "{\"_links\":{\"self\":{\"href\":\"localhost\"}},\"_embedded\":{\"content\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]}}";
-+	static final String LIST_EMBEDDED_RESOURCE_REFERENCE = "{\"_links\":{\"self\":{\"href\":\"localhost\"}},\"_embedded\":{\"content\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}},{\"text\":\"test2\",\"number\":2,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]}}";
- 
--	static final String ANNOTATED_EMBEDDED_RESOURCE_REFERENCE = "{\"_embedded\":{\"pojos\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]},\"_links\":{\"self\":{\"href\":\"localhost\"}}}";
-+	static final String ANNOTATED_EMBEDDED_RESOURCE_REFERENCE = "{\"_links\":{\"self\":{\"href\":\"localhost\"}},\"_embedded\":{\"pojos\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]}}";
- 	static final String ANNOTATED_EMBEDDED_RESOURCES_REFERENCE = "{\"_embedded\":{\"pojos\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}},{\"text\":\"test2\",\"number\":2,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]}}";
- 
--	static final String ANNOTATED_PAGED_RESOURCES = "{\"_embedded\":{\"pojos\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}},{\"text\":\"test2\",\"number\":2,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]},\"_links\":{\"next\":{\"href\":\"foo\"},\"prev\":{\"href\":\"bar\"}},\"page\":{\"size\":2,\"totalElements\":4,\"totalPages\":2,\"number\":0}}";
-+	static final String ANNOTATED_PAGED_RESOURCES = "{\"_links\":{\"next\":{\"href\":\"foo\"},\"prev\":{\"href\":\"bar\"}},\"_embedded\":{\"pojos\":[{\"text\":\"test1\",\"number\":1,\"_links\":{\"self\":{\"href\":\"localhost\"}}},{\"text\":\"test2\",\"number\":2,\"_links\":{\"self\":{\"href\":\"localhost\"}}}]},\"page\":{\"size\":2,\"totalElements\":4,\"totalPages\":2,\"number\":0}}";
- 
- 	static final Links PAGINATION_LINKS = new Links(new Link("foo", Link.REL_NEXT), new Link("bar", Link.REL_PREVIOUS));
- 
-@@ -127,6 +129,20 @@ public void rendersWithOneExtraRFC5988Attribute() throws Exception {
- 		assertThat(write(resourceSupport)).isEqualTo(SINGLE_WITH_ONE_EXTRA_ATTRIBUTES);
- 	}
- 
-+	@Test
-+	public void rendersEmbeddedResourceSupportAsEmbedded() throws Exception {
-+
-+		ResourceSupport resourceSupport = new ResourceSupport();
-+
-+		Author author = new Author("Alan Watts", "January 6, 1915", "November 16, 1973");
-+		author.add(new Link("/people/alan-watts").withSelfRel());
-+
-+		resourceSupport.addEmbeddedResource("author", author);
-+		resourceSupport.add(new Link("/blog-post").withSelfRel(), new Link("/people/alan-watts").withRel("author"));
-+
-+		assertThat(write(resourceSupport)).isEqualTo("{\"_links\":{\"self\":{\"href\":\"/blog-post\"},\"author\":{\"href\":\"/people/alan-watts\"}},\"_embedded\":{\"author\":{\"name\":\"Alan Watts\",\"born\":\"January 6, 1915\",\"died\":\"November 16, 1973\",\"_links\":{\"self\":{\"href\":\"/people/alan-watts\"}}}}}");
-+	}
-+
- 	@Test
- 	public void deserializeSingleLink() throws Exception {
- 		ResourceSupport expected = new ResourceSupport();
-diff --git a/src/test/java/org/springframework/hateoas/support/Author.java b/src/test/java/org/springframework/hateoas/support/Author.java
-new file mode 100644
-index 00000000..91d4ca4d
---- /dev/null
-+++ b/src/test/java/org/springframework/hateoas/support/Author.java
-@@ -0,0 +1,33 @@
-+/*
-+ * Copyright 2017 the original author or authors.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *      http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package org.springframework.hateoas.support;
-+
-+import lombok.AllArgsConstructor;
-+import lombok.Data;
-+
-+import org.springframework.hateoas.ResourceSupport;
-+
-+/**
-+ * @author Greg Turnquist
-+ */
-+@Data
-+@AllArgsConstructor
-+public class Author extends ResourceSupport {
-+
-+	private String name;
-+	private String born;
-+	private String died;
-+}

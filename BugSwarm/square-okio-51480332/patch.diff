@@ -1,24 +1,12 @@
 diff --git a/okio/src/main/java/okio/Buffer.java b/okio/src/main/java/okio/Buffer.java
-index 3bd11753..d6483f98 100644
+index 9600149364..d6483f9862 100755
 --- a/okio/src/main/java/okio/Buffer.java
 +++ b/okio/src/main/java/okio/Buffer.java
-@@ -45,6 +45,9 @@
-  * This class avoids zero-fill and GC churn by pooling byte arrays.
-  */
- public final class Buffer implements BufferedSource, BufferedSink, Cloneable {
-+  private static final byte[] DIGITS =
-+      { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-+
-   Segment head;
-   long size;
+@@ -413,7 +413,56 @@ public byte getByte(long pos) {
+   @Override public long readDecimalLong() {
+     if (size == 0) throw new IllegalStateException("size == 0");
  
-@@ -407,6 +410,113 @@ public byte getByte(long pos) {
-     return Util.reverseBytesLong(readLong());
-   }
- 
-+  @Override public long readDecimalLong() {
-+    if (size == 0) throw new IllegalStateException("size == 0");
-+
+-    throw new UnsupportedOperationException("Not implemented.");
 +    // This value is always built negatively in order to accommodate Long.MIN_VALUE.
 +    long value = 0;
 +    int seen = 0;
@@ -69,236 +57,59 @@ index 3bd11753..d6483f98 100644
 +
 +    size -= seen;
 +    return negative ? value : -value;
-+  }
-+
-+  @Override public long readHexadecimalUnsignedLong() {
-+    if (size == 0) throw new IllegalStateException("size == 0");
-+
-+    long value = 0;
-+    int seen = 0;
-+
+   }
+ 
+   @Override public long readHexadecimalUnsignedLong() {
+@@ -421,9 +470,8 @@ public byte getByte(long pos) {
+ 
+     long value = 0;
+     int seen = 0;
+-    boolean done = false;
+ 
+-    do {
 +    outer: do {
-+      Segment segment = head;
-+
-+      byte[] data = segment.data;
-+      int pos = segment.pos;
-+      int limit = segment.limit;
-+
-+      for (; pos < limit; pos++) {
-+        int digit;
-+
-+        byte b = data[pos];
-+        if (b >= '0' && b <= '9') {
-+          digit = b - '0';
-+        } else if (b >= 'a' && b <= 'f') {
-+          digit = b - 'a' + 10;
-+        } else if (b >= 'A' && b <= 'F') {
-+          digit = b - 'A' + 10; // We never write uppercase, but we support reading it.
-+        } else {
+       Segment segment = head;
+ 
+       byte[] data = segment.data;
+@@ -441,8 +489,11 @@ public byte getByte(long pos) {
+         } else if (b >= 'A' && b <= 'F') {
+           digit = b - 'A' + 10; // We never write uppercase, but we support reading it.
+         } else {
+-          done = true;
+-          break;
 +          if (seen == 0) {
 +            throw new NumberFormatException(
 +                "Expected leading [0-9a-fA-F] character but was 0x" + Integer.toHexString(b));
 +          }
 +          break outer;
-+        }
-+
-+        if (++seen > 16) {
-+          Buffer buffer = new Buffer().writeHexadecimalUnsignedLong(value).writeByte(b);
-+          throw new NumberFormatException("Number too large: " + buffer.readUtf8());
-+        }
-+
-+        value <<= 4;
-+        value |= digit;
-+      }
-+
-+      if (pos == limit) {
-+        head = segment.pop();
-+        SegmentPool.INSTANCE.recycle(segment);
-+      } else {
-+        segment.pos = pos;
-+      }
+         }
+ 
+         if (++seen > 16) {
+@@ -460,14 +511,7 @@ public byte getByte(long pos) {
+       } else {
+         segment.pos = pos;
+       }
+-    } while (!done && head != null);
+-
+-    if (seen == 0) {
+-      assert head != null; // Head is only null after seen is greater than zero.
+-      throw new NumberFormatException(
+-          "Expected leading [0-9a-fA-F] character but was 0x" + Integer.toHexString(
+-              head.data[head.pos]));
+-    }
 +    } while (head != null);
-+
-+    size -= seen;
-+    return value;
-+  }
-+
-   @Override public ByteString readByteString() {
-     return new ByteString(readByteArray());
-   }
-@@ -775,6 +885,97 @@ public void clear() {
-     return writeLong(reverseBytesLong(v));
-   }
  
-+  @Override public Buffer writeDecimalLong(long v) {
-+    if (v == 0) {
-+      // Both a shortcut and required since the following code can't handle zero.
-+      return writeByte('0');
-+    }
-+
-+    boolean negative = false;
-+    if (v < 0) {
-+      v = -v;
-+      if (v < 0) { // Only true for Long.MIN_VALUE.
-+        return writeUtf8("-9223372036854775808");
-+      }
-+      negative = true;
-+    }
-+
-+    // Binary search for character width which favors matching lower numbers.
-+    int width = //
-+          v < 100000000L
-+        ? v < 10000L
-+        ? v < 100L
-+        ? v < 10L ? 1 : 2
-+        : v < 1000L ? 3 : 4
-+        : v < 1000000L
-+        ? v < 100000L ? 5 : 6
-+        : v < 10000000L ? 7 : 8
-+        : v < 1000000000000L
-+        ? v < 10000000000L
-+        ? v < 1000000000L ? 9 : 10
-+        : v < 100000000000L ? 11 : 12
-+        : v < 1000000000000000L
-+        ? v < 10000000000000L ? 13
-+        : v < 100000000000000L ? 14 : 15
-+        : v < 100000000000000000L
-+        ? v < 10000000000000000L ? 16 : 17
-+        : v < 1000000000000000000L ? 18 : 19;
-+    if (negative) {
-+      ++width;
-+    }
-+
-+    Segment tail = writableSegment(width);
-+    byte[] data = tail.data;
-+    int pos = tail.limit + width; // We write backwards from right to left.
-+    while (v != 0) {
-+      int digit = (int) (v % 10);
-+      data[--pos] = DIGITS[digit];
-+      v /= 10;
-+    }
-+    if (negative) {
-+      data[--pos] = '-';
-+    }
-+
-+    tail.limit += width;
-+    this.size += width;
-+    return this;
-+  }
-+
-+  @Override public Buffer writeHexadecimalUnsignedLong(long v) {
-+    if (v == 0) {
-+      // Both a shortcut and required since the following code can't handle zero.
-+      return writeByte('0');
-+    }
-+
-+    // Binary search for character width which favors matching lower numbers.
-+    int width =  //
-+          (v & 0xFFFFFFFF00000000L) == 0
-+        ? (v & 0xFFFFFFFFFFFF0000L) == 0
-+        ? (v & 0xFFFFFFFFFFFFFF00L) == 0
-+        ? (v & 0xFFFFFFFFFFFFFFF0L) == 0 ? 1 : 2
-+        : (v & 0xFFFFFFFFFFFFF000L) == 0 ? 3 : 4
-+        : (v & 0xFFFFFFFFFF000000L) == 0
-+        ? (v & 0xFFFFFFFFFFF00000L) == 0 ? 5 : 6
-+        : (v & 0xFFFFFFFFF0000000L) == 0 ? 7 : 8
-+        : (v & 0xFFFF000000000000L) == 0
-+        ? (v & 0xFFFFFF0000000000L) == 0
-+        ? (v & 0xFFFFFFF000000000L) == 0 ? 9 : 10
-+        : (v & 0xFFFFF00000000000L) == 0 ? 11 : 12
-+        : (v & 0xFF00000000000000L) == 0
-+        ? (v & 0xFFF0000000000000L) == 0 ? 13 : 14
-+        : (v & 0xF000000000000000L) == 0 ? 15 : 16;
-+
-+    Segment tail = writableSegment(width);
-+    byte[] data = tail.data;
-+    for (int pos = tail.limit + width - 1, start = tail.limit; pos >= start; pos--) {
-+      data[pos] = DIGITS[(int) (v & 0xF)];
-+      v >>>= 4;
-+    }
-+    tail.limit += width;
-+    size += width;
-+    return this;
-+  }
-+
-   /**
-    * Returns a tail segment that we can write at least {@code minimumCapacity}
-    * bytes to, creating it if necessary.
-diff --git a/okio/src/main/java/okio/BufferedSink.java b/okio/src/main/java/okio/BufferedSink.java
-index 0deba922..dc0835ff 100644
---- a/okio/src/main/java/okio/BufferedSink.java
-+++ b/okio/src/main/java/okio/BufferedSink.java
-@@ -77,6 +77,12 @@
-   /** Writes a little-endian long to this sink using eight bytes. */
-   BufferedSink writeLongLe(long v) throws IOException;
- 
-+  /** Writes a long to this sink in signed decimal form (i.e., as a string in base 10). */
-+  BufferedSink writeDecimalLong(long v) throws IOException;
-+
-+  /** Writes a long to this sink in hexadecimal form (i.e., as a string in base 16). */
-+  BufferedSink writeHexadecimalUnsignedLong(long v) throws IOException;
-+
-   /**
-    * Writes complete segments to the underlying sink, if one exists. Like {@link #flush}, but
-    * weaker. Use this to limit the memory held in the buffer to a single segment.
-diff --git a/okio/src/main/java/okio/BufferedSource.java b/okio/src/main/java/okio/BufferedSource.java
-index b13f1bc8..fc204c44 100644
---- a/okio/src/main/java/okio/BufferedSource.java
-+++ b/okio/src/main/java/okio/BufferedSource.java
-@@ -69,6 +69,21 @@
-   /** Removes eight bytes from this source and returns a little-endian long. */
-   long readLongLe() throws IOException;
- 
-+  /**
-+   * Reads a long from this source in signed decimal form (i.e., as a string in base 10). This
-+   * will iterate until a non-digit character is found.
-+   *
-+   * @throws NumberFormatException if the found digits do not fit into a {@code long}.
-+   */
-+  long readDecimalLong() throws IOException;
-+
-+  /**
-+   * Removes 16 bytes from this source and returns a long from the hexadecimal representation.
-+   *
-+   * @throws NullPointerException if the 16 bytes are not valid hexadecimal.
-+   */
-+  long readHexadecimalUnsignedLong() throws IOException;
-+
-   /**
-    * Reads and discards {@code byteCount} bytes from this source. Throws an
-    * {@link java.io.EOFException} if the source is exhausted before the
-diff --git a/okio/src/main/java/okio/RealBufferedSink.java b/okio/src/main/java/okio/RealBufferedSink.java
-index 6a8ba885..d5d4799d 100644
---- a/okio/src/main/java/okio/RealBufferedSink.java
-+++ b/okio/src/main/java/okio/RealBufferedSink.java
-@@ -134,6 +134,18 @@ public RealBufferedSink(Sink sink) {
-     return emitCompleteSegments();
-   }
- 
-+  @Override public BufferedSink writeDecimalLong(long v) throws IOException {
-+    if (closed) throw new IllegalStateException("closed");
-+    buffer.writeDecimalLong(v);
-+    return emitCompleteSegments();
-+  }
-+
-+  @Override public BufferedSink writeHexadecimalUnsignedLong(long v) throws IOException {
-+    if (closed) throw new IllegalStateException("closed");
-+    buffer.writeHexadecimalUnsignedLong(v);
-+    return emitCompleteSegments();
-+  }
-+
-   @Override public BufferedSink emitCompleteSegments() throws IOException {
-     if (closed) throw new IllegalStateException("closed");
-     long byteCount = buffer.completeSegmentByteCount();
+     size -= seen;
+     return value;
 diff --git a/okio/src/main/java/okio/RealBufferedSource.java b/okio/src/main/java/okio/RealBufferedSource.java
-index 5e42aad9..fdc02eee 100644
+index ed2bc4e9dd..fdc02eee80 100755
 --- a/okio/src/main/java/okio/RealBufferedSource.java
 +++ b/okio/src/main/java/okio/RealBufferedSource.java
-@@ -233,6 +233,52 @@ public RealBufferedSource(Source source) {
-     return buffer.readLongLe();
+@@ -234,12 +234,48 @@ public RealBufferedSource(Source source) {
    }
  
-+  @Override public long readDecimalLong() throws IOException {
+   @Override public long readDecimalLong() throws IOException {
+-    request(20);
 +    int pos = 0;
 +    while (true) {
 +      if (!request(pos + 1)) {
@@ -318,10 +129,11 @@ index 5e42aad9..fdc02eee 100644
 +          + Integer.toHexString(buffer.getByte(0)));
 +    }
 +
-+    return buffer.readDecimalLong();
-+  }
-+
-+  @Override public long readHexadecimalUnsignedLong() throws IOException {
+     return buffer.readDecimalLong();
+   }
+ 
+   @Override public long readHexadecimalUnsignedLong() throws IOException {
+-    request(16);
 +    int pos = 0;
 +    while (true) {
 +      if (!request(pos + 1)) {
@@ -341,200 +153,19 @@ index 5e42aad9..fdc02eee 100644
 +          + Integer.toHexString(buffer.getByte(0)));
 +    }
 +
-+    return buffer.readHexadecimalUnsignedLong();
-+  }
-+
-   @Override public void skip(long byteCount) throws IOException {
-     if (closed) throw new IllegalStateException("closed");
-     while (byteCount > 0) {
-diff --git a/okio/src/test/java/okio/BufferedSinkTest.java b/okio/src/test/java/okio/BufferedSinkTest.java
-index 70a7fe3f..ed5fab62 100644
---- a/okio/src/test/java/okio/BufferedSinkTest.java
-+++ b/okio/src/test/java/okio/BufferedSinkTest.java
-@@ -2,6 +2,7 @@
- 
- import java.io.IOException;
- import java.io.OutputStream;
-+import java.math.BigInteger;
- import java.nio.charset.Charset;
- import java.util.Arrays;
- import java.util.List;
-@@ -211,4 +212,41 @@
-     } catch (ArrayIndexOutOfBoundsException expected) {
-     }
+     return buffer.readHexadecimalUnsignedLong();
    }
-+
-+  @Test public void longDecimalString() throws IOException {
-+    assertLongDecimalString(0);
-+    assertLongDecimalString(Long.MIN_VALUE);
-+    assertLongDecimalString(Long.MAX_VALUE);
-+
-+    for (int i = 1; i < 20; i++) {
-+      long value = BigInteger.valueOf(10L).pow(i).longValue();
-+      assertLongDecimalString(value - 1);
-+      assertLongDecimalString(value);
-+    }
-+  }
-+
-+  private void assertLongDecimalString(long value) throws IOException {
-+    sink.writeDecimalLong(value).flush();
-+    String expected = Long.toString(value);
-+    String actual = data.readUtf8();
-+    assertEquals(value + " expected " + expected + " but was " + actual, actual, expected);
-+  }
-+
-+  @Test public void longHexString() throws IOException {
-+    assertLongHexString(0);
-+    assertLongHexString(Long.MIN_VALUE);
-+    assertLongHexString(Long.MAX_VALUE);
-+
-+    for (int i = 0; i < 16; i++) {
-+      assertLongHexString((1 << i) - 1);
-+      assertLongHexString(1 << i);
-+    }
-+  }
-+
-+  private void assertLongHexString(long value) throws IOException {
-+    sink.writeHexadecimalUnsignedLong(value).flush();
-+    String expected = String.format("%x", value);
-+    String actual = data.readUtf8();
-+    assertEquals(value + " expected " + expected + " but was " + actual, actual, expected);
-+  }
- }
+ 
 diff --git a/okio/src/test/java/okio/BufferedSourceTest.java b/okio/src/test/java/okio/BufferedSourceTest.java
-index 21c7d539..8e42ab2d 100644
+index 064cf155f7..8e42ab2d77 100755
 --- a/okio/src/test/java/okio/BufferedSourceTest.java
 +++ b/okio/src/test/java/okio/BufferedSourceTest.java
-@@ -3,6 +3,7 @@
- import java.io.EOFException;
- import java.io.IOException;
- import java.io.InputStream;
-+import java.math.BigInteger;
- import java.nio.charset.Charset;
- import java.util.Arrays;
- import java.util.List;
-@@ -236,7 +237,7 @@
-     }
- 
-     // Verify we read all that we could from the source.
--    assertByteArraysEquals(new byte[]{'H', 'e', 'l', 'l', 'o', 0}, sink);
-+    assertByteArraysEquals(new byte[] { 'H', 'e', 'l', 'l', 'o', 0 }, sink);
-   }
- 
-   @Test public void readIntoByteArray() throws IOException {
-@@ -468,4 +469,115 @@
-     } catch (ArrayIndexOutOfBoundsException expected) {
-     }
-   }
-+
-+  @Test public void longHexString() throws IOException {
-+    assertLongHexString("8000000000000000");
-+    assertLongHexString("fffffffffffffffe");
-+    assertLongHexString("FFFFFFFFFFFFFFFe");
-+    assertLongHexString("ffffffffffffffff");
-+    assertLongHexString("FFFFFFFFFFFFFFFF");
-+    assertLongHexString("0000000000000000");
-+    assertLongHexString("0000000000000001");
-+    assertLongHexString("7999999999999999");
-+
-+    assertLongHexString("FF");
-+    assertLongHexString("01");
-+  }
-+
-+  private void assertLongHexString(String s) throws IOException {
-+    data.writeUtf8(s);
-+    long expected = new BigInteger(s, 16).longValue();
-+    long actual = source.readHexadecimalUnsignedLong();
-+    assertEquals(s + " --> " + expected, expected, actual);
-+  }
-+
-+  @Test public void longHexStringAcrossSegment() throws IOException {
-+    data.writeUtf8(repeat('a', Segment.SIZE - 8)).writeUtf8("FFFFFFFFFFFFFFFF");
-+    source.skip(Segment.SIZE - 8);
-+    assertEquals(-1, source.readHexadecimalUnsignedLong());
-+  }
-+
-+  @Test public void longHexStringTooLongThrows() throws IOException {
-+    try {
-+      data.writeUtf8("fffffffffffffffff");
-+      source.readHexadecimalUnsignedLong();
-+      fail();
-+    } catch (NumberFormatException e) {
-+      assertEquals("Number too large: fffffffffffffffff", e.getMessage());
-+    }
-+  }
-+
-+  @Test public void longHexStringTooShortThrows() throws IOException {
-+    try {
-+      data.writeUtf8(" ");
-+      source.readHexadecimalUnsignedLong();
-+      fail();
-+    } catch (NumberFormatException e) {
-+      assertEquals("Expected leading [0-9a-fA-F] character but was 0x20", e.getMessage());
-+    }
-+  }
-+
-+  @Test public void longDecimalString() throws IOException {
-+    assertLongDecimalString("-9223372036854775808");
-+    assertLongDecimalString("-1");
-+    assertLongDecimalString("0");
-+    assertLongDecimalString("1");
-+    assertLongDecimalString("9223372036854775807");
-+
-+    assertLongDecimalString("00000001");
-+    assertLongDecimalString("-000001");
-+  }
-+
-+  private void assertLongDecimalString(String s) throws IOException {
-+    data.writeUtf8(s);
-+    long expected = Long.parseLong(s);
-+    long actual = source.readDecimalLong();
-+    assertEquals(s + " --> " + expected, expected, actual);
-+  }
-+
-+  @Test public void longDecimalStringAcrossSegment() throws IOException {
-+    data.writeUtf8(repeat('a', Segment.SIZE - 8)).writeUtf8("1234567890123456");
-+    source.skip(Segment.SIZE - 8);
-+    assertEquals(1234567890123456L, source.readDecimalLong());
-+  }
-+
-+  @Test public void longDecimalStringTooLongThrows() throws IOException {
-+    try {
-+      data.writeUtf8("12345678901234567890"); // Too many digits.
-+      source.readDecimalLong();
-+      fail();
-+    } catch (NumberFormatException e) {
-+      assertEquals("Number too large: 12345678901234567890", e.getMessage());
-+    }
-+  }
-+
-+  @Test public void longDecimalStringTooHighThrows() throws IOException {
-+    try {
-+      data.writeUtf8("9223372036854775808"); // Right size but cannot fit.
-+      source.readDecimalLong();
-+      fail();
-+    } catch (NumberFormatException e) {
-+      assertEquals("Number too large: 9223372036854775808", e.getMessage());
-+    }
-+  }
-+
-+  @Test public void longDecimalStringTooLowThrows() throws IOException {
-+    try {
-+      data.writeUtf8("-9223372036854775809"); // Right size but cannot fit.
-+      source.readDecimalLong();
-+      fail();
-+    } catch (NumberFormatException e) {
-+      assertEquals("Number too large: -9223372036854775809", e.getMessage());
-+    }
-+  }
-+
-+  @Test public void longDecimalStringTooShortThrows() throws IOException {
-+    try {
-+      data.writeUtf8(" ");
-+      source.readDecimalLong();
-+      fail();
-+    } catch (NumberFormatException e) {
+@@ -577,7 +577,7 @@ private void assertLongDecimalString(String s) throws IOException {
+       source.readDecimalLong();
+       fail();
+     } catch (NumberFormatException e) {
+-      assertEquals("Expected leading [0-9] character but was 0x20", e.getMessage());
 +      assertEquals("Expected leading [0-9] or '-' character but was 0x20", e.getMessage());
-+    }
-+  }
+     }
+   }
  }

@@ -1,5 +1,5 @@
 diff --git a/doc/modules/model_evaluation.rst b/doc/modules/model_evaluation.rst
-index d7361127d944..d311e60c9f12 100644
+index d7361127d9..d311e60c9f 100755
 --- a/doc/modules/model_evaluation.rst
 +++ b/doc/modules/model_evaluation.rst
 @@ -1405,7 +1405,7 @@ Dummy estimators
@@ -12,7 +12,7 @@ index d7361127d944..d311e60c9f12 100644
  - ``stratified`` generates random predictions by respecting the training
    set class distribution.
 diff --git a/sklearn/linear_model/logistic.py b/sklearn/linear_model/logistic.py
-index 1fcea4a0faa9..a5e532884aa9 100644
+index 1fcea4a0fa..a5e532884a 100755
 --- a/sklearn/linear_model/logistic.py
 +++ b/sklearn/linear_model/logistic.py
 @@ -649,7 +649,7 @@ def logistic_regression_path(X, y, pos_class=None, Cs=10, fit_intercept=True,
@@ -25,7 +25,7 @@ index 1fcea4a0faa9..a5e532884aa9 100644
  
      if coef is not None:
 diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
-index f82ca9de4965..6f6095c30360 100644
+index f82ca9de49..6f6095c303 100755
 --- a/sklearn/linear_model/ridge.py
 +++ b/sklearn/linear_model/ridge.py
 @@ -397,11 +397,11 @@ def ridge_regression(X, y, alpha, sample_weight=None, solver='auto',
@@ -42,95 +42,3 @@ index f82ca9de4965..6f6095c30360 100644
              if return_intercept:
                  coef[i] = coef_[:-1]
                  intercept[i] = coef_[-1]
-diff --git a/sklearn/linear_model/sag_fast.pyx b/sklearn/linear_model/sag_fast.pyx
-index 53348c65683a..a724db98fb43 100644
---- a/sklearn/linear_model/sag_fast.pyx
-+++ b/sklearn/linear_model/sag_fast.pyx
-@@ -55,12 +55,13 @@ cdef class MultinomialLogLoss:
-         """Multinomial Logistic regression loss.
- 
-         The multinomial logistic loss is equal to:
--        loss = - w \sum_c \delta_{y,c} (prediction[c] - logsumexp(prediction))
--             = w (logsumexp(prediction) - prediction[y])
-+        loss = - sw \sum_c \delta_{y,c} (prediction[c] - logsumexp(prediction))
-+             = sw (logsumexp(prediction) - prediction[y])
- 
-         where:
--            prediction = dot(x, w) + intercept
-+            prediction = dot(x_sample, weights) + intercept
-             \delta_{y,c} = 1 if (y == c) else 0
-+            sw = sample_weight
- 
-         Parameters
-         ----------
-@@ -98,12 +99,13 @@ cdef class MultinomialLogLoss:
-         """Multinomial Logistic regression gradient of the loss.
- 
-         The gradient of the multinomial logistic loss is equal to:
--        grad_c = - w * (p[c] - \delta_{y,c})
-+        grad_c = - sw * (p[c] - \delta_{y,c})
- 
-         where:
-             p[c] = exp(logsumexp(prediction) - prediction[c])
--            prediction = dot(x, w) + intercept
-+            prediction = dot(sample, weights) + intercept
-             \delta_{y,c} = 1 if (y == c) else 0
-+            sw = sample_weight
- 
-         Note that to obtain the true gradient, this value has to be multiplied
-         by the sample vector x.
-diff --git a/sklearn/linear_model/tests/test_sag.py b/sklearn/linear_model/tests/test_sag.py
-index 9b85d1469197..3cb02013188f 100644
---- a/sklearn/linear_model/tests/test_sag.py
-+++ b/sklearn/linear_model/tests/test_sag.py
-@@ -14,6 +14,7 @@
- from sklearn.linear_model.base import make_dataset
- from sklearn.linear_model.logistic import _multinomial_loss_grad
- 
-+from sklearn.utils.extmath import logsumexp
- from sklearn.utils.testing import assert_almost_equal
- from sklearn.utils.testing import assert_array_almost_equal
- from sklearn.utils.testing import assert_greater
-@@ -756,5 +757,42 @@ def test_multinomial_loss():
-     grad_2 = grad_2.reshape(n_classes, -1)
-     grad_2 = grad_2[:, :-1].T
- 
-+    # comparison
-     assert_array_almost_equal(grad_1, grad_2)
-     assert_almost_equal(loss_1, loss_2)
-+
-+
-+def test_multinomial_loss_ground_truth():
-+    # n_samples, n_features, n_classes = 4, 2, 3
-+    n_classes = 3
-+    X = np.array([[1.1, 2.2], [2.2, -4.4], [3.3, -2.2], [1.1, 1.1]])
-+    y = np.array([0, 1, 2, 0])
-+    lbin = LabelBinarizer()
-+    Y_bin = lbin.fit_transform(y)
-+
-+    weights = np.array([[0.1, 0.2, 0.3], [1.1, 1.2, -1.3]])
-+    intercept = np.array([1., 0, -.2])
-+    sample_weights = np.array([0.8, 1, 1, 0.8])
-+
-+    prediction = np.dot(X, weights) + intercept
-+    logsumexp_prediction = logsumexp(prediction, axis=1)
-+    p = prediction - logsumexp_prediction[:, np.newaxis]
-+    loss_1 = -(sample_weights[:, np.newaxis] * p * Y_bin).sum()
-+    diff = sample_weights[:, np.newaxis] * (np.exp(p) - Y_bin)
-+    grad_1 = np.dot(X.T, diff)
-+
-+    weights_intercept = np.vstack((weights, intercept)).T.ravel()
-+    loss_2, grad_2, _ = _multinomial_loss_grad(weights_intercept, X, Y_bin,
-+                                               0.0, sample_weights)
-+    grad_2 = grad_2.reshape(n_classes, -1)
-+    grad_2 = grad_2[:, :-1].T
-+
-+    assert_almost_equal(loss_1, loss_2)
-+    assert_array_almost_equal(grad_1, grad_2)
-+
-+    # ground truth
-+    loss_gt = 11.680360354325961
-+    grad_gt = np.array([[-0.557487, -1.619151, +2.176638],
-+                        [-0.903942, +5.258745, -4.354803]])
-+    assert_almost_equal(loss_1, loss_gt)
-+    assert_array_almost_equal(grad_1, grad_gt)

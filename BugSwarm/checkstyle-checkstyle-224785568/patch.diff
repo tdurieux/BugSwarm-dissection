@@ -1,548 +1,5 @@
-diff --git a/config/suppressions.xml b/config/suppressions.xml
-index 1b557fa897..2d234218a1 100644
---- a/config/suppressions.xml
-+++ b/config/suppressions.xml
-@@ -92,7 +92,5 @@
- 
-     <!-- Until https://github.com/checkstyle/checkstyle/issues/3496 -->
-     <suppress id="returnCountMaxOne" files=".*[\\/]ant[\\/]|.*[\\/]filters[\\/]|.*[\\/]api[\\/]|.*[\\/]annotation[\\/]|
--        |.*[\\/]coding[\\/]|.*[\\/]design[\\/]|.*[\\/]imports[\\/]|.*[\\/]indentation[\\/]|.*[\\/]javadoc[\\/]|
--        |.*[\\/]naming[\\/]|.*[\\/]regexp[\\/]|.*[\\/]sizes[\\/]|.*[\\/]whitespace[\\/]|.*[\\/]doclets[\\/]|.*[\\/]gui[\\/]|
--        |.*[\\/]utils[\\/]|.*[\\/]doclets[\\/]|.*[\\/]internal[\\/]"/>
-+        |.*[\\/]coding[\\/]|.*[\\/]indentation[\\/]|.*[\\/]javadoc[\\/]"/>
- </suppressions>
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/MutableExceptionCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/MutableExceptionCheck.java
-index cd39fad7e4..70d558c610 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/MutableExceptionCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/design/MutableExceptionCheck.java
-@@ -157,6 +157,7 @@ private boolean isNamedAsException(DetailAST ast) {
-      * @return true if extended class name conforms to specified format
-      */
-     private boolean isExtendedClassNamedAsException(DetailAST ast) {
-+        boolean result = false;
-         final DetailAST extendsClause = ast.findFirstToken(TokenTypes.EXTENDS_CLAUSE);
-         if (extendsClause != null) {
-             DetailAST currentNode = extendsClause;
-@@ -164,8 +165,8 @@ private boolean isExtendedClassNamedAsException(DetailAST ast) {
-                 currentNode = currentNode.getLastChild();
-             }
-             final String extendedClassName = currentNode.getText();
--            return extendedClassNameFormat.matcher(extendedClassName).matches();
-+            result = extendedClassNameFormat.matcher(extendedClassName).matches();
-         }
--        return false;
-+        return result;
-     }
- }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/CustomImportOrderCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/CustomImportOrderCheck.java
-index feb3dd540c..54a0b72462 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/CustomImportOrderCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/CustomImportOrderCheck.java
-@@ -593,12 +593,14 @@ private String getNextImportGroup(int currentGroupNumber) {
-      *        true, if current group contains at least one import.
-      */
-     private boolean hasAnyImportInCurrentGroup(String currentGroup) {
-+        boolean result = false;
-         for (ImportDetails currentImport : importToGroupList) {
-             if (currentGroup.equals(currentImport.getImportGroup())) {
--                return true;
-+                result = true;
-+                break;
-             }
-         }
--        return false;
-+        return result;
-     }
- 
-     /**
-@@ -723,12 +725,11 @@ private int getCountOfEmptyLinesBefore(int lineNo) {
-      * @return full path or null.
-      */
-     private static String getFullImportIdent(DetailAST token) {
--        if (token == null) {
--            return "";
--        }
--        else {
--            return FullIdent.createFullIdent(token.findFirstToken(TokenTypes.DOT)).getText();
-+        String ident = "";
-+        if (token != null) {
-+            ident = FullIdent.createFullIdent(token.findFirstToken(TokenTypes.DOT)).getText();
-         }
-+        return ident;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/IllegalImportCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/IllegalImportCheck.java
-index 7e247f4416..4c53ccc8aa 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/IllegalImportCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/IllegalImportCheck.java
-@@ -123,11 +123,13 @@ public void visitToken(DetailAST ast) {
-      * @return if {@code importText} contains an illegal package prefix
-      */
-     private boolean isIllegalImport(String importText) {
-+        boolean isIllegal = false;
-         for (String element : illegalPkgs) {
-             if (importText.startsWith(element + ".")) {
--                return true;
-+                isIllegal = true;
-+                break;
-             }
-         }
--        return false;
-+        return isIllegal;
-     }
- }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControl.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControl.java
-index c7dcd9e6e6..44247355a9 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControl.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControl.java
-@@ -271,19 +271,19 @@ else if (parent == null) {
-      * @param inPkg the package doing the import.
-      * @return an {@link AccessResult}.
-      */
--    private AccessResult localCheckAccess(final String inPkg,
--        final String forImport) {
--        for (AbstractImportRule r : rules) {
-+    private AccessResult localCheckAccess(final String inPkg, final String forImport) {
-+        AccessResult localCheckAccessResult = AccessResult.UNKNOWN;
-+        for (AbstractImportRule importRule : rules) {
-             // Check if an import rule is only meant to be applied locally.
--            if (r.isLocalOnly() && !matchesExactly(inPkg)) {
-+            if (importRule.isLocalOnly() && !matchesExactly(inPkg)) {
-                 continue;
-             }
--            final AccessResult result = r.verifyImport(forImport);
-+            final AccessResult result = importRule.verifyImport(forImport);
-             if (result != AccessResult.UNKNOWN) {
--                return result;
-+                localCheckAccessResult = result;
-             }
-         }
--        return AccessResult.UNKNOWN;
-+        return localCheckAccessResult;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/LocalVariableNameCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/LocalVariableNameCheck.java
-index ccb2496b75..4d7da9fe71 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/LocalVariableNameCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/LocalVariableNameCheck.java
-@@ -113,15 +113,17 @@ public final void setAllowOneCharVarInForLoop(boolean allow) {
- 
-     @Override
-     protected final boolean mustCheckName(DetailAST ast) {
-+        final boolean result;
-         if (allowOneCharVarInForLoop && isForLoopVariable(ast)) {
--            final String variableName =
--                    ast.findFirstToken(TokenTypes.IDENT).getText();
--            return !SINGLE_CHAR.matcher(variableName).find();
-+            final String variableName = ast.findFirstToken(TokenTypes.IDENT).getText();
-+            result = !SINGLE_CHAR.matcher(variableName).find();
-         }
--        final DetailAST modifiersAST =
--            ast.findFirstToken(TokenTypes.MODIFIERS);
--        final boolean isFinal = modifiersAST.branchContains(TokenTypes.FINAL);
--        return !isFinal && ScopeUtils.isLocalVariableDef(ast);
-+        else {
-+            final DetailAST modifiersAST = ast.findFirstToken(TokenTypes.MODIFIERS);
-+            final boolean isFinal = modifiersAST.branchContains(TokenTypes.FINAL);
-+            result = !isFinal && ScopeUtils.isLocalVariableDef(ast);
-+        }
-+        return result;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-index 94a702c897..2b73218a08 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/DetectorOptions.java
-@@ -117,15 +117,14 @@ public MatchSuppressor getSuppressor() {
-      * @return the pattern to use when matching.
-      */
-     public Pattern getPattern() {
--        if (pattern != null) {
--            return pattern;
--        }
--        int options = compileFlags;
-+        if (pattern == null) {
-+            int options = compileFlags;
- 
--        if (ignoreCase) {
--            options |= Pattern.CASE_INSENSITIVE;
-+            if (ignoreCase) {
-+                options |= Pattern.CASE_INSENSITIVE;
-+            }
-+            pattern = Pattern.compile(format, options);
-         }
--        pattern = Pattern.compile(format, options);
-         return pattern;
-     }
- 
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodCountCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodCountCheck.java
-index 05339249b6..0ff4916428 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodCountCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/MethodCountCheck.java
-@@ -252,14 +252,11 @@ private void increment(Scope scope) {
-          * @return the value of a scope counter
-          */
-         private int value(Scope scope) {
--            final Integer value = counts.get(scope);
--
-+            Integer value = counts.get(scope);
-             if (value == null) {
--                return 0;
--            }
--            else {
--                return value;
-+                value = 0;
-             }
-+            return value;
-         }
- 
-         /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
-index 095e02e7f7..016dd569f5 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
-@@ -544,13 +544,14 @@ private boolean hasEmptyLine(int startLine, int endLine) {
-      * @return true, if token have empty line before.
-      */
-     private boolean hasEmptyLineBefore(DetailAST token) {
-+        boolean result = false;
-         final int lineNo = token.getLineNo();
--        if (lineNo == 1) {
--            return false;
-+        if (lineNo != 1) {
-+            // [lineNo - 2] is the number of the previous line as the numbering starts from zero.
-+            final String lineBefore = getLines()[lineNo - 2];
-+            result = lineBefore.trim().isEmpty();
-         }
--        //  [lineNo - 2] is the number of the previous line because the numbering starts from zero.
--        final String lineBefore = getLines()[lineNo - 2];
--        return lineBefore.trim().isEmpty();
-+        return result;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
-index 2c0ec7cbc8..789204af2e 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/GenericWhitespaceCheck.java
-@@ -291,14 +291,15 @@ else if (Character.isWhitespace(line.charAt(before))
-      * @param line the line to check
-      * @return whether there are only whitespaces (or nothing)
-      */
--    private static boolean containsWhitespaceBetween(
--            int fromIndex, int toIndex, String line) {
-+    private static boolean containsWhitespaceBetween(int fromIndex, int toIndex, String line) {
-+        boolean result = true;
-         for (int i = fromIndex; i < toIndex; i++) {
-             if (!Character.isWhitespace(line.charAt(i))) {
--                return false;
-+                result = false;
-+                break;
-             }
-         }
--        return true;
-+        return result;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheck.java
-index f5972820b9..130a549019 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheck.java
-@@ -508,18 +508,21 @@ private boolean isEmptyBlock(DetailAST ast, int parentType) {
-      *         node.
-      */
-     private static boolean isEmptyBlock(DetailAST ast, int parentType, int match) {
-+        final boolean result;
-         final int type = ast.getType();
-         if (type == TokenTypes.RCURLY) {
-             final DetailAST parent = ast.getParent();
-             final DetailAST grandParent = ast.getParent().getParent();
--            return parentType == TokenTypes.SLIST
-+            result = parentType == TokenTypes.SLIST
-                     && parent.getFirstChild().getType() == TokenTypes.RCURLY
-                     && grandParent.getType() == match;
-         }
--
--        return type == TokenTypes.SLIST
-+        else {
-+            result = type == TokenTypes.SLIST
-                 && parentType == match
-                 && ast.getFirstChild().getType() == TokenTypes.RCURLY;
-+        }
-+        return result;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDoclet.java b/src/main/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDoclet.java
-index 733339e242..ceefd3f552 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDoclet.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/doclets/TokenTypesDoclet.java
-@@ -90,10 +90,11 @@ public static boolean start(RootDoc root)
-      * @return option length (how many parts are in option).
-      */
-     public static int optionLength(String option) {
-+        int length = 0;
-         if (DEST_FILE_OPT.equals(option)) {
--            return 2;
-+            length = 2;
-         }
--        return 0;
-+        return length;
-     }
- 
-     /**
-@@ -104,21 +105,21 @@ public static int optionLength(String option) {
-      */
-     public static boolean checkOptions(String[][] options, DocErrorReporter reporter) {
-         boolean foundDestFileOption = false;
-+        boolean onlyOneDestFileOption = true;
-         for (final String[] opt : options) {
-             if (DEST_FILE_OPT.equals(opt[0])) {
-                 if (foundDestFileOption) {
-                     reporter.printError("Only one -destfile option allowed.");
--                    return false;
-+                    onlyOneDestFileOption = false;
-+                    break;
-                 }
-                 foundDestFileOption = true;
-             }
-         }
-         if (!foundDestFileOption) {
--            final String message =
--                "Usage: javadoc -destfile file -doclet TokenTypesDoclet ...";
--            reporter.printError(message);
-+            reporter.printError("Usage: javadoc -destfile file -doclet TokenTypesDoclet ...");
-         }
--        return foundDestFileOption;
-+        return onlyOneDestFileOption && foundDestFileOption;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentation.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentation.java
-index 56e3ca85d2..53c4bfdf4d 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentation.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/CodeSelectorPresentation.java
-@@ -122,13 +122,15 @@ private void findSelectionPositions(DetailNode detailNode) {
-      * @return Last position of node without children.
-      */
-     private int findLastPosition(final DetailAST astNode) {
-+        final int lastPosition;
-         if (astNode.getChildCount() == 0) {
--            return lines2position.get(astNode.getLineNo()) + astNode.getColumnNo()
-+            lastPosition = lines2position.get(astNode.getLineNo()) + astNode.getColumnNo()
-                     + astNode.getText().length();
-         }
-         else {
--            return findLastPosition(astNode.getLastChild());
-+            lastPosition = findLastPosition(astNode.getLastChild());
-         }
-+        return lastPosition;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTable.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTable.java
-index 20ece7d239..d6847e27a1 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTable.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/TreeTable.java
-@@ -194,14 +194,12 @@ public void updateUI() {
-      */
-     @Override
-     public int getEditingRow() {
-+        int rowIndex = -1;
-         final Class<?> editingClass = getColumnClass(editingColumn);
--
--        if (editingClass == ParseTreeTableModel.class) {
--            return -1;
--        }
--        else {
--            return editingRow;
-+        if (editingClass != ParseTreeTableModel.class) {
-+            rowIndex = editingRow;
-         }
-+        return rowIndex;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java b/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-index 8d3638e44e..98a208ad2d 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/utils/CommonUtils.java
-@@ -150,12 +150,14 @@ public static boolean matchesFileExtension(File file, String... fileExtensions)
-      * @return whether there is only whitespace
-      */
-     public static boolean hasWhitespaceBefore(int index, String line) {
-+        boolean result = true;
-         for (int i = 0; i < index; i++) {
-             if (!Character.isWhitespace(line.charAt(i))) {
--                return false;
-+                result = false;
-+                break;
-             }
-         }
--        return true;
-+        return result;
-     }
- 
-     /**
-@@ -214,13 +216,14 @@ public static int lengthExpandedTabs(String inputString,
-      * @return true if the pattern is valid false otherwise
-      */
-     public static boolean isPatternValid(String pattern) {
-+        boolean isValid = true;
-         try {
-             Pattern.compile(pattern);
-         }
-         catch (final PatternSyntaxException ignored) {
--            return false;
-+            isValid = false;
-         }
--        return true;
-+        return isValid;
-     }
- 
-     /**
-@@ -229,14 +232,15 @@ public static boolean isPatternValid(String pattern) {
-      * @return the base class name from a fully qualified name
-      */
-     public static String baseClassName(String type) {
-+        final String className;
-         final int index = type.lastIndexOf('.');
--
-         if (index == -1) {
--            return type;
-+            className = type;
-         }
-         else {
--            return type.substring(index + 1);
-+            className = type.substring(index + 1);
-         }
-+        return className;
-     }
- 
-     /**
-@@ -250,12 +254,16 @@ public static String baseClassName(String type) {
-      *     path or path if base directory is null.
-      */
-     public static String relativizeAndNormalizePath(final String baseDirectory, final String path) {
-+        final String resultPath;
-         if (baseDirectory == null) {
--            return path;
-+            resultPath = path;
-+        }
-+        else {
-+            final Path pathAbsolute = Paths.get(path).normalize();
-+            final Path pathBase = Paths.get(baseDirectory).normalize();
-+            resultPath = pathBase.relativize(pathAbsolute).toString();
-         }
--        final Path pathAbsolute = Paths.get(path).normalize();
--        final Path pathBase = Paths.get(baseDirectory).normalize();
--        return pathBase.relativize(pathAbsolute).toString();
-+        return resultPath;
-     }
- 
-     /**
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtils.java b/src/main/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtils.java
-index f1044021aa..1be7fdd419 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtils.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/utils/JavadocUtils.java
-@@ -332,13 +332,9 @@ public static DetailNode getFirstChild(DetailNode node) {
-      * @return true if node contains any node of type type among children on any deep level.
-      */
-     public static boolean containsInBranch(DetailNode node, int type) {
-+        boolean result = true;
-         DetailNode curNode = node;
--        while (true) {
--
--            if (type == curNode.getType()) {
--                return true;
--            }
--
-+        while (type != curNode.getType()) {
-             DetailNode toVisit = getFirstChild(curNode);
-             while (curNode != null && toVisit == null) {
-                 toVisit = getNextSibling(curNode);
-@@ -348,13 +344,13 @@ public static boolean containsInBranch(DetailNode node, int type) {
-             }
- 
-             if (curNode == toVisit) {
-+                result = false;
-                 break;
-             }
- 
-             curNode = toVisit;
-         }
--
--        return false;
-+        return result;
-     }
- 
-     /**
-@@ -364,15 +360,16 @@ public static boolean containsInBranch(DetailNode node, int type) {
-      * @return next sibling.
-      */
-     public static DetailNode getNextSibling(DetailNode node) {
-+        DetailNode nextSibling = null;
-         final DetailNode parent = node.getParent();
-         if (parent != null) {
-             final int nextSiblingIndex = node.getIndex() + 1;
-             final DetailNode[] children = parent.getChildren();
-             if (nextSiblingIndex <= children.length - 1) {
--                return children[nextSiblingIndex];
-+                nextSibling = children[nextSiblingIndex];
-             }
-         }
--        return null;
-+        return nextSibling;
-     }
- 
-     /**
-@@ -396,13 +393,14 @@ public static DetailNode getNextSibling(DetailNode node, int tokenType) {
-      * @return previous sibling
-      */
-     public static DetailNode getPreviousSibling(DetailNode node) {
-+        DetailNode previousSibling = null;
-         final DetailNode parent = node.getParent();
-         final int previousSiblingIndex = node.getIndex() - 1;
-         final DetailNode[] children = parent.getChildren();
-         if (previousSiblingIndex >= 0) {
--            return children[previousSiblingIndex];
-+            previousSibling = children[previousSiblingIndex];
-         }
--        return null;
-+        return previousSibling;
-     }
- 
-     /**
-@@ -412,15 +410,18 @@ public static DetailNode getPreviousSibling(DetailNode node) {
-      * @return a token name
-      */
-     public static String getTokenName(int id) {
-+        final String name;
-         if (id == JavadocTokenTypes.EOF) {
--            return "EOF";
-+            name = "EOF";
-         }
--        if (id > TOKEN_VALUE_TO_NAME.length - 1) {
-+        else if (id > TOKEN_VALUE_TO_NAME.length - 1) {
-             throw new IllegalArgumentException(UNKNOWN_JAVADOC_TOKEN_ID_EXCEPTION_MESSAGE + id);
-         }
--        final String name = TOKEN_VALUE_TO_NAME[id];
--        if (name == null) {
--            throw new IllegalArgumentException(UNKNOWN_JAVADOC_TOKEN_ID_EXCEPTION_MESSAGE + id);
-+        else {
-+            name = TOKEN_VALUE_TO_NAME[id];
-+            if (name == null) {
-+                throw new IllegalArgumentException(UNKNOWN_JAVADOC_TOKEN_ID_EXCEPTION_MESSAGE + id);
-+            }
-         }
-         return name;
-     }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
-index d58554f9b6..2aeb83e7a3 100644
+index d58554f9b6..2aeb83e7a3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 @@ -40,7 +40,7 @@
@@ -626,187 +83,182 @@ index d58554f9b6..2aeb83e7a3 100644
      }
  
      @Test
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-index 2d485bd6a4..b8e5491fc0 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/AllChecksTest.java
-@@ -539,11 +539,13 @@ private static void verifyCheckstyleMessage(Map<String, List<String>> usedMessag
-      */
-     private static boolean isSubset(int[] array, int... arrayToCheckIn) {
-         Arrays.sort(arrayToCheckIn);
-+        boolean result = true;
-         for (final int element : array) {
-             if (Arrays.binarySearch(arrayToCheckIn, element) < 0) {
--                return false;
-+                result = false;
-+                break;
-             }
-         }
--        return true;
-+        return result;
-     }
- }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/CheckUtil.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/CheckUtil.java
-index c9e05180a6..e5aa345de4 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/CheckUtil.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/CheckUtil.java
-@@ -319,8 +319,9 @@ else if (module == RegexpSinglelineCheck.class
-      */
-     public static String getCheckMessage(Class<?> module, Locale locale, String messageKey,
-             Object... arguments) {
--        final Properties pr = new Properties();
-+        String checkMessage;
-         try {
-+            final Properties pr = new Properties();
-             if (locale == Locale.ENGLISH) {
-                 pr.load(module.getResourceAsStream("messages.properties"));
-             }
-@@ -328,17 +329,19 @@ public static String getCheckMessage(Class<?> module, Locale locale, String mess
-                 pr.load(module
-                         .getResourceAsStream("messages_" + locale.getLanguage() + ".properties"));
-             }
-+            final MessageFormat formatter = new MessageFormat(pr.getProperty(messageKey), locale);
-+            checkMessage = formatter.format(arguments);
-         }
-         catch (IOException ex) {
--            return null;
-+            checkMessage = null;
-         }
--        final MessageFormat formatter = new MessageFormat(pr.getProperty(messageKey), locale);
--        return formatter.format(arguments);
-+        return checkMessage;
-     }
- 
-     public static String getTokenText(int[] tokens, int... subtractions) {
-+        final String tokenText;
-         if (subtractions.length == 0 && Arrays.equals(tokens, TokenUtils.getAllTokenIds())) {
--            return "TokenTypes.";
-+            tokenText = "TokenTypes.";
-         }
-         else {
-             final StringBuilder result = new StringBuilder();
-@@ -375,8 +378,9 @@ public static String getTokenText(int[] tokens, int... subtractions) {
-                 result.append(".");
-             }
- 
--            return result.toString();
-+            tokenText = result.toString();
-         }
-+        return tokenText;
-     }
- 
-     public static Set<String> getTokenNameSet(int... tokens) {
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/XmlUtil.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/XmlUtil.java
-index aba22848a8..9333026324 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/XmlUtil.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/XmlUtil.java
-@@ -40,6 +40,7 @@ private XmlUtil() {
- 
-     public static Document getRawXml(String fileName, String code, String unserializedSource)
-             throws ParserConfigurationException {
-+        Document rawXml = null;
-         try {
-             final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-             factory.setValidating(false);
-@@ -47,14 +48,14 @@ public static Document getRawXml(String fileName, String code, String unserializ
- 
-             final DocumentBuilder builder = factory.newDocumentBuilder();
- 
--            return builder.parse(new InputSource(new StringReader(code)));
-+            rawXml = builder.parse(new InputSource(new StringReader(code)));
-         }
-         catch (IOException | SAXException ex) {
-             Assert.fail(fileName + " has invalid xml (" + ex.getMessage() + "): "
-                     + unserializedSource);
-         }
- 
--        return null;
-+        return rawXml;
-     }
- 
-     public static Set<Node> getChildrenElements(Node node) {
-@@ -70,13 +71,15 @@ public static Document getRawXml(String fileName, String code, String unserializ
-     }
- 
-     public static Node getFirstChildElement(Node node) {
-+        Node firstChildElement = null;
-         for (Node child = node.getFirstChild(); child != null; child = child.getNextSibling()) {
-             if (child.getNodeType() != Node.TEXT_NODE) {
--                return child;
-+                firstChildElement = child;
-+                break;
-             }
-         }
- 
--        return null;
-+        return firstChildElement;
-     }
- 
-     public static Set<Node> findChildElementsByTag(Node node, String tag) {
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-similarity index 91%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-index bf75c7bd26..b8c1df3f66 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockCase.java
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
+new file mode 100755
+index 0000000000..b8c1df3f66
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCase.java
-@@ -2,9 +2,9 @@
- // Input test file for testing empty LITERAL_CASE.
- // Created: 2017
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,36 @@
++////////////////////////////////////////////////////////////////////////////////
++// Input test file for testing empty LITERAL_CASE.
++// Created: 2017
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
--class InputEmptyBlockCase
++
 +class InputEmptyCase
- {
-     void method1(int a) {
-         switch (a) {}
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-similarity index 94%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-index d387c10d10..94cda5d53d 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockDefault.java
++{
++    void method1(int a) {
++        switch (a) {}
++        switch (a) {case 1: ; } // no violation
++        switch (a) {case 1:{}}  // 1 violation
++        switch (a) {
++            case 1:
++        }
++        switch (a) {
++            case 1: // 1 violation
++            {}
++        }
++        switch (a) {
++            case 1: // 1 violation if checking statements
++            {// none if checking text
++            }
++        }
++    }
++
++    public void method2(char c) {
++        switch(c) { case 0: } // no violation
++        switch(c) { case 0: {} method1(1); } // 1 violation
++        switch(c) { case 0: method1(0); {} } // no violation
++        switch(c) { case 0: case 1: {} } // 1 violation
++        switch(c) { case 0: {} case 1: {// 2 violations if checking statements
++        }
++        }
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
+new file mode 100755
+index 0000000000..94cda5d53d
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic.java
-@@ -2,7 +2,7 @@
- // Test case file for checkstyle.
- // Created: 2001
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,87 @@
++////////////////////////////////////////////////////////////////////////////////
++// Test case file for checkstyle.
++// Created: 2001
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
- import java.io.*; // star import for instantiation tests
- import java.awt.Dimension; // explicit import for instantiation tests
-@@ -12,7 +12,7 @@
-  * Test case for detecting empty block statements.
-  * @author Lars Kühne
-  **/
--class InputEmptyBlockDefault
++
++import java.io.*; // star import for instantiation tests
++import java.awt.Dimension; // explicit import for instantiation tests
++import java.awt.Color;
++
++/**
++ * Test case for detecting empty block statements.
++ * @author Lars Kühne
++ **/
 +class InputSemantic
- {
-     static {
-         Boolean x = new Boolean(true);
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-similarity index 89%
-rename from src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
-rename to src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-index b1f994af76..01b93dfdaa 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/emptyblock/InputEmptyBlockAllowEmptyLoops.java
++{
++    static {
++        Boolean x = new Boolean(true);
++    }
++
++    {
++        Boolean x = new Boolean(true);
++        Boolean[] y = new Boolean[]{Boolean.TRUE, Boolean.FALSE};
++    }
++
++    Boolean getBoolean()
++    {
++        return new java.lang.Boolean(true);
++    }
++
++    void exHandlerTest()
++    {
++        try {
++        }
++        finally {
++        }
++        try {
++        // something
++        }
++        finally {
++            // something
++        }
++        try {
++            ; // something
++        }
++        finally {
++            ; // statement
++        }
++    }
++
++    /** test **/
++    private static final long IGNORE = 666l + 666L;
++
++    public class EqualsVsHashCode1
++    {
++        public boolean equals(int a)
++        {
++            return a == 1;
++        }
++    }
++
++    // empty instance initializer
++    {
++    }
++
++    private class InputBraces {
++        
++    }
++
++    synchronized void foo() {
++        synchronized (this) {} // not OK
++        synchronized (Class.class) { // OK
++            synchronized (new Object()) {
++                // not OK if checking statements
++            }
++        }
++    }
++    
++    
++    static {
++       
++    int a = 0;}
++    
++    static {
++        
++    }
++}
+diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
+new file mode 100755
+index 0000000000..01b93dfdaa
+--- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-@@ -2,13 +2,13 @@
- // Test case file for checkstyle.
- // Created: 2001
- ////////////////////////////////////////////////////////////////////////////////
--package com.puppycrawl.tools.checkstyle.checks.blocks.emptyblock;
+@@ -0,0 +1,38 @@
++////////////////////////////////////////////////////////////////////////////////
++// Test case file for checkstyle.
++// Created: 2001
++////////////////////////////////////////////////////////////////////////////////
 +package com.puppycrawl.tools.checkstyle.checks.blocks;
- 
- import java.io.*; // star import for instantiation tests
- import java.awt.Dimension; // explicit import for instantiation tests
- import java.awt.Color;
- 
--class InputEmptyBlockAllowEmptyLoops
++
++import java.io.*; // star import for instantiation tests
++import java.awt.Dimension; // explicit import for instantiation tests
++import java.awt.Color;
++
 +class UpdateClass
- {
- 	public void fooMethod()
- 	{
++{
++	public void fooMethod()
++	{
++		int a = 1;
++		if (a == 1) {} //is not OK 
++		char[] s = {'1', '2'};
++		int index = 2;
++		if (doSideEffect() == 1) {} //is not OK, 
++		while ((a = index - 1) != 0) {} // is OK 
++		for (; index < s.length && s[index] != 'x'; index++) {} // is OK
++		if (a == 1) {} else {System.identityHashCode("a");} // is not OK
++		switch (a) {} //warn
++		switch (a) { //ok
++        case 1:
++            a = 2;
++        case 2:
++            a = 3;
++        default:
++            a = 0;
++        }
++	}
++	
++	public int doSideEffect()
++	{
++		return 1;
++	}
++}

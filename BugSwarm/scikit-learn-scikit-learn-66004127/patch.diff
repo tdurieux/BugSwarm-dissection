@@ -1,5 +1,5 @@
 diff --git a/doc/modules/preprocessing.rst b/doc/modules/preprocessing.rst
-index a25fd9fb49b3..d7ed663b519c 100644
+index a25fd9fb49..d7ed663b51 100755
 --- a/doc/modules/preprocessing.rst
 +++ b/doc/modules/preprocessing.rst
 @@ -426,3 +426,44 @@ values than observed values.
@@ -48,7 +48,7 @@ index a25fd9fb49b3..d7ed663b519c 100644
 +
 +See :ref:`example_linear_model_plot_polynomial_interpolation.py` for Ridge regression using created polynomial features.  
 diff --git a/sklearn/grid_search.py b/sklearn/grid_search.py
-index 3e13a134a624..36a8f33eee21 100644
+index 9b3d3e80a0..36a8f33eee 100755
 --- a/sklearn/grid_search.py
 +++ b/sklearn/grid_search.py
 @@ -70,6 +70,8 @@ class ParameterGrid(object):
@@ -60,11 +60,15 @@ index 3e13a134a624..36a8f33eee21 100644
  
      See also
      --------
-@@ -111,6 +113,44 @@ def __len__(self):
-         return sum(product(len(v) for v in p.values()) if p else 1
+@@ -112,24 +114,42 @@ def __len__(self):
                     for p in self.param_grid)
  
-+    def __getitem__(self, ind):
+     def __getitem__(self, ind):
+-        """
+-        >>> grid = ParameterGrid([{'kernel': ['linear']},
+-        ...                       {'kernel': ['rbf'], 'gamma': [1, 10]}])
+-        >>> [grid[i] for i in range(len(grid))] == list(grid)
+-        True
 +        """Get the parameters that would be ``ind``th in iteration
 +
 +        Parameters
@@ -76,9 +80,11 @@ index 3e13a134a624..36a8f33eee21 100644
 +        -------
 +        params : dict of string to any
 +            Equal to list(self)[ind]
-+        """
-+        for sub_grid in self.param_grid:
-+            # XXX: could memoize information used here
+         """
+         for sub_grid in self.param_grid:
+             # XXX: could memoize information used here
+-            keys, values = zip(*sorted(sub_grid.items()))
+-            sizes = [len(v) for v in values]
 +            if not sub_grid:
 +                if ind == 0:
 +                    return {}
@@ -90,34 +96,33 @@ index 3e13a134a624..36a8f33eee21 100644
 +            # For sizes = [5, 3, 2], modulo = [30,  6,  2,  1]
 +            # The grid has size 30;
 +            # the first param changes every 6, the second every 2, etc.
-+            modulo = np.cumprod(np.hstack([1, sizes[::-1]]))[::-1]
-+            if ind >= modulo[0]:
+             modulo = np.cumprod(np.hstack([1, sizes[::-1]]))[::-1]
+             if ind >= modulo[0]:
 +                # Try the next grid
-+                ind -= modulo[0]
-+            else:
-+                offsets = ind // modulo[1:] % sizes
+                 ind -= modulo[0]
+             else:
+                 offsets = ind // modulo[1:] % sizes
+-                return {k: v[o] for k, v, o in zip(keys, values, offsets)}
 +                return dict((key, v_list[offset])
 +                            for key, v_list, offset
 +                            in zip(keys, values_lists, offsets))
-+
+ 
+-        raise ValueError
 +        raise IndexError('ParameterGrid index out of range')
-+
+ 
  
  class ParameterSampler(object):
-     """Generator on parameters sampled from given distributions.
-@@ -181,8 +221,8 @@ def __iter__(self):
+@@ -201,7 +221,7 @@ def __iter__(self):
          rnd = check_random_state(self.random_state)
  
          if all_lists:
 -            # get complete grid and yield from it
--            param_grid = list(ParameterGrid(self.param_distributions))
 +            # look up sampled parameter settings in parameter grid
-+            param_grid = ParameterGrid(self.param_distributions)
+             param_grid = ParameterGrid(self.param_distributions)
              grid_size = len(param_grid)
  
-             if grid_size < self.n_iter:
 diff --git a/sklearn/linear_model/ridge.py b/sklearn/linear_model/ridge.py
-index 77c3e10dbbfd..24d9f7a7e389 100644
+index 77c3e10dbb..24d9f7a7e3 100755
 --- a/sklearn/linear_model/ridge.py
 +++ b/sklearn/linear_model/ridge.py
 @@ -871,10 +871,7 @@ def fit(self, X, y, sample_weight=None):
@@ -133,7 +138,7 @@ index 77c3e10dbbfd..24d9f7a7e389 100644
                                parameters, fit_params=fit_params, cv=self.cv)
              gs.fit(X, y)
 diff --git a/sklearn/linear_model/tests/test_ridge.py b/sklearn/linear_model/tests/test_ridge.py
-index daa8f8bbcc72..649970fec328 100644
+index daa8f8bbcc..649970fec3 100755
 --- a/sklearn/linear_model/tests/test_ridge.py
 +++ b/sklearn/linear_model/tests/test_ridge.py
 @@ -27,6 +27,8 @@
@@ -179,7 +184,7 @@ index daa8f8bbcc72..649970fec328 100644
      # Sample weights must be either scalar or 1D
  
 diff --git a/sklearn/tests/test_grid_search.py b/sklearn/tests/test_grid_search.py
-index d9038187dfff..78c6bfc8ea21 100644
+index d9038187df..78c6bfc8ea 100755
 --- a/sklearn/tests/test_grid_search.py
 +++ b/sklearn/tests/test_grid_search.py
 @@ -92,6 +92,10 @@ def score(self):

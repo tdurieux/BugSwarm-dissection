@@ -1,8 +1,8 @@
 diff --git a/yamcs-core/mdb/refmdb.xls b/yamcs-core/mdb/refmdb.xls
-index bcd95012e..a4cbc0ba6 100644
+index bcd95012e0..a4cbc0ba60 100755
 Binary files a/yamcs-core/mdb/refmdb.xls and b/yamcs-core/mdb/refmdb.xls differ
 diff --git a/yamcs-core/pom.xml b/yamcs-core/pom.xml
-index 2427b1188..50e40ae85 100644
+index 2427b1188f..50e40ae853 100755
 --- a/yamcs-core/pom.xml
 +++ b/yamcs-core/pom.xml
 @@ -87,7 +87,7 @@
@@ -15,8 +15,8 @@ index 2427b1188..50e40ae85 100644
  
      <dependency>
 diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/AbstractAlgorithmExecutor.java b/yamcs-core/src/main/java/org/yamcs/algorithms/AbstractAlgorithmExecutor.java
-new file mode 100644
-index 000000000..c1670eef6
+new file mode 100755
+index 0000000000..c1670eef66
 --- /dev/null
 +++ b/yamcs-core/src/main/java/org/yamcs/algorithms/AbstractAlgorithmExecutor.java
 @@ -0,0 +1,134 @@
@@ -155,7 +155,7 @@ index 000000000..c1670eef6
 +    }
 +}
 diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutionContext.java b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutionContext.java
-index 94db6e1ec..3b8b447b3 100644
+index 94db6e1ec1..3b8b447b37 100755
 --- a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutionContext.java
 +++ b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutionContext.java
 @@ -29,7 +29,7 @@
@@ -192,8 +192,8 @@ index 94db6e1ec..3b8b447b3 100644
      }
  }
 diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutor.java b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutor.java
-new file mode 100644
-index 000000000..f99edcb20
+new file mode 100755
+index 0000000000..f99edcb201
 --- /dev/null
 +++ b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmExecutor.java
 @@ -0,0 +1,41 @@
@@ -240,7 +240,7 @@ index 000000000..f99edcb20
 +}
 \ No newline at end of file
 diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmManager.java b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmManager.java
-index 3f1959ac3..fc9327524 100644
+index 3f1959ac30..fc93275247 100755
 --- a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmManager.java
 +++ b/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmManager.java
 @@ -13,6 +13,8 @@
@@ -463,265 +463,410 @@ index 3f1959ac3..fc9327524 100644
                      if(r!=null) {
                          allItems.addAll(r);
                          newItems.addAll(r);
-diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmEngine.java b/yamcs-core/src/main/java/org/yamcs/algorithms/ScriptAlgorithmExecutor.java
-similarity index 76%
-rename from yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmEngine.java
-rename to yamcs-core/src/main/java/org/yamcs/algorithms/ScriptAlgorithmExecutor.java
-index 5e20e767c..7a215f945 100644
---- a/yamcs-core/src/main/java/org/yamcs/algorithms/AlgorithmEngine.java
+diff --git a/yamcs-core/src/main/java/org/yamcs/algorithms/ScriptAlgorithmExecutor.java b/yamcs-core/src/main/java/org/yamcs/algorithms/ScriptAlgorithmExecutor.java
+new file mode 100755
+index 0000000000..7a215f9456
+--- /dev/null
 +++ b/yamcs-core/src/main/java/org/yamcs/algorithms/ScriptAlgorithmExecutor.java
-@@ -4,11 +4,8 @@
- import java.util.ArrayList;
- import java.util.Collections;
- import java.util.HashMap;
--import java.util.HashSet;
- import java.util.List;
- import java.util.Map;
--import java.util.Set;
--import java.util.concurrent.CopyOnWriteArrayList;
- 
- import javax.script.Compilable;
- import javax.script.CompiledScript;
-@@ -33,10 +30,8 @@
- import org.yamcs.xtce.IntegerDataEncoding;
- import org.yamcs.xtce.IntegerDataEncoding.Encoding;
- import org.yamcs.xtce.IntegerParameterType;
--import org.yamcs.xtce.OnParameterUpdateTrigger;
- import org.yamcs.xtce.OutputParameter;
- import org.yamcs.xtce.Parameter;
--import org.yamcs.xtce.ParameterInstanceRef;
- import org.yamcs.xtce.ParameterType;
- import org.yamcs.xtce.StringDataEncoding;
- import org.yamcs.xtce.StringParameterType;
-@@ -59,51 +54,38 @@
-  * of the maven-compiler-plugin in order to lift Sun's Access Restrictions on these
-  * internal classes), we generate classes with primitive raw/eng values when needed.  
-  */
--public class AlgorithmEngine {
--    static final Logger log=LoggerFactory.getLogger(AlgorithmEngine.class);
+@@ -0,0 +1,396 @@
++package org.yamcs.algorithms;
++
++import java.lang.reflect.Constructor;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++import javax.script.Compilable;
++import javax.script.CompiledScript;
++import javax.script.ScriptEngine;
++import javax.script.ScriptException;
++
++import org.codehaus.janino.SimpleCompiler;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.yamcs.parameter.ParameterValue;
++import org.yamcs.parameter.Value;
++import org.yamcs.protobuf.Yamcs.Value.Type;
++import org.yamcs.xtce.Algorithm;
++import org.yamcs.xtce.BinaryParameterType;
++import org.yamcs.xtce.BooleanDataEncoding;
++import org.yamcs.xtce.BooleanParameterType;
++import org.yamcs.xtce.DataEncoding;
++import org.yamcs.xtce.EnumeratedParameterType;
++import org.yamcs.xtce.FloatDataEncoding;
++import org.yamcs.xtce.FloatParameterType;
++import org.yamcs.xtce.InputParameter;
++import org.yamcs.xtce.IntegerDataEncoding;
++import org.yamcs.xtce.IntegerDataEncoding.Encoding;
++import org.yamcs.xtce.IntegerParameterType;
++import org.yamcs.xtce.OutputParameter;
++import org.yamcs.xtce.Parameter;
++import org.yamcs.xtce.ParameterType;
++import org.yamcs.xtce.StringDataEncoding;
++import org.yamcs.xtce.StringParameterType;
++import org.yamcs.xtceproc.ParameterTypeProcessor;
++
++import com.google.protobuf.ByteString;
++
++/**
++ * Represents the execution context of one algorithm. An AlgorithmEngine is reused
++ * upon each update of one or more of its InputParameters.
++ * <p>
++ * This class will create and compile on-the-fly ValueBinding implementations for every
++ * unique combination of raw and eng types. The reason for this is to get the mapping
++ * correct from Java to JavaScript. Rhino (the default JavaScript engine for JDK &le; 7)
++ * will map java Float, Integer, etc towards javascript Object, instead of Number. As
++ * a result, in javascript, using the plus operator on two supposed numbers would do a
++ * string concatenation instead of an addition.
++ * <p>
++ * Rather than changing the Rhino configuration (which would require drastic tampering
++ * of the maven-compiler-plugin in order to lift Sun's Access Restrictions on these
++ * internal classes), we generate classes with primitive raw/eng values when needed.  
++ */
 +public class ScriptAlgorithmExecutor extends AbstractAlgorithmExecutor {
 +    static final Logger log = LoggerFactory.getLogger(ScriptAlgorithmExecutor.class);
- 
-     static final String RETURN_VALUE_VAR_NAME="returnValue";
-     
-     ScriptEngine scriptEngine; // Not shared with other algorithm engines
-     CompiledScript compiledScript;
--    Algorithm def;
- 
--    // Keep only unique arguments (for subscription purposes)
--    private Set<Parameter> requiredParameters=new HashSet<Parameter>();
-     // Keeps one ValueBinding instance per InputParameter, recycled on each algorithm run
--    private Map<InputParameter,ValueBinding> bindingsByInput=new HashMap<InputParameter,ValueBinding>();
++
++    static final String RETURN_VALUE_VAR_NAME="returnValue";
++    
++    ScriptEngine scriptEngine; // Not shared with other algorithm engines
++    CompiledScript compiledScript;
++
++    // Keeps one ValueBinding instance per InputParameter, recycled on each algorithm run
 +    private Map<InputParameter,ValueBinding> bindingsByInput = new HashMap<InputParameter,ValueBinding>();
-     // Keeps one OutputValueBinding instance per OutputParameter, recycled on each algorithm run
--    private Map<OutputParameter,OutputValueBinding> bindingsByOutput=new HashMap<OutputParameter,OutputValueBinding>();
++    // Keeps one OutputValueBinding instance per OutputParameter, recycled on each algorithm run
 +    private Map<OutputParameter,OutputValueBinding> bindingsByOutput = new HashMap<OutputParameter,OutputValueBinding>();
-     // Each ValueBinding class represent a unique raw/eng type combination (== key)
--    private static Map<String, Class<ValueBinding>> valueBindingClasses=Collections.synchronizedMap(new HashMap<String,Class<ValueBinding>>());
++    // Each ValueBinding class represent a unique raw/eng type combination (== key)
 +    private static Map<String, Class<ValueBinding>> valueBindingClasses = Collections.synchronizedMap(new HashMap<String,Class<ValueBinding>>());
- 
--    private Set<InputParameter>mandatoryToRun = new HashSet<InputParameter>();
--    
--    protected boolean updated=true;
--
--    final AlgorithmExecutionContext execCtx;
--    
--    CopyOnWriteArrayList<AlgorithmExecListener> execListeners = new CopyOnWriteArrayList<AlgorithmExecListener>();
- 
--    public AlgorithmEngine(Algorithm algorithmDef, ScriptEngine scriptEngine, AlgorithmExecutionContext execCtx) {
--        this.def=algorithmDef;
++
++
 +    public ScriptAlgorithmExecutor(Algorithm algorithmDef, ScriptEngine scriptEngine, AlgorithmExecutionContext execCtx) {
 +        super(algorithmDef, execCtx);
-         this.scriptEngine=scriptEngine;
--        this.execCtx = execCtx;
++        this.scriptEngine=scriptEngine;
 +      
- 
-         for(InputParameter inputParameter:algorithmDef.getInputSet()) {
--            requiredParameters.add(inputParameter.getParameterInstance().getParameter());
--
-             // Default-define all input values to null to prevent ugly runtime errors
--            String scriptName=inputParameter.getInputName();
++
++        for(InputParameter inputParameter:algorithmDef.getInputSet()) {
++            // Default-define all input values to null to prevent ugly runtime errors
 +            String scriptName = inputParameter.getInputName();
-             if(scriptName==null) {
--                scriptName=inputParameter.getParameterInstance().getParameter().getName();
++            if(scriptName==null) {
 +                scriptName = inputParameter.getParameterInstance().getParameter().getName();
-             }
-             scriptEngine.put(scriptName, null);
--            if(inputParameter.isMandatory()) mandatoryToRun.add(inputParameter);
-         }
- 
-         // Improve error msgs
--        scriptEngine.put(ScriptEngine.FILENAME, def.getQualifiedName());
++            }
++            scriptEngine.put(scriptName, null);
++        }
++
++        // Improve error msgs
 +        scriptEngine.put(ScriptEngine.FILENAME, algorithmDef.getQualifiedName());
- 
-         // Set empty output bindings so that algorithms can write their attributes
-         for(OutputParameter outputParameter:algorithmDef.getOutputSet()) {
-@@ -118,86 +100,22 @@ public AlgorithmEngine(Algorithm algorithmDef, ScriptEngine scriptEngine, Algori
- 
-         if(scriptEngine instanceof Compilable) {
-             try {
--                compiledScript = ((Compilable)scriptEngine).compile(def.getAlgorithmText());
++
++        // Set empty output bindings so that algorithms can write their attributes
++        for(OutputParameter outputParameter:algorithmDef.getOutputSet()) {
++            OutputValueBinding valueBinding=new OutputValueBinding();
++            bindingsByOutput.put(outputParameter, valueBinding);
++            String scriptName=outputParameter.getOutputName();
++            if(scriptName==null) {
++                scriptName=outputParameter.getParameter().getName();
++            }
++            scriptEngine.put(scriptName, valueBinding);
++        }
++
++        if(scriptEngine instanceof Compilable) {
++            try {
 +                compiledScript = ((Compilable)scriptEngine).compile(algorithmDef.getAlgorithmText());
-             } catch (ScriptException e) {
-                 log.warn("Error while compiling algorithm "+algorithmDef.getName()+": "+e.getMessage(), e);
-             }
-         }
-     }
- 
--    /**
--     * update the parameters and return true if the algorithm should run
--     * @param items
--     * @return
--     */
--    synchronized boolean updateParameters(ArrayList<ParameterValue> items) {
--        ArrayList<ParameterValue> allItems=new ArrayList<ParameterValue>(items);
--        boolean skipRun=false;
--
--        // Set algorithm arguments based on incoming values
--        for(InputParameter inputParameter:def.getInputSet()) {
--            ParameterInstanceRef pInstance = inputParameter.getParameterInstance();
--            for(ParameterValue pval:allItems) {
--                if(pInstance.getParameter().equals(pval.getParameter())) {
--                    if(getLookbackSize(pInstance.getParameter())==0) {
--                        updateInput(inputParameter, pval);
--                    } else {
--                        ParameterValue historicValue=execCtx.getHistoricValue(pInstance);
--                        if(historicValue!=null) {
--                            updateInput(inputParameter, historicValue);
--                        }
--                    }
--                }
--            }
--            if(!skipRun && inputParameter.isMandatory() && !bindingsByInput.containsKey(inputParameter)) {
--                log.trace("Not running algorithm {} because mandatory input {} is not present", def.getName(), inputParameter.getInputName());
--                skipRun = true;
--            }
--        }
--
--        // But run it only, if this satisfies an onParameterUpdate trigger
--        boolean triggered=false;
--        for(OnParameterUpdateTrigger trigger:def.getTriggerSet().getOnParameterUpdateTriggers()) {
--            if(triggered) break;
--            for(ParameterValue pval:allItems) {
--                if(pval.getParameter().equals(trigger.getParameter())) {
--                    triggered=true;
--                    break;
--                }
--            }
--        }
--        boolean shouldRun =(!skipRun && triggered);
--        return shouldRun;
--    }
--
-    
--    public Algorithm getAlgorithm() {
--        return def;
--    }
--
--    public Set<Parameter> getRequiredParameters() {
--        return requiredParameters;
--    }
--
--    public int getLookbackSize(Parameter parameter) {
--        // e.g. [ -3, -2, -1, 0 ]
--        int min=0;
--        for(InputParameter p:def.getInputSet()) {
--            ParameterInstanceRef pInstance=p.getParameterInstance();
--            if(pInstance.getParameter().equals(parameter) && pInstance.getInstance()<min) {
--                min=p.getParameterInstance().getInstance();
--            }
--        }
--        return -min;
--    }
--
--    private void updateInput(InputParameter inputParameter, ParameterValue newValue) {
++            } catch (ScriptException e) {
++                log.warn("Error while compiling algorithm "+algorithmDef.getName()+": "+e.getMessage(), e);
++            }
++        }
++    }
++
++   
 +    @Override
 +    protected void updateInput(InputParameter inputParameter, ParameterValue newValue) {
-         // First time for an inputParameter, it will register a ValueBinding object with the engine.
-         // Further calls will just update that object
-         if(!bindingsByInput.containsKey(inputParameter)) {
-             ValueBinding valueBinding = toValueBinding(newValue);
-             bindingsByInput.put(inputParameter, valueBinding);
--            for(InputParameter input:def.getInputSet()) {
++        // First time for an inputParameter, it will register a ValueBinding object with the engine.
++        // Further calls will just update that object
++        if(!bindingsByInput.containsKey(inputParameter)) {
++            ValueBinding valueBinding = toValueBinding(newValue);
++            bindingsByInput.put(inputParameter, valueBinding);
 +            for(InputParameter input:algorithmDef.getInputSet()) {
-                 if(input.equals(inputParameter)) {
-                     String scriptName=inputParameter.getInputName();
-                     if(scriptName==null) {
-@@ -211,19 +129,17 @@ private void updateInput(InputParameter inputParameter, ParameterValue newValue)
-     }
-     
- 
--    /**
--     * Runs the associated algorithm with the latest InputParameters
--     * @param acqTime 
--     * @param genTime 
--     * @return the outputted parameters, if any
++                if(input.equals(inputParameter)) {
++                    String scriptName=inputParameter.getInputName();
++                    if(scriptName==null) {
++                        scriptName=inputParameter.getParameterInstance().getParameter().getName();
++                    }
++                    scriptEngine.put(scriptName, valueBinding);
++                }
++            }
++        }
++        bindingsByInput.get(inputParameter).updateValue(newValue);
++    }
++    
++
 +    /* (non-Javadoc)
 +     * @see org.yamcs.algorithms.AlgorithmEngineIf#runAlgorithm(long, long)
-      */
++     */
 +    @Override
-     public synchronized List<ParameterValue> runAlgorithm(long acqTime, long genTime) {
--        log.trace("Running algorithm '{}'",def.getName());
++    public synchronized List<ParameterValue> runAlgorithm(long acqTime, long genTime) {
 +        log.trace("Running algorithm '{}'",algorithmDef.getName());
-         try {
-             if(compiledScript!=null) {
-                 compiledScript.eval();
-             } else {
--                scriptEngine.eval(def.getAlgorithmText());
++        try {
++            if(compiledScript!=null) {
++                compiledScript.eval();
++            } else {
 +                scriptEngine.eval(algorithmDef.getAlgorithmText());
-             }
-         } catch (ScriptException e) {
-             log.warn("Error while executing algorithm: "+e.getMessage(), e);
-@@ -232,7 +148,7 @@ private void updateInput(InputParameter inputParameter, ParameterValue newValue)
-         Object returnValue = scriptEngine.get(RETURN_VALUE_VAR_NAME);
- 
-         List<ParameterValue> outputValues=new ArrayList<ParameterValue>();
--        for(OutputParameter outputParameter:def.getOutputSet()) {
++            }
++        } catch (ScriptException e) {
++            log.warn("Error while executing algorithm: "+e.getMessage(), e);
++            return Collections.emptyList();
++        }
++        Object returnValue = scriptEngine.get(RETURN_VALUE_VAR_NAME);
++
++        List<ParameterValue> outputValues=new ArrayList<ParameterValue>();
 +        for(OutputParameter outputParameter:algorithmDef.getOutputSet()) {
-             String scriptName=outputParameter.getOutputName();
-             if(scriptName==null) {
-                 scriptName=outputParameter.getParameter().getName();
-@@ -247,13 +163,11 @@ private void updateInput(InputParameter inputParameter, ParameterValue newValue)
-                 }
-             } else {
-                 log.warn("Error while executing algorithm {}. Wrong type of output parameter. Ensure you assign to '{}.value' and not directly to '{}'",
--                        def.getQualifiedName(), scriptName, scriptName);
++            String scriptName=outputParameter.getOutputName();
++            if(scriptName==null) {
++                scriptName=outputParameter.getParameter().getName();
++            }
++            if(scriptEngine.get(scriptName) instanceof OutputValueBinding) {
++                OutputValueBinding res = (OutputValueBinding) scriptEngine.get(scriptName);
++                if(res.updated && res.value != null) {
++                    ParameterValue pv = convertScriptOutputToParameterValue(outputParameter.getParameter(), res);
++                    pv.setAcquisitionTime(acqTime);
++                    pv.setGenerationTime(genTime);
++                    outputValues.add(pv);
++                }
++            } else {
++                log.warn("Error while executing algorithm {}. Wrong type of output parameter. Ensure you assign to '{}.value' and not directly to '{}'",
 +                        algorithmDef.getQualifiedName(), scriptName, scriptName);
-             }
- 
-         }
--        for(AlgorithmExecListener listener: execListeners) {
--            listener.algorithmRun(returnValue, outputValues);
--        }
++            }
++
++        }
 +        propagateToListeners(returnValue, outputValues);
-         return outputValues; 
-     }
- 
-@@ -337,10 +251,6 @@ private void setRawFloatValue(FloatDataEncoding fde, ParameterValue pv, Object o
-         }
-     }
- 
--    public boolean isUpdated() {
--        return updated;
--    }
--
-     @Override
-     public String toString() {
-         return "def.getName() " +scriptEngine;
-@@ -482,10 +392,5 @@ private static String addValueType(StringBuilder source, Value v, boolean raw) {
-             throw new IllegalArgumentException("Unexpected value of type "+v.getType());
-         }
-     }
--
--
--    public void addExecListener(AlgorithmExecListener listener) {
--        execListeners.add(listener);
--    }
--    
++        return outputValues; 
++    }
++
++    private ParameterValue convertScriptOutputToParameterValue(Parameter parameter, OutputValueBinding binding) {
++        ParameterValue pval=new ParameterValue(parameter);
++        ParameterType ptype=parameter.getParameterType();
++        if(ptype instanceof EnumeratedParameterType) {
++            setRawValue(((EnumeratedParameterType) ptype).getEncoding(), pval, binding.value);
++        } else if(ptype instanceof IntegerParameterType) {
++            setRawValue(((IntegerParameterType) ptype).getEncoding(), pval, binding.value);
++        } else if(ptype instanceof FloatParameterType) {
++            setRawValue(((FloatParameterType) ptype).getEncoding(), pval, binding.value);
++        } else if(ptype instanceof BinaryParameterType) {
++            setRawValue(((BinaryParameterType) ptype).getEncoding(), pval, binding.value);
++        } else if(ptype instanceof StringParameterType) {
++            setRawValue(((StringParameterType) ptype).getEncoding(), pval, binding.value);
++        } else if(ptype instanceof BooleanParameterType) {
++            setRawValue(((BooleanParameterType) ptype).getEncoding(), pval, binding.value);
++        } else {
++            throw new IllegalArgumentException("Unsupported parameter type "+ptype);
++        }
++
++        ParameterTypeProcessor.calibrate(pval);
++        return pval;
++    }
++
++    private void setRawValue(DataEncoding de, ParameterValue pval, Object outputValue) {
++        if(de instanceof IntegerDataEncoding) {
++            setRawIntegerValue((IntegerDataEncoding) de, pval, outputValue);
++        } else if(de instanceof FloatDataEncoding) {
++            setRawFloatValue((FloatDataEncoding) de, pval, outputValue);
++        } else if(de instanceof StringDataEncoding) {
++            pval.setRawValue(outputValue.toString());
++        } else if(de instanceof BooleanDataEncoding) {
++            if(outputValue instanceof Boolean) {
++                pval.setRawValue((Boolean)outputValue);
++            } else {
++                log.error("Could not set boolean value of parameter "+pval.getParameter().getName()+". Algorithm returned wrong type: "+outputValue.getClass());
++            }
++        } else {
++            log.error("DataEncoding "+de+" not implemented as a raw return type for algorithms");
++            throw new RuntimeException("DataEncoding "+de+" not implemented as a raw return type for algorithms");
++        }
++    }
++
++    private void setRawIntegerValue(IntegerDataEncoding ide, ParameterValue pv, Object outputValue) {
++        long longValue;
++        if(outputValue instanceof Number) {
++            longValue=((Number)outputValue).longValue();
++        } else {
++            log.warn("Unexpected script return type for "+pv.getParameter().getName()+". Was expecting a number, but got: "+outputValue.getClass());
++            return; // TODO make exc, and catch to send to ev
++        }
++        if(ide.getSizeInBits() <= 32) {
++            if(ide.getEncoding() == Encoding.unsigned) {
++                pv.setRawUnsignedInteger((int)longValue);
++            } else {
++                pv.setRawSignedInteger((int)longValue);
++            }
++        } else {
++            if(ide.getEncoding() == Encoding.unsigned) {
++                pv.setRawUnsignedLong(longValue);
++            } else {
++                pv.setRawSignedLong(longValue);
++            }
++        }
++    }
++
++    private void setRawFloatValue(FloatDataEncoding fde, ParameterValue pv, Object outputValue) {
++        double doubleValue;
++        if(outputValue instanceof Number) {
++            doubleValue=((Number)outputValue).doubleValue();
++        } else {
++            log.warn("Unexpected script return type for "+pv.getParameter().getName()+". Was expecting a number, but got: "+outputValue.getClass());
++            return; // TODO make exc, and catch to send to ev
++        }
++        if(fde.getSizeInBits() <= 32) {
++            pv.setRawValue((float) doubleValue);
++        } else {
++            pv.setRawValue(doubleValue);
++        }
++    }
++
++    @Override
++    public String toString() {
++        return "def.getName() " +scriptEngine;
++    }
++
++    private static ValueBinding toValueBinding(ParameterValue pval) {
++        try {
++            Class<ValueBinding> clazz=getOrCreateValueBindingClass(pval);
++            Constructor<ValueBinding> constructor=clazz.getConstructor();
++            return constructor.newInstance();
++        } catch (Exception e) {
++            throw new IllegalStateException("Could not instantiate object of custom class", e);
++        }
++    }
++
++    private static Class<ValueBinding> getOrCreateValueBindingClass(ParameterValue pval) {
++        String key;
++        if(pval.getRawValue()==null) {
++            key=""+pval.getEngValue().getType().getNumber();
++        } else {
++            key=pval.getRawValue().getType().getNumber()+"_"+pval.getEngValue().getType().getNumber();
++        }
++
++        if(valueBindingClasses.containsKey(key)) {
++            return valueBindingClasses.get(key);
++        } else {
++            String className="ValueBinding"+key;
++            StringBuilder source=new StringBuilder();
++            source.append("package org.yamcs.algorithms;\n");
++            source.append("import "+ByteString.class.getName()+";\n");
++            source.append("import "+ParameterValue.class.getName()+";\n")
++            .append("public class " + className + " extends ValueBinding {\n");
++            StringBuilder updateValueSource=new StringBuilder("  public void updateValue(ParameterValue v) {\n")
++            .append("    super.updateValue(v);\n");
++            if(pval.getRawValue() != null) {
++                updateValueSource.append(addValueType(source, pval.getRawValue(), true));
++            }
++            updateValueSource.append(addValueType(source, pval.getEngValue(), false));
++            updateValueSource.append("  }\n");
++
++            source.append(updateValueSource.toString());
++            source.append("}");
++
++            try {
++                SimpleCompiler compiler=new SimpleCompiler();
++                if(log.isTraceEnabled()) {
++                    log.trace("Compiling this:\n"+source.toString());
++                }
++
++                compiler.cook(source.toString());
++                @SuppressWarnings("unchecked")
++                Class<ValueBinding> clazz=(Class<ValueBinding>) compiler.getClassLoader().loadClass("org.yamcs.algorithms."+className);
++                valueBindingClasses.put(key, clazz);
++                return clazz;
++            } catch(Exception e) {
++                throw new IllegalStateException("Could not compile custom class", e);
++            }
++        }
++    }
++
++    /**
++     * Appends a raw or eng field with a getter of the given value
++     * @return a matching code fragment to be included in the updateValue() method
++     */
++    private static String addValueType(StringBuilder source, Value v, boolean raw) {
++        if(v.getType() == Type.BINARY) {
++            if(raw) {
++                source.append("  public ByteString rawValue;\n");
++                return "    rawValue=v.getRawValue().getBinaryValue();\n";
++            } else {
++                source.append("  public ByteString value;\n");
++                return "    value=v.getEngValue().getBinaryValue();\n";
++            }
++        } else if(v.getType() == Type.DOUBLE) {
++            if(raw) {
++                source.append("  public double rawValue;\n");
++                return "    rawValue=v.getRawValue().getDoubleValue();\n";
++            } else {
++                source.append("  public double value;\n");
++                return "    value=v.getEngValue().getDoubleValue();\n";
++            }
++        } else if(v.getType() == Type.FLOAT) {
++            if(raw) {
++                source.append("  public float rawValue;\n");
++                return "    rawValue=v.getRawValue().getFloatValue();\n";
++            } else {
++                source.append("  public float value;\n");
++                return "    value=v.getEngValue().getFloatValue();\n";
++            }
++        } else if(v.getType() == Type.UINT32) {
++            if(raw) {
++                source.append("  public int rawValue;\n");
++                return "    rawValue=v.getRawValue().getUint32Value();\n";
++            } else {
++                source.append("  public int value;\n");
++                return "    value=v.getEngValue().getUint32Value();\n";
++            }
++        } else if(v.getType() == Type.SINT32) {
++            if(raw) {
++                source.append("  public int rawValue;\n");
++                return "    rawValue=v.getRawValue().getSint32Value();\n";
++            } else {
++                source.append("  public int value;\n");
++                return "    value=v.getEngValue().getSint32Value();\n";
++            }
++        } else if(v.getType() == Type.UINT64) {
++            if(raw) {
++                source.append("  public long rawValue;\n");
++                return "    rawValue=v.getRawValue().getUint64Value();\n";
++            } else {
++                source.append("  public long value;\n");
++                return "    value=v.getEngValue().getUint64Value();\n";
++            }
++        } else if(v.getType() == Type.SINT64) {
++            if(raw) {
++                source.append("  public long rawValue;\n");
++                return "    rawValue=v.getRawValue().getSint64Value();\n";
++            } else {
++                source.append("  public long value;\n");
++                return "    value=v.getEngValue().getSint64Value();\n";
++            }
++        } else if(v.getType() == Type.STRING) {
++            if(raw) {
++                source.append("  public String rawValue;\n");
++                return "    rawValue=v.getRawValue().getStringValue();\n";
++            } else {
++                source.append("  public String value;\n");
++                return "    value=v.getEngValue().getStringValue();\n";
++            }
++        } else if(v.getType() == Type.BOOLEAN) {
++            if(raw) {
++                source.append("  public boolean rawValue;\n");
++                return "    rawValue=v.getRawValue().getBooleanValue();\n";
++            } else {
++                source.append("  public boolean value;\n");
++                return "    value=v.getEngValue().getBooleanValue();\n";
++            }
++        } else {
++            throw new IllegalArgumentException("Unexpected value of type "+v.getType());
++        }
++    }
 +  
- }
++}
 diff --git a/yamcs-core/src/main/java/org/yamcs/cli/Backup.java b/yamcs-core/src/main/java/org/yamcs/cli/Backup.java
-index 3ae68ec9d..0a07161a6 100644
+index 3ae68ec9da..0a07161a60 100755
 --- a/yamcs-core/src/main/java/org/yamcs/cli/Backup.java
 +++ b/yamcs-core/src/main/java/org/yamcs/cli/Backup.java
 @@ -161,7 +161,7 @@ public static void verifyBackupDirectory(String backupDir, boolean mustExist) th
@@ -734,8 +879,8 @@ index 3ae68ec9d..0a07161a6 100644
                          break;
                      }
 diff --git a/yamcs-core/src/main/java/org/yamcs/tctm/UdpParameterDataLink.java b/yamcs-core/src/main/java/org/yamcs/tctm/UdpParameterDataLink.java
-new file mode 100644
-index 000000000..9835ee36c
+new file mode 100755
+index 0000000000..9835ee36c2
 --- /dev/null
 +++ b/yamcs-core/src/main/java/org/yamcs/tctm/UdpParameterDataLink.java
 @@ -0,0 +1,147 @@
@@ -887,7 +1032,7 @@ index 000000000..9835ee36c
 +    }
 +}
 diff --git a/yamcs-core/src/main/java/org/yamcs/web/rest/Router.java b/yamcs-core/src/main/java/org/yamcs/web/rest/Router.java
-index f400bccde..33c6cbeaf 100644
+index f400bccde4..33c6cbeaf7 100755
 --- a/yamcs-core/src/main/java/org/yamcs/web/rest/Router.java
 +++ b/yamcs-core/src/main/java/org/yamcs/web/rest/Router.java
 @@ -42,7 +42,6 @@
@@ -899,7 +1044,7 @@ index f400bccde..33c6cbeaf 100644
  import org.yamcs.web.rest.archive.ArchiveTableRestHandler;
  import org.yamcs.web.rest.archive.ArchiveTagRestHandler;
 diff --git a/yamcs-core/src/main/java/org/yamcs/web/rest/archive/ArchiveParameterRestHandler.java b/yamcs-core/src/main/java/org/yamcs/web/rest/archive/ArchiveParameterRestHandler.java
-index dd27e0c59..e808e01d0 100644
+index dd27e0c597..e808e01d0c 100755
 --- a/yamcs-core/src/main/java/org/yamcs/web/rest/archive/ArchiveParameterRestHandler.java
 +++ b/yamcs-core/src/main/java/org/yamcs/web/rest/archive/ArchiveParameterRestHandler.java
 @@ -150,6 +150,7 @@ private void sampleDataFromCache(ParameterCache pcache, Parameter p, long start,
@@ -921,7 +1066,7 @@ index dd27e0c59..e808e01d0 100644
                  sendFromCache(p, id, pcache, false, mpvr.getStart(), mpvr.getStop(), replayListener);
              }
 diff --git a/yamcs-core/src/main/java/org/yamcs/xtce/SpreadsheetLoader.java b/yamcs-core/src/main/java/org/yamcs/xtce/SpreadsheetLoader.java
-index 79198bbb4..c0b17ae05 100644
+index 79198bbb48..c0b17ae055 100755
 --- a/yamcs-core/src/main/java/org/yamcs/xtce/SpreadsheetLoader.java
 +++ b/yamcs-core/src/main/java/org/yamcs/xtce/SpreadsheetLoader.java
 @@ -1764,12 +1764,17 @@ protected void loadAlgorithmsSheet(SpaceSystem spaceSystem, String sheetName) {
@@ -953,7 +1098,7 @@ index 79198bbb4..c0b17ae05 100644
              String paraInout=null;
              Set<String> inputParameterRefs=new HashSet<String>();
 diff --git a/yamcs-core/src/main/java/org/yamcs/yarch/YarchDatabase.java b/yamcs-core/src/main/java/org/yamcs/yarch/YarchDatabase.java
-index e4b65e1d0..2e3b182a6 100644
+index e4b65e1d02..2e3b182a60 100755
 --- a/yamcs-core/src/main/java/org/yamcs/yarch/YarchDatabase.java
 +++ b/yamcs-core/src/main/java/org/yamcs/yarch/YarchDatabase.java
 @@ -235,7 +235,7 @@ TableDefinition deserializeTableDefinition(File f) throws FileNotFoundException,
@@ -966,7 +1111,7 @@ index e4b65e1d0..2e3b182a6 100644
      void serializeTableDefinition(TableDefinition td) {
          String fn=getRoot()+"/"+td.getName()+".def";
 diff --git a/yamcs-core/src/main/java/org/yamcs/yarch/rocksdb/RDBFactory.java b/yamcs-core/src/main/java/org/yamcs/yarch/rocksdb/RDBFactory.java
-index 06ab87b0a..74476e490 100644
+index 06ab87b0ac..74476e490a 100755
 --- a/yamcs-core/src/main/java/org/yamcs/yarch/rocksdb/RDBFactory.java
 +++ b/yamcs-core/src/main/java/org/yamcs/yarch/rocksdb/RDBFactory.java
 @@ -171,6 +171,10 @@ public void run() {
@@ -981,7 +1126,7 @@ index 06ab87b0a..74476e490 100644
          daat.refcount--;
      }
 diff --git a/yamcs-core/src/test/java/org/yamcs/ParameterArchiveIntegrationTest.java b/yamcs-core/src/test/java/org/yamcs/ParameterArchiveIntegrationTest.java
-index 05c21595a..f059efa76 100644
+index 05c21595a5..f059efa76b 100755
 --- a/yamcs-core/src/test/java/org/yamcs/ParameterArchiveIntegrationTest.java
 +++ b/yamcs-core/src/test/java/org/yamcs/ParameterArchiveIntegrationTest.java
 @@ -64,14 +64,14 @@ public void testRestRetrieval() throws Exception {
@@ -1068,8 +1213,8 @@ index 05c21595a..f059efa76 100644
          assertEquals(20, pdata.getParameterCount());
          t = TimeEncoding.parse("2015-01-02T11:59:50");
 diff --git a/yamcs-core/src/test/java/org/yamcs/algorithms/AlgorithmManagerJavaTest.java b/yamcs-core/src/test/java/org/yamcs/algorithms/AlgorithmManagerJavaTest.java
-new file mode 100644
-index 000000000..067343859
+new file mode 100755
+index 0000000000..0673438592
 --- /dev/null
 +++ b/yamcs-core/src/test/java/org/yamcs/algorithms/AlgorithmManagerJavaTest.java
 @@ -0,0 +1,206 @@

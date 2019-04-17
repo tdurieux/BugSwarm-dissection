@@ -1,99 +1,18 @@
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheck.java
-index e152fd5864..44caf948af 100644
+index 3a1ddb3ac5..44caf948af 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheck.java
-@@ -131,7 +131,8 @@ public void visitToken(DetailAST ast) {
-             case TokenTypes.ENUM_CONSTANT_DEF:
-             case TokenTypes.LITERAL_NEW:
-             case TokenTypes.LITERAL_SYNCHRONIZED:
--                visitNewEnumConstDefAnnotationSync(ast);
-+            case TokenTypes.LAMBDA:
-+                visitTokenWithOptionalParentheses(ast);
-                 break;
-             default:
-                 processLeft(ast.findFirstToken(TokenTypes.LPAREN));
-@@ -140,11 +141,13 @@ public void visitToken(DetailAST ast) {
-     }
- 
-     /**
--     * Checks parens in {@link TokenTypes#ENUM_CONSTANT_DEF}, {@link TokenTypes#ANNOTATION}
--     * {@link TokenTypes#LITERAL_SYNCHRONIZED} and {@link TokenTypes#LITERAL_NEW}.
-+     * Checks parens in token which may not contain parens, e.g.
-+     * {@link TokenTypes#ENUM_CONSTANT_DEF}, {@link TokenTypes#ANNOTATION}
-+     * {@link TokenTypes#LITERAL_SYNCHRONIZED}, {@link TokenTypes#LITERAL_NEW} and
-+     * {@link TokenTypes#LAMBDA}.
-      * @param ast the token to check.
-      */
--    private void visitNewEnumConstDefAnnotationSync(DetailAST ast) {
-+    private void visitTokenWithOptionalParentheses(DetailAST ast) {
-         final DetailAST parenAst = ast.findFirstToken(TokenTypes.LPAREN);
-         if (parenAst != null) {
-             processLeft(parenAst);
-@@ -229,6 +232,7 @@ private boolean isAcceptableToken(DetailAST ast) {
+@@ -232,7 +232,7 @@ private boolean isAcceptableToken(DetailAST ast) {
              TokenTypes.QUESTION,
              TokenTypes.RESOURCE_SPECIFICATION,
              TokenTypes.SUPER_CTOR_CALL,
+-            TokenTypes.LAMBDA
 +            TokenTypes.LAMBDA,
          };
      }
  
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
-index b80c6d78b1..470d5b88b8 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/ParenPadCheckTest.java
-@@ -262,4 +262,50 @@ public void testInvalidOption() throws Exception {
-                             + "Cannot set property 'option' to 'invalid_option' in module"));
-         }
-     }
-+
-+    @Test
-+    public void testLambdaAssignment() throws Exception {
-+        final DefaultConfiguration checkConfig = createCheckConfig(ParenPadCheck.class);
-+        final String[] expected = {
-+            "6:42: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "6:44: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "8:47: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "8:49: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "10:47: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "10:56: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "12:62: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "12:62: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "15:21: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "15:34: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+        };
-+        verify(checkConfig, getPath("InputParenPadLambda.java"), expected);
-+    }
-+
-+    @Test
-+    public void testLambdaCheckDisabled() throws Exception {
-+        final DefaultConfiguration checkConfig = createCheckConfig(ParenPadCheck.class);
-+        checkConfig.addAttribute("tokens", "EXPR, METHOD_CALL, METHOD_DEF");
-+        final String[] expected = {
-+            "12:62: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "12:62: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "15:21: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "15:34: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+        };
-+        verify(checkConfig, getPath("InputParenPadLambda.java"), expected);
-+    }
-+
-+    @Test
-+    public void testLambdaCheckOnly() throws Exception {
-+        final DefaultConfiguration checkConfig = createCheckConfig(ParenPadCheck.class);
-+        checkConfig.addAttribute("tokens", "LAMBDA");
-+        final String[] expected = {
-+            "6:42: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "6:44: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "8:47: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "8:49: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+            "10:47: " + getCheckMessage(MSG_WS_FOLLOWED, "("),
-+            "10:56: " + getCheckMessage(MSG_WS_PRECEDED, ")"),
-+        };
-+        verify(checkConfig, getPath("InputParenPadLambda.java"), expected);
-+    }
- }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/internal/CommitValidationTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/internal/CommitValidationTest.java
-index 5ab7cacc09..6b0d4073f2 100644
+index 5ab7cacc09..6b0d4073f2 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/internal/CommitValidationTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/internal/CommitValidationTest.java
 @@ -129,6 +129,11 @@ public void testCommitMessage() {
@@ -119,53 +38,3 @@ index 5ab7cacc09..6b0d4073f2 100644
          else {
              result = 0;
          }
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadLambda.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadLambda.java
-new file mode 100644
-index 0000000000..c4465aaafd
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadLambda.java
-@@ -0,0 +1,18 @@
-+package com.puppycrawl.tools.checkstyle.checks.whitespace;
-+
-+class InputParenPadLambda
-+{
-+    {
-+        java.util.function.Consumer c = ( o ) -> { o.toString(); }; // 2 violations
-+
-+        java.util.stream.Stream.of().forEach(( o ) -> o.toString()); // 2 violations
-+
-+        java.util.stream.Stream.of().forEach(( Object o ) -> o.toString()); // 2 violations
-+
-+        java.util.stream.Stream.of().forEach(o -> o.toString( )); // 2 violations
-+    }
-+
-+    void someMethod( String param ) // 2 violations
-+    {
-+    }
-+}
-diff --git a/src/xdocs/config_whitespace.xml b/src/xdocs/config_whitespace.xml
-index d8c8a325e0..65bc284ef9 100644
---- a/src/xdocs/config_whitespace.xml
-+++ b/src/xdocs/config_whitespace.xml
-@@ -1408,7 +1408,9 @@ import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
-               <a
-               href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#RESOURCE_SPECIFICATION">RESOURCE_SPECIFICATION</a>,
-               <a
--              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#SUPER_CTOR_CALL">SUPER_CTOR_CALL</a>.
-+              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#SUPER_CTOR_CALL">SUPER_CTOR_CALL</a>,
-+              <a
-+              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LAMBDA">LAMBDA</a>.
-             </td>
- 
-             <td>
-@@ -1449,7 +1451,9 @@ import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
-               <a
-               href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#RESOURCE_SPECIFICATION">RESOURCE_SPECIFICATION</a>,
-               <a
--              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#SUPER_CTOR_CALL">SUPER_CTOR_CALL</a>.
-+              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#SUPER_CTOR_CALL">SUPER_CTOR_CALL</a>,
-+              <a
-+              href="apidocs/com/puppycrawl/tools/checkstyle/api/TokenTypes.html#LAMBDA">LAMBDA</a>.
-             </td>
-           </tr>
-         </table>

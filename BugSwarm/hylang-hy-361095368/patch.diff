@@ -1,463 +1,59 @@
-diff --git a/.gitignore b/.gitignore
-index 503fc276..1ebb4077 100644
---- a/.gitignore
-+++ b/.gitignore
-@@ -1,6 +1,6 @@
- /hy/version.py
- *.pyc
--*swp
-+.*.sw?
- *hy*egg*
- *pyreadline*egg*
- .tox
-@@ -9,3 +9,4 @@ dist
- .coverage
- build/
- /.cache
-+/.pytest_cache
-diff --git a/NEWS.rst b/NEWS.rst
-index 94a561ff..eb0aaf88 100644
---- a/NEWS.rst
-+++ b/NEWS.rst
-@@ -22,11 +22,13 @@ New Features
- * Added `mangle` and `unmangle` as core functions
- * `defclass` in Python 3 now supports specifying metaclasses and other
-   keyword arguments
-+* Added a command-line option `-E` per CPython
- 
- Bug Fixes
- ------------------------------
- * Fix `(return)` so it works correctly to exit a Python 2 generator
- * Fixed a case where `->` and `->>` duplicated an argument
-+* Fixed bugs that caused `defclass` to drop statements or crash
- 
- Misc. Improvements
- ----------------------------
-diff --git a/hy/cmdline.py b/hy/cmdline.py
-index 151b6eba..779ec40c 100644
---- a/hy/cmdline.py
-+++ b/hy/cmdline.py
-@@ -271,6 +271,8 @@ def cmdline_handler(scriptname, argv):
-                         help="program passed in as a string")
-     parser.add_argument("-m", dest="mod",
-                         help="module to run, passed in as a string")
-+    parser.add_argument("-E", action='store_true',
-+                        help="ignore PYTHON* environment variables")
-     parser.add_argument("-i", dest="icommand",
-                         help="program passed in as a string, then stay in REPL")
-     parser.add_argument("--spy", action="store_true",
-@@ -310,6 +312,10 @@ def cmdline_handler(scriptname, argv):
-     # reset sys.argv like Python
-     sys.argv = options.args + module_args or [""]
- 
-+    if options.E:
-+        # User did "hy -E ..."
-+        _remove_python_envs()
-+
-     if options.command:
-         # User did "hy -c ..."
-         return run_command(options.command)
-@@ -436,3 +442,10 @@ def _print_for_windows(src):
-             print(line)
-         except:
-             print(line.encode('utf-8'))
-+
-+# remove PYTHON* environment variables,
-+# such as "PYTHONPATH"
-+def _remove_python_envs():
-+    for key in list(os.environ.keys()):
-+        if key.startswith("PYTHON"):
-+            os.environ.pop(key)
-diff --git a/hy/compiler.py b/hy/compiler.py
-index 9a130f0f..6f42e2c7 100755
---- a/hy/compiler.py
-+++ b/hy/compiler.py
-@@ -20,10 +20,8 @@
- 
- import traceback
- import importlib
--import codecs
- import ast
- import sys
--import keyword
- import copy
- 
- from collections import defaultdict
-@@ -2038,7 +2036,10 @@ def compile_return(self, expr):
-     def compile_class_expression(self, expressions):
-         def rewire_init(expr):
-             new_args = []
--            if expr[0] == HySymbol("setv"):
-+            if (isinstance(expr, HyExpression)
-+                and len(expr) > 1
-+                and isinstance(expr[0], HySymbol)
-+                and expr[0] == HySymbol("setv")):
-                 pairs = expr[1:]
-                 while len(pairs) > 0:
-                     k, v = (pairs.pop(0), pairs.pop(0))
-@@ -2070,13 +2071,12 @@ def rewire_init(expr):
-         body = Result()
- 
-         # grab the doc string, if there is one
-+        docstring = None
-         if expressions and isinstance(expressions[0], HyString):
-             docstring = expressions.pop(0)
--            symb = HySymbol("__doc__")
--            symb.start_line = docstring.start_line
--            symb.start_column = docstring.start_column
--            body += self._compile_assign(symb, docstring)
--            body += body.expr_as_stmt()
-+            if not PY37:
-+                body += self.compile(docstring).expr_as_stmt()
-+                docstring = None
- 
-         if expressions and isinstance(expressions[0], HyList) \
-            and not isinstance(expressions[0], HyExpression):
-@@ -2087,7 +2087,8 @@ def rewire_init(expr):
-             body += self.compile(rewire_init(expr))
- 
-         for expression in expressions:
--            body += self.compile(rewire_init(macroexpand(expression, self)))
-+            e = self.compile(rewire_init(macroexpand(expression, self)))
-+            body += e + e.expr_as_stmt()
- 
-         if not body.stmts:
-             body += asty.Pass(expressions)
-@@ -2100,7 +2101,8 @@ def rewire_init(expr):
-             starargs=None,
-             kwargs=None,
-             bases=bases_expr,
--            body=body.stmts)
-+            body=body.stmts,
-+            docstring=(None if docstring is None else str_type(docstring)))
- 
-     @builds("dispatch-tag-macro")
-     @checkargs(exact=2)
 diff --git a/hy/completer.hy b/hy/completer.hy
-new file mode 100644
-index 00000000..a67c0d5c
---- /dev/null
+index 482a3821fe..a67c0d5cfe 100755
+--- a/hy/completer.hy
 +++ b/hy/completer.hy
-@@ -0,0 +1,114 @@
-+(import contextlib)
-+(import os)
-+(import re)
-+(import sys)
-+
-+(import hy.macros)
-+(import hy.compiler)
-+(import [hy.lex.parser [mangle unmangle]])
-+(import [hy.-compat [builtins string-types]])
-+
+@@ -8,7 +8,9 @@
+ (import [hy.lex.parser [mangle unmangle]])
+ (import [hy.-compat [builtins string-types]])
+ 
+-(import [builtins [eval]])
 +(if-python2
 +  (import [--builtin-- [eval]])
 +  (import [builtins [eval]]))
-+
-+(setv docomplete True)
-+
-+(try
-+  (import readline)
-+  (except [ImportError]
-+    (try
-+      (import pyreadline.rlmain)
-+      (import pyreadline.unicode-helper)
-+      (import readline)
-+      (except [ImportError]
-+        (setv docomplete False)))))
-+
-+(defclass Completer []
-+  (defn --init-- [self &optional [namespace {}]]
-+    (when (not (instance? dict namespace))
-+      (raise (TypeError "namespace must be a dictionary")))
-+
-+    (setv self.namespace namespace
-+          self.path [hy.compiler.-compile-table
-+                     builtins.--dict--
-+                     (get hy.macros.-hy-macros None)
-+                     namespace]
-+          self.tag-path [(get hy.macros.-hy-tag None)])
-+
-+    (setv module-name (.get namespace "__name__"))
-+    (when module-name
-+      (->> (get hy.macros.-hy-macros module-name) (.append self.path))
-+      (->> (get hy.macros.-hy-tag module-name) (.append self.tag-path))))
-+
-+  (defn attr-matches [self text]
-+    (setv match (re.match r"(\S+(\.[\w-]+)*)\.([\w-]*)$" text))
-+    (if match
-+      (setv [expr attr] (map mangle (.group match 1 3)))
-+      (return))
-+
-+    (try
-+      (setv obj (eval expr self.namespace)
-+            words (dir obj))
-+      (except [Exception]
-+        (return)))
-+
-+    (for [word words]
-+      (when (= (cut word 0 (len attr)) attr)
-+        (yield (->> (, expr word)
-+                    (map unmangle)
-+                    (.join "."))))))
-+
-+  (defn global-matches [self text]
-+    (for [path self.path
-+          key (.keys path)]
-+      (when (instance? string-types key)
-+        (setv key (unmangle key))
-+        (when (.startswith key text)
-+          (yield key)))))
-+
-+  (defn tag-matches [self text]
-+    (setv text (cut text 1))
-+    (for [path self.tag-path
-+          key (.keys path)]
-+      (when (instance? string-types key)
-+        (setv key (unmangle key))
-+        (when (.startswith key text)
-+          (yield (.format "#{}" key))))))
-+
-+  (defn complete [self text state]
+ 
+ (setv docomplete True)
+ 
+@@ -22,13 +24,6 @@
+       (except [ImportError]
+         (setv docomplete False)))))
+ 
+-(when docomplete
+-  (setv readline-bind
+-        (if (and (= sys.platform "darwin")
+-                 (in "libedit" readline.--doc--))
+-            "bind ^I rl_complete"
+-            "tab: complete")))
+-
+ (defclass Completer []
+   (defn --init-- [self &optional [namespace {}]]
+     (when (not (instance? dict namespace))
+@@ -82,12 +77,12 @@
+           (yield (.format "#{}" key))))))
+ 
+   (defn complete [self text state]
+-    (setv matches
+-          (cond [(.startswith text "#") (self.tag-matches text)]
+-                [(in "." text) (self.attr-matches text)]
+-                [True (self.global-matches text)]))
 +    (setv sub-completer
 +          (cond [(.startswith text "#") self.tag-matches]
 +                [(in "." text) self.attr-matches]
 +                [True self.global-matches]))
-+    (try
+     (try
+-      (return (get (list matches) state))
 +      (return (get (list (sub-completer text)) state))
-+      (except [IndexError]
-+        (return None)))))
-+
-+#@(contextlib.contextmanager
-+    (defn completion [&optional [completer None]]
-+      (setv delims "()[]{} ")
-+      (when (not completer)
-+        (setv completer (Completer)))
-+
-+      (when docomplete
-+        (readline.set-completer completer.complete)
-+        (readline.set-completer-delims delims)
-+        (readline.parse-and-bind "set blink-matching-paren on")
+       (except [IndexError]
+         (return None)))))
+ 
+@@ -101,7 +96,10 @@
+         (readline.set-completer completer.complete)
+         (readline.set-completer-delims delims)
+         (readline.parse-and-bind "set blink-matching-paren on")
+-        (readline.parse-and-bind readline-bind)
 +        (readline.parse-and-bind (if (and (= sys.platform "darwin")
 +                                          (in "libedit" readline.--doc--))
 +                                     "bind ^I rl_complete"
 +                                     "tab: complete"))
-+
-+        (setv history (os.path.expanduser "~/.hy-history"))
-+        (try
-+          (readline.read-history-file history)
-+          (except [IOError]
-+            (-> (open history "a") (.close)))))
-+
-+      (try
-+        (yield)
-+        (finally
-+          (when docomplete
-+            (readline.write-history-file history))))))
-diff --git a/hy/completer.py b/hy/completer.py
-deleted file mode 100644
-index 9cfc6685..00000000
---- a/hy/completer.py
-+++ /dev/null
-@@ -1,132 +0,0 @@
--# Copyright 2018 the authors.
--# This file is part of Hy, which is free software licensed under the Expat
--# license. See the LICENSE.
--
--import contextlib
--import os
--import re
--import sys
--
--import hy.macros
--import hy.compiler
--from hy._compat import builtins, string_types
--
--
--docomplete = True
--
--try:
--    import readline
--except ImportError:
--    try:
--        import pyreadline.rlmain
--        import pyreadline.unicode_helper  # NOQA
--        import readline
--    except ImportError:
--        docomplete = False
--
--if docomplete:
--    if sys.platform == 'darwin' and 'libedit' in readline.__doc__:
--        readline_bind = "bind ^I rl_complete"
--    else:
--        readline_bind = "tab: complete"
--
--
--class Completer(object):
--
--    def __init__(self, namespace={}):
--        if not isinstance(namespace, dict):
--            raise TypeError('namespace must be a dictionary')
--        self.namespace = namespace
--        self.path = [hy.compiler._compile_table,
--                     builtins.__dict__,
--                     hy.macros._hy_macros[None],
--                     namespace]
--        self.tag_path = [hy.macros._hy_tag[None]]
--        if '__name__' in namespace:
--            module_name = namespace['__name__']
--            self.path.append(hy.macros._hy_macros[module_name])
--            self.tag_path.append(hy.macros._hy_tag[module_name])
--
--    def attr_matches(self, text):
--        # Borrowed from IPython's completer
--        m = re.match(r"(\S+(\.[\w-]+)*)\.([\w-]*)$", text)
--
--        if m:
--            expr, attr = m.group(1, 3)
--            attr = attr.replace("-", "_")
--            expr = expr.replace("-", "_")
--        else:
--            return []
--
--        try:
--            obj = eval(expr, self.namespace)
--            words = dir(obj)
--        except Exception:
--            return []
--
--        n = len(attr)
--        matches = []
--        for w in words:
--            if w[:n] == attr:
--                matches.append("{}.{}".format(
--                    expr.replace("_", "-"), w.replace("_", "-")))
--        return matches
--
--    def global_matches(self, text):
--        matches = []
--        for p in self.path:
--            for k in p.keys():
--                if isinstance(k, string_types):
--                    k = k.replace("_", "-")
--                    if k.startswith(text):
--                        matches.append(k)
--        return matches
--
--    def tag_matches(self, text):
--        text = text[1:]
--        matches = []
--        for p in self.tag_path:
--            for k in p.keys():
--                if isinstance(k, string_types):
--                    if k.startswith(text):
--                        matches.append("#{}".format(k))
--        return matches
--
--    def complete(self, text, state):
--        if text.startswith("#"):
--            matches = self.tag_matches(text)
--        elif "." in text:
--            matches = self.attr_matches(text)
--        else:
--            matches = self.global_matches(text)
--        try:
--            return matches[state]
--        except IndexError:
--            return None
--
--
--@contextlib.contextmanager
--def completion(completer=None):
--    delims = "()[]{} "
--    if not completer:
--        completer = Completer()
--
--    if docomplete:
--        readline.set_completer(completer.complete)
--        readline.set_completer_delims(delims)
--
--        history = os.path.expanduser("~/.hy-history")
--        readline.parse_and_bind("set blink-matching-paren on")
--
--        try:
--            readline.read_history_file(history)
--        except IOError:
--            open(history, 'a').close()
--
--        readline.parse_and_bind(readline_bind)
--
--    try:
--        yield
--    finally:
--        if docomplete:
--            readline.write_history_file(history)
-diff --git a/tests/compilers/test_ast.py b/tests/compilers/test_ast.py
-index 2aea3a92..c779fbdb 100644
---- a/tests/compilers/test_ast.py
-+++ b/tests/compilers/test_ast.py
-@@ -212,6 +212,9 @@ def test_ast_good_defclass():
-     "Make sure AST can compile valid defclass"
-     can_compile("(defclass a)")
-     can_compile("(defclass a [])")
-+    can_compile("(defclass a [] None 42)")
-+    can_compile("(defclass a [] None \"test\")")
-+    can_compile("(defclass a [] None (print \"foo\"))")
  
- 
- @pytest.mark.skipif(not PY3, reason="Python 3 supports class keywords")
-diff --git a/tests/native_tests/defclass.hy b/tests/native_tests/defclass.hy
-index da3d9ad9..b07e9911 100644
---- a/tests/native_tests/defclass.hy
-+++ b/tests/native_tests/defclass.hy
-@@ -127,3 +127,14 @@
-   (setv b (B))
-   (assert (= a.x 1))
-   (assert (= b.x 2)))
-+
-+(defn test-class-sideeffects []
-+  "NATIVE: test that defclass runs all expressions"
-+  (defn set-sentinel []
-+    (setv set-sentinel.set True))
-+  (setv set-sentinel.set False)
-+
-+  (defclass A []
-+    (set-sentinel))
-+
-+  (assert set-sentinel.set))
-diff --git a/tests/resources/bin/printenv.hy b/tests/resources/bin/printenv.hy
-new file mode 100644
-index 00000000..521fd278
---- /dev/null
-+++ b/tests/resources/bin/printenv.hy
-@@ -0,0 +1,3 @@
-+(import os)
-+
-+(print (. os environ))
-diff --git a/tests/test_bin.py b/tests/test_bin.py
-index b1e0b256..ad747817 100644
---- a/tests/test_bin.py
-+++ b/tests/test_bin.py
-@@ -168,6 +168,23 @@ def test_bin_hy_stdin_hy_repr():
-     output, _ = run_cmd(hr("--spy"), '(+ [1] [2] (foof))')
-     assert "[1]+[2]" in output.replace('L', '').replace(' ', '')
- 
-+def test_bin_hy_ignore_python_env():
-+    os.environ.update({"PYTHONTEST": '0'})
-+    output, _ = run_cmd("hy -c '(print (do (import os) (. os environ)))'")
-+    assert "PYTHONTEST" in output
-+    output, _ = run_cmd("hy -m tests.resources.bin.printenv")
-+    assert "PYTHONTEST" in output
-+    output, _ = run_cmd("hy tests/resources/bin/printenv.hy")
-+    assert "PYTHONTEST" in output
-+
-+    output, _ = run_cmd("hy -E -c '(print (do (import os) (. os environ)))'")
-+    assert "PYTHONTEST" not in output
-+    os.environ.update({"PYTHONTEST": '0'})
-+    output, _ = run_cmd("hy -E -m tests.resources.bin.printenv")
-+    assert "PYTHONTEST" not in output
-+    os.environ.update({"PYTHONTEST": '0'})
-+    output, _ = run_cmd("hy -E tests/resources/bin/printenv.hy")
-+    assert "PYTHONTEST" not in output
- 
- def test_bin_hy_cmd():
-     output, _ = run_cmd("hy -c \"(koan)\"")
+         (setv history (os.path.expanduser "~/.hy-history"))
+         (try

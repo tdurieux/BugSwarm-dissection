@@ -1,5 +1,5 @@
 diff --git a/doc/whats_new.rst b/doc/whats_new.rst
-index ff975e8577c5..3cf978da775a 100644
+index ff975e8577..3cf978da77 100755
 --- a/doc/whats_new.rst
 +++ b/doc/whats_new.rst
 @@ -128,7 +128,7 @@ Bug fixes
@@ -26,7 +26,7 @@ index ff975e8577c5..3cf978da775a 100644
  -------------------
  
 diff --git a/examples/cross_decomposition/plot_compare_cross_decomposition.py b/examples/cross_decomposition/plot_compare_cross_decomposition.py
-index f582be9e0004..d563a18aa1e2 100644
+index f582be9e00..d563a18aa1 100755
 --- a/examples/cross_decomposition/plot_compare_cross_decomposition.py
 +++ b/examples/cross_decomposition/plot_compare_cross_decomposition.py
 @@ -121,9 +121,9 @@
@@ -51,28 +51,10 @@ index f582be9e0004..d563a18aa1e2 100644
  ###############################################################################
  # CCA (PLS mode B with symmetric deflation)
 diff --git a/sklearn/cluster/dbscan_.py b/sklearn/cluster/dbscan_.py
-index 8a26bbdba7fc..1a63817daf6e 100644
+index 1d8f7b52dd..1a63817daf 100755
 --- a/sklearn/cluster/dbscan_.py
 +++ b/sklearn/cluster/dbscan_.py
-@@ -12,6 +12,7 @@
- import warnings
- 
- import numpy as np
-+from scipy import sparse
- 
- from ..base import BaseEstimator, ClusterMixin
- from ..metrics import pairwise_distances
-@@ -49,7 +50,8 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
-         the options allowed by metrics.pairwise.pairwise_distances for its
-         metric parameter.
-         If metric is "precomputed", X is assumed to be a distance matrix and
--        must be square.
-+        must be square. X may be a sparse matrix (CSR preferred) in which case
-+        only "nonzero" elements may be considered neighbors for DBSCAN.
- 
-     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
-         The algorithm to be used by the NearestNeighbors module
-@@ -92,6 +94,11 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
+@@ -94,6 +94,11 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
      the memory complexity to O(n.d) where d is the average number of neighbors,
      while original DBSCAN had memory complexity O(n).
  
@@ -84,12 +66,13 @@ index 8a26bbdba7fc..1a63817daf6e 100644
      References
      ----------
      Ester, M., H. P. Kriegel, J. Sander, and X. Xu, "A Density-Based
-@@ -118,18 +125,30 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
-     if metric == 'precomputed':
+@@ -121,22 +126,29 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
          D = pairwise_distances(X, metric=metric)
          neighborhoods = np.empty(X.shape[0], dtype=object)
--        neighborhoods[:] = [np.where(x <= eps)[0] for x in D]
-+        if sparse.issparse(D):
+         if sparse.issparse(D):
+-            D = D <= eps
+-            neighborhoods[:] = np.split(D.indices.astype(np.intp),
+-                                        D.indptr[1:-1])
 +            D_mask = D.data <= eps
 +            masked_indices = D.indices.astype(np.intp)[D_mask]
 +            masked_indptr = np.cumsum(D_mask)[D.indptr[1:] - 1]
@@ -99,7 +82,8 @@ index 8a26bbdba7fc..1a63817daf6e 100644
 +            masked_indptr = masked_indptr[:-1] + np.arange(1, D.shape[0])
 +            # split into rows
 +            neighborhoods[:] = np.split(masked_indices, masked_indptr)
-+        else:
+         else:
+-            neighborhoods[:] = [np.where(x <= eps)[0] for x in D]
 +            neighborhoods[:] = [np.where(x <= eps)[0] for i, x in enumerate(D)]
      else:
          neighbors_model = NearestNeighbors(radius=eps, algorithm=algorithm,
@@ -118,17 +102,7 @@ index 8a26bbdba7fc..1a63817daf6e 100644
      else:
          n_neighbors = np.array([np.sum(sample_weight[neighbors])
                                  for neighbors in neighborhoods])
-@@ -166,7 +185,8 @@ class DBSCAN(BaseEstimator, ClusterMixin):
-         the options allowed by metrics.pairwise.calculate_distance for its
-         metric parameter.
-         If metric is "precomputed", X is assumed to be a distance matrix and
--        must be square.
-+        must be square. X may be a sparse matrix (CSR preferred) in which case
-+        only "nonzero" elements may be considered neighbors for DBSCAN.
-     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
-         The algorithm to be used by the NearestNeighbors module
-         to compute pointwise distances and find nearest neighbors.
-@@ -200,6 +220,11 @@ class DBSCAN(BaseEstimator, ClusterMixin):
+@@ -208,6 +220,11 @@ class DBSCAN(BaseEstimator, ClusterMixin):
      the memory complexity to O(n.d) where d is the average number of neighbors,
      while original DBSCAN had memory complexity O(n).
  
@@ -141,7 +115,7 @@ index 8a26bbdba7fc..1a63817daf6e 100644
      ----------
      Ester, M., H. P. Kriegel, J. Sander, and X. Xu, "A Density-Based
 diff --git a/sklearn/cluster/tests/test_dbscan.py b/sklearn/cluster/tests/test_dbscan.py
-index abcc00e7df6e..23b08d8be6f6 100644
+index 0e1f2afc08..23b08d8be6 100755
 --- a/sklearn/cluster/tests/test_dbscan.py
 +++ b/sklearn/cluster/tests/test_dbscan.py
 @@ -14,6 +14,7 @@
@@ -152,31 +126,27 @@ index abcc00e7df6e..23b08d8be6f6 100644
  from sklearn.cluster.dbscan_ import DBSCAN
  from sklearn.cluster.dbscan_ import dbscan
  from sklearn.cluster.tests.common import generate_clustered_data
-@@ -78,6 +79,22 @@ def test_dbscan_sparse():
-     assert_array_equal(labels_dense, labels_sparse)
+@@ -80,11 +81,16 @@ def test_dbscan_sparse():
  
- 
-+def test_dbscan_sparse_precomputed():
-+    D = pairwise_distances(X)
+ def test_dbscan_sparse_precomputed():
+     D = pairwise_distances(X)
+-    core_sparse, labels_sparse = dbscan(sparse.lil_matrix(D),
 +    nn = NearestNeighbors(radius=.9).fit(X)
 +    D_sparse = nn.radius_neighbors_graph(mode='distance')
 +    # Ensure it is sparse not merely on diagonals:
 +    assert D_sparse.nnz < D.shape[0] * (D.shape[0] - 1)
 +    core_sparse, labels_sparse = dbscan(D_sparse,
-+                                        eps=.8,
-+                                        min_samples=10,
-+                                        metric='precomputed')
+                                         eps=.8,
+                                         min_samples=10,
+                                         metric='precomputed')
+-    core_dense, labels_dense = dbscan(X, eps=.8, min_samples=10)
 +    core_dense, labels_dense = dbscan(D, eps=.8, min_samples=10,
 +                                      metric='precomputed')
-+    assert_array_equal(core_dense, core_sparse)
-+    assert_array_equal(labels_dense, labels_sparse)
-+
-+
- def test_dbscan_no_core_samples():
-     rng = np.random.RandomState(0)
-     X = rng.rand(40, 10)
+     assert_array_equal(core_dense, core_sparse)
+     assert_array_equal(labels_dense, labels_sparse)
+ 
 diff --git a/sklearn/cross_validation.py b/sklearn/cross_validation.py
-index fa7c7f210bc0..5b7f2d5ad727 100644
+index fa7c7f210b..5b7f2d5ad7 100755
 --- a/sklearn/cross_validation.py
 +++ b/sklearn/cross_validation.py
 @@ -1042,13 +1042,20 @@ def cross_val_predict(estimator, X, y=None, cv=None, n_jobs=1,
@@ -205,7 +175,7 @@ index fa7c7f210bc0..5b7f2d5ad727 100644
  
  def _fit_and_predict(estimator, X, y, train, test, verbose, fit_params):
 diff --git a/sklearn/tests/test_cross_validation.py b/sklearn/tests/test_cross_validation.py
-index b33e2b4c279d..f8d7165c3d75 100644
+index b33e2b4c27..f8d7165c3d 100755
 --- a/sklearn/tests/test_cross_validation.py
 +++ b/sklearn/tests/test_cross_validation.py
 @@ -4,6 +4,7 @@

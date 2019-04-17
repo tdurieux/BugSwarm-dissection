@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index a9059306..0b0b4ba7 100644
+index a9059306e1..0b0b4ba7ab 100755
 --- a/README.md
 +++ b/README.md
 @@ -1,6 +1,8 @@
@@ -12,7 +12,7 @@ index a9059306..0b0b4ba7 100644
  
   * CDI
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Address.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Address.java
-index fc23904d..38325274 100644
+index fc23904d21..383252740d 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Address.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Address.java
 @@ -15,6 +15,9 @@
@@ -48,7 +48,7 @@ index fc23904d..38325274 100644
      * Return <code>true</code> if this {@link Address} contains a query section, otherwise return <code>false</code>.
      */
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilder.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilder.java
-index c5a15777..e912bd87 100644
+index 46048c6f8d..e912bd8702 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilder.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilder.java
 @@ -18,6 +18,7 @@
@@ -69,29 +69,7 @@ index c5a15777..e912bd87 100644
   * 
   * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
   */
-@@ -58,6 +60,21 @@ public static AddressBuilderBase begin()
-     * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
-     */
-    protected Address build()
-+   {
-+      if (address == null)
-+      {
-+         address = new ParameterizedAddressResult(this);
-+      }
-+      return address;
-+   }
-+
-+   /**
-+    * Generate an {@link Address} representing the current literal state of this {@link AddressBuilder}.
-+    * <p>
-+    * (Does not apply parameterization. E.g. The URL `/{foo}` will be treated as literal text, as opposed to calling
-+    * {@link #build()}, which would result in `foo` being treated as a parameterized expression)
-+    */
-+   protected Address buildLiteral()
-    {
-       if (address == null)
-       {
-@@ -67,8 +84,8 @@ protected Address build()
+@@ -82,8 +84,8 @@ protected Address buildLiteral()
     }
  
     /**
@@ -102,48 +80,36 @@ index c5a15777..e912bd87 100644
      * 
      * @see http://en.wikipedia.org/wiki/URI_scheme
      * @throws IllegalArgumentException when the input URL or URL fragment is not valid.
-@@ -79,16 +96,48 @@ public static Address create(String url) throws IllegalArgumentException
-          URI u = new URI(url);
-          String scheme = u.getScheme();
-          String host = u.getHost();
--         if(scheme != null && host == null)
--            return AddressBuilder.begin().scheme(u.getScheme()).schemeSpecificPart(u.getRawSchemeSpecificPart()).build();
-+         if (scheme != null && host == null)
-+            return AddressBuilder.begin().scheme(u.getScheme()).schemeSpecificPart(u.getRawSchemeSpecificPart())
-+                     .build();
-+         else
-+            return AddressBuilder.begin().scheme(scheme).domain(host).port(u.getPort())
+@@ -99,18 +101,20 @@ public static Address create(String url) throws IllegalArgumentException
+                      .build();
+          else
+             return AddressBuilder.begin().scheme(scheme).domain(host).port(u.getPort())
+-                     .pathEncoded(u.getRawPath()).queryLiteral(u.getRawQuery()).anchor(u.getRawFragment()).build();
 +                     .path(u.getRawPath()).queryLiteral(u.getRawQuery()).anchor(u.getRawFragment()).build();
-+      }
-+      catch (URISyntaxException e) {
-+         throw new IllegalArgumentException(
-+                  "[" + url + "] is not a valid URL fragment. Consider encoding relevant portions of the URL with ["
+       }
+       catch (URISyntaxException e) {
+          throw new IllegalArgumentException(
+                   "[" + url + "] is not a valid URL fragment. Consider encoding relevant portions of the URL with ["
+-                           + Encoder.class + "]", e);
 +                           + Encoder.class
 +                           + "], or use the provided builder pattern via this class to specify part encoding.", e);
-+      }
-+   }
-+
-+   /**
+       }
+    }
+ 
+    /**
+-    * Create a new {@link Address} from the given fully encoded URL. Improperly formatted or encoded URLs are not
+-    * parse-able and will result in an exception.<p>
 +    * Create a new {@link Address} from the given URL. Improperly formatted or encoded URLs are not parse-able and will
 +    * result in an exception.
 +    * <p>
-+    * 
-+    * @see http://en.wikipedia.org/wiki/URI_scheme
-+    * @throws IllegalArgumentException when the input URL or URL fragment is not valid.
-+    */
-+   public static Address createLiteral(String url) throws IllegalArgumentException
-+   {
-+      try {
-+         URI u = new URI(url);
-+         String scheme = u.getScheme();
-+         String host = u.getHost();
-+         if (scheme != null && host == null)
-+            return AddressBuilder.begin().scheme(u.getScheme()).schemeSpecificPart(u.getRawSchemeSpecificPart())
-+                     .buildLiteral();
+     * 
+     * @see http://en.wikipedia.org/wiki/URI_scheme
+     * @throws IllegalArgumentException when the input URL or URL fragment is not valid.
+@@ -126,12 +130,14 @@ public static Address createLiteral(String url) throws IllegalArgumentException
+                      .buildLiteral();
           else
--           return AddressBuilder.begin().scheme(scheme).domain(host).port(u.getPort())
--             .pathEncoded(u.getRawPath()).queryLiteral(u.getRawQuery()).anchor(u.getRawFragment()).build();
-+            return AddressBuilder.begin().scheme(scheme).domain(host).port(u.getPort())
+             return AddressBuilder.begin().scheme(scheme).domain(host).port(u.getPort())
+-                     .pathEncoded(u.getRawPath()).queryLiteral(u.getRawQuery()).anchor(u.getRawFragment()).buildLiteral();
 +                     .path(u.getRawPath()).queryLiteral(u.getRawQuery()).anchor(u.getRawFragment())
 +                     .buildLiteral();
        }
@@ -156,7 +122,7 @@ index c5a15777..e912bd87 100644
        }
     }
  
-@@ -130,8 +179,8 @@ AddressBuilderPort port(int port)
+@@ -173,8 +179,8 @@ AddressBuilderPort port(int port)
     }
  
     /**
@@ -167,7 +133,7 @@ index c5a15777..e912bd87 100644
      */
     AddressBuilderPath path(CharSequence path)
     {
-@@ -140,31 +189,70 @@ AddressBuilderPath path(CharSequence path)
+@@ -183,31 +189,70 @@ AddressBuilderPath path(CharSequence path)
     }
  
     /**
@@ -246,7 +212,7 @@ index c5a15777..e912bd87 100644
        return new AddressBuilderQuery(this);
     }
  
-@@ -224,7 +312,7 @@ AddressBuilderQuery queryLiteral(String query)
+@@ -267,7 +312,7 @@ AddressBuilderQuery queryLiteral(String query)
           }
  
           for (Entry<CharSequence, List<CharSequence>> entry : params.entrySet()) {
@@ -255,7 +221,7 @@ index c5a15777..e912bd87 100644
           }
        }
        return new AddressBuilderQuery(this);
-@@ -253,26 +341,102 @@ AddressBuilderAnchor anchor(CharSequence anchor)
+@@ -296,21 +341,49 @@ AddressBuilderAnchor anchor(CharSequence anchor)
     }
  
     /**
@@ -311,11 +277,10 @@ index c5a15777..e912bd87 100644
     }
  
     @Override
-    public String toString()
+@@ -318,4 +391,52 @@ public String toString()
     {
--      return build().toString();
-+      return buildLiteral().toString();
-+   }
+       return buildLiteral().toString();
+    }
 +
 +   /**
 +    * Package private method for {@link Address} implementations to use for rendering.
@@ -363,79 +328,13 @@ index c5a15777..e912bd87 100644
 +         result.put(key == null ? null : key.toString(), entry.getValue().getValues());
 +      }
 +      return Collections.unmodifiableMap(result);
-    }
- }
-diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderAnchor.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderAnchor.java
-index d39655d6..03d30982 100644
---- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderAnchor.java
-+++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderAnchor.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderAnchor
-+public class AddressBuilderAnchor implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,14 +29,18 @@
-       this.parent = parent;
-    }
- 
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
 +   }
-+
-    @Override
-    public String toString()
-    {
+ }
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderBase.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderBase.java
-index 35a2c113..e8701ba3 100644
+index 158c530123..e8701ba3c6 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderBase.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderBase.java
-@@ -18,7 +18,7 @@
- /**
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderBase
-+public class AddressBuilderBase implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -27,14 +27,18 @@
-       this.parent = parent;
-    }
- 
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
-    /**
-     * Set the scheme section of this {@link Address}.
-     */
-@@ -60,8 +64,8 @@ public AddressBuilderPort port(int port)
+@@ -64,8 +64,8 @@ public AddressBuilderPort port(int port)
     }
  
     /**
@@ -446,7 +345,7 @@ index 35a2c113..e8701ba3 100644
      */
     public AddressBuilderPath path(CharSequence path)
     {
-@@ -69,7 +73,15 @@ public AddressBuilderPath path(CharSequence path)
+@@ -73,7 +73,15 @@ public AddressBuilderPath path(CharSequence path)
     }
  
     /**
@@ -463,7 +362,7 @@ index 35a2c113..e8701ba3 100644
      */
     public AddressBuilderPath pathEncoded(CharSequence path)
     {
-@@ -77,8 +89,8 @@ public AddressBuilderPath pathEncoded(CharSequence path)
+@@ -81,8 +89,8 @@ public AddressBuilderPath pathEncoded(CharSequence path)
     }
  
     /**
@@ -474,7 +373,7 @@ index 35a2c113..e8701ba3 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object... values)
     {
-@@ -86,8 +98,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
+@@ -90,8 +98,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
     }
  
     /**
@@ -493,37 +392,13 @@ index 35a2c113..e8701ba3 100644
     public AddressBuilderQuery queryEncoded(CharSequence name, Object... values)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderDomain.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderDomain.java
-index 52502c91..dc10b524 100644
+index e1164a7e14..dc10b524f9 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderDomain.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderDomain.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderDomain
-+public class AddressBuilderDomain implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,14 +29,45 @@
-       this.parent = parent;
+@@ -41,6 +41,33 @@ public Address buildLiteral()
+       return parent.buildLiteral();
     }
  
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
 +   /**
 +    * Set a parameter name and value or values. The supplied values will be stored without additional encoding.
 +    */
@@ -554,7 +429,7 @@ index 52502c91..dc10b524 100644
     /**
      * Set the port section of this {@link Address}.
      */
-@@ -46,8 +77,8 @@ public AddressBuilderPort port(int port)
+@@ -50,8 +77,8 @@ public AddressBuilderPort port(int port)
     }
  
     /**
@@ -565,7 +440,7 @@ index 52502c91..dc10b524 100644
      */
     public AddressBuilderPath path(CharSequence path)
     {
-@@ -55,7 +86,15 @@ public AddressBuilderPath path(CharSequence path)
+@@ -59,7 +86,15 @@ public AddressBuilderPath path(CharSequence path)
     }
  
     /**
@@ -582,7 +457,7 @@ index 52502c91..dc10b524 100644
      */
     public AddressBuilderPath pathEncoded(CharSequence path)
     {
-@@ -63,8 +102,8 @@ public AddressBuilderPath pathEncoded(CharSequence path)
+@@ -67,8 +102,8 @@ public AddressBuilderPath pathEncoded(CharSequence path)
     }
  
     /**
@@ -593,7 +468,7 @@ index 52502c91..dc10b524 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object... values)
     {
-@@ -72,8 +111,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
+@@ -76,8 +111,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
     }
  
     /**
@@ -612,37 +487,12 @@ index 52502c91..dc10b524 100644
     public AddressBuilderQuery queryEncoded(CharSequence name, Object... values)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPath.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPath.java
-index 58fcc411..a138ad47 100644
+index 1ae77b8a41..a138ad47a5 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPath.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPath.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderPath
-+public class AddressBuilderPath implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,17 +29,21 @@
-       this.parent = parent;
+@@ -42,8 +42,8 @@ public Address buildLiteral()
     }
  
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
     /**
 -    * Set a query-parameter to a value or multiple values. The given name and values will be encoded before they are
 -    * stored.
@@ -651,7 +501,7 @@ index 58fcc411..a138ad47 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object... values)
     {
-@@ -47,8 +51,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
+@@ -51,8 +51,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
     }
  
     /**
@@ -669,7 +519,7 @@ index 58fcc411..a138ad47 100644
      */
     public AddressBuilderQuery queryEncoded(CharSequence name, Object... values)
     {
-@@ -73,8 +84,7 @@ public AddressBuilderAnchor anchor(String anchor)
+@@ -77,8 +84,7 @@ public AddressBuilderAnchor anchor(String anchor)
     }
  
     /**
@@ -679,7 +529,7 @@ index 58fcc411..a138ad47 100644
      */
     public AddressBuilderPath set(CharSequence name, Object... values)
     {
-@@ -83,8 +93,16 @@ public AddressBuilderPath set(CharSequence name, Object... values)
+@@ -87,8 +93,16 @@ public AddressBuilderPath set(CharSequence name, Object... values)
     }
  
     /**
@@ -699,44 +549,19 @@ index 58fcc411..a138ad47 100644
     public AddressBuilderPath setEncoded(CharSequence name, Object... values)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPort.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPort.java
-index 344a7d90..9e2cd102 100644
+index 80d548d818..9e2cd102b4 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPort.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderPort.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderPort
-+public class AddressBuilderPort implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,16 +29,20 @@
-       this.parent = parent;
+@@ -42,7 +42,7 @@ public Address buildLiteral()
     }
  
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
     /**
 -    * Set the non-encoded path section of this {@link Address}. The given value will be stored without additional
 +    * Set the path section of this {@link Address}. The given value will be stored without additional
      * encoding or decoding.
      */
     public AddressBuilderPath path(CharSequence path)
-@@ -47,16 +51,24 @@ public AddressBuilderPath path(CharSequence path)
+@@ -51,16 +51,24 @@ public AddressBuilderPath path(CharSequence path)
     }
  
     /**
@@ -765,7 +590,7 @@ index 344a7d90..9e2cd102 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object... values)
     {
-@@ -64,8 +76,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
+@@ -68,8 +76,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
     }
  
     /**
@@ -784,37 +609,12 @@ index 344a7d90..9e2cd102 100644
     public AddressBuilderQuery queryEncoded(CharSequence name, Object... values)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderQuery.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderQuery.java
-index 790cb9dc..5833930a 100644
+index 79688c211f..5833930ab6 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderQuery.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderQuery.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderQuery
-+public class AddressBuilderQuery implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,17 +29,21 @@
-       this.parent = parent;
+@@ -42,8 +42,8 @@ public Address buildLiteral()
     }
  
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
     /**
 -    * Set a query-parameter to a value or multiple values. The given name and values will be encoded before they are
 -    * stored.
@@ -823,7 +623,7 @@ index 790cb9dc..5833930a 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object value)
     {
-@@ -47,8 +51,15 @@ public AddressBuilderQuery query(CharSequence name, Object value)
+@@ -51,8 +51,15 @@ public AddressBuilderQuery query(CharSequence name, Object value)
     }
  
     /**
@@ -842,41 +642,10 @@ index 790cb9dc..5833930a 100644
     public AddressBuilderQuery queryEncoded(CharSequence name, Object value)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderScheme.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderScheme.java
-index 9a030184..45d971c8 100644
+index dfef69db61..45d971c865 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderScheme.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderScheme.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-  */
--public class AddressBuilderScheme
-+public class AddressBuilderScheme implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -29,14 +29,18 @@
-       this.parent = parent;
-    }
- 
--   /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
--    */
-+   @Override
-    public Address build()
-    {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
-    /**
-     * Set the domain section of this {@link Address}.
-     */
-@@ -52,7 +56,34 @@ public AddressBuilderSchemeSpecificPart schemeSpecificPart(CharSequence schemeSp
+@@ -56,7 +56,34 @@ public AddressBuilderSchemeSpecificPart schemeSpecificPart(CharSequence schemeSp
     {
        return parent.schemeSpecificPart(schemeSpecificPart);
     }
@@ -912,7 +681,7 @@ index 9a030184..45d971c8 100644
     /**
      * Set the port section of this {@link Address}.
      */
-@@ -71,16 +102,24 @@ public AddressBuilderPath path(CharSequence path)
+@@ -75,16 +102,24 @@ public AddressBuilderPath path(CharSequence path)
     }
  
     /**
@@ -941,7 +710,7 @@ index 9a030184..45d971c8 100644
      */
     public AddressBuilderQuery query(CharSequence name, Object... values)
     {
-@@ -88,8 +127,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
+@@ -92,8 +127,15 @@ public AddressBuilderQuery query(CharSequence name, Object... values)
     }
  
     /**
@@ -960,25 +729,16 @@ index 9a030184..45d971c8 100644
     public AddressBuilderQuery queryEncoded(CharSequence name, Object... values)
     {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderSchemeSpecificPart.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderSchemeSpecificPart.java
-index 5657a25d..28440dc2 100644
+index ea9f2bd54f..28440dc24f 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderSchemeSpecificPart.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressBuilderSchemeSpecificPart.java
-@@ -20,7 +20,7 @@
-  * 
-  * @author <a href="mailto:fabmars@gmail.com">Fabien Marsaud</a>
-  */
--public class AddressBuilderSchemeSpecificPart
-+public class AddressBuilderSchemeSpecificPart implements BuildableAddress
- {
-    private AddressBuilder parent;
- 
-@@ -30,13 +30,44 @@
+@@ -29,6 +29,33 @@
+       this.parent = parent;
     }
  
-    /**
--    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
++   /**
 +    * Set a parameter name and value or values. The supplied values will be stored without additional encoding.
-     */
++    */
 +   public AddressBuilderSchemeSpecificPart set(CharSequence name, Object... values)
 +   {
 +      parent.set(name, values);
@@ -1003,26 +763,14 @@ index 5657a25d..28440dc2 100644
 +      return this;
 +   }
 +
-+   @Override
+    @Override
     public Address build()
     {
-       return parent.build();
-    }
- 
-+   @Override
-+   public Address buildLiteral()
-+   {
-+      return parent.buildLiteral();
-+   }
-+
-    @Override
-    public String toString()
-    {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressResult.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressResult.java
-index 60af7ff2..8b3ed30e 100644
+index 5779fa52a4..8b3ed30e77 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressResult.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/AddressResult.java
-@@ -15,13 +15,10 @@
+@@ -15,6 +15,8 @@
   */
  package org.ocpsoft.urlbuilder;
  
@@ -1030,15 +778,8 @@ index 60af7ff2..8b3ed30e 100644
 +import java.util.List;
  import java.util.Map;
  
--import org.ocpsoft.urlbuilder.util.CaptureType;
--import org.ocpsoft.urlbuilder.util.CapturingGroup;
--import org.ocpsoft.urlbuilder.util.Encoder;
--import org.ocpsoft.urlbuilder.util.ParseTools;
--
  /**
-  * Implementation of {@link Address} created by {@link AddressBuilder}.
-  * 
-@@ -37,21 +34,22 @@
+@@ -32,6 +34,7 @@
     private final String query;
     private final String anchor;
     private CharSequence result;
@@ -1046,34 +787,7 @@ index 60af7ff2..8b3ed30e 100644
  
     public AddressResult(AddressBuilder parent)
     {
-       if (isSet(parent.scheme))
--         protocol = parameterize(parent.parameters, parent.scheme).toString();
-+         protocol = parent.scheme.toString();
-       else
-          protocol = null;
- 
-       if (isSet(parent.schemeSpecificPart))
--         schemeSpecificPart = parameterize(parent.parameters, parent.schemeSpecificPart, false).toString();
-+         schemeSpecificPart = parent.schemeSpecificPart.toString();
-       else
-          schemeSpecificPart = null;
- 
-       if (isSet(parent.domain))
--         host = parameterize(parent.parameters, parent.domain).toString();
-+         host = parent.domain.toString();
-       else
-          host = null;
- 
-@@ -62,7 +60,7 @@ public AddressResult(AddressBuilder parent)
- 
-       if (isSet(parent.path))
-       {
--         CharSequence path = parameterize(parent.parameters, parent.path);
-+         CharSequence path = parent.path;
-          if (path.charAt(0) != '/')
-             path = new StringBuilder('/').append(path);
-          this.path = path.toString();
-@@ -70,13 +68,15 @@ public AddressResult(AddressBuilder parent)
+@@ -65,8 +68,10 @@ public AddressResult(AddressBuilder parent)
        else
           path = null;
  
@@ -1085,13 +799,7 @@ index 60af7ff2..8b3ed30e 100644
        else
           query = null;
  
-       if (isSetOrEmpty(parent.anchor))
--         anchor = parameterize(parent.parameters, parent.anchor).toString();
-+         anchor = parent.anchor.toString();
-       else
-          anchor = null;
-    }
-@@ -98,7 +98,7 @@ private CharSequence toQuery(Map<CharSequence, Parameter> queries)
+@@ -93,7 +98,7 @@ private CharSequence toQuery(Map<CharSequence, Parameter> queries)
           if (parameter.getValueCount() > 0)
           {
              for (int i = 0; i < parameter.getValueCount(); i++) {
@@ -1100,7 +808,7 @@ index 60af7ff2..8b3ed30e 100644
  
                 if (value != null)
                    result.append('=').append(value);
-@@ -118,95 +118,13 @@ public String toString()
+@@ -113,33 +118,7 @@ public String toString()
     {
        if (this.result == null)
        {
@@ -1111,108 +819,31 @@ index 60af7ff2..8b3ed30e 100644
 -
 -         if (isSchemeSpecificPartSet())
 -         {
--           result.append(getSchemeSpecificPart());
+-            result.append(getSchemeSpecificPart());
 -         }
 -         else
 -         {
--           if (isDomainSet())
--              result.append("//").append(getDomain());
--  
--           if (isPortSet())
--              result.append(":").append(getPort());
--  
--           if (isPathSet())
--              result.append(getPath());
--  
--           if (isQuerySet())
--              result.append('?').append(getQuery());
--  
--           if (isAnchorSet())
--              result.append('#').append(getAnchor());
+-            if (isDomainSet())
+-               result.append("//").append(getDomain());
+-
+-            if (isPortSet())
+-               result.append(":").append(getPort());
+-
+-            if (isPathSet())
+-               result.append(getPath());
+-
+-            if (isQuerySet())
+-               result.append('?').append(getQuery());
+-
+-            if (isAnchorSet())
+-               result.append('#').append(getAnchor());
 -         }
 -
 +         StringBuilder result = AddressBuilder.toString(this);
           this.result = result;
        }
  
-       return this.result.toString();
-    }
- 
--   private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharSequence sequence)
--   {
--     return parameterize(parameters, sequence, true);
--   }
--
--   private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharSequence sequence, boolean encodeSequence)
--   {
--      StringBuilder result = new StringBuilder();
--      int cursor = 0;
--      int lastEnd = 0;
--      while (cursor < sequence.length())
--      {
--         switch (sequence.charAt(cursor))
--         {
--         case '{':
--            CharSequence subSequence = sequence.subSequence(lastEnd, cursor);
--            if(encodeSequence)
--              subSequence = Encoder.path(subSequence);
--            
--            result.append(subSequence);
--
--            int startPos = cursor;
--            CapturingGroup group = ParseTools.balancedCapture(sequence, startPos, sequence.length() - 1,
--                     CaptureType.BRACE);
--            cursor = group.getEnd();
--            lastEnd = group.getEnd() + 1;
--
--            String name = group.getCaptured().toString();
--
--            Parameter parameter = parameters.get(name);
--            if (parameter == null || !parameter.hasValues())
--               throw new IllegalStateException("No parameter [" + name + "] was set in the pattern [" + sequence
--                        + "]. Call address.set(\"" + name + "\", value); or remove the parameter from the pattern.");
--
--            result.append(parameter.getValueAsPathParam(0));
--
--            break;
--
--         default:
--            break;
--         }
--
--         cursor++;
--      }
--
--      if (cursor >= lastEnd)
--      {
--         CharSequence subSequence = sequence.subSequence(lastEnd, cursor);
--         if(encodeSequence)
--            subSequence = Encoder.path(subSequence);
--        
--         result.append(subSequence);
--      }
--      return result;
--   }
--
-    private boolean isSet(Integer port)
-    {
-       return port != null;
-@@ -307,19 +225,25 @@ public String getSchemeSpecificPart()
-    {
-       return schemeSpecificPart;
-    }
--   
-+
-    @Override
-    public boolean isSchemeSpecificPartSet()
-    {
-       return isSet(schemeSpecificPart);
-    }
--   
-+
-    @Override
-    public String getQuery()
-    {
+@@ -259,6 +238,12 @@ public String getQuery()
        return query;
     }
  
@@ -1225,45 +856,11 @@ index 60af7ff2..8b3ed30e 100644
     @Override
     public boolean isQuerySet()
     {
-diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/BuildableAddress.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/BuildableAddress.java
-new file mode 100644
-index 00000000..40acf017
---- /dev/null
-+++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/BuildableAddress.java
-@@ -0,0 +1,28 @@
-+/*
-+ * Copyright 2016 Red Hat, Inc. and/or its affiliates.
-+ *
-+ * Licensed under the Eclipse Public License version 1.0, available at
-+ * http://www.eclipse.org/legal/epl-v10.html
-+ */
-+package org.ocpsoft.urlbuilder;
-+
-+/**
-+ * Represents an object that can build and return an {@link Address} as a result.
-+ * 
-+ * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-+ */
-+public interface BuildableAddress
-+{
-+   /**
-+    * Generate an {@link Address} representing the current state of this {@link AddressBuilder}.
-+    */
-+   Address build();
-+
-+   /**
-+    * Generate an {@link Address} representing the current literal state of this {@link AddressBuilder}.
-+    * <p>
-+    * (Does not apply parameterization. E.g. The URL `/{foo}` will be treated as literal text, as opposed to calling
-+    * {@link #build()}, which would result in `foo` being treated as a parameterized expression)
-+    */
-+   public Address buildLiteral();
-+}
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Parameter.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Parameter.java
-index 57723e5f..827280ed 100644
+index 75f652c259..827280ed44 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Parameter.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/Parameter.java
-@@ -18,35 +18,31 @@
+@@ -18,10 +18,9 @@
  import java.util.Arrays;
  import java.util.List;
  
@@ -1276,9 +873,8 @@ index 57723e5f..827280ed 100644
   * 
   * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
   */
- class Parameter
+@@ -29,23 +28,21 @@
  {
--
     private final CharSequence name;
     private final List<Object> values;
 -   private final boolean encode;
@@ -1306,7 +902,7 @@ index 57723e5f..827280ed 100644
     }
  
     public CharSequence getName()
-@@ -54,11 +50,6 @@ public CharSequence getName()
+@@ -53,11 +50,6 @@ public CharSequence getName()
        return name;
     }
  
@@ -1318,7 +914,7 @@ index 57723e5f..827280ed 100644
     public boolean hasValues()
     {
        return !values.isEmpty();
-@@ -69,25 +60,15 @@ public int getValueCount()
+@@ -68,25 +60,15 @@ public int getValueCount()
        return values.size();
     }
  
@@ -1350,314 +946,158 @@ index 57723e5f..827280ed 100644
  
  }
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/ParameterizedAddressResult.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/ParameterizedAddressResult.java
-new file mode 100644
-index 00000000..b561a568
---- /dev/null
+index 4b14dcdcb8..b561a568b5 100755
+--- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/ParameterizedAddressResult.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/ParameterizedAddressResult.java
-@@ -0,0 +1,301 @@
-+/*
-+ * Copyright 2013 <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-+ * 
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ * 
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ * 
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package org.ocpsoft.urlbuilder;
-+
+@@ -15,11 +15,12 @@
+  */
+ package org.ocpsoft.urlbuilder;
+ 
 +import java.util.Collections;
 +import java.util.List;
-+import java.util.Map;
-+
-+import org.ocpsoft.urlbuilder.util.CaptureType;
-+import org.ocpsoft.urlbuilder.util.CapturingGroup;
-+import org.ocpsoft.urlbuilder.util.ParseTools;
-+
-+/**
-+ * Parameterized implementation of {@link Address} created by {@link AddressBuilder}. (Applies parameterization to all
-+ * parts of the URL.)
-+ * 
-+ * @author <a href="mailto:lincolnbaxter@gmail.com">Lincoln Baxter, III</a>
-+ */
-+class ParameterizedAddressResult implements Address
-+{
-+   private final String protocol;
-+   private final String schemeSpecificPart;
-+   private final String host;
-+   private final Integer port;
-+   private final String path;
-+   private final String query;
-+   private final String anchor;
-+   private CharSequence result;
+ import java.util.Map;
+ 
+ import org.ocpsoft.urlbuilder.util.CaptureType;
+ import org.ocpsoft.urlbuilder.util.CapturingGroup;
+-import org.ocpsoft.urlbuilder.util.Encoder;
+ import org.ocpsoft.urlbuilder.util.ParseTools;
+ 
+ /**
+@@ -38,6 +39,7 @@
+    private final String query;
+    private final String anchor;
+    private CharSequence result;
 +   private Map<String, List<Object>> queries = Collections.emptyMap();
-+
-+   public ParameterizedAddressResult(AddressBuilder parent)
-+   {
-+      if (isSet(parent.scheme))
-+         protocol = parameterize(parent.parameters, parent.scheme).toString();
-+      else
-+         protocol = null;
-+
-+      if (isSet(parent.schemeSpecificPart))
+ 
+    public ParameterizedAddressResult(AddressBuilder parent)
+    {
+@@ -47,7 +49,7 @@ public ParameterizedAddressResult(AddressBuilder parent)
+          protocol = null;
+ 
+       if (isSet(parent.schemeSpecificPart))
+-         schemeSpecificPart = parameterize(parent.parameters, parent.schemeSpecificPart, false).toString();
 +         schemeSpecificPart = parameterize(parent.parameters, parent.schemeSpecificPart).toString();
-+      else
-+         schemeSpecificPart = null;
-+
-+      if (isSet(parent.domain))
-+         host = parameterize(parent.parameters, parent.domain).toString();
-+      else
-+         host = null;
-+
-+      if (isSet(parent.port))
-+         port = parent.port;
-+      else
-+         port = null;
-+
-+      if (isSet(parent.path))
-+      {
-+         CharSequence path = parameterize(parent.parameters, parent.path);
-+         if (path.charAt(0) != '/')
-+            path = new StringBuilder('/').append(path);
-+         this.path = path.toString();
-+      }
-+      else
-+         path = null;
-+
-+      if (isSet(parent.queries))
+       else
+          schemeSpecificPart = null;
+ 
+@@ -72,7 +74,10 @@ public ParameterizedAddressResult(AddressBuilder parent)
+          path = null;
+ 
+       if (isSet(parent.queries))
 +      {
 +         this.queries = Collections.unmodifiableMap(parent.getQueries());
-+         query = toQuery(parent.queries).toString();
+          query = toQuery(parent.queries).toString();
 +      }
-+      else
-+         query = null;
-+
-+      if (isSetOrEmpty(parent.anchor))
-+         anchor = parameterize(parent.parameters, parent.anchor).toString();
-+      else
-+         anchor = null;
-+   }
-+
-+   private CharSequence toQuery(Map<CharSequence, Parameter> queries)
-+   {
-+      StringBuilder result = new StringBuilder();
-+      boolean first = true;
-+      for (CharSequence name : queries.keySet()) {
-+         Parameter parameter = queries.get(name);
-+
-+         if (!first)
-+            result.append('&');
-+         else
-+            first = false;
-+
-+         result.append(name);
-+
-+         if (parameter.getValueCount() > 0)
-+         {
-+            for (int i = 0; i < parameter.getValueCount(); i++) {
+       else
+          query = null;
+ 
+@@ -99,7 +104,7 @@ private CharSequence toQuery(Map<CharSequence, Parameter> queries)
+          if (parameter.getValueCount() > 0)
+          {
+             for (int i = 0; i < parameter.getValueCount(); i++) {
+-               String value = parameter.getValueAsQueryParam(i);
 +               String value = parameter.getValue(i);
-+
-+               if (value != null)
-+                  result.append('=').append(value);
-+
-+               if (i < parameter.getValueCount() - 1)
-+               {
-+                  result.append('&').append(name);
-+               }
-+            }
-+         }
-+      }
-+      return result;
-+   }
-+
-+   @Override
-+   public String toString()
-+   {
-+      if (this.result == null)
-+      {
+ 
+                if (value != null)
+                   result.append('=').append(value);
+@@ -119,33 +124,7 @@ public String toString()
+    {
+       if (this.result == null)
+       {
+-         StringBuilder result = new StringBuilder();
+-
+-         if (isSchemeSet())
+-            result.append(getScheme()).append(":");
+-
+-         if (isSchemeSpecificPartSet())
+-         {
+-            result.append(getSchemeSpecificPart());
+-         }
+-         else
+-         {
+-            if (isDomainSet())
+-               result.append("//").append(getDomain());
+-
+-            if (isPortSet())
+-               result.append(":").append(getPort());
+-
+-            if (isPathSet())
+-               result.append(getPath());
+-
+-            if (isQuerySet())
+-               result.append('?').append(getQuery());
+-
+-            if (isAnchorSet())
+-               result.append('#').append(getAnchor());
+-         }
+-
 +         StringBuilder result = AddressBuilder.toString(this);
-+         this.result = result;
-+      }
-+
-+      return this.result.toString();
-+   }
-+
-+   private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharSequence sequence)
-+   {
-+      StringBuilder result = new StringBuilder();
-+      int cursor = 0;
-+      int lastEnd = 0;
-+      while (cursor < sequence.length())
-+      {
-+         switch (sequence.charAt(cursor))
-+         {
-+         case '{':
+          this.result = result;
+       }
+ 
+@@ -153,12 +132,6 @@ public String toString()
+    }
+ 
+    private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharSequence sequence)
+-   {
+-      return parameterize(parameters, sequence, true);
+-   }
+-
+-   private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharSequence sequence,
+-            boolean encodeSequence)
+    {
+       StringBuilder result = new StringBuilder();
+       int cursor = 0;
+@@ -168,11 +141,7 @@ private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharS
+          switch (sequence.charAt(cursor))
+          {
+          case '{':
+-            CharSequence subSequence = sequence.subSequence(lastEnd, cursor);
+-            if (encodeSequence)
+-               subSequence = Encoder.path(subSequence);
+-
+-            result.append(subSequence);
 +            result.append(sequence.subSequence(lastEnd, cursor));
-+
-+            int startPos = cursor;
-+            CapturingGroup group = ParseTools.balancedCapture(sequence, startPos, sequence.length() - 1,
-+                     CaptureType.BRACE);
-+            cursor = group.getEnd();
-+            lastEnd = group.getEnd() + 1;
-+
-+            String name = group.getCaptured().toString();
-+
-+            Parameter parameter = parameters.get(name);
-+            if (parameter == null || !parameter.hasValues())
-+               throw new IllegalStateException("No parameter [" + name + "] was set in the pattern [" + sequence
-+                        + "]. Call address.set(\"" + name + "\", value); or remove the parameter from the pattern.");
-+
+ 
+             int startPos = cursor;
+             CapturingGroup group = ParseTools.balancedCapture(sequence, startPos, sequence.length() - 1,
+@@ -187,7 +156,7 @@ private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharS
+                throw new IllegalStateException("No parameter [" + name + "] was set in the pattern [" + sequence
+                         + "]. Call address.set(\"" + name + "\", value); or remove the parameter from the pattern.");
+ 
+-            result.append(parameter.getValueAsPathParam(0));
 +            result.append(parameter.getValue(0));
-+
-+            break;
-+
-+         default:
-+            break;
-+         }
-+
-+         cursor++;
-+      }
-+
-+      if (cursor >= lastEnd)
-+      {
+ 
+             break;
+ 
+@@ -200,11 +169,7 @@ private CharSequence parameterize(Map<CharSequence, Parameter> parameters, CharS
+ 
+       if (cursor >= lastEnd)
+       {
+-         CharSequence subSequence = sequence.subSequence(lastEnd, cursor);
+-         if (encodeSequence)
+-            subSequence = Encoder.path(subSequence);
+-
+-         result.append(subSequence);
 +         result.append(sequence.subSequence(lastEnd, cursor));
-+      }
-+      return result;
-+   }
-+
-+   private boolean isSet(Integer port)
-+   {
-+      return port != null;
-+   }
-+
-+   private boolean isSet(Map<?, ?> map)
-+   {
-+      return map != null && !map.isEmpty();
-+   }
-+
-+   private boolean isSet(CharSequence value)
-+   {
-+      return value != null && value.length() > 0;
-+   }
-+
-+   private boolean isSetOrEmpty(CharSequence value)
-+   {
-+      return value != null;
-+   }
-+
-+   /*
-+    * Inspectors
-+    */
-+
-+   @Override
-+   public String getAnchor()
-+   {
-+      return anchor;
-+   }
-+
-+   @Override
-+   public boolean isAnchorSet()
-+   {
-+      return isSetOrEmpty(anchor);
-+   }
-+
-+   @Override
-+   public String getPath()
-+   {
-+      return path;
-+   }
-+
-+   @Override
-+   public String getPathAndQuery()
-+   {
-+      StringBuilder result = new StringBuilder();
-+      if (isPathSet())
-+         result.append(getPath());
-+      if (isQuerySet())
-+         result.append('?').append(getQuery());
-+      return result.toString();
-+   }
-+
-+   @Override
-+   public boolean isPathSet()
-+   {
-+      return isSet(path);
-+   }
-+
-+   @Override
-+   public Integer getPort()
-+   {
-+      return port;
-+   }
-+
-+   @Override
-+   public boolean isPortSet()
-+   {
-+      return isSet(port);
-+   }
-+
-+   @Override
-+   public String getDomain()
-+   {
-+      return host;
-+   }
-+
-+   @Override
-+   public boolean isDomainSet()
-+   {
-+      return isSet(host);
-+   }
-+
-+   @Override
-+   public String getScheme()
-+   {
-+      return protocol;
-+   }
-+
-+   @Override
-+   public boolean isSchemeSet()
-+   {
-+      return isSet(protocol);
-+   }
-+
-+   @Override
-+   public String getSchemeSpecificPart()
-+   {
-+      return schemeSpecificPart;
-+   }
-+
-+   @Override
-+   public boolean isSchemeSpecificPartSet()
-+   {
-+      return isSet(schemeSpecificPart);
-+   }
-+
-+   @Override
-+   public String getQuery()
-+   {
-+      return query;
-+   }
-+
+       }
+       return result;
+    }
+@@ -322,6 +287,12 @@ public String getQuery()
+       return query;
+    }
+ 
 +   @Override
 +   public Map<String, List<Object>> getQueryParameters()
 +   {
 +      return queries;
 +   }
 +
-+   @Override
-+   public boolean isQuerySet()
-+   {
-+      return isSet(query);
-+   }
-+}
+    @Override
+    public boolean isQuerySet()
+    {
 diff --git a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/util/Encoder.java b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/util/Encoder.java
-index 2411bee4..86c2f28d 100644
+index 2411bee474..86c2f28dd0 100755
 --- a/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/util/Encoder.java
 +++ b/addressbuilder/src/main/java/org/ocpsoft/urlbuilder/util/Encoder.java
 @@ -6,15 +6,22 @@
@@ -1707,7 +1147,7 @@ index 2411bee4..86c2f28d 100644
     }
  
 diff --git a/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderEncodingTest.java b/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderEncodingTest.java
-index 7d9a34dd..1478bff6 100644
+index 36853b34cf..1478bff633 100755
 --- a/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderEncodingTest.java
 +++ b/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderEncodingTest.java
 @@ -25,7 +25,7 @@ public void testCreateImproperlyEncodedQuery()
@@ -1719,7 +1159,7 @@ index 7d9a34dd..1478bff6 100644
     }
  
     @Test
-@@ -50,15 +50,29 @@ public void testCreateUnencodedAmpersandInQuery() throws Exception
+@@ -50,15 +50,28 @@ public void testCreateUnencodedAmpersandInQuery() throws Exception
     }
  
     @Test
@@ -1748,11 +1188,10 @@ index 7d9a34dd..1478bff6 100644
 -                        .query("q", "a b")
 +                        .setEncoded("p", "a b")
 +                        .queryEncoded("q", "a b")
-+                        .build()
+                         .build()
                          .toString());
     }
- 
-@@ -70,8 +84,8 @@ public void testParameterEncodingResult()
+@@ -71,8 +84,8 @@ public void testParameterEncodingResult()
                          .scheme("http")
                          .domain("localhost")
                          .path("/{p}")
@@ -1763,7 +1202,7 @@ index 7d9a34dd..1478bff6 100644
                          .build()
                          .toString());
     }
-@@ -84,21 +98,27 @@ public void testParametersWithoutEncoding()
+@@ -85,8 +98,8 @@ public void testParametersWithoutEncoding()
                          .scheme("http")
                          .domain("localhost")
                          .path("/{p}")
@@ -1771,10 +1210,10 @@ index 7d9a34dd..1478bff6 100644
 -                        .queryEncoded("q", "a+b")
 +                        .set("p", "a%20b")
 +                        .query("q", "a+b")
-+                        .build()
+                         .build()
                          .toString());
     }
- 
+@@ -94,13 +107,18 @@ public void testParametersWithoutEncoding()
     @Test
     public void testParametersWithoutEncodingResult()
     {
@@ -1796,7 +1235,7 @@ index 7d9a34dd..1478bff6 100644
                          .build()
                          .toString());
     }
-@@ -107,27 +127,27 @@ public void testParametersWithoutEncodingResult()
+@@ -109,27 +127,27 @@ public void testParametersWithoutEncodingResult()
     public void testBuildQueryWithAmpersandInName()
     {
        Assert.assertEquals("?q%26q=200",
@@ -1829,28 +1268,18 @@ index 7d9a34dd..1478bff6 100644
     }
  }
 diff --git a/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderTest.java b/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderTest.java
-index 90885dba..1cc4e0f2 100644
+index 4b2244624d..1cc4e0f2ab 100755
 --- a/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderTest.java
 +++ b/addressbuilder/src/test/java/org/ocpsoft/urlbuilder/AddressBuilderTest.java
-@@ -3,7 +3,6 @@
- import static org.junit.Assert.assertEquals;
- 
- import org.junit.Assert;
--import org.junit.Ignore;
- import org.junit.Test;
- 
- public class AddressBuilderTest
-@@ -21,8 +20,9 @@ public void testBuildEverything()
+@@ -20,7 +20,7 @@ public void testBuildEverything()
                          .path("/{s}/{t}")
                          .set("s", "search")
                          .set("t", "table")
 -                        .query("q", "query string")
 +                        .queryEncoded("q", "query string")
                          .anchor("foo")
-+                        .build()
+                         .build()
                          .toString());
-    }
- 
 @@ -38,7 +38,7 @@ public void testBuildEverythingResult()
                          .path("/{s}/{t}")
                          .set("s", "search")
@@ -1860,33 +1289,10 @@ index 90885dba..1cc4e0f2 100644
                          .anchor("foo")
                          .build()
                          .toString());
-@@ -146,7 +146,7 @@ public void testBuildPathSimpleResult()
-    public void testBuildPathWithOneParameter()
-    {
-       Assert.assertEquals("/store/23",
--               AddressBuilder.begin().path("/store/{item}").set("item", 23).toString());
-+               AddressBuilder.begin().path("/store/{item}").set("item", 23).build().toString());
+@@ -181,6 +181,15 @@ public void testBuildHostAndPath()
+                         .path("/store/{item}/{action}").set("item", 23).set("action", "buy").build().toString());
     }
  
-    @Test
-@@ -160,7 +160,8 @@ public void testBuildPathWithOneParameterResult()
-    public void testBuildPathWithParameters()
-    {
-       Assert.assertEquals("/store/23/buy",
--               AddressBuilder.begin().path("/store/{item}/{action}").set("item", 23).set("action", "buy").toString());
-+               AddressBuilder.begin().path("/store/{item}/{action}").set("item", 23).set("action", "buy").build()
-+                        .toString());
-    }
- 
-    @Test
-@@ -177,7 +178,16 @@ public void testBuildHostAndPath()
-       Assert.assertEquals("//ocpsoft.org/store/23/buy",
-                AddressBuilder.begin()
-                         .domain("ocpsoft.org")
--                        .path("/store/{item}/{action}").set("item", 23).set("action", "buy").toString());
-+                        .path("/store/{item}/{action}").set("item", 23).set("action", "buy").build().toString());
-+   }
-+
 +   @Test
 +   public void testBuildHostAndQuery()
 +   {
@@ -1894,10 +1300,12 @@ index 90885dba..1cc4e0f2 100644
 +               AddressBuilder.begin()
 +                        .domain("ocpsoft.org")
 +                        .query("buy", "23").build().toString());
-    }
- 
++   }
++
     @Test
-@@ -238,6 +248,18 @@ public void testFromStringOnlyWithPathAndQuery()
+    public void testBuildHostAndPathResult()
+    {
+@@ -239,6 +248,18 @@ public void testFromStringOnlyWithPathAndQuery()
        assertEquals("/search?q=foobar", address.getPathAndQuery());
     }
  
@@ -1916,45 +1324,18 @@ index 90885dba..1cc4e0f2 100644
     @Test
     public void testCreateSchemalessUrl()
     {
-@@ -257,7 +279,7 @@ public void testBuildSchemeSpecificPart()
-    {
-       Assert.assertEquals("mailto:contact@ocpsoft.org?subject=Howdy Lincoln!",
-                AddressBuilder.begin()
--                         .scheme("mailto")
-+                        .scheme("mailto")
-                         .schemeSpecificPart("contact@ocpsoft.org?subject=Howdy Lincoln!")
-                         .toString());
-    }
-@@ -267,9 +289,9 @@ public void testBuildSchemeSpecificPartResult()
-    {
-       Assert.assertEquals("mailto:contact@ocpsoft.org?subject=Howdy Lincoln!",
-                AddressBuilder.begin()
--               .scheme("mailto")
--               .schemeSpecificPart("contact@ocpsoft.org?subject=Howdy Lincoln!")
--               .build().toString());
-+                        .scheme("mailto")
-+                        .schemeSpecificPart("contact@ocpsoft.org?subject=Howdy Lincoln!")
-+                        .build().toString());
-    }
- 
-    @Test
-@@ -285,11 +307,11 @@ public void testEmptyAnchorOnly()
-    }
- 
-    @Test
--   @Ignore // see: https://github.com/ocpsoft/rewrite/issues/195
+@@ -289,7 +310,8 @@ public void testEmptyAnchorOnly()
     public void shouldCreateAddressFromUrlWithCurlyBrace()
     {
--      Address address = AddressBuilder.create("http://localhost/somepath/%7Bsomething%7D");
+       Address address = AddressBuilder.createLiteral("http://localhost/somepath/%7Bsomething%7D");
 -      assertEquals("/somepath/{something}", address.getPath());
-+      Address address = AddressBuilder.createLiteral("http://localhost/somepath/%7Bsomething%7D");
 +      assertEquals("/somepath/%7Bsomething%7D", address.getPath());
 +      assertEquals("http://localhost/somepath/%7Bsomething%7D", address.toString());
     }
  
  }
 diff --git a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/AbstractClassFinder.java b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/AbstractClassFinder.java
-index 45f0aa44..9bc6e891 100644
+index 45f0aa4405..9bc6e8913a 100755
 --- a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/AbstractClassFinder.java
 +++ b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/AbstractClassFinder.java
 @@ -196,7 +196,7 @@ protected void processClass(String className, InputStream classFileStream, Class
@@ -1967,7 +1348,7 @@ index 45f0aa44..9bc6e891 100644
           // call handler
           visitor.visit(clazz);
 diff --git a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/ByteCodeFilter.java b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/ByteCodeFilter.java
-index 52e1118e..5e75b649 100644
+index 52e1118e41..5e75b64939 100755
 --- a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/ByteCodeFilter.java
 +++ b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/ByteCodeFilter.java
 @@ -19,7 +19,6 @@
@@ -2030,7 +1411,7 @@ index 52e1118e..5e75b649 100644
           default:
              /*
 diff --git a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinder.java b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinder.java
-index 3264d3d7..3047f6a9 100644
+index 3264d3d7d7..3047f6a9c8 100755
 --- a/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinder.java
 +++ b/annotations-impl/src/main/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinder.java
 @@ -24,14 +24,13 @@
@@ -2109,7 +1490,7 @@ index 3264d3d7..3047f6a9 100644
      *         "/a/b/c/d.class" returns "d.class"
      */
 diff --git a/annotations-impl/src/test/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinderTest.java b/annotations-impl/src/test/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinderTest.java
-index a849602b..3aa650d3 100644
+index a849602bf4..3aa650d361 100755
 --- a/annotations-impl/src/test/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinderTest.java
 +++ b/annotations-impl/src/test/java/org/ocpsoft/rewrite/annotation/scan/WebClassesFinderTest.java
 @@ -23,11 +23,13 @@
@@ -2127,7 +1508,7 @@ index a849602b..3aa650d3 100644
  {
  
 diff --git a/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/http/event/HttpServletRewrite.java b/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/http/event/HttpServletRewrite.java
-index 9b4d7220..aed545df 100644
+index 9b4d72207a..aed545dfc6 100755
 --- a/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/http/event/HttpServletRewrite.java
 +++ b/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/http/event/HttpServletRewrite.java
 @@ -34,7 +34,8 @@
@@ -2140,92 +1521,8 @@ index 9b4d7220..aed545df 100644
      */
     Address getInboundAddress();
  
-diff --git a/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/util/URLBuilder.java b/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/util/URLBuilder.java
-index fe2d6370..5db8a6a1 100644
---- a/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/util/URLBuilder.java
-+++ b/api-servlet/src/main/java/org/ocpsoft/rewrite/servlet/util/URLBuilder.java
-@@ -24,6 +24,8 @@
- 
- import org.ocpsoft.common.util.Strings;
- import org.ocpsoft.urlbuilder.AddressBuilder;
-+import org.ocpsoft.urlbuilder.util.Decoder;
-+import org.ocpsoft.urlbuilder.util.Encoder;
- 
- /**
-  * Utility for building URL strings. Also manages the URL query string with the help of {@link QueryStringBuilder}.
-@@ -170,26 +172,6 @@ public URLBuilder decode()
-       return new URLBuilder(getDecodedSegments(), metadata, query.decode());
-    }
- 
--   /**
--    * Decodes a segment using the {@link URI} class.
--    * 
--    * @param segment The segment to decode
--    * @return the decoded segment
--    */
--   private String decodeSegment(final String segment)
--   {
--      try
--      {
--         String prepared = ("http://localhost/" + segment);
--         final URI uri = new URI(prepared);
--         return uri.getPath().substring(1);
--      }
--      catch (URISyntaxException e)
--      {
--         throw new IllegalArgumentException(e);
--      }
--   }
--
-    /**
-     * Return this {@link URLBuilder} after path segments and query parameters have been encoded.
-     */
-@@ -198,25 +180,6 @@ public URLBuilder encode()
-       return new URLBuilder(getEncodedSegments(), metadata, query.encode());
-    }
- 
--   /**
--    * Encodes a segment using the {@link URI} class.
--    * 
--    * @param segment The segment to encode
--    * @return the encoded segment
--    */
--   private String encodeSegment(final String segment)
--   {
--      try
--      {
--         final URI uri = new URI("http", "localhost", "/" + segment, null);
--         return uri.toASCIIString().substring(17);
--      }
--      catch (URISyntaxException e)
--      {
--         throw new IllegalArgumentException(e);
--      }
--   }
--
-    private List<String> getDecodedSegments()
-    {
-       /*
-@@ -224,7 +187,7 @@ private String encodeSegment(final String segment)
-        */
-       List<String> result = new ArrayList<String>();
-       for (int i = 0; i < segments.size(); i++) {
--         result.add(decodeSegment(segments.get(i)));
-+         result.add(Decoder.path(segments.get(i)));
-       }
-       return result;
-    }
-@@ -236,7 +199,7 @@ private String encodeSegment(final String segment)
-        */
-       List<String> result = new ArrayList<String>();
-       for (int i = 0; i < segments.size(); i++) {
--         result.add(encodeSegment(segments.get(i)));
-+         result.add(Encoder.path(segments.get(i)));
-       }
-       return result;
-    }
 diff --git a/config-prettyfaces-tests/src/test/java/org/ocpsoft/rewrite/prettyfaces/encoding/URLEncodingTest.java b/config-prettyfaces-tests/src/test/java/org/ocpsoft/rewrite/prettyfaces/encoding/URLEncodingTest.java
-index a5eb9d17..94fc4b94 100644
+index 94e120266f..94fc4b9408 100755
 --- a/config-prettyfaces-tests/src/test/java/org/ocpsoft/rewrite/prettyfaces/encoding/URLEncodingTest.java
 +++ b/config-prettyfaces-tests/src/test/java/org/ocpsoft/rewrite/prettyfaces/encoding/URLEncodingTest.java
 @@ -16,7 +16,6 @@
@@ -2256,42 +1553,25 @@ index a5eb9d17..94fc4b94 100644
     }
  
     @Test
-@@ -178,4 +177,18 @@ public void testNoDecodeOnSubmitDoesNotCrash() throws Exception
+@@ -178,14 +177,14 @@ public void testNoDecodeOnSubmitDoesNotCrash() throws Exception
        browser.findElement(By.id("submit")).click();
        Assert.assertTrue(browser.getPageSource().contains("viewId=/encoding.xhtml"));
     }
+-   
 +
-+   @Test
-+   public void testBracesAndBracketsInURL() throws Exception
-+   {
-+      browser.get(getBaseURL() + getContextPath() + "/basic/[]{}");
-+      Assert.assertNotNull(browser.findElement(By.id("form")));
-+   }
+    @Test
+    public void testBracesAndBracketsInURL() throws Exception
+    {
+       browser.get(getBaseURL() + getContextPath() + "/basic/[]{}");
+       Assert.assertNotNull(browser.findElement(By.id("form")));
+    }
+-   
 +
-+   @Test
-+   public void testBracesAndBracketsInURLEncoded() throws Exception
-+   {
-+      browser.get(getBaseURL() + getContextPath() + "/basic/%5B%5D%7B%7D");
-+      Assert.assertNotNull(browser.findElement(By.id("form")));
-+   }
- }
-diff --git a/config-prettyfaces-tests/src/test/resources/encoding/encoding-pretty-config.xml b/config-prettyfaces-tests/src/test/resources/encoding/encoding-pretty-config.xml
-index f3368d59..f1c303b3 100644
---- a/config-prettyfaces-tests/src/test/resources/encoding/encoding-pretty-config.xml
-+++ b/config-prettyfaces-tests/src/test/resources/encoding/encoding-pretty-config.xml
-@@ -41,5 +41,9 @@
-       <pattern value="/custom/form"/>
-       <view-id value="/encoding.jsf"/>
-    </url-mapping>
-+   <url-mapping id="basic">
-+      <pattern value="/basic/#{/.*/ encodingBean.pathText }"/>
-+      <view-id value="/encoding.jsf"/>
-+   </url-mapping>
- 
- </pretty-config>
-\ No newline at end of file
+    @Test
+    public void testBracesAndBracketsInURLEncoded() throws Exception
+    {
 diff --git a/config-prettyfaces/src/main/java/com/ocpsoft/pretty/faces/url/URL.java b/config-prettyfaces/src/main/java/com/ocpsoft/pretty/faces/url/URL.java
-index 18676313..2f921092 100644
+index 1867631399..2f92109288 100755
 --- a/config-prettyfaces/src/main/java/com/ocpsoft/pretty/faces/url/URL.java
 +++ b/config-prettyfaces/src/main/java/com/ocpsoft/pretty/faces/url/URL.java
 @@ -15,8 +15,6 @@
@@ -2397,7 +1677,7 @@ index 18676313..2f921092 100644
      * Return a decoded form of this URL.
      */
 diff --git a/config-prettyfaces/src/main/java/org/ocpsoft/rewrite/prettyfaces/UrlMappingRuleAdaptor.java b/config-prettyfaces/src/main/java/org/ocpsoft/rewrite/prettyfaces/UrlMappingRuleAdaptor.java
-index 161a57d3..b58a48cc 100644
+index 161a57d34d..b58a48cc44 100755
 --- a/config-prettyfaces/src/main/java/org/ocpsoft/rewrite/prettyfaces/UrlMappingRuleAdaptor.java
 +++ b/config-prettyfaces/src/main/java/org/ocpsoft/rewrite/prettyfaces/UrlMappingRuleAdaptor.java
 @@ -121,7 +121,8 @@ private String rewritePrettyMappings(final PrettyConfig config, final String con
@@ -2456,7 +1736,7 @@ index 161a57d3..b58a48cc 100644
           outboundRewrite.setOutboundAddress(AddressBuilder.create(newUrl));
        }
 diff --git a/config-servlet/src/main/java/org/ocpsoft/rewrite/servlet/config/rule/Join.java b/config-servlet/src/main/java/org/ocpsoft/rewrite/servlet/config/rule/Join.java
-index 3c12b4d1..ee4db4f9 100644
+index 3c12b4d146..ee4db4f9de 100755
 --- a/config-servlet/src/main/java/org/ocpsoft/rewrite/servlet/config/rule/Join.java
 +++ b/config-servlet/src/main/java/org/ocpsoft/rewrite/servlet/config/rule/Join.java
 @@ -15,8 +15,11 @@
@@ -2540,7 +1820,7 @@ index 3c12b4d1..ee4db4f9 100644
  
           substitute.perform(event, context);
 diff --git a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/CommittedResponseTest.java b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/CommittedResponseTest.java
-index d91c5c67..259ae82b 100644
+index d91c5c6734..259ae82b60 100755
 --- a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/CommittedResponseTest.java
 +++ b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/CommittedResponseTest.java
 @@ -23,7 +23,6 @@
@@ -2552,7 +1832,7 @@ index d91c5c67..259ae82b 100644
  import org.junit.experimental.categories.Category;
  import org.junit.runner.RunWith;
 diff --git a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/ForwardEncodingTest.java b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/ForwardEncodingTest.java
-index e4d135cf..9c5c0f82 100644
+index e4d135cf71..9c5c0f8283 100755
 --- a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/ForwardEncodingTest.java
 +++ b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/ForwardEncodingTest.java
 @@ -105,7 +105,6 @@ public void requestUrlsDirect() throws Exception
@@ -2581,45 +1861,10 @@ index e4d135cf..9c5c0f82 100644
  }
 \ No newline at end of file
 diff --git a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/JoinEncodingConfigurationTest.java b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/JoinEncodingConfigurationTest.java
-index 25ac3b41..cf631b97 100644
+index e05536802f..cf631b9738 100755
 --- a/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/JoinEncodingConfigurationTest.java
 +++ b/config-servlet/src/test/java/org/ocpsoft/rewrite/servlet/config/JoinEncodingConfigurationTest.java
-@@ -33,7 +33,6 @@
- import org.jboss.arquillian.container.test.api.Deployment;
- import org.jboss.arquillian.junit.Arquillian;
- import org.jboss.shrinkwrap.api.spec.WebArchive;
--import org.junit.Ignore;
- import org.junit.Test;
- import org.junit.runner.RunWith;
- import org.ocpsoft.common.util.Streams;
-@@ -85,7 +84,6 @@ public void testJoinEncodingSpaceCharacter() throws Exception
-    }
- 
-    @Test
--   @Ignore // see: https://github.com/ocpsoft/rewrite/issues/195
-    public void testJoinSupportsSingleCurlyBrace() throws Exception
-    {
-       HttpAction<HttpGet> action = get("/encoding/foo%7Bbar");
-@@ -97,7 +95,17 @@ public void testJoinSupportsSingleCurlyBrace() throws Exception
-    }
- 
-    @Test
--   @Ignore // see: https://github.com/ocpsoft/rewrite/issues/195
-+   public void testJoinSupportsCurlyBracketGroup() throws Exception
-+   {
-+      HttpAction<HttpGet> action = get("/encoding/foo%5B%5D");
-+      assertEquals(200, action.getResponse().getStatusLine().getStatusCode());
-+
-+      String responseContent = action.getResponseContent();
-+      assertThat(responseContent, containsString("getRequestPath() = " + getContextPath() + "/encoding.html"));
-+      assertThat(responseContent, containsString("getParameter('param') = foo[]"));
-+   }
-+
-+   @Test
-    public void testJoinSupportsCurlyBraceGroup() throws Exception
-    {
-       HttpAction<HttpGet> action = get("/encoding/foo%7Bbar%7D");
-@@ -174,7 +182,8 @@ public void testOutboundRewritingSimpleString() throws Exception
+@@ -182,7 +182,8 @@ public void testOutboundRewritingSimpleString() throws Exception
  
     /**
      * Make sure that an URL containing a space in the query string (encoded as '+') is rewritten to a path containing
@@ -2630,7 +1875,7 @@ index 25ac3b41..cf631b97 100644
     @Test
     public void testOutboundRewritingSpaceCharacter() throws Exception
 diff --git a/documentation/src/main/asciidoc/configuration/install.asciidoc b/documentation/src/main/asciidoc/configuration/install.asciidoc
-index 46b9c042..c2a1a967 100644
+index 46b9c042c4..c2a1a967f9 100755
 --- a/documentation/src/main/asciidoc/configuration/install.asciidoc
 +++ b/documentation/src/main/asciidoc/configuration/install.asciidoc
 @@ -91,7 +91,7 @@ public class ApplicationConfigurationProvider extends HttpConfigurationProvider
@@ -2643,35 +1888,20 @@ index 46b9c042..c2a1a967 100644
     }
  
 diff --git a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/BaseHttpRewrite.java b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/BaseHttpRewrite.java
-index 1a120c0b..f9562613 100644
+index 82d0dc3e93..f956261324 100755
 --- a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/BaseHttpRewrite.java
 +++ b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/BaseHttpRewrite.java
-@@ -89,8 +89,8 @@ public Address getInboundAddress()
+@@ -89,7 +89,7 @@ public Address getInboundAddress()
                    .scheme(getRequest().getScheme())
                    .domain(getRequest().getServerName())
                    .port(getRequest().getServerPort())
 -                  .pathEncoded(requestURI)
--                  .queryLiteral(getRequest().getQueryString()).build();
 +                  .path(requestURI)
-+                  .queryLiteral(getRequest().getQueryString()).buildLiteral();
+                   .queryLiteral(getRequest().getQueryString()).buildLiteral();
        }
        return this.address;
-    }
-diff --git a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/DefaultHttpRewriteProvider.java b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/DefaultHttpRewriteProvider.java
-index 91b9ca33..d9ec680f 100644
---- a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/DefaultHttpRewriteProvider.java
-+++ b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/DefaultHttpRewriteProvider.java
-@@ -246,7 +246,7 @@ private void rewriteInbound(final HttpServletRewrite event)
-             }
-          }
-          catch (Exception e) {
--            throw new RewriteException("Error during [" + event + "] while executing rule [" + rule + "]");
-+            throw new RewriteException("Error during [" + event + "] while executing rule [" + rule + "]", e);
-          }
-       }
- 
 diff --git a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/HttpRewriteWrappedResponse.java b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/HttpRewriteWrappedResponse.java
-index 4ba4bfba..b74b4c50 100644
+index 4ba4bfbab7..b74b4c50ce 100755
 --- a/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/HttpRewriteWrappedResponse.java
 +++ b/impl-servlet/src/main/java/org/ocpsoft/rewrite/servlet/impl/HttpRewriteWrappedResponse.java
 @@ -378,7 +378,8 @@ public String encodeUrl(final String url)
@@ -2695,7 +1925,7 @@ index 4ba4bfba..b74b4c50 100644
  
        if (event.getFlow().is(ServletRewriteFlow.ABORT_REQUEST))
 diff --git a/integration-faces/src/main/java/org/ocpsoft/rewrite/faces/navigate/Navigate.java b/integration-faces/src/main/java/org/ocpsoft/rewrite/faces/navigate/Navigate.java
-index 1f929ee1..fa4991ae 100644
+index 1f929ee1cc..fa4991ae11 100755
 --- a/integration-faces/src/main/java/org/ocpsoft/rewrite/faces/navigate/Navigate.java
 +++ b/integration-faces/src/main/java/org/ocpsoft/rewrite/faces/navigate/Navigate.java
 @@ -126,10 +126,10 @@ public String build()

@@ -1,5 +1,5 @@
 diff --git a/config/suppressions.xml b/config/suppressions.xml
-index 369a394d3a..0cd5ff121c 100644
+index 369a394d3a..0cd5ff121c 100755
 --- a/config/suppressions.xml
 +++ b/config/suppressions.xml
 @@ -50,7 +50,10 @@
@@ -15,7 +15,7 @@ index 369a394d3a..0cd5ff121c 100644
      <!-- Methods that build fake AST are very long-->
      <suppress checks="MethodLength" files="src[\\/]test[\\/]java[\\/]com[\\/]puppycrawl[\\/]tools[\\/]checkstyle[\\/]comments[\\/]CommentsTest\.java"/>
 diff --git a/pom.xml b/pom.xml
-index af356937ac..1a7b91224d 100644
+index af356937ac..1a7b91224d 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1090,13 +1090,11 @@
@@ -32,8 +32,68 @@ index af356937ac..1a7b91224d 100644
  
                  </regexes>
                </check>
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java b/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
+index 25a947df4a..aab6df10bd 100755
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
+@@ -421,6 +421,19 @@ public final void setClassLoader(ClassLoader loader) {
+         this.loader = loader;
+     }
+ 
++    /**
++     * Sets the classloader that is used to contextualize filesetchecks.
++     * Some Check implementations will use that classloader to improve the
++     * quality of their reports, e.g. to load a class and then analyze it via
++     * reflection.
++     * @param loader the new classloader
++     * @deprecated use {@link #setClassLoader(ClassLoader loader)} instead.
++     */
++    @Deprecated
++    public final void setClassloader(ClassLoader loader) {
++        setClassLoader(loader);
++    }
++
+     /**
+      * Sets the classloader used to load Checkstyle core and custom module
+      * classes when the module tree is being built up.
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
+index 5b669f1c56..f93abb9fde 100755
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
+@@ -206,6 +206,31 @@ public static Configuration loadConfiguration(String config,
+                 omitIgnoredModules);
+     }
+ 
++    /**
++     * Returns the module configurations from a specified input stream.
++     * Note that clients are required to close the given stream by themselves
++     *
++     * @param configStream the input stream to the Checkstyle configuration
++     * @param overridePropsResolver overriding properties
++     * @param omitIgnoredModules <code>true</code> if modules with severity
++     *            'ignore' should be omitted, <code>false</code> otherwise
++     * @return the check configurations
++     * @throws CheckstyleException if an error occurs
++     *
++     * @deprecated As this method does not provide a valid system ID,
++     *   preventing resolution of external entities, a
++     *   {@link #loadConfiguration(InputSource,PropertyResolver,boolean)
++     *          version using an InputSource}
++     *   should be used instead
++     */
++    @Deprecated
++    public static Configuration loadConfiguration(InputStream configStream,
++        PropertyResolver overridePropsResolver, boolean omitIgnoredModules)
++        throws CheckstyleException {
++        return loadConfiguration(new InputSource(configStream),
++                                 overridePropsResolver, omitIgnoredModules);
++    }
++
+     /**
+      * Returns the module configurations from a specified input source.
+      * Note that if the source does wrap an open byte or character
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-index 068a46759a..7437405545 100644
+index 068a46759a..7437405545 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
 @@ -82,20 +82,20 @@ public static void main(String... args) throws UnsupportedEncodingException,
@@ -114,7 +174,7 @@ index f4e3ac8da4..abe02f9ccd 100755
              registerCheck(element, check);
          }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/Check.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/Check.java
-index f12c401fdb..6a98cc4f8c 100644
+index f12c401fdb..6a98cc4f8c 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/api/Check.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/Check.java
 @@ -103,7 +103,7 @@ public final void setTokens(String... strRep) {
@@ -127,10 +187,40 @@ index f12c401fdb..6a98cc4f8c 100644
  
      /**
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/FileContents.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/FileContents.java
-index 812f1de9c9..5ea239ac59 100644
+index fa81df72a6..5ea239ac59 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/api/FileContents.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/FileContents.java
-@@ -230,7 +230,7 @@ private String line(int lineNo) {
+@@ -19,6 +19,8 @@
+ 
+ package com.puppycrawl.tools.checkstyle.api;
+ 
++import java.io.File;
++import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.List;
+ import java.util.Map;
+@@ -64,6 +66,20 @@
+      */
+     private final Map<Integer, List<TextBlock>> clangComments = Maps.newHashMap();
+ 
++    /**
++     * Creates a new <code>FileContents</code> instance.
++     *
++     * @param filename name of the file
++     * @param lines the contents of the file
++     * @deprecated Use {@link #FileContents(FileText)} instead
++     *   in order to preserve the original line breaks where possible.
++     */
++    @Deprecated
++    public FileContents(String filename, String... lines) {
++        fileName = filename;
++        text = FileText.fromLines(new File(filename), Arrays.asList(lines));
++    }
++
+     /**
+      * Creates a new <code>FileContents</code> instance.
+      *
+@@ -214,7 +230,7 @@ private String line(int lineNo) {
       * @return an object containing the full text of the file
       */
      public FileText getText() {
@@ -139,8 +229,25 @@ index 812f1de9c9..5ea239ac59 100644
      }
  
      /** @return the lines in the file */
+@@ -236,6 +252,16 @@ public String getFileName() {
+         return fileName;
+     }
+ 
++    /**
++     * Getter.
++     * @return the name of the file
++     * @deprecated use {@link #getFileName} instead
++     */
++    @Deprecated
++    public String getFilename() {
++        return getFileName();
++    }
++
+     /**
+      * Checks if the specified line is blank.
+      * @param lineNo the line number to check
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/FilterSet.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/FilterSet.java
-index 16a39b9582..682073d1bc 100644
+index 16a39b9582..682073d1bc 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/api/FilterSet.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/FilterSet.java
 @@ -19,6 +19,7 @@
@@ -161,7 +268,7 @@ index 16a39b9582..682073d1bc 100644
  
      @Override
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheck.java
-index 8e9ad80d40..0a1a99bc1f 100644
+index 8e9ad80d40..0a1a99bc1f 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheck.java
 @@ -74,7 +74,14 @@ public void beginTree(DetailAST ast) {
@@ -195,7 +302,7 @@ index 8e9ad80d40..0a1a99bc1f 100644
      }
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
-index e5d6eb8ae6..5cbab3fe2e 100644
+index e5d6eb8ae6..5cbab3fe2e 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
 @@ -28,6 +28,7 @@
@@ -216,7 +323,7 @@ index e5d6eb8ae6..5cbab3fe2e 100644
      }
  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
-index 30f41890b5..f64dad15ec 100644
+index 30f41890b5..f64dad15ec 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
 @@ -142,11 +142,11 @@ public void visitToken(DetailAST ast) {
@@ -235,7 +342,7 @@ index 30f41890b5..f64dad15ec 100644
          }
      }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheck.java
-index 873cb6ca09..5fc9658be2 100644
+index 873cb6ca09..5fc9658be2 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/InnerAssignmentCheck.java
 @@ -243,12 +243,12 @@ private static boolean isInContext(DetailAST ast, int[]... contextSet) {
@@ -256,7 +363,7 @@ index 873cb6ca09..5fc9658be2 100644
              }
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheck.java
-index 61a71567c3..c66733e7d6 100644
+index 61a71567c3..c66733e7d6 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheck.java
 @@ -332,8 +332,7 @@ private static boolean isInitializationSequence(
@@ -449,7 +556,7 @@ index 61a71567c3..c66733e7d6 100644
              }
          }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MemberDefHandler.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MemberDefHandler.java
-index 83e59404bd..43af8125c4 100644
+index 83e59404bd..43af8125c4 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MemberDefHandler.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MemberDefHandler.java
 @@ -44,11 +44,11 @@ public MemberDefHandler(IndentationCheck indentCheck,
@@ -468,7 +575,7 @@ index 83e59404bd..43af8125c4 100644
          final LineWrappingHandler lineWrap =
              new LineWrappingHandler(getIndentCheck(), getMainAst(),
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocStyleCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocStyleCheck.java
-index 0bd4b5dd32..89e70d5174 100644
+index 0bd4b5dd32..89e70d5174 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocStyleCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocStyleCheck.java
 @@ -365,13 +365,7 @@ private void checkHtml(final DetailAST ast, final TextBlock comment) {
@@ -500,7 +607,7 @@ index 0bd4b5dd32..89e70d5174 100644
  
          // Identify any tags left on the stack.
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocTags.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocTags.java
-index e05eeae94c..eef176c586 100644
+index e05eeae94c..eef176c586 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocTags.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocTags.java
 @@ -19,6 +19,7 @@
@@ -529,7 +636,7 @@ index e05eeae94c..eef176c586 100644
      }
  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocUtils.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocUtils.java
-index 3606618c8f..40ba100096 100644
+index 3606618c8f..40ba100096 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocUtils.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/javadoc/JavadocUtils.java
 @@ -130,14 +130,14 @@ else if (tagType == JavadocTagType.ALL || tagType == JavadocTagType.INLINE) {
@@ -553,7 +660,7 @@ index 3606618c8f..40ba100096 100644
                  final Matcher tagMatcher = tagPattern.matcher(commentContents);
                  while (tagMatcher.find()) {
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/MultilineDetector.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/MultilineDetector.java
-index f21476ebf1..eb7fe582c9 100644
+index f21476ebf1..eb7fe582c9 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/MultilineDetector.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/regexp/MultilineDetector.java
 @@ -79,14 +79,14 @@ public void processLines(FileText text) {
@@ -606,7 +713,7 @@ index f21476ebf1..eb7fe582c9 100644
                  }
                  foundMatch = matcher.find();
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/filters/CSVFilter.java b/src/main/java/com/puppycrawl/tools/checkstyle/filters/CSVFilter.java
-index 84e74db75e..c6c99df679 100644
+index 84e74db75e..c6c99df679 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/filters/CSVFilter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/filters/CSVFilter.java
 @@ -19,6 +19,7 @@
@@ -627,7 +734,7 @@ index 84e74db75e..c6c99df679 100644
  
      /**
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
-index b027761119..8def4779fa 100644
+index 6fc903aef6..8def4779fa 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
 @@ -27,6 +27,7 @@
@@ -638,44 +745,7 @@ index b027761119..8def4779fa 100644
  import java.util.List;
  import java.util.TooManyListenersException;
  
-@@ -41,13 +42,13 @@
- import javax.swing.SwingUtilities;
- import javax.swing.filechooser.FileFilter;
- 
--import antlr.ANTLRException;
--
- import com.puppycrawl.tools.checkstyle.TreeWalker;
- import com.puppycrawl.tools.checkstyle.api.DetailAST;
- import com.puppycrawl.tools.checkstyle.api.FileContents;
- import com.puppycrawl.tools.checkstyle.api.FileText;
- 
-+import antlr.ANTLRException;
-+
- /**
-  * Displays information about a parse tree.
-  * The user can change the file that is parsed and displayed
-@@ -171,20 +172,6 @@ public void openFile(File file, final Component parent) {
-         }
-     }
- 
--    /**
--     * Parses a file and returns the parse tree.
--     * @param fileName the file to parse
--     * @return the root node of the parse tree
--     * @throws IOException if the file cannot be opened
--     * @throws ANTLRException if the file is not a Java source
--     * @deprecated Use {@link #parseFile(FileText)} instead
--     */
--    @Deprecated
--    public static DetailAST parseFile(String fileName)
--        throws IOException, ANTLRException {
--        return parseFile(new FileText(new File(fileName), getEncoding()));
--    }
--
-     /**
-      * Parses a file and returns the parse tree.
-      * @param text the file to parse
-@@ -213,7 +200,7 @@ private static void showErrorDialog(final Component parent, final String msg) {
+@@ -199,7 +200,7 @@ private static void showErrorDialog(final Component parent, final String msg) {
      }
  
      public List<Integer> getLines2position() {
@@ -684,8 +754,96 @@ index b027761119..8def4779fa 100644
      }
  
      /**
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
+index 49966a0546..b6348f380b 100755
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/CheckerTest.java
+@@ -186,6 +186,7 @@ public void testSetters() throws Exception {
+         // all  that is set by reflection, so just make code coverage be happy
+         final Checker c = new Checker();
+         c.setClassLoader(this.getClass().getClassLoader());
++        c.setClassloader(this.getClass().getClassLoader());
+         c.setBasedir("some");
+         c.setSeverity("ignore");
+ 
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
+index 91ed602684..6dfe7cf5fb 100755
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/ConfigurationLoaderTest.java
+@@ -26,6 +26,8 @@
+ import static org.powermock.api.mockito.PowerMockito.when;
+ 
+ import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileNotFoundException;
+ import java.lang.reflect.Constructor;
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
+@@ -472,6 +474,27 @@ public void testLoadConfiguration_URISyntaxException() throws CheckstyleExceptio
+         }
+     }
+ 
++    @Test
++    public void testLoadConfiguration_Deprecated() throws CheckstyleException {
++        try {
++            final DefaultConfiguration config =
++                    (DefaultConfiguration) ConfigurationLoader.loadConfiguration(
++                            new FileInputStream(
++                                    "src/test/resources/com/puppycrawl/tools/checkstyle/configs/"
++                                    + "config_with_ignore.xml"),
++                            new PropertiesExpander(new Properties()), true);
++
++            final Configuration[] children = config.getChildren();
++            assertTrue(children[0].getChildren().length == 0);
++        }
++        catch (CheckstyleException ex) {
++            fail("unexpected exception");
++        }
++        catch (FileNotFoundException e) {
++            fail("unexpected exception");
++        }
++    }
++
+     @Test
+     public void testReplacePropertiesDefault() throws Exception {
+         final Properties props = new Properties();
+diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
+index 2b6a5fa08c..c40198a718 100755
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
+@@ -19,6 +19,7 @@
+ 
+ package com.puppycrawl.tools.checkstyle.api;
+ 
++import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertTrue;
+ 
+ import java.io.File;
+@@ -28,6 +29,22 @@
+ 
+ public class FileContentsTest {
+ 
++    @Test
++    public void testDeprecatedCtor() {
++        // just to make UT coverage 100%
++        FileContents o = new FileContents("filename.java", new String[]{"1", "2"});
++        o.getFilename();
++    }
++
++    @Test
++    public void testCppCommentNotIntersect() {
++        // just to make UT coverage 100%
++        FileContents o = new FileContents(
++                FileText.fromLines(new File("filename"), Arrays.asList("  //  ")));
++        o.reportCppComment(1, 2);
++        assertFalse(o.hasIntersectionWithComment(1, 0, 1, 1));
++    }
++
+     @Test
+     public void testCppCommentIntersect() {
+         // just to make UT coverage 100%
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheckTest.java
-index 71b5c6d9d2..0219dea95f 100644
+index 71b5c6d9d2..0219dea95f 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/VariableDeclarationUsageDistanceCheckTest.java
 @@ -68,6 +68,9 @@ public void testGeneralLogic() throws Exception {
@@ -719,7 +877,7 @@ index 71b5c6d9d2..0219dea95f 100644
          verify(checkConfig, getPath("coding/InputVariableDeclarationUsageDistanceCheck.java"), expected);
      }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
-index 33b05ed256..7321a23370 100644
+index 33b05ed256..7321a23370 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 @@ -173,4 +173,29 @@ private static CharSequence makeLargeXYString() {
@@ -753,7 +911,7 @@ index 33b05ed256..7321a23370 100644
 +
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputVariableDeclarationUsageDistanceCheck.java b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputVariableDeclarationUsageDistanceCheck.java
-index 4388952968..541096c41b 100644
+index 4388952968..541096c41b 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputVariableDeclarationUsageDistanceCheck.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputVariableDeclarationUsageDistanceCheck.java
 @@ -837,3 +837,141 @@ public static void append(String line)

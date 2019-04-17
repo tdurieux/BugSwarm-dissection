@@ -1,5 +1,5 @@
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/AfkModule.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/AfkModule.java
-index f25df0c4..cd1f4d32 100644
+index f25df0c4d7..cd1f4d3265 100755
 --- a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/AfkModule.java
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/AfkModule.java
 @@ -29,7 +29,7 @@
@@ -12,7 +12,7 @@ index f25df0c4..cd1f4d32 100644
  import org.spongepowered.api.event.game.state.GameInitializationEvent;
  import org.spongepowered.api.event.game.state.GamePostInitializationEvent;
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/listeners/AfkDetectionListener.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/listeners/AfkDetectionListener.java
-index e87aba2e..6b3d50e6 100644
+index e87aba2eaf..6b3d50e6eb 100755
 --- a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/listeners/AfkDetectionListener.java
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/listeners/AfkDetectionListener.java
 @@ -27,7 +27,7 @@
@@ -24,41 +24,175 @@ index e87aba2e..6b3d50e6 100644
  import bammerbom.ultimatecore.sponge.utils.Messages;
  import bammerbom.ultimatecore.sponge.utils.TimeUtil;
  import ninja.leaping.configurate.commented.CommentedConfigurationNode;
-diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkCheckTask.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkCheckTask.java
-similarity index 98%
-rename from src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkCheckTask.java
-rename to src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkCheckTask.java
-index 52c58755..f911e999 100644
---- a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkCheckTask.java
+diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkCheckTask.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkCheckTask.java
+new file mode 100755
+index 0000000000..f911e99941
+--- /dev/null
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkCheckTask.java
-@@ -21,7 +21,7 @@
-  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-  * THE SOFTWARE.
-  */
--package bammerbom.ultimatecore.sponge.modules.afk.runnable;
+@@ -0,0 +1,83 @@
++/*
++ * This file is part of UltimateCore, licensed under the MIT License (MIT).
++ *
++ * Copyright (c) Bammerbom
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++ * THE SOFTWARE.
++ */
 +package bammerbom.ultimatecore.sponge.modules.afk.runnables;
- 
- import bammerbom.ultimatecore.sponge.UltimateCore;
- import bammerbom.ultimatecore.sponge.api.module.Modules;
-diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkTitleTask.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkTitleTask.java
-similarity index 98%
-rename from src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkTitleTask.java
-rename to src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkTitleTask.java
-index 45d6cf3b..4317524e 100644
---- a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnable/AfkTitleTask.java
++
++import bammerbom.ultimatecore.sponge.UltimateCore;
++import bammerbom.ultimatecore.sponge.api.module.Modules;
++import bammerbom.ultimatecore.sponge.api.user.UltimateUser;
++import bammerbom.ultimatecore.sponge.modules.afk.api.AfkKeys;
++import bammerbom.ultimatecore.sponge.modules.afk.listeners.AfkDetectionListener;
++import bammerbom.ultimatecore.sponge.utils.Messages;
++import ninja.leaping.configurate.commented.CommentedConfigurationNode;
++import org.spongepowered.api.Sponge;
++import org.spongepowered.api.entity.Transform;
++import org.spongepowered.api.entity.living.player.Player;
++import org.spongepowered.api.world.World;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++
++public class AfkCheckTask implements Runnable {
++    @Override
++    public void run() {
++        CommentedConfigurationNode config = Modules.AFK.get().getConfig().get().get();
++        long afk = config.getNode("time", "afktime").getLong() * 1000;
++        List<UUID> remove = new ArrayList<>();
++        for (UUID uuid : AfkDetectionListener.afktime.keySet()) {
++            Player player = Sponge.getServer().getPlayer(uuid).orElse(null);
++            if (player == null) {
++                remove.add(uuid);
++                continue;
++            }
++            UltimateUser user = UltimateCore.get().getUserService().getUser(player);
++            //Location check
++            if (config.getNode("events", "move", "enabled").getBoolean(false) && config.getNode("events", "move", "mode").getString("").equalsIgnoreCase("task")) {
++                Transform<World> nloc = new Transform<World>(player.getLocation(), player.getRotation(), player.getScale());
++                if (!user.get(AfkKeys.LAST_LOCATION).isPresent()) {
++                    user.offer(AfkKeys.LAST_LOCATION, nloc);
++                    AfkDetectionListener.unafkCheck(player);
++                }
++                Transform<World> oloc = user.get(AfkKeys.LAST_LOCATION).get();
++                if (!oloc.equals(nloc)) {
++                    AfkDetectionListener.afktime.put(player.getUniqueId(), System.currentTimeMillis());
++                    user.offer(AfkKeys.LAST_LOCATION, nloc);
++                    AfkDetectionListener.unafkCheck(player);
++                }
++            }
++            //Afk check
++            long value = AfkDetectionListener.afktime.get(uuid);
++            long diff = System.currentTimeMillis() - value;
++            if (!user.get(AfkKeys.IS_AFK).get() && diff > afk) {
++                user.offer(AfkKeys.IS_AFK, true);
++                user.offer(AfkKeys.AFK_TIME, System.currentTimeMillis());
++                Sponge.getServer().getBroadcastChannel().send(Messages.getFormatted("afk.broadcast.afk", "%player%", user.getUser().getName()));
++                //TODO afk message
++            }
++        }
++        for (UUID uuid : remove) {
++            AfkDetectionListener.afktime.remove(uuid);
++        }
++    }
++}
+diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkTitleTask.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkTitleTask.java
+new file mode 100755
+index 0000000000..4317524e70
+--- /dev/null
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/afk/runnables/AfkTitleTask.java
-@@ -21,7 +21,7 @@
-  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-  * THE SOFTWARE.
-  */
--package bammerbom.ultimatecore.sponge.modules.afk.runnable;
+@@ -0,0 +1,71 @@
++/*
++ * This file is part of UltimateCore, licensed under the MIT License (MIT).
++ *
++ * Copyright (c) Bammerbom
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++ * THE SOFTWARE.
++ */
 +package bammerbom.ultimatecore.sponge.modules.afk.runnables;
- 
- import bammerbom.ultimatecore.sponge.UltimateCore;
- import bammerbom.ultimatecore.sponge.api.module.Modules;
++
++import bammerbom.ultimatecore.sponge.UltimateCore;
++import bammerbom.ultimatecore.sponge.api.module.Modules;
++import bammerbom.ultimatecore.sponge.api.user.UltimateUser;
++import bammerbom.ultimatecore.sponge.modules.afk.api.AfkKeys;
++import bammerbom.ultimatecore.sponge.modules.afk.api.AfkPermissions;
++import bammerbom.ultimatecore.sponge.utils.Messages;
++import bammerbom.ultimatecore.sponge.utils.TimeUtil;
++import ninja.leaping.configurate.commented.CommentedConfigurationNode;
++import org.spongepowered.api.Sponge;
++import org.spongepowered.api.entity.living.player.Player;
++import org.spongepowered.api.text.Text;
++import org.spongepowered.api.text.title.Title;
++
++public class AfkTitleTask implements Runnable {
++    @Override
++    public void run() {
++        CommentedConfigurationNode config = Modules.AFK.get().getConfig().get().get();
++        for (Player player : Sponge.getServer().getOnlinePlayers()) {
++            UltimateUser user = UltimateCore.get().getUserService().getUser(player);
++            if (user.get(AfkKeys.IS_AFK).get()) {
++                Text title = Messages.getFormatted("afk.title.title");
++                Text subtitle;
++                long timediff = (config.getNode("time", "kicktime").getInt() * 1000) - (System.currentTimeMillis() - user.get(AfkKeys.AFK_TIME).get());
++                if (config.getNode("time", "kicktime").getInt() != -1 && timediff <= 0 && !player.hasPermission(AfkPermissions.UC_AFK_EXEMPT.get())) {
++                    player.kick(Messages.getFormatted("afk.kick.reason"));
++                }
++                if (player.hasPermission(AfkPermissions.UC_AFK_EXEMPT.get()) || config.getNode("time", "kicktime").getInt() == -1) {
++                    subtitle = Messages.getFormatted("afk.title.subtitle.exempt");
++                } else if (config.getNode("title", "subtitle-show-seconds").getBoolean(true)) {
++                    subtitle = Messages.getFormatted("afk.title.subtitle.kick", "%time%", TimeUtil.format(timediff, 3, null));
++                } else {
++                    subtitle = Messages.getFormatted("afk.title.subtitle.kick", "%time%", TimeUtil.format(timediff, 3, 11));
++                }
++                if (config.getNode("title", "subtitle").getBoolean(false) && (!player.hasPermission(AfkPermissions.UC_AFK_EXEMPT.get()) || config.getNode("title", "subtitle-exempt")
++                        .getBoolean(false))) {
++                    //Show subtitle
++                    player.sendTitle(Title.builder().title(title).subtitle(subtitle).fadeIn(0).fadeOut(20).stay(config.getNode("title", "subtitle-refresh").getInt()).build());
++                } else {
++                    //Don't show subtitle
++                    //TODO refresh?
++                    player.sendTitle(Title.builder().title(title).fadeIn(0).fadeOut(20).stay(config.getNode("title", "subtitle-refresh").getInt()).build());
++                }
++            }
++        }
++    }
++}
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/TablistModule.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/TablistModule.java
-new file mode 100644
-index 00000000..cdace8e6
+new file mode 100755
+index 0000000000..cdace8e679
 --- /dev/null
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/TablistModule.java
 @@ -0,0 +1,71 @@
@@ -134,8 +268,8 @@ index 00000000..cdace8e6
 +    }
 +}
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/runnables/TablistRunnable.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/runnables/TablistRunnable.java
-new file mode 100644
-index 00000000..9730cb70
+new file mode 100755
+index 0000000000..9730cb7006
 --- /dev/null
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/tablist/runnables/TablistRunnable.java
 @@ -0,0 +1,109 @@
@@ -249,8 +383,8 @@ index 00000000..9730cb70
 +    }
 +}
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/modules/teleport/commands/TeleportnativeCommand.java b/src/main/java/bammerbom/ultimatecore/sponge/modules/teleport/commands/TeleportnativeCommand.java
-new file mode 100644
-index 00000000..0baa2323
+new file mode 100755
+index 0000000000..0baa23236c
 --- /dev/null
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/modules/teleport/commands/TeleportnativeCommand.java
 @@ -0,0 +1,69 @@
@@ -324,7 +458,7 @@ index 00000000..0baa2323
 +    }
 +}
 diff --git a/src/main/java/bammerbom/ultimatecore/sponge/utils/Selector.java b/src/main/java/bammerbom/ultimatecore/sponge/utils/Selector.java
-index f9d6ec96..b5877e73 100644
+index f9d6ec96ac..b5877e738d 100755
 --- a/src/main/java/bammerbom/ultimatecore/sponge/utils/Selector.java
 +++ b/src/main/java/bammerbom/ultimatecore/sponge/utils/Selector.java
 @@ -27,7 +27,6 @@
@@ -336,7 +470,7 @@ index f9d6ec96..b5877e73 100644
  
  import java.util.ArrayList;
 diff --git a/src/main/resources/assets/ultimatecore/config/modules/chat.conf b/src/main/resources/assets/ultimatecore/config/modules/chat.conf
-index 2d5dbe69..57c673dc 100644
+index 2d5dbe6933..57c673dc06 100755
 --- a/src/main/resources/assets/ultimatecore/config/modules/chat.conf
 +++ b/src/main/resources/assets/ultimatecore/config/modules/chat.conf
 @@ -18,7 +18,7 @@ default {
@@ -349,8 +483,8 @@ index 2d5dbe69..57c673dc 100644
      # Uses the same variables as above
      header: "&6%prefix%&6%displayname%: "
 diff --git a/src/main/resources/assets/ultimatecore/config/modules/tablist.conf b/src/main/resources/assets/ultimatecore/config/modules/tablist.conf
-new file mode 100644
-index 00000000..65994055
+new file mode 100755
+index 0000000000..6599405562
 --- /dev/null
 +++ b/src/main/resources/assets/ultimatecore/config/modules/tablist.conf
 @@ -0,0 +1,50 @@

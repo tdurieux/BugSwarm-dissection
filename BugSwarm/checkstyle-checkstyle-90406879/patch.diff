@@ -1,5 +1,5 @@
 diff --git a/.travis.yml b/.travis.yml
-index cc3597a921..3e323a5ee6 100644
+index cc3597a921..3e323a5ee6 100755
 --- a/.travis.yml
 +++ b/.travis.yml
 @@ -42,10 +42,15 @@ matrix:
@@ -23,7 +23,7 @@ index cc3597a921..3e323a5ee6 100644
      # nemo.sonarqube.com (oraclejdk7)
      - jdk: oraclejdk7
 diff --git a/config/checkstyle_checks.xml b/config/checkstyle_checks.xml
-index 3e92d5b167..51f4ea010e 100644
+index 3e92d5b167..51f4ea010e 100755
 --- a/config/checkstyle_checks.xml
 +++ b/config/checkstyle_checks.xml
 @@ -108,7 +108,9 @@
@@ -38,7 +38,7 @@ index 3e92d5b167..51f4ea010e 100644
      <module name="MissingDeprecated"/>
      <module name="MissingOverride">
 diff --git a/pom.xml b/pom.xml
-index 944ae71a5c..07351aef02 100644
+index 944ae71a5c..07351aef02 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -192,7 +192,7 @@
@@ -101,79 +101,62 @@ index 944ae71a5c..07351aef02 100644
                </instrumentation>
              </configuration>
 diff --git a/src/it/java/com/google/checkstyle/test/base/BaseCheckTestSupport.java b/src/it/java/com/google/checkstyle/test/base/BaseCheckTestSupport.java
-index 2c7644c390..da9ab927b9 100644
+index 7aa8823447..da9ab927b9 100755
 --- a/src/it/java/com/google/checkstyle/test/base/BaseCheckTestSupport.java
 +++ b/src/it/java/com/google/checkstyle/test/base/BaseCheckTestSupport.java
-@@ -20,43 +20,67 @@
+@@ -20,6 +20,8 @@
  package com.google.checkstyle.test.base;
  
  import static org.junit.Assert.assertEquals;
 +import static org.junit.Assert.assertNotNull;
 +import static org.junit.Assert.assertTrue;
  
-+import java.io.BufferedReader;
+ import java.io.BufferedReader;
  import java.io.ByteArrayInputStream;
- import java.io.ByteArrayOutputStream;
- import java.io.File;
-+import java.io.FileInputStream;
- import java.io.IOException;
- import java.io.InputStreamReader;
- import java.io.LineNumberReader;
+@@ -32,7 +34,6 @@
  import java.nio.charset.StandardCharsets;
  import java.text.MessageFormat;
+ import java.util.ArrayList;
 -import java.util.Arrays;
-+import java.util.ArrayList;
  import java.util.Collections;
  import java.util.List;
  import java.util.Locale;
- import java.util.Map;
- import java.util.Properties;
-+import java.util.regex.Pattern;
- 
- import com.google.common.collect.Lists;
- import com.puppycrawl.tools.checkstyle.Checker;
-+import com.puppycrawl.tools.checkstyle.ConfigurationLoader;
- import com.puppycrawl.tools.checkstyle.DefaultConfiguration;
-+import com.puppycrawl.tools.checkstyle.PropertiesExpander;
- import com.puppycrawl.tools.checkstyle.TreeWalker;
- import com.puppycrawl.tools.checkstyle.api.AbstractViolationReporter;
-+import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
- import com.puppycrawl.tools.checkstyle.api.Configuration;
-+import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
+@@ -52,25 +53,22 @@
+ import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
  
  public class BaseCheckTestSupport {
--    protected final Properties props = new Properties();
--    final ByteArrayOutputStream stream = new ByteArrayOutputStream();
+-    private static final Pattern warnPattern = CommonUtils
 +    private static final Pattern WARN_PATTERN = CommonUtils
-+            .createPattern(".*[ ]*//[ ]*warn[ ]*|/[*]warn[*]/");
+             .createPattern(".*[ ]*//[ ]*warn[ ]*|/[*]warn[*]/");
+-    
++
+     private static final String XML_NAME = "/google_checks.xml";
  
--    protected static DefaultConfiguration createCheckConfig(Class<?> aClazz) {
--        return new DefaultConfiguration(aClazz.getName());
-+    private static final String XML_NAME = "/google_checks.xml";
-+
+-    private static Configuration configuration = null;
 +    private static Configuration configuration;
-+
-+    protected final ByteArrayOutputStream stream = new ByteArrayOutputStream();
-+
+ 
+     protected final ByteArrayOutputStream stream = new ByteArrayOutputStream();
+ 
+-    static {
+-        try {
 +    protected static Configuration getConfiguration() throws CheckstyleException {
 +        if (configuration == null) {
-+            configuration = ConfigurationLoader.loadConfiguration(XML_NAME, new PropertiesExpander(
-+                    System.getProperties()));
-+        }
+             configuration = ConfigurationLoader.loadConfiguration(XML_NAME, new PropertiesExpander(
+                     System.getProperties()));
+         }
+-        catch (final CheckstyleException e) {
+-            System.out.println("Error loading configuration file");
+-            e.printStackTrace(System.out);
+-            System.exit(1);
+-        }
 +
 +        return configuration;
      }
  
--    protected Checker createChecker(Configuration aCheckConfig)
--        throws Exception {
--        final DefaultConfiguration dc = createCheckerConfig(aCheckConfig);
-+    protected static DefaultConfiguration createCheckConfig(Class<?> clazz) {
-+        return new DefaultConfiguration(clazz.getName());
-+    }
-+
-+    protected Checker createChecker(Configuration checkConfig)
-+            throws Exception {
-+        final DefaultConfiguration dc = createCheckerConfig(checkConfig);
+     protected static DefaultConfiguration createCheckConfig(Class<?> clazz) {
+@@ -81,8 +79,8 @@ protected Checker createChecker(Configuration checkConfig)
+             throws Exception {
+         final DefaultConfiguration dc = createCheckerConfig(checkConfig);
          final Checker checker = new Checker();
 -        // make sure the tests always run with english error messages
 -        // so the tests don't fail in supported locales like german
@@ -182,42 +165,18 @@ index 2c7644c390..da9ab927b9 100644
          final Locale locale = Locale.ENGLISH;
          checker.setLocaleCountry(locale.getCountry());
          checker.setLocaleLanguage(locale.getLanguage());
-@@ -66,114 +90,86 @@ protected Checker createChecker(Configuration aCheckConfig)
-         return checker;
-     }
- 
--    protected DefaultConfiguration createCheckerConfig(Configuration aConfig) {
-+    protected DefaultConfiguration createCheckerConfig(Configuration config) {
-         final DefaultConfiguration dc =
--            new DefaultConfiguration("configuration");
-+                new DefaultConfiguration("configuration");
-         final DefaultConfiguration twConf = createCheckConfig(TreeWalker.class);
-         // make sure that the tests always run with this charset
-         dc.addAttribute("charset", "iso-8859-1");
-         dc.addChild(twConf);
--        twConf.addChild(aConfig);
-+        twConf.addChild(config);
-         return dc;
-     }
- 
--    protected static String getPath(String aFilename)
--        throws IOException {
--        return new File("src/main/java/com/google/checkstyle/test/filebasic/" + aFilename)
--            .getCanonicalPath();
--    }
--
--    protected static String getSrcPath(String aFilename) throws IOException {
--
--        return new File("src/test/java/com/puppycrawl/tools/checkstyle/" + aFilename)
--            .getCanonicalPath();
-+    protected String getPath(String fileName) throws IOException {
-+        return new File("src/it/resources/com/google/checkstyle/test/" + fileName)
-+                .getCanonicalPath();
+@@ -108,62 +106,51 @@ protected String getPath(String fileName) throws IOException {
+                 .getCanonicalPath();
      }
  
 -    protected void verify(Configuration aConfig, String aFileName, String[] aExpected,
 -            Integer... aWarnsExpected) throws Exception {
 -        verify(createChecker(aConfig), aFileName, aFileName, aExpected, aWarnsExpected);
+-    }
+-
+-    protected void verify(Checker aC, String aFileName, String[] aExpected,
+-            Integer... aWarnsExpected) throws Exception {
+-        verify(aC, aFileName, aFileName, aExpected, aWarnsExpected);
 +    protected void verify(Configuration config, String fileName, String[] expected,
 +            Integer... warnsExpected) throws Exception {
 +        verify(createChecker(config),
@@ -225,11 +184,6 @@ index 2c7644c390..da9ab927b9 100644
 +                fileName, expected, warnsExpected);
      }
  
--    protected void verify(Checker aC, String aFileName, String[] aExpected,
--            Integer... aWarnsExpected) throws Exception {
--        verify(aC, aFileName, aFileName, aExpected, aWarnsExpected);
--    }
--
 -    private void verify(Checker aC,
 -            String aProcessedFilename,
 -            String aMessageFileName,
@@ -240,7 +194,7 @@ index 2c7644c390..da9ab927b9 100644
 -            aMessageFileName, aExpected, aWarnsExpected);
 -    }
 -
--    void verify(Checker aC,
+-    protected void verify(Checker aC,
 -            File[] aProcessedFiles,
 -            String aMessageFileName,
 -            String[] aExpected,
@@ -301,95 +255,41 @@ index 2c7644c390..da9ab927b9 100644
      }
  
      /**
-      * Gets the check message 'as is' from appropriate 'messages.properties'
-      * file.
-      *
--     * @param messageKey
--     *            the key of message in 'messages.properties' file.
-+     * @param messageKey the key of message in 'messages.properties' file.
-+     * @param arguments  the arguments of message in 'messages.properties' file.
-      */
-     protected String getCheckMessage(Class<? extends AbstractViolationReporter> aClass,
--            String messageKey) {
-+            String messageKey, Object... arguments) {
-         final Properties pr = new Properties();
-         try {
-             pr.load(aClass.getResourceAsStream("messages.properties"));
-         }
--        catch (IOException ignored) {
-+        catch (IOException e) {
-             return null;
-         }
--        return pr.getProperty(messageKey);
--    }
--
--    /**
--     * Gets the check message 'as is' from appropriate 'messages.properties' file.
--     * @param messageKey the key of message in 'messages.properties' file.
--     * @param arguments the arguments of message in 'messages.properties' file.
--     */
--    protected String getCheckMessage(Class<? extends AbstractViolationReporter> aClass,
--            String messageKey, Object... arguments) {
--        final MessageFormat formatter = new MessageFormat(getCheckMessage(aClass, messageKey),
-+        final MessageFormat formatter = new MessageFormat(pr.getProperty(messageKey),
-                 Locale.ROOT);
-         return formatter.format(arguments);
-     }
-@@ -194,6 +190,25 @@ protected String getCheckMessage(Map<String, String> messages, String messageKey
+@@ -203,9 +190,9 @@ protected String getCheckMessage(Map<String, String> messages, String messageKey
          return null;
      }
  
+-    protected static Configuration getCheckConfig(String checkName) {
 +    protected static Configuration getCheckConfig(String checkName) throws CheckstyleException {
-+        Configuration result = null;
+         Configuration result = null;
+-        for (Configuration currentConfig : configuration.getChildren()) {
 +        for (Configuration currentConfig : getConfiguration().getChildren()) {
-+            if ("TreeWalker".equals(currentConfig.getName())) {
-+                for (Configuration checkConfig : currentConfig.getChildren()) {
-+                    if (checkName.equals(checkConfig.getName())) {
-+                        result = checkConfig;
-+                        break;
-+                    }
-+                }
-+            }
-+            else if (checkName.equals(currentConfig.getName())) {
-+                result = currentConfig;
-+                break;
-+            }
-+        }
-+        return result;
-+    }
-+
-     private static String removeDeviceFromPathOnWindows(String path) {
-         final String os = System.getProperty("os.name", "Unix");
-         if (os.startsWith("Windows")) {
-@@ -201,4 +216,23 @@ private static String removeDeviceFromPathOnWindows(String path) {
-         }
+             if ("TreeWalker".equals(currentConfig.getName())) {
+                 for (Configuration checkConfig : currentConfig.getChildren()) {
+                     if (checkName.equals(checkConfig.getName())) {
+@@ -230,7 +217,7 @@ private static String removeDeviceFromPathOnWindows(String path) {
          return path;
      }
-+
+ 
+-    protected static Integer[] getLinesWithWarn(String fileName) throws IOException {
 +    protected Integer[] getLinesWithWarn(String fileName) throws IOException {
-+        final List<Integer> result = new ArrayList<>();
-+        try (BufferedReader br = new BufferedReader(new InputStreamReader(
-+                new FileInputStream(fileName), StandardCharsets.UTF_8))) {
-+            int lineNumber = 1;
-+            while (true) {
-+                final String line = br.readLine();
-+                if (line == null) {
-+                    break;
-+                }
+         final List<Integer> result = new ArrayList<>();
+         try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                 new FileInputStream(fileName), StandardCharsets.UTF_8))) {
+@@ -240,7 +227,7 @@ private static String removeDeviceFromPathOnWindows(String path) {
+                 if (line == null) {
+                     break;
+                 }
+-                if (warnPattern.matcher(line).find()) {
 +                if (WARN_PATTERN.matcher(line).find()) {
-+                    result.add(lineNumber);
-+                }
-+                lineNumber++;
-+            }
-+        }
-+        return result.toArray(new Integer[result.size()]);
-+    }
- }
+                     result.add(lineNumber);
+                 }
+                 lineNumber++;
 diff --git a/src/it/java/com/google/checkstyle/test/base/IndentationConfigurationBuilder.java b/src/it/java/com/google/checkstyle/test/base/BaseIndentationCheckSupport.java
 similarity index 96%
 rename from src/it/java/com/google/checkstyle/test/base/IndentationConfigurationBuilder.java
 rename to src/it/java/com/google/checkstyle/test/base/BaseIndentationCheckSupport.java
-index 400e375d0c..9f977b2a44 100644
+index 400e375d0c..9f977b2a44 100755
 --- a/src/it/java/com/google/checkstyle/test/base/IndentationConfigurationBuilder.java
 +++ b/src/it/java/com/google/checkstyle/test/base/BaseIndentationCheckSupport.java
 @@ -20,7 +20,6 @@
@@ -426,40 +326,65 @@ index 400e375d0c..9f977b2a44 100644
  
      private enum CommentType {
 diff --git a/src/it/java/com/google/checkstyle/test/base/ConfigValidationTest.java b/src/it/java/com/google/checkstyle/test/base/ConfigValidationTest.java
-index 3f9a2decf2..85eec3f431 100644
---- a/src/it/java/com/google/checkstyle/test/base/ConfigValidationTest.java
+new file mode 100755
+index 0000000000..85eec3f431
+--- /dev/null
 +++ b/src/it/java/com/google/checkstyle/test/base/ConfigValidationTest.java
-@@ -23,6 +23,7 @@
- import static org.apache.commons.lang3.ArrayUtils.EMPTY_STRING_ARRAY;
- 
- import java.io.File;
+@@ -0,0 +1,69 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2015 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++// Lesser General Public License for more details.
++//
++// You should have received a copy of the GNU Lesser General Public
++// License along with this library; if not, write to the Free Software
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++////////////////////////////////////////////////////////////////////////////////
++
++package com.google.checkstyle.test.base;
++
++import static org.apache.commons.lang3.ArrayUtils.EMPTY_INTEGER_OBJECT_ARRAY;
++import static org.apache.commons.lang3.ArrayUtils.EMPTY_STRING_ARRAY;
++
++import java.io.File;
 +import java.util.ArrayList;
- import java.util.List;
- import java.util.Locale;
- 
-@@ -34,8 +35,7 @@
- public class ConfigValidationTest extends BaseCheckTestSupport {
-     @Test
-     public void testGoogleChecks() throws Exception {
--        final ConfigurationBuilder builder = new ConfigurationBuilder(new File("src/it/"));
--        final Configuration checkerConfig = builder.getConfiguration();
++import java.util.List;
++import java.util.Locale;
++
++import org.junit.Test;
++
++import com.puppycrawl.tools.checkstyle.Checker;
++import com.puppycrawl.tools.checkstyle.api.Configuration;
++
++public class ConfigValidationTest extends BaseCheckTestSupport {
++    @Test
++    public void testGoogleChecks() throws Exception {
 +        final Configuration checkerConfig = getConfiguration();
-         final Checker checker = new Checker();
-         final Locale locale = Locale.ROOT;
-         checker.setLocaleCountry(locale.getCountry());
-@@ -44,11 +44,26 @@ public void testGoogleChecks() throws Exception {
-         checker.configure(checkerConfig);
-         checker.addListener(new BriefLogger(stream));
- 
--        final List<File> files = builder.getFiles();
++        final Checker checker = new Checker();
++        final Locale locale = Locale.ROOT;
++        checker.setLocaleCountry(locale.getCountry());
++        checker.setLocaleLanguage(locale.getLanguage());
++        checker.setModuleClassLoader(Thread.currentThread().getContextClassLoader());
++        checker.configure(checkerConfig);
++        checker.addListener(new BriefLogger(stream));
++
 +        final List<File> files = new ArrayList<>();
 +        listFiles(files, new File("src/it/"), "java");
- 
-         //runs over all input files;
-         //as severity level is "warning", no errors expected
-         verify(checker, files.toArray(new File[files.size()]), "",
-                 EMPTY_STRING_ARRAY, EMPTY_INTEGER_OBJECT_ARRAY);
-     }
++
++        //runs over all input files;
++        //as severity level is "warning", no errors expected
++        verify(checker, files.toArray(new File[files.size()]), "",
++                EMPTY_STRING_ARRAY, EMPTY_INTEGER_OBJECT_ARRAY);
++    }
 +
 +    private static void listFiles(final List<File> files, final File folder,
 +            final String extension) {
@@ -474,240 +399,9 @@ index 3f9a2decf2..85eec3f431 100644
 +            }
 +        }
 +    }
- }
-diff --git a/src/it/java/com/google/checkstyle/test/base/ConfigurationBuilder.java b/src/it/java/com/google/checkstyle/test/base/ConfigurationBuilder.java
-deleted file mode 100644
-index 1b5d2f02f7..0000000000
---- a/src/it/java/com/google/checkstyle/test/base/ConfigurationBuilder.java
-+++ /dev/null
-@@ -1,150 +0,0 @@
--////////////////////////////////////////////////////////////////////////////////
--// checkstyle: Checks Java source code for adherence to a set of rules.
--// Copyright (C) 2001-2015 the original author or authors.
--//
--// This library is free software; you can redistribute it and/or
--// modify it under the terms of the GNU Lesser General Public
--// License as published by the Free Software Foundation; either
--// version 2.1 of the License, or (at your option) any later version.
--//
--// This library is distributed in the hope that it will be useful,
--// but WITHOUT ANY WARRANTY; without even the implied warranty of
--// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
--// Lesser General Public License for more details.
--//
--// You should have received a copy of the GNU Lesser General Public
--// License along with this library; if not, write to the Free Software
--// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
--////////////////////////////////////////////////////////////////////////////////
--
--package com.google.checkstyle.test.base;
--
--import java.io.BufferedReader;
--import java.io.File;
--import java.io.FileInputStream;
--import java.io.IOException;
--import java.io.InputStreamReader;
--import java.nio.charset.StandardCharsets;
--import java.util.ArrayList;
--import java.util.Collections;
--import java.util.List;
--import java.util.Properties;
--import java.util.regex.Pattern;
--
--import com.puppycrawl.tools.checkstyle.ConfigurationLoader;
--import com.puppycrawl.tools.checkstyle.PropertiesExpander;
--import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
--import com.puppycrawl.tools.checkstyle.api.Configuration;
--import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
--
--public class ConfigurationBuilder extends BaseCheckTestSupport {
--
--    private static final String XML_NAME = "/google_checks.xml";
--
--    private final File root;
--
--    private final List<File> files = new ArrayList<>();
--
--    private final Configuration configuration;
--
--    private final Pattern warnPattern = CommonUtils
--        .createPattern(".*[ ]*//[ ]*warn[ ]*|/[*]warn[*]/");
--
--    public ConfigurationBuilder(File aRoot) {
--        root = aRoot;
--        configuration = getConfigurationFromXML(XML_NAME, System.getProperties());
--        listFiles(files, root, "java");
--    }
--
--    private static Configuration getConfigurationFromXML(String aConfigName,
--            Properties aProps) {
--        try {
--            return ConfigurationLoader.loadConfiguration(aConfigName,
--                    new PropertiesExpander(aProps));
--        }
--        catch (final CheckstyleException e) {
--            System.out.println("Error loading configuration file");
--            e.printStackTrace(System.out);
--            System.exit(1);
--            return null;
--        }
--    }
--
--    Configuration getConfiguration() {
--        return configuration;
--    }
--
--    public Configuration getCheckConfig(String aCheckName) {
--        Configuration result = null;
--        for (Configuration currentConfig : configuration.getChildren()) {
--            if ("TreeWalker".equals(currentConfig.getName())) {
--                for (Configuration checkConfig : currentConfig.getChildren()) {
--                    if (aCheckName.equals(checkConfig.getName())) {
--                        result = checkConfig;
--                        break;
--                    }
--                }
--                if (result != null) {
--                    break;
--                }
--            }
--            else if (aCheckName.equals(currentConfig.getName())) {
--                result = currentConfig;
--            }
--        }
--        return result;
--    }
--
--    public String getFilePath(String aFileName) {
--        final String absoluteRootPath = root.getAbsolutePath();
--        final String rootPath = absoluteRootPath.substring(0,
--                absoluteRootPath.lastIndexOf("src"));
--        for (File file : files) {
--            if (file.toString().endsWith(aFileName + ".java")) {
--                return rootPath + file;
--            }
--        }
--        return null;
--    }
--
--    private static void listFiles(final List<File> files, final File folder,
--            final String extension) {
--        if (folder.canRead()) {
--            if (folder.isDirectory()) {
--                for (final File file : folder.listFiles()) {
--                    listFiles(files, file, extension);
--                }
--            }
--            else if (folder.toString().endsWith("." + extension)) {
--                files.add(folder);
--            }
--        }
--    }
--
--    public File getRoot() {
--        return root;
--    }
--
--    public List<File> getFiles() {
--        return Collections.unmodifiableList(files);
--    }
--
--    public Integer[] getLinesWithWarn(String aFileName) throws IOException {
--        final List<Integer> result = new ArrayList<>();
--        try (BufferedReader br = new BufferedReader(new InputStreamReader(
--                new FileInputStream(aFileName), StandardCharsets.UTF_8))) {
--            int lineNumber = 1;
--            while (true) {
--                final String line = br.readLine();
--                if (line == null) {
--                    break;
--                }
--                if (warnPattern.matcher(line).find()) {
--                    result.add(lineNumber);
--                }
--                lineNumber++;
--            }
--        }
--        return result.toArray(new Integer[result.size()]);
--    }
--}
-diff --git a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule21filename/OuterTypeFilenameTest.java b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule21filename/OuterTypeFilenameTest.java
-index 6b3b67794f..6061396a0f 100644
---- a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule21filename/OuterTypeFilenameTest.java
-+++ b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule21filename/OuterTypeFilenameTest.java
-@@ -20,23 +20,21 @@
- package com.google.checkstyle.test.chapter2filebasic.rule21filename;
- 
- import java.io.File;
-+import java.io.IOException;
- 
- import org.apache.commons.lang3.ArrayUtils;
--import org.junit.BeforeClass;
- import org.junit.Test;
- 
- import com.google.checkstyle.test.base.BaseCheckTestSupport;
--import com.google.checkstyle.test.base.ConfigurationBuilder;
- import com.puppycrawl.tools.checkstyle.api.Configuration;
- import com.puppycrawl.tools.checkstyle.checks.OuterTypeFilenameCheck;
- 
- public class OuterTypeFilenameTest extends BaseCheckTestSupport {
- 
--    private static ConfigurationBuilder builder;
--
--    @BeforeClass
--    public static void setConfigurationBuilder() {
--        builder = new ConfigurationBuilder(new File("src/it/"));
-+    @Override
-+    protected String getPath(String fileName) throws IOException {
-+        return super.getPath("chapter2filebasic" + File.separator + "rule21filename"
-+                + File.separator + fileName);
-     }
- 
-     @Test
-@@ -44,10 +42,10 @@ public void outerTypeFilenameTest1() throws Exception {
- 
-         final String[] expected = ArrayUtils.EMPTY_STRING_ARRAY;
- 
--        final Configuration checkConfig = builder.getCheckConfig("OuterTypeFilename");
--        final String filePath = builder.getFilePath("InputOuterTypeFilename1");
-+        final Configuration checkConfig = getCheckConfig("OuterTypeFilename");
-+        final String filePath = getPath("InputOuterTypeFilename1.java");
- 
--        final Integer[] warnList = builder.getLinesWithWarn(filePath);
-+        final Integer[] warnList = getLinesWithWarn(filePath);
-         verify(checkConfig, filePath, expected, warnList);
-     }
- 
-@@ -56,10 +54,10 @@ public void outerTypeFilenameTest2() throws Exception {
- 
-         final String[] expected = ArrayUtils.EMPTY_STRING_ARRAY;
- 
--        final Configuration checkConfig = builder.getCheckConfig("OuterTypeFilename");
--        final String filePath = builder.getFilePath("InputOuterTypeFilename2");
-+        final Configuration checkConfig = getCheckConfig("OuterTypeFilename");
-+        final String filePath = getPath("InputOuterTypeFilename2.java");
- 
--        final Integer[] warnList = builder.getLinesWithWarn(filePath);
-+        final Integer[] warnList = getLinesWithWarn(filePath);
-         verify(checkConfig, filePath, expected, warnList);
-     }
- 
-@@ -70,10 +68,10 @@ public void outerTypeFilenameTest3() throws Exception {
-             "3: " + getCheckMessage(OuterTypeFilenameCheck.class, "type.file.mismatch"),
-         };
- 
--        final Configuration checkConfig = builder.getCheckConfig("OuterTypeFilename");
--        final String filePath = builder.getFilePath("InputOuterTypeFilename3");
-+        final Configuration checkConfig = getCheckConfig("OuterTypeFilename");
-+        final String filePath = getPath("InputOuterTypeFilename3.java");
- 
--        final Integer[] warnList = builder.getLinesWithWarn(filePath);
-+        final Integer[] warnList = getLinesWithWarn(filePath);
-         verify(checkConfig, filePath, expected, warnList);
-     }
- }
++}
 diff --git a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule231filetab/FileTabCharacterTest.java b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule231filetab/FileTabCharacterTest.java
-index 5fe580a28a..e588c031b7 100644
+index 5fe580a28a..e588c031b7 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule231filetab/FileTabCharacterTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule231filetab/FileTabCharacterTest.java
 @@ -20,23 +20,21 @@
@@ -754,7 +448,7 @@ index 5fe580a28a..e588c031b7 100644
  
      /**
 diff --git a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule232specialescape/IllegalTokenTextTest.java b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule232specialescape/IllegalTokenTextTest.java
-index 7e03c39079..d6ba17046f 100644
+index 7e03c39079..d6ba17046f 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule232specialescape/IllegalTokenTextTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule232specialescape/IllegalTokenTextTest.java
 @@ -20,21 +20,19 @@
@@ -799,7 +493,7 @@ index 7e03c39079..d6ba17046f 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule233nonascii/AvoidEscapedUnicodeCharactersTest.java b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule233nonascii/AvoidEscapedUnicodeCharactersTest.java
-index a2103c2980..1171812fae 100644
+index a2103c2980..1171812fae 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule233nonascii/AvoidEscapedUnicodeCharactersTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter2filebasic/rule233nonascii/AvoidEscapedUnicodeCharactersTest.java
 @@ -20,22 +20,20 @@
@@ -845,7 +539,7 @@ index a2103c2980..1171812fae 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/LineLengthTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/LineLengthTest.java
-index 93a086e72a..e36a3e225e 100644
+index 93a086e72a..e36a3e225e 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/LineLengthTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/LineLengthTest.java
 @@ -20,22 +20,20 @@
@@ -891,7 +585,7 @@ index 93a086e72a..e36a3e225e 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule331nowildcard/AvoidStarImportTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule331nowildcard/AvoidStarImportTest.java
-index 0d2e07b301..a4d957fd36 100644
+index 0d2e07b301..a4d957fd36 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule331nowildcard/AvoidStarImportTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule331nowildcard/AvoidStarImportTest.java
 @@ -20,21 +20,19 @@
@@ -936,7 +630,7 @@ index 0d2e07b301..a4d957fd36 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/NoLineWrapTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/NoLineWrapTest.java
-index 45d34a659b..50f1dda395 100644
+index 45d34a659b..50f1dda395 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/NoLineWrapTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/NoLineWrapTest.java
 @@ -20,24 +20,22 @@
@@ -1022,7 +716,7 @@ index 45d34a659b..50f1dda395 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule333orderingandspacing/CustomImportOrderTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule333orderingandspacing/CustomImportOrderTest.java
-index 6d9dda4adb..96545aa454 100644
+index 6d9dda4adb..96545aa454 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule333orderingandspacing/CustomImportOrderTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule333orderingandspacing/CustomImportOrderTest.java
 @@ -20,13 +20,12 @@
@@ -1114,7 +808,7 @@ index 6d9dda4adb..96545aa454 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule341onetoplevel/OneTopLevelClassTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule341onetoplevel/OneTopLevelClassTest.java
-index b3e89fbb38..952f752c90 100644
+index b3e89fbb38..952f752c90 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule341onetoplevel/OneTopLevelClassTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule341onetoplevel/OneTopLevelClassTest.java
 @@ -20,23 +20,21 @@
@@ -1203,7 +897,7 @@ index b3e89fbb38..952f752c90 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3421overloadsplit/OverloadMethodsDeclarationOrderTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3421overloadsplit/OverloadMethodsDeclarationOrderTest.java
-index 6b5e01c500..a67a4908ee 100644
+index 6b5e01c500..a67a4908ee 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3421overloadsplit/OverloadMethodsDeclarationOrderTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3421overloadsplit/OverloadMethodsDeclarationOrderTest.java
 @@ -20,22 +20,20 @@
@@ -1249,7 +943,7 @@ index 6b5e01c500..a67a4908ee 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/EmptyLineSeparatorTest.java b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/EmptyLineSeparatorTest.java
-index 322c510030..18e3f1fb61 100644
+index 322c510030..18e3f1fb61 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/EmptyLineSeparatorTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/EmptyLineSeparatorTest.java
 @@ -20,22 +20,20 @@
@@ -1295,7 +989,7 @@ index 322c510030..18e3f1fb61 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule411bracesareused/NeedBracesTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule411bracesareused/NeedBracesTest.java
-index 2e68aa7e99..ff3453ce71 100644
+index 2e68aa7e99..ff3453ce71 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule411bracesareused/NeedBracesTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule411bracesareused/NeedBracesTest.java
 @@ -20,22 +20,20 @@
@@ -1341,7 +1035,7 @@ index 2e68aa7e99..ff3453ce71 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/LeftCurlyTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/LeftCurlyTest.java
-index b6d56c2d91..206ef27f70 100644
+index b6d56c2d91..206ef27f70 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/LeftCurlyTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/LeftCurlyTest.java
 @@ -22,22 +22,20 @@
@@ -1415,7 +1109,7 @@ index b6d56c2d91..206ef27f70 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/RightCurlyTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/RightCurlyTest.java
-index aa69311a16..eec483d2c7 100644
+index aa69311a16..eec483d2c7 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/RightCurlyTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/RightCurlyTest.java
 @@ -23,24 +23,22 @@
@@ -1471,7 +1165,7 @@ index aa69311a16..eec483d2c7 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyBlockTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyBlockTest.java
-index 2efa48095b..8c25633d68 100644
+index 2efa48095b..8c25633d68 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyBlockTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyBlockTest.java
 @@ -20,22 +20,20 @@
@@ -1531,7 +1225,7 @@ index 2efa48095b..8c25633d68 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyCatchBlockTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyCatchBlockTest.java
-index 8fe7aa17a7..ba1093899f 100644
+index 8fe7aa17a7..ba1093899f 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyCatchBlockTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/EmptyCatchBlockTest.java
 @@ -20,22 +20,21 @@
@@ -1619,7 +1313,7 @@ index 8fe7aa17a7..ba1093899f 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
-index 51ce9a8452..4d7b8f6625 100644
+index 51ce9a8452..4d7b8f6625 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule43onestatement/OneStatementPerLineTest.java
 @@ -20,22 +20,20 @@
@@ -1680,7 +1374,7 @@ index 51ce9a8452..4d7b8f6625 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/LineLengthTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/LineLengthTest.java
-index 2ab80382ca..1fb15c57b8 100644
+index 2ab80382ca..1fb15c57b8 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/LineLengthTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/LineLengthTest.java
 @@ -20,22 +20,20 @@
@@ -1736,7 +1430,7 @@ index 2ab80382ca..1fb15c57b8 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/MethodParamPadTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/MethodParamPadTest.java
-index 6449394889..f58dd8587e 100644
+index 6449394889..f58dd8587e 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/MethodParamPadTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/MethodParamPadTest.java
 @@ -20,22 +20,20 @@
@@ -1782,7 +1476,7 @@ index 6449394889..f58dd8587e 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/OperatorWrapTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/OperatorWrapTest.java
-index bdf21ab8df..0c5ea65fe6 100644
+index bdf21ab8df..0c5ea65fe6 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/OperatorWrapTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/OperatorWrapTest.java
 @@ -20,12 +20,11 @@
@@ -1841,7 +1535,7 @@ index bdf21ab8df..0c5ea65fe6 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
-index a5cb93a989..2b535ecd4f 100644
+index a5cb93a989..2b535ecd4f 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule451wheretobreak/SeparatorWrapTest.java
 @@ -20,22 +20,20 @@
@@ -1887,7 +1581,7 @@ index a5cb93a989..2b535ecd4f 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule461verticalwhitespace/EmptyLineSeparatorTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule461verticalwhitespace/EmptyLineSeparatorTest.java
-index fb62e0cb0f..878c38089e 100644
+index fb62e0cb0f..878c38089e 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule461verticalwhitespace/EmptyLineSeparatorTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule461verticalwhitespace/EmptyLineSeparatorTest.java
 @@ -20,22 +20,20 @@
@@ -1933,7 +1627,7 @@ index fb62e0cb0f..878c38089e 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/GenericWhitespaceTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/GenericWhitespaceTest.java
-index 9094b972ec..485520d4b0 100644
+index 9094b972ec..485520d4b0 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/GenericWhitespaceTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/GenericWhitespaceTest.java
 @@ -20,21 +20,19 @@
@@ -2006,7 +1700,7 @@ index 9094b972ec..485520d4b0 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/WhitespaceAroundTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/WhitespaceAroundTest.java
-index a8de72b589..e164e92383 100644
+index a8de72b589..e164e92383 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/WhitespaceAroundTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule462horizontalwhitespace/WhitespaceAroundTest.java
 @@ -20,28 +20,26 @@
@@ -2071,7 +1765,7 @@ index a8de72b589..e164e92383 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4821onevariableperline/MultipleVariableDeclarationsTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4821onevariableperline/MultipleVariableDeclarationsTest.java
-index d613a560f9..35af6ed356 100644
+index d613a560f9..35af6ed356 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4821onevariableperline/MultipleVariableDeclarationsTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4821onevariableperline/MultipleVariableDeclarationsTest.java
 @@ -20,22 +20,20 @@
@@ -2117,7 +1811,7 @@ index d613a560f9..35af6ed356 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/VariableDeclarationUsageDistanceTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/VariableDeclarationUsageDistanceTest.java
-index 69a07ca9d1..e67c86d4b0 100644
+index 69a07ca9d1..e67c86d4b0 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/VariableDeclarationUsageDistanceTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/VariableDeclarationUsageDistanceTest.java
 @@ -20,22 +20,20 @@
@@ -2163,7 +1857,7 @@ index 69a07ca9d1..e67c86d4b0 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4832nocstylearray/ArrayTypeStyleTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4832nocstylearray/ArrayTypeStyleTest.java
-index 52aa560e32..14c052f65a 100644
+index 52aa560e32..14c052f65a 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4832nocstylearray/ArrayTypeStyleTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4832nocstylearray/ArrayTypeStyleTest.java
 @@ -20,22 +20,20 @@
@@ -2209,7 +1903,7 @@ index 52aa560e32..14c052f65a 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4841indentation/IndentationTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4841indentation/IndentationTest.java
-index 97617a7f1f..b4a44b2ac5 100644
+index 97617a7f1f..b4a44b2ac5 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4841indentation/IndentationTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4841indentation/IndentationTest.java
 @@ -20,23 +20,20 @@
@@ -2343,7 +2037,7 @@ index 97617a7f1f..b4a44b2ac5 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/FallThroughTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/FallThroughTest.java
-index 3d3fabc620..e8e168f6de 100644
+index 3d3fabc620..e8e168f6de 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/FallThroughTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/FallThroughTest.java
 @@ -20,22 +20,20 @@
@@ -2389,7 +2083,7 @@ index 3d3fabc620..e8e168f6de 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4843defaultcasepresent/MissingSwitchDefaultTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4843defaultcasepresent/MissingSwitchDefaultTest.java
-index d1e5162eb5..45c93a0cc6 100644
+index d1e5162eb5..45c93a0cc6 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4843defaultcasepresent/MissingSwitchDefaultTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4843defaultcasepresent/MissingSwitchDefaultTest.java
 @@ -20,22 +20,20 @@
@@ -2435,7 +2129,7 @@ index d1e5162eb5..45c93a0cc6 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule485annotations/AnnotationLocationTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule485annotations/AnnotationLocationTest.java
-index 7bf6a86615..61f43a4d7e 100644
+index 7bf6a86615..61f43a4d7e 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule485annotations/AnnotationLocationTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule485annotations/AnnotationLocationTest.java
 @@ -20,22 +20,20 @@
@@ -2488,7 +2182,7 @@ index 7bf6a86615..61f43a4d7e 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/CommentsIndentationTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/CommentsIndentationTest.java
-index a00d353dc9..9e0cc56693 100644
+index a00d353dc9..9e0cc56693 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/CommentsIndentationTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/CommentsIndentationTest.java
 @@ -20,22 +20,20 @@
@@ -2580,7 +2274,7 @@ index a00d353dc9..9e0cc56693 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule487modifiers/ModifierOrderTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule487modifiers/ModifierOrderTest.java
-index aa120edec9..3c9ecc8042 100644
+index aa120edec9..3c9ecc8042 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule487modifiers/ModifierOrderTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule487modifiers/ModifierOrderTest.java
 @@ -20,22 +20,20 @@
@@ -2626,7 +2320,7 @@ index aa120edec9..3c9ecc8042 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule488numericliterals/UpperEllTest.java b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule488numericliterals/UpperEllTest.java
-index 91e31b8bf5..d56d51bbfb 100644
+index 91e31b8bf5..d56d51bbfb 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter4formatting/rule488numericliterals/UpperEllTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter4formatting/rule488numericliterals/UpperEllTest.java
 @@ -20,21 +20,19 @@
@@ -2671,7 +2365,7 @@ index 91e31b8bf5..d56d51bbfb 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule521packagenames/PackageNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule521packagenames/PackageNameTest.java
-index 70c4b04855..3f84963ef8 100644
+index 70c4b04855..3f84963ef8 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule521packagenames/PackageNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule521packagenames/PackageNameTest.java
 @@ -20,27 +20,30 @@
@@ -2758,7 +2452,7 @@ index 70c4b04855..3f84963ef8 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule522typenames/TypeNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule522typenames/TypeNameTest.java
-index 094ed7c041..367eaeb137 100644
+index 094ed7c041..367eaeb137 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule522typenames/TypeNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule522typenames/TypeNameTest.java
 @@ -20,27 +20,25 @@
@@ -2808,7 +2502,7 @@ index 094ed7c041..367eaeb137 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule523methodnames/MethodNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule523methodnames/MethodNameTest.java
-index bb479e817f..2113d245f3 100644
+index bb479e817f..2113d245f3 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule523methodnames/MethodNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule523methodnames/MethodNameTest.java
 @@ -20,27 +20,25 @@
@@ -2858,7 +2552,7 @@ index bb479e817f..2113d245f3 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule525nonconstantfieldnames/MemberNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule525nonconstantfieldnames/MemberNameTest.java
-index 4873ace4db..0a8d1057c1 100644
+index 4873ace4db..0a8d1057c1 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule525nonconstantfieldnames/MemberNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule525nonconstantfieldnames/MemberNameTest.java
 @@ -20,26 +20,30 @@
@@ -2921,7 +2615,7 @@ index 4873ace4db..0a8d1057c1 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule526parameternames/ParameterNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule526parameternames/ParameterNameTest.java
-index ba676e3411..19d5d17fa5 100644
+index ba676e3411..19d5d17fa5 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule526parameternames/ParameterNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule526parameternames/ParameterNameTest.java
 @@ -20,12 +20,12 @@
@@ -2972,7 +2666,7 @@ index ba676e3411..19d5d17fa5 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule527localvariablenames/LocalVariableNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule527localvariablenames/LocalVariableNameTest.java
-index 5ee7206967..d7d96f4fb0 100644
+index 5ee7206967..d7d96f4fb0 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule527localvariablenames/LocalVariableNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule527localvariablenames/LocalVariableNameTest.java
 @@ -20,26 +20,30 @@
@@ -3035,7 +2729,7 @@ index 5ee7206967..d7d96f4fb0 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/ClassTypeParameterNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/ClassTypeParameterNameTest.java
-index a7475c6397..d3a3ed7dcb 100644
+index a7475c6397..d3a3ed7dcb 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/ClassTypeParameterNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/ClassTypeParameterNameTest.java
 @@ -20,31 +20,27 @@
@@ -3091,7 +2785,7 @@ index a7475c6397..d3a3ed7dcb 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/MethodTypeParameterNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/MethodTypeParameterNameTest.java
-index ecb3ce8873..7dc51b05ba 100644
+index ecb3ce8873..7dc51b05ba 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/MethodTypeParameterNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule528typevariablenames/MethodTypeParameterNameTest.java
 @@ -20,33 +20,37 @@
@@ -3150,7 +2844,7 @@ index ecb3ce8873..7dc51b05ba 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter5naming/rule53camelcase/AbbreviationAsWordInNameTest.java b/src/it/java/com/google/checkstyle/test/chapter5naming/rule53camelcase/AbbreviationAsWordInNameTest.java
-index 982263e3f1..fe7317fdbd 100644
+index 982263e3f1..fe7317fdbd 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter5naming/rule53camelcase/AbbreviationAsWordInNameTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter5naming/rule53camelcase/AbbreviationAsWordInNameTest.java
 @@ -20,26 +20,23 @@
@@ -3199,7 +2893,7 @@ index 982263e3f1..fe7317fdbd 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/EmptyBlockTest.java b/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/EmptyBlockTest.java
-index 6d207501ed..f1ab0b1cdf 100644
+index 6d207501ed..f1ab0b1cdf 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/EmptyBlockTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/EmptyBlockTest.java
 @@ -20,22 +20,20 @@
@@ -3245,7 +2939,7 @@ index 6d207501ed..f1ab0b1cdf 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/NoFinalizerTest.java b/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/NoFinalizerTest.java
-index ee0bbb3276..98c955c315 100644
+index ee0bbb3276..98c955c315 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/NoFinalizerTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/NoFinalizerTest.java
 @@ -20,22 +20,20 @@
@@ -3305,7 +2999,7 @@ index ee0bbb3276..98c955c315 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule711generalform/SingleLineJavadocTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule711generalform/SingleLineJavadocTest.java
-index fd48161cca..035fe86c54 100644
+index fd48161cca..035fe86c54 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule711generalform/SingleLineJavadocTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule711generalform/SingleLineJavadocTest.java
 @@ -20,23 +20,21 @@
@@ -3368,7 +3062,7 @@ index fd48161cca..035fe86c54 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule712paragraphs/JavadocParagraphTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule712paragraphs/JavadocParagraphTest.java
-index b167726135..7a32efe380 100644
+index b167726135..7a32efe380 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule712paragraphs/JavadocParagraphTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule712paragraphs/JavadocParagraphTest.java
 @@ -20,23 +20,21 @@
@@ -3429,7 +3123,7 @@ index b167726135..7a32efe380 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/AtclauseOrderTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/AtclauseOrderTest.java
-index a063e98b0a..f78637830d 100644
+index a063e98b0a..f78637830d 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/AtclauseOrderTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/AtclauseOrderTest.java
 @@ -20,23 +20,21 @@
@@ -3490,7 +3184,7 @@ index a063e98b0a..f78637830d 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/JavadocTagContinuationIndentationTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/JavadocTagContinuationIndentationTest.java
-index 1553c6835f..246f7f925a 100644
+index 1553c6835f..246f7f925a 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/JavadocTagContinuationIndentationTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/JavadocTagContinuationIndentationTest.java
 @@ -20,19 +20,24 @@
@@ -3536,7 +3230,7 @@ index 1553c6835f..246f7f925a 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/NonEmptyAtclauseDescriptionTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/NonEmptyAtclauseDescriptionTest.java
-index 91b7c33094..ae52d9cc37 100644
+index 91b7c33094..ae52d9cc37 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/NonEmptyAtclauseDescriptionTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/NonEmptyAtclauseDescriptionTest.java
 @@ -20,22 +20,20 @@
@@ -3591,7 +3285,7 @@ index 91b7c33094..ae52d9cc37 100644
          final Integer[] warnList = getLineNumbersFromExpected(expected);
          verify(checkConfig, filePath, expected, warnList);
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule72thesummaryfragment/SummaryJavadocTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule72thesummaryfragment/SummaryJavadocTest.java
-index c7116aec63..b6df4f426c 100644
+index c7116aec63..b6df4f426c 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule72thesummaryfragment/SummaryJavadocTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule72thesummaryfragment/SummaryJavadocTest.java
 @@ -20,23 +20,21 @@
@@ -3652,7 +3346,7 @@ index c7116aec63..b6df4f426c 100644
      }
  }
 diff --git a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule731selfexplanatory/JavadocMethodTest.java b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule731selfexplanatory/JavadocMethodTest.java
-index 3dc2ee8476..39d4bf8d29 100644
+index 3dc2ee8476..39d4bf8d29 100755
 --- a/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule731selfexplanatory/JavadocMethodTest.java
 +++ b/src/it/java/com/google/checkstyle/test/chapter7javadoc/rule731selfexplanatory/JavadocMethodTest.java
 @@ -20,22 +20,20 @@
@@ -3701,7 +3395,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/r
 similarity index 99%
 rename from src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule32packagestatement/InputLineLength.java
 rename to src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/InputLineLength.java
-index 78294d2d97..c026e12ae7 100644
+index 78294d2d97..c026e12ae7 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule32packagestatement/InputLineLength.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule32packagestate/InputLineLength.java
 @@ -1,4 +1,4 @@
@@ -3711,7 +3405,7 @@ index 78294d2d97..c026e12ae7 100644
  final class InputLineLength
  {
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputLineLength.java b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputLineLength.java
-new file mode 100644
+new file mode 100755
 index 0000000000..e983c1f03d
 --- /dev/null
 +++ b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputLineLength.java
@@ -3901,7 +3595,7 @@ index 0000000000..e983c1f03d
 +    }
 +}
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputNoLineWrapGood.java b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputNoLineWrapGood.java
-index 558e80dd74..faaafbed20 100644
+index 558e80dd74..faaafbed20 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputNoLineWrapGood.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule332nolinewrap/InputNoLineWrapGood.java
 @@ -2,12 +2,12 @@
@@ -3925,7 +3619,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/r
 similarity index 97%
 rename from src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule3sourcefilestructure/InputEmptyLineSeparator.java
 rename to src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/InputEmptyLineSeparator.java
-index 9782b70aa4..bd33be5856 100644
+index 9782b70aa4..bd33be5856 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule3sourcefilestructure/InputEmptyLineSeparator.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter3filestructure/rule3sourcefile/InputEmptyLineSeparator.java
 @@ -16,7 +16,7 @@
@@ -3949,7 +3643,7 @@ index 9782b70aa4..bd33be5856 100644
  class Class2{ //warn
      public int compareTo(InputEmptyLineSeparator aObject) //ok
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/InputRightCurlyOther.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/InputRightCurlyOther.java
-index 6c8ea7d6f8..56a837919d 100644
+index 6c8ea7d6f8..56a837919d 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/InputRightCurlyOther.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule412nonemptyblocks/InputRightCurlyOther.java
 @@ -75,12 +75,12 @@ void method2()
@@ -3970,7 +3664,7 @@ index 6c8ea7d6f8..56a837919d 100644
  } //ok
  
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlock.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlock.java
-new file mode 100644
+new file mode 100755
 index 0000000000..624be9f0e3
 --- /dev/null
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlock.java
@@ -4051,7 +3745,7 @@ index 0000000000..624be9f0e3
 +    };
 +}
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockBasic.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockBasic.java
-index 0100d19ebd..5e45ea28ee 100644
+index 0100d19ebd..5e45ea28ee 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockBasic.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockBasic.java
 @@ -23,7 +23,7 @@ public void fooMethod()
@@ -4214,7 +3908,7 @@ index 0100d19ebd..5e45ea28ee 100644
                  
                  if (a == 1) {
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockCatch.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockCatch.java
-index 259bef7e56..c4c27aca80 100644
+index 259bef7e56..c4c27aca80 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockCatch.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyBlockCatch.java
 @@ -26,7 +26,7 @@ void foo2() {
@@ -4245,7 +3939,7 @@ index 259bef7e56..c4c27aca80 100644
      };
  }
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyCatchBlockNoViolations.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyCatchBlockNoViolations.java
-index 6229a1feb5..c481739f8a 100644
+index 6229a1feb5..c481739f8a 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyCatchBlockNoViolations.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule413emptyblocks/InputEmptyCatchBlockNoViolations.java
 @@ -24,7 +24,7 @@ public void testTryCatch()
@@ -4284,7 +3978,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule
 similarity index 96%
 rename from src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/FastMatcher.java
 rename to src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputFastMatcher.java
-index 9227b748b9..bea82148bf 100644
+index 9227b748b9..bea82148bf 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/FastMatcher.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputFastMatcher.java
 @@ -1,6 +1,6 @@
@@ -4296,7 +3990,7 @@ index 9227b748b9..bea82148bf 100644
  
      public boolean matches(char c)
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputIndentationCorrect.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputIndentationCorrect.java
-index 5a7e34cca5..6b47b0058c 100644
+index 5a7e34cca5..6b47b0058c 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputIndentationCorrect.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule42blockindentaion/InputIndentationCorrect.java
 @@ -34,8 +34,8 @@
@@ -4311,7 +4005,7 @@ index 5a7e34cca5..6b47b0058c 100644
          return false; //indent:8 exp:8
        } //indent:6 exp:6
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule43onestatement/InputOneStatementPerLine.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule43onestatement/InputOneStatementPerLine.java
-index e87f25167a..bf77830bbd 100644
+index e87f25167a..bf77830bbd 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule43onestatement/InputOneStatementPerLine.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule43onestatement/InputOneStatementPerLine.java
 @@ -31,7 +31,7 @@ public void doLegal() {
@@ -4324,7 +4018,7 @@ index e87f25167a..bf77830bbd 100644
  
    /**
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/InputLineLength.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/InputLineLength.java
-index 5e1bf75632..03589cf058 100644
+index 5e1bf75632..03589cf058 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/InputLineLength.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule44columnlimit/InputLineLength.java
 @@ -1,8 +1,8 @@
@@ -4351,7 +4045,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule
 similarity index 96%
 rename from src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/FastMatcher.java
 rename to src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputFastMatcher.java
-index b0c632dae1..2bad7402bf 100644
+index b0c632dae1..2bad7402bf 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/FastMatcher.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputFastMatcher.java
 @@ -1,6 +1,6 @@
@@ -4363,7 +4057,7 @@ index b0c632dae1..2bad7402bf 100644
  
      public boolean matches(char c)
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputIndentationCorrect.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputIndentationCorrect.java
-index 10118c682f..591b41dc42 100644
+index 10118c682f..591b41dc42 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputIndentationCorrect.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule452indentcontinuationlines/InputIndentationCorrect.java
 @@ -34,8 +34,8 @@
@@ -4378,7 +4072,7 @@ index 10118c682f..591b41dc42 100644
          return false; //indent:8 exp:8
        } //indent:6 exp:6
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/InputVariableDeclarationUsageDistanceCheck.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/InputVariableDeclarationUsageDistanceCheck.java
-index 873e6fea24..dbe6088911 100644
+index 873e6fea24..dbe6088911 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/InputVariableDeclarationUsageDistanceCheck.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4822variabledistance/InputVariableDeclarationUsageDistanceCheck.java
 @@ -88,7 +88,7 @@ public void testMethod4(int arg) {
@@ -4446,7 +4140,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule
 similarity index 96%
 rename from src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/FastMatcher.java
 rename to src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputFastMatcher.java
-index b2e2f77a56..a4c279202a 100644
+index b2e2f77a56..a4c279202a 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/FastMatcher.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputFastMatcher.java
 @@ -1,6 +1,6 @@
@@ -4458,7 +4152,7 @@ index b2e2f77a56..a4c279202a 100644
  
      public boolean matches(char c)
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputIndentationCorrect.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputIndentationCorrect.java
-index 1cf911ce27..2b8530359f 100644
+index 1cf911ce27..2b8530359f 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputIndentationCorrect.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4841indentation/InputIndentationCorrect.java
 @@ -34,8 +34,8 @@
@@ -4473,7 +4167,7 @@ index 1cf911ce27..2b8530359f 100644
          return false; //indent:8 exp:8
        } //indent:6 exp:6
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/InputFallThrough.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/InputFallThrough.java
-index 4877727d08..864f7661f0 100644
+index 4877727d08..864f7661f0 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/InputFallThrough.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4842fallthrough/InputFallThrough.java
 @@ -52,12 +52,12 @@ void method(int i, int j, boolean cond) {
@@ -4507,7 +4201,7 @@ index 4877727d08..864f7661f0 100644
                }
            case 17:
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule485annotations/InputAnnotationLocation.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule485annotations/InputAnnotationLocation.java
-index 4d97799e8d..78cfb82416 100644
+index 4d97799e8d..78cfb82416 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule485annotations/InputAnnotationLocation.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule485annotations/InputAnnotationLocation.java
 @@ -21,7 +21,7 @@
@@ -4538,7 +4232,7 @@ index 4d97799e8d..78cfb82416 100644
      {
          @MyAnnotation2 @MyAnnotation1 public int a;
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationCommentIsAtTheEndOfBlock.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationCommentIsAtTheEndOfBlock.java
-index 5dbac5d272..8b7057a2aa 100644
+index 5dbac5d272..8b7057a2aa 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationCommentIsAtTheEndOfBlock.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationCommentIsAtTheEndOfBlock.java
 @@ -145,7 +145,7 @@ public void foo21() {
@@ -4593,7 +4287,7 @@ index 5dbac5d272..8b7057a2aa 100644
                            // warn
      }
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationInSwitchBlock.java b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationInSwitchBlock.java
-index 4acbe634ac..3ce959b5d5 100644
+index 4acbe634ac..3ce959b5d5 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationInSwitchBlock.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter4formatting/rule4861blockcommentstyle/InputCommentsIndentationInSwitchBlock.java
 @@ -66,7 +66,7 @@ private static void fooSwitch() {
@@ -4609,7 +4303,7 @@ diff --git a/src/it/resources/com/google/checkstyle/test/chapter6programpractice
 similarity index 91%
 rename from src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule62caughtexceptions/InputEmptyBlockCatch.java
 rename to src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/InputEmptyBlockCatch.java
-index 14bcddeb01..f5efc09f99 100644
+index 14bcddeb01..f5efc09f99 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule62caughtexceptions/InputEmptyBlockCatch.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule62donotignoreexceptions/InputEmptyBlockCatch.java
 @@ -2,7 +2,7 @@
@@ -4649,7 +4343,7 @@ index 14bcddeb01..f5efc09f99 100644
          }
      };
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/InputNoFinalizeExtend.java b/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/InputNoFinalizeExtend.java
-index c4281d83f9..75c003550d 100644
+index c4281d83f9..75c003550d 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/InputNoFinalizeExtend.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter6programpractice/rule64finalizers/InputNoFinalizeExtend.java
 @@ -113,7 +113,7 @@ public void foo() {
@@ -4662,7 +4356,7 @@ index c4281d83f9..75c003550d 100644
  
              protected void finalize() { //warn
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputIncorrectAtClauseOrderCheck.java b/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputIncorrectAtClauseOrderCheck.java
-index 83d4bae7c3..9ca960da2c 100644
+index 83d4bae7c3..9ca960da2c 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputIncorrectAtClauseOrderCheck.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputIncorrectAtClauseOrderCheck.java
 @@ -6,10 +6,10 @@
@@ -4680,7 +4374,7 @@ index 83d4bae7c3..9ca960da2c 100644
  class WithAnnotations12 implements Serializable
  {
 diff --git a/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputJavaDocTagContinuationIndentation.java b/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputJavaDocTagContinuationIndentation.java
-index e1b1ecb61f..281f11c25f 100644
+index e1b1ecb61f..281f11c25f 100755
 --- a/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputJavaDocTagContinuationIndentation.java
 +++ b/src/it/resources/com/google/checkstyle/test/chapter7javadoc/rule713atclauses/InputJavaDocTagContinuationIndentation.java
 @@ -280,7 +280,7 @@ String method5(String aString)
@@ -4693,7 +4387,7 @@ index e1b1ecb61f..281f11c25f 100644
           *    Some javadoc. // warn
           * @return Some text.
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
-index cd19d7279a..9084a77d5d 100644
+index cd19d7279a..9084a77d5d 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/ConfigurationLoader.java
 @@ -38,6 +38,7 @@
@@ -4714,7 +4408,7 @@ index cd19d7279a..9084a77d5d 100644
              String value, PropertyResolver props, String defaultValue)
          throws CheckstyleException {
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java b/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
-index b741311563..33f5423a72 100644
+index b741311563..33f5423a72 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/PackageObjectFactory.java
 @@ -25,6 +25,7 @@
@@ -4734,7 +4428,7 @@ index b741311563..33f5423a72 100644
          packages.add(packageName);
      }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/api/AbstractViolationReporter.java b/src/main/java/com/puppycrawl/tools/checkstyle/api/AbstractViolationReporter.java
-index db07fc2ec5..13584bd271 100644
+index db07fc2ec5..13584bd271 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/api/AbstractViolationReporter.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/api/AbstractViolationReporter.java
 @@ -21,6 +21,8 @@
@@ -4776,7 +4470,7 @@ index 4d591d4077..410577b8c5 100755
          this.parent = parent;
          final DetailAST nextSibling = getNextSibling();
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/AbstractOptionCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/AbstractOptionCheck.java
-index cea70232d9..ae02c04ee9 100644
+index cea70232d9..ae02c04ee9 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/AbstractOptionCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/AbstractOptionCheck.java
 @@ -68,7 +68,7 @@ public void setOption(String optionStr) {
@@ -4789,7 +4483,7 @@ index cea70232d9..ae02c04ee9 100644
      }
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheck.java
-index 6067a9006e..8a4b6805fb 100644
+index 6067a9006e..8a4b6805fb 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheck.java
 @@ -19,12 +19,15 @@
@@ -4853,7 +4547,7 @@ index 6067a9006e..8a4b6805fb 100644
                  if (leftCurly.getType() == TokenTypes.LCURLY) {
                      emptyBlock = leftCurly.getNextSibling().getType() != TokenTypes.CASE_GROUP;
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/AbstractTypeParameterNameCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/AbstractTypeParameterNameCheck.java
-index 6401de9502..e0dbd7dda0 100644
+index 6401de9502..e0dbd7dda0 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/AbstractTypeParameterNameCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/AbstractTypeParameterNameCheck.java
 @@ -29,9 +29,12 @@
@@ -4871,7 +4565,7 @@ index 6401de9502..e0dbd7dda0 100644
      extends AbstractNameCheck {
  
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheck.java
-index ae0c6ac0e7..b41d97173d 100644
+index ae0c6ac0e7..b41d97173d 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheck.java
 @@ -19,6 +19,7 @@
@@ -4921,7 +4615,7 @@ index ae0c6ac0e7..b41d97173d 100644
      }
  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
-index 7561b381a1..aec8b5c7fd 100644
+index 7561b381a1..aec8b5c7fd 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheck.java
 @@ -161,6 +161,13 @@
@@ -5021,7 +4715,7 @@ index 7561b381a1..aec8b5c7fd 100644
  
      /**
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages.properties
-index d87d9e9878..b306a8c275 100644
+index d87d9e9878..b306a8c275 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages.properties
 @@ -1,5 +1,6 @@
@@ -5032,7 +4726,7 @@ index d87d9e9878..b306a8c275 100644
  containsTab=Line contains a tab character.
  file.containsTab=File contains tab characters (this is the first instance).
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_de.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_de.properties
-index bfbf25924d..442b7d66e8 100644
+index bfbf25924d..442b7d66e8 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_de.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_de.properties
 @@ -1,4 +1,5 @@
@@ -5042,7 +4736,7 @@ index bfbf25924d..442b7d66e8 100644
  containsTab=Zeile enthält ein TAB-Zeichen
  file.containsTab=Datei enthält Tabulatorzeichen (diese Stelle ist das erste Vorkommnen).
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_es.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_es.properties
-index c6b9786d4b..cdadaf60e2 100644
+index c6b9786d4b..cdadaf60e2 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_es.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_es.properties
 @@ -13,6 +13,7 @@ ws.typeCast=''conversión de tipos'' no está seguido de espacio en blanco.
@@ -5054,7 +4748,7 @@ index c6b9786d4b..cdadaf60e2 100644
  no.line.wrap = {0} declaración no debe ser la línea envuelto.
  ws.illegalFollow = ''{0}'' es seguido por un carácter ilegal.
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fi.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fi.properties
-index bf19ad16d4..449ee19089 100644
+index bf19ad16d4..449ee19089 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fi.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fi.properties
 @@ -14,5 +14,6 @@ ws.illegalFollow=''{0}'' seuraa laiton merkki.
@@ -5065,7 +4759,7 @@ index bf19ad16d4..449ee19089 100644
  file.containsTab = Tiedosto sisältää sarkainmerkeillä (tämä on ensisijaisesti).
  no.line.wrap = {0} lausunto ei pitäisi olla linja-kääritty.
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fr.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fr.properties
-index 8ac5935066..ced7345bc1 100644
+index 8ac5935066..ced7345bc1 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fr.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_fr.properties
 @@ -14,5 +14,6 @@ ws.illegalFollow=''{0}'' est suivi par un caractère illégal.
@@ -5076,7 +4770,7 @@ index 8ac5935066..ced7345bc1 100644
  file.containsTab = Fichier contient des caractères de tabulation (ce qui est le premier exemple).
  no.line.wrap = {0} déclaration ne devrait pas être sur des lignes enveloppé.
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_ja.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_ja.properties
-index d6bbc579e9..79984b3d0c 100644
+index d6bbc579e9..79984b3d0c 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_ja.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_ja.properties
 @@ -14,5 +14,6 @@ ws.illegalFollow=が ''{0}'' 不正な文字が続いています。
@@ -5087,7 +4781,7 @@ index d6bbc579e9..79984b3d0c 100644
  file.containsTab = ファイルが（これが最初のインスタンスである）タブ文字が含まれています。
  no.line.wrap = {0} 文は、行ラップされてはなりません。
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_pt.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_pt.properties
-index 1789959ab3..d9f877385b 100644
+index 1789959ab3..d9f877385b 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_pt.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_pt.properties
 @@ -14,5 +14,6 @@ ws.illegalFollow=''{0}'' é seguido por um carácter ilegal.
@@ -5098,7 +4792,7 @@ index 1789959ab3..d9f877385b 100644
  file.containsTab = Arquivo contém caracteres de tabulação (esta é a primeira instância).
  no.line.wrap = {0} afirmação não deve ser linha-embrulhado.
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_tr.properties b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_tr.properties
-index 4063c011b4..c5b27c3f47 100644
+index 4063c011b4..c5b27c3f47 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_tr.properties
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/messages_tr.properties
 @@ -18,4 +18,5 @@ ws.typeCast=''türü dönüştürme'' ifadesinden sonra boşluk kullanılmamış
@@ -5108,7 +4802,7 @@ index 4063c011b4..c5b27c3f47 100644
 +empty.line.separator.multiple.lines.after=''{0}'' sonra 1'den fazla boş hatları vardır.
  no.line.wrap = {0} ifadesi hattı sarılı olmamalıdır.
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index 442cab9e00..22561973bd 100644
+index 442cab9e00..22561973bd 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 @@ -508,7 +508,8 @@ public void testExistingDirectoryWithViolations() throws Exception {
@@ -5122,7 +4816,7 @@ index 442cab9e00..22561973bd 100644
                  final StringBuilder sb = new StringBuilder();
                  sb.append("Starting audit...").append(System.getProperty("line.separator"));
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
-index 6f0ecfc39b..dcde375ac8 100644
+index 6f0ecfc39b..dcde375ac8 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
 @@ -48,7 +48,8 @@
@@ -5136,7 +4830,7 @@ index 6f0ecfc39b..dcde375ac8 100644
      @Test
      public void testProperFileExtension() throws Exception {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
-index b9bc9790d4..ce8004e09b 100644
+index b9bc9790d4..ce8004e09b 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/EmptyBlockCheckTest.java
 @@ -26,10 +26,12 @@
@@ -5167,7 +4861,7 @@ index b9bc9790d4..ce8004e09b 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/RightCurlyCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/RightCurlyCheckTest.java
-index a8d4bb6987..99ed06508c 100644
+index a8d4bb6987..99ed06508c 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/RightCurlyCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/blocks/RightCurlyCheckTest.java
 @@ -214,8 +214,8 @@ public void testWithAnnotations() throws Exception {
@@ -5193,7 +4887,7 @@ index a8d4bb6987..99ed06508c 100644
              "164:76: " + getCheckMessage(MSG_KEY_LINE_ALONE, "}", 76),
              "164:77: " + getCheckMessage(MSG_KEY_LINE_NEW, "}", 77),
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
-index 1aceebcc26..e7c5e58e84 100644
+index 1aceebcc26..e7c5e58e84 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
 @@ -39,22 +39,6 @@ protected String getPath(String filename) throws IOException {
@@ -5303,7 +4997,7 @@ index 1aceebcc26..e7c5e58e84 100644
      public void testGetAcceptableTokens() {
          final ClassTypeParameterNameCheck typeParameterNameCheckObj =
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/InterfaceTypeParameterNameCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/InterfaceTypeParameterNameCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..89de3cf9ad
 --- /dev/null
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/InterfaceTypeParameterNameCheckTest.java
@@ -5388,7 +5082,7 @@ index 0000000000..89de3cf9ad
 +    }
 +}
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..94af1fb8fe
 --- /dev/null
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/MethodTypeParameterNameCheckTest.java
@@ -5482,7 +5176,7 @@ index 0000000000..94af1fb8fe
 +    }
 +}
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
-index 21cc8661f0..883fd7b044 100644
+index 21cc8661f0..883fd7b044 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/regexp/RegexpMultilineCheckTest.java
 @@ -39,7 +39,8 @@
@@ -5496,7 +5190,7 @@ index 21cc8661f0..883fd7b044 100644
      private DefaultConfiguration checkConfig;
  
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
-index 76a4375bf5..b0ec0a9831 100644
+index 76a4375bf5..b0ec0a9831 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/EmptyLineSeparatorCheckTest.java
 @@ -20,6 +20,7 @@
@@ -5520,7 +5214,7 @@ index 76a4375bf5..b0ec0a9831 100644
          verify(checkConfig, getPath("InputEmptyLineSeparatorMultipleEmptyLines.java"), expected);
      }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CompareTreesWithComments.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CompareTreesWithComments.java
-index e5065ec6a5..5abc375c48 100644
+index e5065ec6a5..5abc375c48 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CompareTreesWithComments.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/comments/CompareTreesWithComments.java
 @@ -50,7 +50,9 @@ public boolean isCommentNodesRequired() {
@@ -5545,7 +5239,7 @@ index e5065ec6a5..5abc375c48 100644
      }
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputSemantic.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputSemantic.java
-index 978963767a..b85c912b3f 100644
+index 978963767a..b85c912b3f 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputSemantic.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputSemantic.java
 @@ -66,7 +66,7 @@ void exHandlerTest()
@@ -5558,7 +5252,7 @@ index 978963767a..b85c912b3f 100644
          catch (SecurityException ex) { /* hello */ }
          catch (StringIndexOutOfBoundsException ex) {}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain.java
-index 646a1a2115..4c7ad1f835 100644
+index 646a1a2115..4c7ad1f835 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain.java
 @@ -13,7 +13,7 @@
@@ -5642,7 +5336,7 @@ index 646a1a2115..4c7ad1f835 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain2.java
-index 831fb4a122..325ceb391d 100644
+index 831fb4a122..325ceb391d 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain2.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain2.java
 @@ -12,7 +12,7 @@
@@ -5673,7 +5367,7 @@ index 831fb4a122..325ceb391d 100644
      
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain3.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain3.java
-index 70378c175b..3152bac575 100644
+index 70378c175b..3152bac575 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain3.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain3.java
 @@ -8,6 +8,6 @@
@@ -5686,7 +5380,7 @@ index 70378c175b..3152bac575 100644
  }
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain4.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain4.java
-index 9f8dbe0702..4e363b3c76 100644
+index 9f8dbe0702..4e363b3c76 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain4.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/InputUncommentedMain4.java
 @@ -9,6 +9,6 @@
@@ -5698,7 +5392,7 @@ index 9f8dbe0702..4e363b3c76 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputBracesSingleLineStatements.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputBracesSingleLineStatements.java
-index 6260ddd825..84e8e7eb26 100644
+index 6260ddd825..84e8e7eb26 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputBracesSingleLineStatements.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputBracesSingleLineStatements.java
 @@ -82,8 +82,8 @@ private int getSmth(int num)
@@ -5713,7 +5407,7 @@ index 6260ddd825..84e8e7eb26 100644
      }
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCatchBlock.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCatchBlock.java
-index 762deede3b..c2ce154298 100644
+index 762deede3b..c2ce154298 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCatchBlock.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputEmptyCatchBlock.java
 @@ -81,7 +81,7 @@ public void testTryCatch()
@@ -5749,7 +5443,7 @@ index 762deede3b..c2ce154298 100644
          }
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyOther.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyOther.java
-index 42c51c7dde..5a29cab0e3 100644
+index 42c51c7dde..5a29cab0e3 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyOther.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputLeftCurlyOther.java
 @@ -89,7 +89,7 @@ void method2()
@@ -5762,7 +5456,7 @@ index 42c51c7dde..5a29cab0e3 100644
                println("Xe-xe");
          // it is ok to have rcurly on the same line as previous
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNeedBraces.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNeedBraces.java
-index 7e87cda6b3..74a8f9ebd1 100644
+index 7e87cda6b3..74a8f9ebd1 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNeedBraces.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNeedBraces.java
 @@ -32,7 +32,7 @@ public void method() {
@@ -5784,7 +5478,7 @@ index 7e87cda6b3..74a8f9ebd1 100644
          }
          
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNestedBlocks.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNestedBlocks.java
-index 4be8c9da13..d0719610f1 100644
+index 4be8c9da13..d0719610f1 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNestedBlocks.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputNestedBlocks.java
 @@ -54,7 +54,7 @@ public void method()
@@ -5797,7 +5491,7 @@ index 4be8c9da13..d0719610f1 100644
                      x = 2;
                  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAloneOrSingleline.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAloneOrSingleline.java
-index de27350d37..e982e59cd5 100644
+index de27350d37..e982e59cd5 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAloneOrSingleline.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAloneOrSingleline.java
 @@ -153,12 +153,12 @@ void foo23(java.util.HashSet<String> set) {
@@ -5825,7 +5519,7 @@ index de27350d37..e982e59cd5 100644
              println("Xe-xe");
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAnnotations.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAnnotations.java
-index 7802a02745..03ccc4b2b7 100644
+index 7802a02745..03ccc4b2b7 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAnnotations.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputRightCurlyAnnotations.java
 @@ -193,12 +193,12 @@ void foo23(java.util.HashSet<String> set) {
@@ -5853,7 +5547,7 @@ index 7802a02745..03ccc4b2b7 100644
              println("Xe-xe");
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
-index a85c38998a..01b93dfdaa 100644
+index a85c38998a..01b93dfdaa 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/blocks/InputSemantic2.java
 @@ -19,7 +19,7 @@ public void fooMethod()
@@ -5866,7 +5560,7 @@ index a85c38998a..01b93dfdaa 100644
  		switch (a) { //ok
          case 1:
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough.java
-index 85f3d15449..bc302a047d 100644
+index 85f3d15449..bc302a047d 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough.java
 @@ -52,7 +52,7 @@ void method(int i, int j, boolean cond) {
@@ -5922,7 +5616,7 @@ index 85f3d15449..bc302a047d 100644
          }
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough2.java
-index 968165f3e2..2c8c9e92a3 100644
+index 968165f3e2..2c8c9e92a3 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough2.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFallThrough2.java
 @@ -26,7 +26,7 @@ public static void test() {
@@ -5952,7 +5646,7 @@ index 968165f3e2..2c8c9e92a3 100644
                  else {
                      System.out.printf("0x4B1D");
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
-index 5d2513e0c0..7c4d337d4b 100644
+index 5d2513e0c0..7c4d337d4b 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariable.java
 @@ -148,7 +148,7 @@ public void anotherMethod()
@@ -5965,7 +5659,7 @@ index 5d2513e0c0..7c4d337d4b 100644
  
      public void doSomething2(Object _o1)
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNameShadowing.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNameShadowing.java
-index 5408f03186..79d40a1581 100644
+index 5408f03186..79d40a1581 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNameShadowing.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNameShadowing.java
 @@ -2,7 +2,7 @@
@@ -5978,7 +5672,7 @@ index 5408f03186..79d40a1581 100644
          class Bar {
              void bar (String text) {
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNativeMethods.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNativeMethods.java
-index ece7fbe238..f8cf647fcc 100644
+index ece7fbe238..f8cf647fcc 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNativeMethods.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputFinalLocalVariableNativeMethods.java
 @@ -11,12 +11,12 @@
@@ -5997,7 +5691,7 @@ index ece7fbe238..f8cf647fcc 100644
           return;
       }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputModifiedControl.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputModifiedControl.java
-index 51731b4284..f47309948f 100644
+index 51731b4284..f47309948f 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputModifiedControl.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputModifiedControl.java
 @@ -35,7 +35,7 @@ void method1()
@@ -6010,7 +5704,7 @@ index 51731b4284..f47309948f 100644
              };
          }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputMultipleStringLiterals.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputMultipleStringLiterals.java
-index 67d7940598..aee8422a83 100644
+index 67d7940598..aee8422a83 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputMultipleStringLiterals.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputMultipleStringLiterals.java
 @@ -11,7 +11,7 @@
@@ -6023,7 +5717,7 @@ index 67d7940598..aee8422a83 100644
          String a2 = "String" + "Contents";
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
-index c431cd1a2e..52c9c4501f 100644
+index c431cd1a2e..52c9c4501f 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputOneStatementPerLine.java
 @@ -85,7 +85,7 @@ public void doLegalComment() {
@@ -6036,7 +5730,7 @@ index c431cd1a2e..52c9c4501f 100644
  
    /**
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
-index e8cdbb7b76..cef9f58834 100644
+index e8cdbb7b76..cef9f58834 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputRequireThis.java
 @@ -102,7 +102,7 @@ public void foo() {
@@ -6049,7 +5743,7 @@ index e8cdbb7b76..cef9f58834 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputUnnecessaryParentheses.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputUnnecessaryParentheses.java
-index af9d001052..04f11ddd7e 100644
+index af9d001052..04f11ddd7e 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputUnnecessaryParentheses.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputUnnecessaryParentheses.java
 @@ -10,7 +10,7 @@ int f1() {
@@ -6071,7 +5765,7 @@ index af9d001052..04f11ddd7e 100644
  
      static class TypeParameterized<T> {}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputVariableDeclarationUsageDistance.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputVariableDeclarationUsageDistance.java
-index ff223c802a..39c8ff6d8c 100644
+index ff223c802a..39c8ff6d8c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputVariableDeclarationUsageDistance.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/coding/InputVariableDeclarationUsageDistance.java
 @@ -88,7 +88,7 @@ public void testMethod4(int arg) {
@@ -6331,7 +6025,7 @@ index ff223c802a..39c8ff6d8c 100644
              a = 2;
          }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputDesignForExtension.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputDesignForExtension.java
-index b35e0879ed..0b3914d24c 100644
+index b35e0879ed..0b3914d24c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputDesignForExtension.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputDesignForExtension.java
 @@ -21,7 +21,7 @@
@@ -6404,7 +6098,7 @@ index b35e0879ed..0b3914d24c 100644
      }
      
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputInnerClass.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputInnerClass.java
-index 61253fa301..d4e7f076b5 100644
+index 61253fa301..d4e7f076b5 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputInnerClass.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputInnerClass.java
 @@ -8,7 +8,7 @@ public void methodTestInner1() {
@@ -6435,7 +6129,7 @@ index 61253fa301..d4e7f076b5 100644
  
  	private int i = 0; //error
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputNonUtilityClass.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputNonUtilityClass.java
-index 57fa5e044c..68c3307225 100644
+index 57fa5e044c..68c3307225 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputNonUtilityClass.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/design/InputNonUtilityClass.java
 @@ -16,6 +16,6 @@ public InputNonUtilityClass()
@@ -6447,7 +6141,7 @@ index 57fa5e044c..68c3307225 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputBraceAdjustment.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputBraceAdjustment.java
-index 7dd282c8a2..fb510d3d7f 100644
+index 7dd282c8a2..fb510d3d7f 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputBraceAdjustment.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputBraceAdjustment.java
 @@ -24,7 +24,7 @@ public InputBraceAdjustment() //indent:4 exp:4
@@ -6460,7 +6154,7 @@ index 7dd282c8a2..fb510d3d7f 100644
        } //indent:6 exp:6
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputCommentsIndentationInSwitchBlock.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputCommentsIndentationInSwitchBlock.java
-index eb9d9aded9..69c419cfdc 100644
+index eb9d9aded9..69c419cfdc 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputCommentsIndentationInSwitchBlock.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputCommentsIndentationInSwitchBlock.java
 @@ -66,7 +66,7 @@ private static void fooSwitch() {
@@ -6473,7 +6167,7 @@ index eb9d9aded9..69c419cfdc 100644
              case "19":
                  // comment
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidLabelIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidLabelIndent.java
-index cf1d275891..7be34f8394 100644
+index cf1d275891..7be34f8394 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidLabelIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidLabelIndent.java
 @@ -22,21 +22,21 @@ public InputInvalidLabelIndent() { //indent:4 exp:4
@@ -6505,7 +6199,7 @@ index cf1d275891..7be34f8394 100644
        System //indent:6 exp:8,12 warn
              .out. //indent:12 exp:>=10
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidMethodIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidMethodIndent.java
-index ff428ae745..724329e3c0 100644
+index ff428ae745..724329e3c0 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidMethodIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidMethodIndent.java
 @@ -100,20 +100,20 @@ void method6a() //indent:4 exp:4
@@ -6543,7 +6237,7 @@ index ff428ae745..724329e3c0 100644
        ); //indent:6 exp:8 warn
      } //indent:4 exp:4
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidSwitchIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidSwitchIndent.java
-index 6d73b0dd33..9585c5c2b7 100644
+index 6d73b0dd33..9585c5c2b7 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidSwitchIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidSwitchIndent.java
 @@ -30,7 +30,7 @@ private void method1() { //indent:4 exp:4
@@ -6599,7 +6293,7 @@ index 6d73b0dd33..9585c5c2b7 100644
              } //indent:12 exp:12
          } //indent:8 exp:8
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidTryIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidTryIndent.java
-index 5e6da9768e..0f4e6da470 100644
+index 5e6da9768e..0f4e6da470 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidTryIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputInvalidTryIndent.java
 @@ -24,26 +24,26 @@ public void method() { //indent:4 exp:4
@@ -6677,7 +6371,7 @@ index 5e6da9768e..0f4e6da470 100644
          finally  //indent:8 exp:8
          { //indent:8 exp:8
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputUseTwoSpaces.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputUseTwoSpaces.java
-index 528bda87c5..6a2caaf41c 100644
+index 528bda87c5..6a2caaf41c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputUseTwoSpaces.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputUseTwoSpaces.java
 @@ -33,7 +33,7 @@ public InputUseTwoSpaces() { //indent:2 exp:2
@@ -6690,7 +6384,7 @@ index 528bda87c5..6a2caaf41c 100644
          public String toString() { //indent:8 exp:8
            return "World"; //indent:10 exp:10
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidBlockIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidBlockIndent.java
-index d85c266809..b2b4589e71 100644
+index d85c266809..b2b4589e71 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidBlockIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidBlockIndent.java
 @@ -152,7 +152,7 @@ public bug1260079() //indent:4 exp:4
@@ -6703,7 +6397,7 @@ index d85c266809..b2b4589e71 100644
          }.start(); //indent:8 exp:8
      } //indent:4 exp:4
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidCommaIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidCommaIndent.java
-index 5de927ad68..d204ea12cc 100644
+index 5de927ad68..d204ea12cc 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidCommaIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidCommaIndent.java
 @@ -34,7 +34,7 @@ public void method1(int x, int y, int z) { //indent:4 exp:4
@@ -6716,7 +6410,7 @@ index 5de927ad68..d204ea12cc 100644
  
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidDotIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidDotIndent.java
-index c334a0e536..c1373182bf 100644
+index c334a0e536..c1373182bf 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidDotIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidDotIndent.java
 @@ -22,7 +22,7 @@
@@ -6729,7 +6423,7 @@ index c334a0e536..c1373182bf 100644
          System. //indent:8 exp:8
              out.println(); //indent:12 exp:12
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidLabelIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidLabelIndent.java
-index 4a35b28403..4e4872537c 100644
+index 4a35b28403..4e4872537c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidLabelIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidLabelIndent.java
 @@ -22,16 +22,16 @@ public InputValidLabelIndent() { //indent:4 exp:4
@@ -6753,7 +6447,7 @@ index 4a35b28403..4e4872537c 100644
  
  } //indent:0 exp:0
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidMethodIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidMethodIndent.java
-index 1822713d88..316299bc5c 100644
+index 1822713d88..316299bc5c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidMethodIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidMethodIndent.java
 @@ -140,14 +140,14 @@ private int myfunc3(int a, int b, int c, int d) { //indent:4 exp:4
@@ -6803,7 +6497,7 @@ index 1822713d88..316299bc5c 100644
                  + " at indentation level not at correct indentation, "  //indent:16 exp:>=12
                  + method1()); //indent:16 exp:>=12
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidSwitchIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidSwitchIndent.java
-index 42e7948e9a..a239e4a976 100644
+index 42e7948e9a..a239e4a976 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidSwitchIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidSwitchIndent.java
 @@ -30,7 +30,7 @@ private void method1() { //indent:4 exp:4
@@ -6870,7 +6564,7 @@ index 42e7948e9a..a239e4a976 100644
          } //indent:8 exp:8
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidTryIndent.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidTryIndent.java
-index 68f31e574b..959fb07bf8 100644
+index 68f31e574b..959fb07bf8 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidTryIndent.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/indentation/InputValidTryIndent.java
 @@ -24,26 +24,26 @@ public void method() { //indent:4 exp:4
@@ -6946,7 +6640,7 @@ index 68f31e574b..959fb07bf8 100644
          finally  //indent:8 exp:8
          { //indent:8 exp:8
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputScopeAnonInner.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputScopeAnonInner.java
-index 913cf6a924..3de11834ef 100644
+index 913cf6a924..3de11834ef 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputScopeAnonInner.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/InputScopeAnonInner.java
 @@ -25,7 +25,7 @@
@@ -6977,7 +6671,7 @@ index 913cf6a924..3de11834ef 100644
              } );
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputBooleanExpressionComplexityNPE.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputBooleanExpressionComplexityNPE.java
-index f7c5887d30..02e074f936 100644
+index f7c5887d30..02e074f936 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputBooleanExpressionComplexityNPE.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputBooleanExpressionComplexityNPE.java
 @@ -4,7 +4,7 @@
@@ -6990,7 +6684,7 @@ index f7c5887d30..02e074f936 100644
              throw new RuntimeException(e);
          }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputJavaNCSS.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputJavaNCSS.java
-index f8ae290043..02b4450fe4 100644
+index f8ae290043..02b4450fe4 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputJavaNCSS.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/metrics/InputJavaNCSS.java
 @@ -32,7 +32,7 @@ private void testMethod3() {
@@ -7012,7 +6706,7 @@ index f8ae290043..02b4450fe4 100644
          };  
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/InputAnonInnerLength.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/InputAnonInnerLength.java
-index 766a368d24..6dfb0a51be 100644
+index 766a368d24..6dfb0a51be 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/InputAnonInnerLength.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/sizes/InputAnonInnerLength.java
 @@ -50,22 +50,22 @@ private MyInner(int[] anArray)
@@ -7110,7 +6804,7 @@ index 766a368d24..6dfb0a51be 100644
              } );
      }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputEmptyLineSeparatorMultipleEmptyLines.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputEmptyLineSeparatorMultipleEmptyLines.java
-index 71b4aef559..eeddc2bd5a 100644
+index 71b4aef559..eeddc2bd5a 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputEmptyLineSeparatorMultipleEmptyLines.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputEmptyLineSeparatorMultipleEmptyLines.java
 @@ -43,5 +43,6 @@
@@ -7122,7 +6816,7 @@ index 71b4aef559..eeddc2bd5a 100644
 +
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadWithSpace.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadWithSpace.java
-index f7ff910b92..f42b7373c1 100644
+index f7ff910b92..f42b7373c1 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadWithSpace.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputParenPadWithSpace.java
 @@ -16,7 +16,7 @@ public void enhancedFor ()
@@ -7135,7 +6829,7 @@ index f7ff910b92..f42b7373c1 100644
      }
  }
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputWhitespaceAround.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputWhitespaceAround.java
-index 0de832df9e..a510313236 100644
+index 0de832df9e..a510313236 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputWhitespaceAround.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/whitespace/InputWhitespaceAround.java
 @@ -17,7 +17,7 @@ public void enhancedFor ()

@@ -1,6 +1,56 @@
+diff --git a/.travis.yml b/.travis.yml
+index 892c0001f2..bf3eb64664 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -1,32 +1,15 @@
++before_cache: [rm -f $HOME/.cache/pip/log/debug.log]
++cache:
++  directories: [$HOME/.cache/pip]
++dist: precise
++group: stable
++install: [travis_retry pip install -U pip==8.1.2, travis_retry pip install -U wheel==0.29.0,
++  travis_retry pip install -U manuel==1.8.0 zope.testing==4.5.0 zope.testrunner==4.5.1,
++  travis_retry pip install -U -e .]
+ language: python
++notifications: {email: false}
++os: linux
++python: 3.5
++script: [zope-testrunner -u --test-path=src --auto-color --auto-progress, zope-testrunner
++    -f --test-path=src --auto-color --auto-progress]
+ sudo: false
+-python:
+-    - pypy
+-    - pypy3
+-    - 2.7
+-    - 3.3
+-    - 3.4
+-    - 3.5
+-install:
+-    # First install a newer pip so that it can use the wheel cache
+-    # (only needed until travis upgrades pip to 7.x; note that the 3.5
+-    # environment uses pip 7.1 by default).
+-    - travis_retry pip install -U pip
+-    # A newer wheel is also needed under Python 3, but only after we have
+-    # a newer pip to take advantage of the cache.
+-    - travis_retry pip install -U wheel
+-    # Then start installing our deps so they can be cached. Note that use of --build-options / --global-options / --install-options
+-    # disables the cache.
+-    - travis_retry pip install -U manuel zope.testing zope.testrunner
+-    - travis_retry pip install -U -e .
+-script:
+-    - zope-testrunner -u --test-path=src --auto-color --auto-progress
+-    - zope-testrunner -f --test-path=src --auto-color --auto-progress
+-notifications:
+-    email: false
+-# cache: pip seems not to work if `install` is replaced (https://github.com/travis-ci/travis-ci/issues/3239)
+-cache:
+-  directories:
+-    - $HOME/.cache/pip
+-before_cache:
+-    - rm -f $HOME/.cache/pip/log/debug.log
 diff --git a/XXX.rst b/XXX.rst
-new file mode 100644
-index 000000000..e21bb37a3
+new file mode 100755
+index 0000000000..e21bb37a3a
 --- /dev/null
 +++ b/XXX.rst
 @@ -0,0 +1,14 @@
@@ -19,7 +69,7 @@ index 000000000..e21bb37a3
 +    to test some advanced features.
 +
 diff --git a/src/ZODB/DemoStorage.test b/src/ZODB/DemoStorage.test
-index 866e28ed0..096498d04 100644
+index 866e28ed03..096498d049 100644
 --- a/src/ZODB/DemoStorage.test
 +++ b/src/ZODB/DemoStorage.test
 @@ -206,7 +206,7 @@ Blob Support
@@ -45,7 +95,7 @@ index 866e28ed0..096498d04 100644
  
      >>> db = DB(storage)
 diff --git a/src/ZODB/FileStorage/FileStorage.py b/src/ZODB/FileStorage/FileStorage.py
-index 980174a21..f273caa2a 100644
+index 980174a21f..f273caa2a7 100644
 --- a/src/ZODB/FileStorage/FileStorage.py
 +++ b/src/ZODB/FileStorage/FileStorage.py
 @@ -31,6 +31,7 @@
@@ -353,7 +403,7 @@ index 980174a21..f273caa2a 100644
          return r
  
 diff --git a/src/ZODB/FileStorage/tests.py b/src/ZODB/FileStorage/tests.py
-index 5fe93c934..f541d370d 100644
+index 5fe93c9347..f541d370d7 100644
 --- a/src/ZODB/FileStorage/tests.py
 +++ b/src/ZODB/FileStorage/tests.py
 @@ -175,7 +175,8 @@ def _save_index():
@@ -367,7 +417,7 @@ index 5fe93c934..f541d370d 100644
  cleanup
  
 diff --git a/src/ZODB/blob.py b/src/ZODB/blob.py
-index e0d901703..62e85e87b 100644
+index e0d9017038..62e85e87be 100644
 --- a/src/ZODB/blob.py
 +++ b/src/ZODB/blob.py
 @@ -352,7 +352,7 @@ class FilesystemHelper:
@@ -380,7 +430,7 @@ index e0d901703..62e85e87b 100644
          if layout_name == 'automatic':
              layout_name = auto_layout_select(base_dir)
 diff --git a/src/ZODB/tests/testFileStorage.py b/src/ZODB/tests/testFileStorage.py
-index 4be98c4e9..e8957acdb 100644
+index 4be98c4e91..e8957acdba 100644
 --- a/src/ZODB/tests/testFileStorage.py
 +++ b/src/ZODB/tests/testFileStorage.py
 @@ -286,7 +286,7 @@ def check_record_iternext(self):
@@ -416,7 +466,7 @@ index 4be98c4e9..e8957acdb 100644
  class FileStorageHexTests(FileStorageTests):
  
 diff --git a/src/ZODB/tests/testblob.py b/src/ZODB/tests/testblob.py
-index ac0d23fa2..a76796ca2 100644
+index ac0d23fa2e..a76796ca26 100644
 --- a/src/ZODB/tests/testblob.py
 +++ b/src/ZODB/tests/testblob.py
 @@ -14,7 +14,7 @@

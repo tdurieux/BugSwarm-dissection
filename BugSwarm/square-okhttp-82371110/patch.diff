@@ -1,35 +1,16 @@
-diff --git a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java
-index 0ca96656f..febc1b560 100644
---- a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java
-+++ b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/RealWebSocketTest.java
-@@ -246,13 +246,6 @@
-         client.readMessage();
-         clientListener.assertClose(1000, "Hello!");
- 
--        try {
--          sink.writeUtf8("lo!").emit(); // No writing to the underlying sink.
--          fail();
--        } catch (IOException e) {
--          assertEquals("closed", e.getMessage());
--          sink.buffer().clear();
--        }
-         try {
-           sink.flush(); // No flushing.
-           fail();
-@@ -320,7 +313,7 @@
-     clientListener.assertClose(1000, "Bye!");
-   }
- 
--  @Test public void protocolErrorBeforeCloseSendsClose() {
-+  @Test public void protocolErrorBeforeCloseSendsClose() throws IOException {
-     server2client.write(ByteString.decodeHex("0a00")); // Invalid non-final ping frame.
- 
-     client.readMessage(); // Detects error, send close.
 diff --git a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
-index 4a53546e7..d662fdec4 100644
+index 053e4e7a22..d662fdec43 100755
 --- a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
 +++ b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/internal/ws/WebSocketWriterTest.java
-@@ -31,6 +31,8 @@
+@@ -22,6 +22,7 @@
+ import okio.BufferedSink;
+ import okio.ByteString;
+ import okio.Okio;
++import okio.Sink;
+ import org.junit.Rule;
+ import org.junit.Test;
+ import org.junit.rules.TestRule;
+@@ -30,6 +31,8 @@
  
  import static com.squareup.okhttp.internal.ws.WebSocketProtocol.OPCODE_BINARY;
  import static com.squareup.okhttp.internal.ws.WebSocketProtocol.OPCODE_TEXT;
@@ -38,223 +19,65 @@ index 4a53546e7..d662fdec4 100644
  import static com.squareup.okhttp.internal.ws.WebSocketProtocol.toggleMask;
  import static org.junit.Assert.assertEquals;
  import static org.junit.Assert.fail;
-@@ -78,8 +80,7 @@
-     assertData("010348656c");
- 
-     sink.writeUtf8("lo").close();
--    assertData("00026c6f");
--    assertData("8000");
-+    assertData("80026c6f");
-   }
- 
-   @Test public void clientTextMessage() throws IOException {
-@@ -96,39 +97,55 @@
-   }
- 
-   @Test public void serverBinaryMessage() throws IOException {
--    Sink sink = serverWriter.newMessageSink(OPCODE_BINARY);
-+    BufferedSink sink = Okio.buffer(serverWriter.newMessageSink(OPCODE_BINARY));
- 
--    sink.write(binaryData(50), 50);
-+    sink.write(binaryData(50)).flush();
-     assertData("0232");
--    assertData(binaryData(50).readByteArray());
-+    assertData(binaryData(50));
- 
--    sink.write(binaryData(50), 50);
-+    sink.write(binaryData(50)).flush();
-     assertData("0032");
--    assertData(binaryData(50).readByteArray());
-+    assertData(binaryData(50));
- 
-     sink.close();
+@@ -108,22 +111,44 @@
      assertData("8000");
    }
  
 -  @Test public void serverBinaryMessageLengthShort() throws IOException {
+-    BufferedSink sink = Okio.buffer(serverWriter.newMessageSink(OPCODE_BINARY));
 +  @Test public void serverMessageLengthShort() throws IOException {
-     Sink sink = serverWriter.newMessageSink(OPCODE_BINARY);
- 
--    int length = 0xffff;
--    sink.write(binaryData(length), length);
--    assertData("027effff");
--    assertData(binaryData(length).readByteArray());
++    Sink sink = serverWriter.newMessageSink(OPCODE_BINARY);
++
 +    // Create a payload which will overload the normal payload byte size.
 +    Buffer payload = new Buffer();
 +    while (payload.completeSegmentByteCount() <= PAYLOAD_MAX) {
 +      payload.writeByte('0');
 +    }
 +    long byteCount = payload.completeSegmentByteCount();
-+
+ 
+-    byte[] payload = binaryData(0xffff);
+-    sink.write(payload).close();
+-    assertData("827effff");
+-    assertData(payload);
 +    // Write directly to the unbuffered sink. This ensures it will become single frame.
 +    sink.write(payload.clone(), byteCount);
 +    assertData("027e"); // 'e' == 4-byte follow-up length.
 +    assertData(String.format("%04X", payload.completeSegmentByteCount()));
 +    assertData(payload.readByteArray());
- 
-     sink.close();
-     assertData("8000");
++
++    sink.close();
++    assertData("8000");
    }
  
 -  @Test public void serverBinaryMessageLengthLong() throws IOException {
+-    BufferedSink sink = Okio.buffer(serverWriter.newMessageSink(OPCODE_BINARY));
 +  @Test public void serverMessageLengthLong() throws IOException {
-     Sink sink = serverWriter.newMessageSink(OPCODE_BINARY);
- 
--    int length = 65537;
--    sink.write(binaryData(length), length);
--    assertData("027f0000000000010001");
--    assertData(binaryData(length).readByteArray());
++    Sink sink = serverWriter.newMessageSink(OPCODE_BINARY);
++
 +    // Create a payload which will overload the normal and short payload byte size.
 +    Buffer payload = new Buffer();
 +    while (payload.completeSegmentByteCount() <= PAYLOAD_SHORT_MAX) {
 +      payload.writeByte('0');
 +    }
 +    long byteCount = payload.completeSegmentByteCount();
-+
+ 
+-    byte[] payload = binaryData(65537);
+-    sink.write(payload).close();
+-    assertData("827f0000000000010001");
+-    assertData(payload);
 +    // Write directly to the unbuffered sink. This ensures it will become single frame.
 +    sink.write(payload.clone(), byteCount);
 +    assertData("027f"); // 'f' == 16-byte follow-up length.
 +    assertData(String.format("%016X", byteCount));
 +    assertData(payload.readByteArray(byteCount));
- 
-     sink.close();
-     assertData("8000");
-@@ -144,25 +161,21 @@
- 
-     random.setSeed(0); // Reset the seed so real data matches.
- 
--    Sink sink = clientWriter.newMessageSink(OPCODE_BINARY);
-+    BufferedSink sink = Okio.buffer(clientWriter.newMessageSink(OPCODE_BINARY));
- 
--    sink.write(binaryData(50), 50);
--    byte[] part1 = binaryData(50).readByteArray();
-+    byte[] part1 = binaryData(50);
-+    sink.write(part1).flush();
-     toggleMask(part1, 50, maskKey1, 0);
-     assertData("02b2");
-     assertData(maskKey1);
-     assertData(part1);
- 
--    sink.write(binaryData(50), 50);
--    byte[] part2 = binaryData(50).readByteArray();
-+    byte[] part2 = binaryData(50);
-+    sink.write(part2).close();
-     toggleMask(part2, 50, maskKey2, 0);
--    assertData("00b2");
-+    assertData("80b2");
-     assertData(maskKey2);
-     assertData(part2);
--
--    sink.close();
--    assertData("8080");
--    assertData(maskKey3);
++
++    sink.close();
++    assertData("8000");
    }
  
-   @Test public void serverEmptyClose() throws IOException {
-@@ -251,7 +264,7 @@
- 
-   @Test public void pingTooLongThrows() throws IOException {
-     try {
--      serverWriter.writePing(binaryData(1000));
-+      serverWriter.writePing(new Buffer().write(binaryData(1000)));
-       fail();
-     } catch (IllegalArgumentException e) {
-       assertEquals("Payload size must be less than or equal to 125", e.getMessage());
-@@ -260,7 +273,7 @@
- 
-   @Test public void pongTooLongThrows() throws IOException {
-     try {
--      serverWriter.writePong(binaryData(1000));
-+      serverWriter.writePong(new Buffer().write(binaryData(1000)));
-       fail();
-     } catch (IllegalArgumentException e) {
-       assertEquals("Payload size must be less than or equal to 125", e.getMessage());
-@@ -269,7 +282,7 @@
- 
-   @Test public void closeTooLongThrows() throws IOException {
-     try {
--      String longString = binaryData(75).readByteString().hex();
-+      String longString = ByteString.of(binaryData(75)).hex();
-       serverWriter.writeClose(1000, longString);
-       fail();
-     } catch (IllegalArgumentException e) {
-@@ -303,9 +316,9 @@ private void assertData(byte[] data) throws IOException {
-     }
-   }
- 
--  private static Buffer binaryData(int length) {
-+  private static byte[] binaryData(int length) {
-     byte[] junk = new byte[length];
-     new Random(0).nextBytes(junk);
--    return new Buffer().write(junk);
-+    return junk;
-   }
- }
-diff --git a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/ws/WebSocketRecorder.java b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/ws/WebSocketRecorder.java
-index 12fb2ef8a..3e82e0515 100644
---- a/okhttp-ws-tests/src/test/java/com/squareup/okhttp/ws/WebSocketRecorder.java
-+++ b/okhttp-ws-tests/src/test/java/com/squareup/okhttp/ws/WebSocketRecorder.java
-@@ -87,28 +87,48 @@ private Object nextEvent() {
-     }
-   }
- 
--  public void assertTextMessage(String payload) {
-+  public void assertTextMessage(String payload) throws IOException {
-     Message message = new Message(TEXT);
-     message.buffer.writeUtf8(payload);
--    assertEquals(message, nextEvent());
-+    Object actual = nextEvent();
-+    if (actual instanceof IOException) {
-+      throw (IOException) actual;
-+    }
-+    assertEquals(message, actual);
-   }
- 
--  public void assertBinaryMessage(byte[] payload) {
-+  public void assertBinaryMessage(byte[] payload) throws IOException {
-     Message message = new Message(BINARY);
-     message.buffer.write(payload);
--    assertEquals(message, nextEvent());
-+    Object actual = nextEvent();
-+    if (actual instanceof IOException) {
-+      throw (IOException) actual;
-+    }
-+    assertEquals(message, actual);
-   }
- 
--  public void assertPing(Buffer payload) {
--    assertEquals(new Ping(payload), nextEvent());
-+  public void assertPing(Buffer payload) throws IOException {
-+    Object actual = nextEvent();
-+    if (actual instanceof IOException) {
-+      throw (IOException) actual;
-+    }
-+    assertEquals(new Ping(payload), actual);
-   }
- 
--  public void assertPong(Buffer payload) {
--    assertEquals(new Pong(payload), nextEvent());
-+  public void assertPong(Buffer payload) throws IOException {
-+    Object actual = nextEvent();
-+    if (actual instanceof IOException) {
-+      throw (IOException) actual;
-+    }
-+    assertEquals(new Pong(payload), actual);
-   }
- 
--  public void assertClose(int code, String reason) {
--    assertEquals(new Close(code, reason), nextEvent());
-+  public void assertClose(int code, String reason) throws IOException {
-+    Object actual = nextEvent();
-+    if (actual instanceof IOException) {
-+      throw (IOException) actual;
-+    }
-+    assertEquals(new Close(code, reason), actual);
-   }
- 
-   public void assertFailure(Class<? extends IOException> cls, String message) {
+   @Test public void clientBinary() throws IOException {
 diff --git a/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketProtocol.java b/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketProtocol.java
-index 2b93398fa..8cd86c0de 100644
+index 2b93398fa5..8cd86c0dea 100755
 --- a/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketProtocol.java
 +++ b/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketProtocol.java
 @@ -71,11 +71,13 @@
@@ -273,7 +96,7 @@ index 2b93398fa..8cd86c0de 100644
     * Value for {@link #B1_MASK_LENGTH} which indicates the next eight bytes are the unsigned
     * length.
 diff --git a/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java b/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
-index 11dcd287d..b2a10da7f 100644
+index 19c87259df..b2a10da7f3 100755
 --- a/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
 +++ b/okhttp-ws/src/main/java/com/squareup/okhttp/internal/ws/WebSocketWriter.java
 @@ -32,6 +32,7 @@
@@ -284,231 +107,12 @@ index 11dcd287d..b2a10da7f 100644
  import static com.squareup.okhttp.internal.ws.WebSocketProtocol.toggleMask;
  
  /**
-@@ -44,13 +45,16 @@
-  */
- public final class WebSocketWriter {
-   private final boolean isClient;
--  /** Writes must be guarded by synchronizing on this instance! */
--  private final BufferedSink sink;
-   private final Random random;
- 
-+  /** Writes must be guarded by synchronizing on 'this'. */
-+  private final BufferedSink sink;
-+  /** Access must be guarded by synchronizing on 'this'. */
-+  private boolean writerClosed;
-+
-+  private final Buffer buffer = new Buffer();
-   private final FrameSink frameSink = new FrameSink();
- 
--  private boolean closed;
-   private boolean activeWriter;
- 
-   private final byte[] maskKey;
-@@ -70,15 +74,15 @@ public WebSocketWriter(boolean isClient, BufferedSink sink, Random random) {
- 
-   /** Send a ping with the supplied {@code payload}. Payload may be {@code null} */
-   public void writePing(Buffer payload) throws IOException {
--    synchronized (sink) {
--      writeControlFrame(OPCODE_CONTROL_PING, payload);
-+    synchronized (this) {
-+      writeControlFrameSynchronized(OPCODE_CONTROL_PING, payload);
-     }
-   }
- 
-   /** Send a pong with the supplied {@code payload}. Payload may be {@code null} */
-   public void writePong(Buffer payload) throws IOException {
--    synchronized (sink) {
--      writeControlFrame(OPCODE_CONTROL_PONG, payload);
-+    synchronized (this) {
-+      writeControlFrameSynchronized(OPCODE_CONTROL_PONG, payload);
-     }
-   }
- 
-@@ -103,14 +107,14 @@ public void writeClose(int code, String reason) throws IOException {
-       }
-     }
- 
--    synchronized (sink) {
--      writeControlFrame(OPCODE_CONTROL_CLOSE, payload);
--      closed = true;
-+    synchronized (this) {
-+      writeControlFrameSynchronized(OPCODE_CONTROL_CLOSE, payload);
-+      writerClosed = true;
-     }
-   }
- 
--  private void writeControlFrame(int opcode, Buffer payload) throws IOException {
--    if (closed) throw new IOException("closed");
-+  private void writeControlFrameSynchronized(int opcode, Buffer payload) throws IOException {
-+    if (writerClosed) throw new IOException("closed");
- 
-     int length = 0;
-     if (payload != null) {
-@@ -133,7 +137,7 @@ private void writeControlFrame(int opcode, Buffer payload) throws IOException {
-       sink.write(maskKey);
- 
-       if (payload != null) {
--        writeAllMasked(payload, length);
-+        writeMaskedSynchronized(payload, length);
-       }
-     } else {
+@@ -185,7 +186,7 @@ private void writeMessageFrameSynchronized(int formatOpcode, long byteCount, boo
+     if (byteCount <= PAYLOAD_MAX) {
+       b1 |= (int) byteCount;
        sink.writeByte(b1);
-@@ -143,7 +147,7 @@ private void writeControlFrame(int opcode, Buffer payload) throws IOException {
-       }
-     }
- 
--    sink.flush();
-+    sink.emit();
-   }
- 
-   /**
-@@ -156,54 +160,53 @@ public Sink newMessageSink(int formatOpcode) {
-     }
-     activeWriter = true;
- 
-+    // Reset FrameSink state for a new writer.
-     frameSink.formatOpcode = formatOpcode;
-     frameSink.isFirstFrame = true;
-+    frameSink.closed = false;
-+
-     return frameSink;
-   }
- 
--  private void writeFrame(int formatOpcode, Buffer source, long byteCount,
--      boolean isFirstFrame, boolean isFinal) throws IOException {
--    if (closed) throw new IOException("closed");
-+  private void writeMessageFrameSynchronized(int formatOpcode, long byteCount, boolean isFirstFrame,
-+      boolean isFinal) throws IOException {
-+    if (writerClosed) throw new IOException("closed");
- 
--    int opcode = isFirstFrame ? formatOpcode : OPCODE_CONTINUATION;
--
--    synchronized (sink) {
--      int b0 = opcode;
--      if (isFinal) {
--        b0 |= B0_FLAG_FIN;
--      }
--      sink.writeByte(b0);
--
--      int b1 = 0;
--      if (isClient) {
--        b1 |= B1_FLAG_MASK;
--        random.nextBytes(maskKey);
--      }
--      if (byteCount <= PAYLOAD_MAX) {
--        b1 |= (int) byteCount;
--        sink.writeByte(b1);
--      } else if (byteCount <= 0xffffL) { // Unsigned short.
--        b1 |= PAYLOAD_SHORT;
--        sink.writeByte(b1);
--        sink.writeShort((int) byteCount);
--      } else {
--        b1 |= PAYLOAD_LONG;
--        sink.writeByte(b1);
--        sink.writeLong(byteCount);
--      }
-+    int b0 = isFirstFrame ? formatOpcode : OPCODE_CONTINUATION;
-+    if (isFinal) {
-+      b0 |= B0_FLAG_FIN;
-+    }
-+    sink.writeByte(b0);
- 
--      if (isClient) {
--        sink.write(maskKey);
--        writeAllMasked(source, byteCount);
--      } else {
--        sink.write(source, byteCount);
--      }
-+    int b1 = 0;
-+    if (isClient) {
-+      b1 |= B1_FLAG_MASK;
-+      random.nextBytes(maskKey);
-+    }
-+    if (byteCount <= PAYLOAD_MAX) {
-+      b1 |= (int) byteCount;
-+      sink.writeByte(b1);
+-    } else if (byteCount <= 0xffffL) { // Unsigned short.
 +    } else if (byteCount <= PAYLOAD_SHORT_MAX) { // Unsigned short.
-+      b1 |= PAYLOAD_SHORT;
-+      sink.writeByte(b1);
-+      sink.writeShort((int) byteCount);
-+    } else {
-+      b1 |= PAYLOAD_LONG;
-+      sink.writeByte(b1);
-+      sink.writeLong(byteCount);
-+    }
- 
--      sink.flush();
-+    if (isClient) {
-+      sink.write(maskKey);
-+      writeMaskedSynchronized(buffer, byteCount);
-+    } else {
-+      sink.write(buffer, byteCount);
-     }
-+
-+    sink.emit();
-   }
- 
--  private void writeAllMasked(BufferedSource source, long byteCount) throws IOException {
-+  private void writeMaskedSynchronized(BufferedSource source, long byteCount) throws IOException {
-     long written = 0;
-     while (written < byteCount) {
-       int toRead = (int) Math.min(byteCount, maskBuffer.length);
-@@ -218,18 +221,29 @@ private void writeAllMasked(BufferedSource source, long byteCount) throws IOExce
-   private final class FrameSink implements Sink {
-     private int formatOpcode;
-     private boolean isFirstFrame;
-+    private boolean closed;
- 
-     @Override public void write(Buffer source, long byteCount) throws IOException {
--      writeFrame(formatOpcode, source, byteCount, isFirstFrame, false /* final */);
--      isFirstFrame = false;
-+      if (closed) throw new IOException("closed");
-+
-+      buffer.write(source, byteCount);
-+
-+      long emitCount = buffer.completeSegmentByteCount();
-+      if (emitCount > 0) {
-+        synchronized (WebSocketWriter.this) {
-+          writeMessageFrameSynchronized(formatOpcode, emitCount, isFirstFrame, false /* final */);
-+        }
-+        isFirstFrame = false;
-+      }
-     }
- 
-     @Override public void flush() throws IOException {
-       if (closed) throw new IOException("closed");
- 
--      synchronized (sink) {
--        sink.flush();
-+      synchronized (WebSocketWriter.this) {
-+        writeMessageFrameSynchronized(formatOpcode, buffer.size(), isFirstFrame, false /* final */);
-       }
-+      isFirstFrame = false;
-     }
- 
-     @Override public Timeout timeout() {
-@@ -240,21 +254,10 @@ private void writeAllMasked(BufferedSource source, long byteCount) throws IOExce
-     @Override public void close() throws IOException {
-       if (closed) throw new IOException("closed");
- 
--      int length = 0;
--
--      synchronized (sink) {
--        sink.writeByte(B0_FLAG_FIN | OPCODE_CONTINUATION);
--
--        if (isClient) {
--          sink.writeByte(B1_FLAG_MASK | length);
--          random.nextBytes(maskKey);
--          sink.write(maskKey);
--        } else {
--          sink.writeByte(length);
--        }
--        sink.flush();
-+      synchronized (WebSocketWriter.this) {
-+        writeMessageFrameSynchronized(formatOpcode, buffer.size(), isFirstFrame, true /* final */);
-       }
--
-+      closed = true;
-       activeWriter = false;
-     }
-   }
+       b1 |= PAYLOAD_SHORT;
+       sink.writeByte(b1);
+       sink.writeShort((int) byteCount);

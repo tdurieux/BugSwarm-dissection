@@ -1,5 +1,5 @@
 diff --git a/config/checkstyle_checks.xml b/config/checkstyle_checks.xml
-index 2d4e38e506..f58dd9c4ea 100644
+index 2d4e38e506..f58dd9c4ea 100755
 --- a/config/checkstyle_checks.xml
 +++ b/config/checkstyle_checks.xml
 @@ -380,4 +380,31 @@
@@ -35,7 +35,7 @@ index 2d4e38e506..f58dd9c4ea 100644
 +  </module>
  </module>
 diff --git a/config/pmd.xml b/config/pmd.xml
-index a9892601f5..da6fc7d81e 100644
+index a9892601f5..da6fc7d81e 100755
 --- a/config/pmd.xml
 +++ b/config/pmd.xml
 @@ -186,6 +186,12 @@
@@ -52,14 +52,14 @@ index a9892601f5..da6fc7d81e 100644
    <rule ref="rulesets/java/migrating.xml"/>
    
 diff --git a/config/suppressions.xml b/config/suppressions.xml
-index 4cef60970b..63346cdd9f 100644
+index eb090a7b67..63346cdd9f 100755
 --- a/config/suppressions.xml
 +++ b/config/suppressions.xml
 @@ -42,7 +42,7 @@
                files="AbstractClassNameCheckTest.java|AbstractTypeAwareCheckTest.java|AbstractJavadocCheckTest.java|AbstractViolationReporterTest.java"/>
  
      <!-- Tone down the checking for test code -->
--    <suppress checks="CyclomaticComplexity" files="[\\/]XDocsPagesTest\.java" lines="323"/>
+-    <suppress checks="CyclomaticComplexity" files="[\\/]XDocsPagesTest\.java" lines="322"/>
 +    <suppress checks="CyclomaticComplexity" files="[\\/]XDocsPagesTest\.java" lines="321"/>
      <suppress checks="EmptyBlock" files=".*[\\/]src[\\/]test[\\/]"/>
      <suppress checks="ImportControl" files=".*[\\/]src[\\/](test|it)[\\/]"/>
@@ -74,7 +74,7 @@ index 4cef60970b..63346cdd9f 100644
      <suppress checks="CyclomaticComplexity" files="JavadocMethodCheck\.java"/>
      <suppress checks="CyclomaticComplexity" files="JavadocStyleCheck\.java"/>
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java b/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
-index 2df5198d5d..bc0defa3a8 100644
+index 2df5198d5d..bc0defa3a8 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/Checker.java
 @@ -277,6 +277,7 @@ public int process(List<File> files) throws CheckstyleException {
@@ -86,7 +86,7 @@ index 2df5198d5d..bc0defa3a8 100644
                          + file.getPath(), ex);
              }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
-index 5f5404edbf..05979ad7c2 100644
+index 5f5404edbf..05979ad7c2 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/Main.java
 @@ -82,8 +82,8 @@ private Main() {
@@ -99,88 +99,8 @@ index 5f5404edbf..05979ad7c2 100644
      public static void main(String... args) throws FileNotFoundException {
          int errorCounter = 0;
          boolean cliViolations = false;
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/TrailingCommentCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/TrailingCommentCheck.java
-index d7659779d4..fea76f8712 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/TrailingCommentCheck.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/TrailingCommentCheck.java
-@@ -27,6 +27,7 @@
- import org.apache.commons.lang3.ArrayUtils;
- 
- import com.google.common.collect.Sets;
-+import com.puppycrawl.tools.checkstyle.api.Check;
- import com.puppycrawl.tools.checkstyle.api.DetailAST;
- import com.puppycrawl.tools.checkstyle.api.TextBlock;
- import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
-@@ -98,7 +99,7 @@
-  *
-  * @author o_sukhodolsky
-  */
--public class TrailingCommentCheck extends AbstractFormatCheck {
-+public class TrailingCommentCheck extends Check {
- 
-     /**
-      * A key is pointing to the warning message text in "messages.properties"
-@@ -106,25 +107,31 @@
-      */
-     public static final String MSG_KEY = "trailing.comments";
- 
--    /** Default format for allowed blank line. */
--    private static final String DEFAULT_FORMAT = "^[\\s\\}\\);]*$";
--
-     /** Pattern for legal trailing comment. */
-     private Pattern legalComment;
- 
-+    /** The format string of the regexp. */
-+    private String format = "^[\\s\\}\\);]*$";
-+
-+    /** The regexp to match against. */
-+    private Pattern regexp = Pattern.compile(format);
-+
-     /**
--     * Creates new instance of the check.
-+     * Sets patter for legal trailing comments.
-+     * @param legalComment format to set.
-      */
--    public TrailingCommentCheck() {
--        super(DEFAULT_FORMAT);
-+    public void setLegalComment(final String legalComment) {
-+        this.legalComment = CommonUtils.createPattern(legalComment);
-     }
- 
-     /**
--     * Sets patter for legal trailing comments.
--     * @param format format to set.
-+     * Set the format to the specified regular expression.
-+     * @param format a {@code String} value
-+     * @throws org.apache.commons.beanutils.ConversionException unable to parse format
-      */
--    public void setLegalComment(final String format) {
--        legalComment = CommonUtils.createPattern(format);
-+    public final void setFormat(String format) {
-+        this.format = format;
-+        regexp = CommonUtils.createPattern(format);
-     }
- 
-     @Override
-@@ -149,7 +156,6 @@ public void visitToken(DetailAST ast) {
- 
-     @Override
-     public void beginTree(DetailAST rootAST) {
--        final Pattern blankLinePattern = getRegexp();
-         final Map<Integer, TextBlock> cppComments = getFileContents()
-                 .getCppComments();
-         final Map<Integer, List<TextBlock>> cComments = getFileContents()
-@@ -177,7 +183,7 @@ public void beginTree(DetailAST rootAST) {
-                     continue;
-                 }
-             }
--            if (!blankLinePattern.matcher(lineBefore).find()
-+            if (!regexp.matcher(lineBefore).find()
-                 && !isLegalComment(comment)) {
-                 log(lineNo, MSG_KEY);
-             }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
-index 9f54c756b1..40c3e35776 100644
+index 9f54c756b1..40c3e35776 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/annotation/SuppressWarningsCheck.java
 @@ -20,13 +20,15 @@
@@ -262,7 +182,7 @@ index 9f54c756b1..40c3e35776 100644
              log(lineNo, colNum,
                      MSG_KEY_SUPPRESSED_WARNING_NOT_ALLOWED, warningText);
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
-index c8ccf233f6..e2f388c918 100644
+index c8ccf233f6..e2f388c918 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheck.java
 @@ -37,7 +37,8 @@
@@ -296,7 +216,7 @@ index c8ccf233f6..e2f388c918 100644
                  log(i + 1, MSG_KEY, max, realLength);
              }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
-index 7e53d5dbb1..091e063206 100644
+index 7e53d5dbb1..091e063206 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/AllChecksTest.java
 @@ -191,13 +191,6 @@ public void testAllCheckstyleModulesInCheckstyleConfig() throws Exception {
@@ -314,7 +234,7 @@ index 7e53d5dbb1..091e063206 100644
                      configChecks.contains(moduleName));
          }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
-index e099927ec1..6b1e60c972 100644
+index e099927ec1..6b1e60c972 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/MainTest.java
 @@ -147,11 +147,11 @@ public void testNonExistingConfigFile()
@@ -411,10 +331,10 @@ index e099927ec1..6b1e60c972 100644
                          + "src/test/resources-noncompilable/com/puppycrawl/tools/"
                          + "checkstyle/InputIncorrectClass.java\n";
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
-index dc50d61a86..d4d62730e3 100644
+index 20b4e4b067..d4d62730e3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/XDocsPagesTest.java
-@@ -109,13 +109,11 @@
+@@ -109,7 +109,6 @@
      private static final Set<String> FILESET_PROPERTIES = getProperties(AbstractFileSetCheck.class);
  
      private static final List<String> UNDOCUMENTED_PROPERTIES = Arrays.asList(
@@ -422,17 +342,11 @@ index dc50d61a86..d4d62730e3 100644
              "SuppressWithNearbyCommentFilter.fileContents",
              "IllegalTokenTextCheck.compileFlags",
              "ReturnCountCheck.compileFlags",
-             "IllegalTypeCheck.compileFlags",
-             "MutableExceptionCheck.compileFlags",
--            "TrailingCommentCheck.compileFlags",
-             "AbstractClassNameCheck.compileFlags",
-             "ClassTypeParameterNameCheck.compileFlags",
-             "ConstantNameCheck.compileFlags",
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
-index 2f4d8bed59..75ffd85d03 100644
+index 2f4d8bed59..75ffd85d03 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/AnnotationUseStyleCheckTest.java
 @@ -39,7 +39,7 @@
@@ -448,7 +362,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/Mis
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
-index f60d47e849..e36b839718 100644
+index f60d47e849..e36b839718 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/MissingDeprecatedCheckTest.java
 @@ -34,7 +34,7 @@
@@ -464,7 +378,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/Pac
 similarity index 97%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationCheckTest.java
-index cd0074166d..a383b1cf3f 100644
+index cd0074166d..a383b1cf3f 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/annotation/PackageAnnotationCheckTest.java
 @@ -30,7 +30,7 @@
@@ -480,7 +394,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidS
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportCheckTest.java
-index 409078b28c..f1d287b774 100644
+index 409078b28c..f1d287b774 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStarImportCheckTest.java
 @@ -31,7 +31,7 @@
@@ -496,7 +410,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidS
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportCheckTest.java
-index d6a043fecc..2db80505d9 100644
+index d6a043fecc..2db80505d9 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/AvoidStaticImportCheckTest.java
 @@ -31,7 +31,7 @@
@@ -512,7 +426,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/Redun
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheckTest.java
-index 217899ceb6..3f08002ec8 100644
+index 217899ceb6..3f08002ec8 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/modifier/RedundantModifierCheckTest.java
 @@ -32,7 +32,7 @@
@@ -528,7 +442,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypePar
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypeParameterNameTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
-index 2aa2133a91..5de40a3eb5 100644
+index 2aa2133a91..5de40a3eb5 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/TypeParameterNameTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/naming/ClassTypeParameterNameCheckTest.java
 @@ -31,7 +31,7 @@
@@ -541,7 +455,7 @@ index 2aa2133a91..5de40a3eb5 100644
      @Override
      protected String getPath(String filename) throws IOException {
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
-index 2e0f2063ff..ec447e8f77 100644
+index 2e0f2063ff..ec447e8f77 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/sizes/LineLengthCheckTest.java
 @@ -38,6 +38,12 @@ protected String getPath(String filename) throws IOException {
@@ -577,7 +491,7 @@ diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/Whi
 similarity index 99%
 rename from src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundTest.java
 rename to src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
-index 836d2681f7..4305a37c09 100644
+index 836d2681f7..4305a37c09 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/whitespace/WhitespaceAroundCheckTest.java
 @@ -34,7 +34,7 @@
@@ -590,7 +504,7 @@ index 836d2681f7..4305a37c09 100644
      private DefaultConfiguration checkConfig;
  
 diff --git a/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java
-new file mode 100644
+new file mode 100755
 index 0000000000..a14b0640f8
 --- /dev/null
 +++ b/src/test/resources-noncompilable/com/puppycrawl/tools/checkstyle/checks/sizes/InputLongPackageStatement.java
@@ -604,7 +518,7 @@ index 0000000000..a14b0640f8
 +    }
 +}
 diff --git a/src/xdocs/config_filters.xml b/src/xdocs/config_filters.xml
-index 12f29003ff..32832a2bca 100644
+index 12f29003ff..32832a2bca 100755
 --- a/src/xdocs/config_filters.xml
 +++ b/src/xdocs/config_filters.xml
 @@ -73,6 +73,12 @@
@@ -660,7 +574,7 @@ index 12f29003ff..32832a2bca 100644
        <subsection name="Package">
          <p> com.puppycrawl.tools.checkstyle.filters </p>
 diff --git a/src/xdocs/config_sizes.xml b/src/xdocs/config_sizes.xml
-index 64bd09a1ae..9936f6ed08 100644
+index 64bd09a1ae..9936f6ed08 100755
 --- a/src/xdocs/config_sizes.xml
 +++ b/src/xdocs/config_sizes.xml
 @@ -245,7 +245,7 @@

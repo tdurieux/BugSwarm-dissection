@@ -1,704 +1,141 @@
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/ReaderTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/ReaderTest.java
-index b8d0d8151..e95a45bd8 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/ReaderTest.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/ReaderTest.java
-@@ -2,6 +2,7 @@
- 
- import io.swagger.v3.jaxrs2.matchers.SerializationMatchers;
- import io.swagger.v3.jaxrs2.resources.BasicFieldsResource;
-+import io.swagger.v3.jaxrs2.resources.BookStoreTicket2646;
- import io.swagger.v3.jaxrs2.resources.CompleteFieldsResource;
- import io.swagger.v3.jaxrs2.resources.DeprecatedFieldsResource;
- import io.swagger.v3.jaxrs2.resources.DuplicatedOperationIdResource;
-@@ -749,4 +750,24 @@ public void test2607() {
-         assertEquals(schema.getType(), "string");
-     }
- 
-+    @Test(description = "test ticket #2646 method annotated with @Produce")
-+    public void test2646() {
-+        Reader reader = new Reader(new OpenAPI());
-+        OpenAPI openAPI = reader.read(BookStoreTicket2646.class);
-+        Paths paths = openAPI.getPaths();
-+        assertEquals(paths.size(), 2);
-+        PathItem pathItem = paths.get("/bookstore");
-+        assertNotNull(pathItem);
-+        Operation operation = pathItem.getGet();
-+        assertNotNull(operation);
-+        assertTrue(operation.getResponses().getDefault().getContent().keySet().contains("application/json"));
+diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java
+new file mode 100755
+index 0000000000..9f2e865117
+--- /dev/null
++++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java
+@@ -0,0 +1,135 @@
++package io.swagger.v3.jaxrs2.annotations.security;
 +
++import io.swagger.v3.jaxrs2.annotations.AbstractAnnotationTest;
++import io.swagger.v3.jaxrs2.resources.SecurityResource;
++import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
++import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
++import io.swagger.v3.oas.annotations.security.OAuthFlow;
++import io.swagger.v3.oas.annotations.security.OAuthFlows;
++import io.swagger.v3.oas.annotations.security.OAuthScope;
++import io.swagger.v3.oas.annotations.security.SecurityScheme;
++import org.testng.annotations.Test;
 +
-+        pathItem = paths.get("/bookstore/{id}");
-+        assertNotNull(pathItem);
-+        operation = pathItem.getDelete();
-+        assertNotNull(operation);
-+        assertTrue(operation.getResponses().getDefault().getContent().keySet().contains("*/*"));
++import java.io.IOException;
++
++import static org.testng.Assert.assertEquals;
++
++public class SecurityTest extends AbstractAnnotationTest {
++    @Test
++    public void testSecuritySheme() {
++        String openApiYAML = readIntoYaml(SecurityTest.OAuth2SchemeOnClass.class);
++        int start = openApiYAML.indexOf("components:");
++        String extractedYAML = openApiYAML.substring(start, openApiYAML.length() - 1);
++        String expectedYAML = "components:\n" +
++                "  securitySchemes:\n" +
++                "    myOauth2Security:\n" +
++                "      type: oauth2\n" +
++                "      name: myOauth2Security\n" +
++                "      in: header\n" +
++                "      flows:\n" +
++                "        implicit:\n" +
++                "          authorizationUrl: http://url.com/auth\n" +
++                "          scopes:\n" +
++                "            write:pets: modify pets in your account";
++        assertEquals(extractedYAML, expectedYAML);
 +
 +    }
- }
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/encoding/EncodingTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/encoding/EncodingTest.java
-index 9e436bd87..f4583e7de 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/encoding/EncodingTest.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/encoding/EncodingTest.java
-@@ -348,7 +348,9 @@ public void testSimpleGetOperationWithoutResponses() {
-                 "      operationId: getWithNoParametersAndNoResponses\n" +
-                 "      responses:\n" +
-                 "        default:\n" +
--                "          description: default response";
++
++    @Test
++    public void testSecurityRequirement() throws IOException {
++        String expectedYAML = "openapi: 3.0.1\n" +
++                "paths:\n" +
++                "  /2:\n" +
++                "    get:\n" +
++                "      description: description 2\n" +
++                "      operationId: Operation Id 2\n" +
++                "      responses:\n" +
++                "        default:\n" +
 +                "          description: default response\n" +
 +                "          content:\n" +
-+                "            '*/*': {}";
-         String extractedYAML = openApiYAML.substring(start, end);
- 
-         assertEquals(extractedYAML, expectedYAML);
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-index dcad8652f..1a23844a3 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/operations/AnnotatedOperationMethodTest.java
-@@ -75,6 +75,8 @@ public void testSimpleGetOperationWithoutResponses() {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
++                "            '*/*': {}\n" +
++                "      security:\n" +
++                "      - security_key:\n" +
++                "        - write:pets\n" +
++                "        - read:pets\n" +
++                "      - myOauth2Security:\n" +
++                "        - write:pets\n" +
++                "      - security_key2:\n" +
++                "        - write:pets\n" +
++                "        - read:pets\n" +
++                "  /:\n" +
++                "    get:\n" +
++                "      description: description\n" +
++                "      operationId: Operation Id\n" +
++                "      responses:\n" +
++                "        default:\n" +
++                "          description: default response\n" +
 +                "          content:\n" +
 +                "            '*/*': {}\n" +
-                 "      deprecated: true";
-         String extractedYAML = openApiYAML.substring(start, end);
- 
-@@ -681,6 +683,9 @@ public void testCompleteUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "  /user/createWithArray:\n" +
-                 "    post:\n" +
-                 "      summary: Creates list of users with given input array\n" +
-@@ -697,6 +702,9 @@ public void testCompleteUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "  /user/createWithList:\n" +
-                 "    post:\n" +
-                 "      summary: Creates list of users with given input array\n" +
-@@ -713,6 +721,9 @@ public void testCompleteUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "  /user/{username}:\n" +
-                 "    get:\n" +
-                 "      summary: Get user by user name\n" +
-@@ -823,6 +834,9 @@ public void testCompleteUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "components:\n" +
-                 "  schemas:\n" +
-                 "    User:\n" +
-@@ -875,6 +889,9 @@ public void testSimpleUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "  /user/createUserWithReturnType:\n" +
-                 "    post:\n" +
-                 "      summary: Create user with return type\n" +
-@@ -999,6 +1016,9 @@ public void testHiddenAnnotatedUserResource() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            'application/json': {}\n" +
-+                "            'application/xml': {}\n" +
-                 "components:\n" +
-                 "  schemas:\n" +
-                 "    UserResourceBean:\n" +
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/requests/RequestBodyTest.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/requests/RequestBodyTest.java
-index e12dc2ee4..048048e1c 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/requests/RequestBodyTest.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/requests/RequestBodyTest.java
-@@ -53,6 +53,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "    post:\n" +
-                 "      summary: Create user\n" +
-                 "      description: This can only be done by the logged in user.\n" +
-@@ -76,6 +78,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "    delete:\n" +
-                 "      summary: Delete user\n" +
-                 "      description: This can only be done by the logged in user.\n" +
-@@ -92,6 +96,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "  /pet:\n" +
-                 "    put:\n" +
-                 "      summary: Modify pet\n" +
-@@ -108,6 +114,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "    post:\n" +
-                 "      summary: Create pet\n" +
-                 "      description: Creating pet.\n" +
-@@ -123,6 +131,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "    delete:\n" +
-                 "        summary: Delete pet\n" +
-                 "        description: Deleting pet.\n" +
-@@ -140,6 +150,8 @@ public void oneRequestBodyMultipleParameters() throws IOException {
-                 "        responses:\n" +
-                 "          default:\n" +
-                 "            description: default response\n" +
-+                "            content:\n" +
-+                "              '*/*': {}\n" +
-                 "components:\n" +
-                 "  schemas:\n" +
-                 "    User:\n" +
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTests.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java
-similarity index 93%
-rename from modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTests.java
-rename to modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java
-index 3363ce4be..9f2e86511 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTests.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/annotations/security/SecurityTest.java
-@@ -14,10 +14,10 @@
- 
- import static org.testng.Assert.assertEquals;
- 
--public class SecurityTests extends AbstractAnnotationTest {
-+public class SecurityTest extends AbstractAnnotationTest {
-     @Test
-     public void testSecuritySheme() {
--        String openApiYAML = readIntoYaml(SecurityTests.OAuth2SchemeOnClass.class);
-+        String openApiYAML = readIntoYaml(SecurityTest.OAuth2SchemeOnClass.class);
-         int start = openApiYAML.indexOf("components:");
-         String extractedYAML = openApiYAML.substring(start, openApiYAML.length() - 1);
-         String expectedYAML = "components:\n" +
-@@ -46,6 +46,8 @@ public void testSecurityRequirement() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "      security:\n" +
-                 "      - security_key:\n" +
-                 "        - write:pets\n" +
-@@ -62,6 +64,8 @@ public void testSecurityRequirement() throws IOException {
-                 "      responses:\n" +
-                 "        default:\n" +
-                 "          description: default response\n" +
-+                "          content:\n" +
-+                "            '*/*': {}\n" +
-                 "      security:\n" +
-                 "      - security_key:\n" +
-                 "        - write:pets\n" +
-@@ -86,7 +90,7 @@ public void testSecurityRequirement() throws IOException {
- 
-     @Test
-     public void testMultipleSecurityShemes() {
--        String openApiYAML = readIntoYaml(SecurityTests.MultipleSchemesOnClass.class);
++                "      security:\n" +
++                "      - security_key:\n" +
++                "        - write:pets\n" +
++                "        - read:pets\n" +
++                "      - myOauth2Security:\n" +
++                "        - write:pets\n" +
++                "components:\n" +
++                "  securitySchemes:\n" +
++                "    myOauth2Security:\n" +
++                "      type: oauth2\n" +
++                "      description: myOauthSecurity Description\n" +
++                "      name: myOauth2Security\n" +
++                "      in: header\n" +
++                "      flows:\n" +
++                "        implicit:\n" +
++                "          authorizationUrl: http://x.com\n" +
++                "          scopes:\n" +
++                "            write:pets: modify pets in your account";
++        compareAsYaml(SecurityResource.class, expectedYAML);
++
++    }
++
++    @Test
++    public void testMultipleSecurityShemes() {
 +        String openApiYAML = readIntoYaml(SecurityTest.MultipleSchemesOnClass.class);
-         int start = openApiYAML.indexOf("components:");
-         String extractedYAML = openApiYAML.substring(start, openApiYAML.length() - 1);
-         String expectedYAML = "components:\n" +
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/BookStoreTicket2646.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/BookStoreTicket2646.java
-new file mode 100644
-index 000000000..9ac33cde6
---- /dev/null
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/BookStoreTicket2646.java
-@@ -0,0 +1,46 @@
-+package io.swagger.v3.jaxrs2.resources;
++        int start = openApiYAML.indexOf("components:");
++        String extractedYAML = openApiYAML.substring(start, openApiYAML.length() - 1);
++        String expectedYAML = "components:\n" +
++                "  securitySchemes:\n" +
++                "    apiKey:\n" +
++                "      type: apiKey\n" +
++                "      name: apiKey\n" +
++                "      in: header\n" +
++                "    myOauth2Security:\n" +
++                "      type: oauth2\n" +
++                "      name: myOauth2Security\n" +
++                "      in: header\n" +
++                "      flows:\n" +
++                "        implicit:\n" +
++                "          authorizationUrl: http://url.com/auth\n" +
++                "          scopes:\n" +
++                "            write:pets: modify pets in your account";
++        assertEquals(extractedYAML, expectedYAML);
 +
-+
-+import java.util.Arrays;
-+
-+import javax.ws.rs.DELETE;
-+import javax.ws.rs.DefaultValue;
-+import javax.ws.rs.GET;
-+import javax.ws.rs.Path;
-+import javax.ws.rs.PathParam;
-+import javax.ws.rs.Produces;
-+import javax.ws.rs.QueryParam;
-+import javax.ws.rs.core.MediaType;
-+import javax.ws.rs.core.Response;
-+
-+@Path("/bookstore")
-+public class BookStoreTicket2646 {
-+    @Produces({ MediaType.APPLICATION_JSON })
-+    @GET
-+    public Response getBooks(
-+            @QueryParam("page") @DefaultValue("1") int page) {
-+        return Response.ok(
-+                Arrays.asList(
-+                        new Book(),
-+                        new Book()
-+                )
-+        ).build();
 +    }
 +
-+    @Produces({ MediaType.APPLICATION_JSON })
-+    @Path("/{id}")
-+    @GET
-+    public Book getBook(@PathParam("id") Long id) {
-+        return new Book();
++    @SecurityScheme(name = "myOauth2Security",
++            type = SecuritySchemeType.OAUTH2,
++            in = SecuritySchemeIn.HEADER,
++            flows = @OAuthFlows(
++                    implicit = @OAuthFlow(authorizationUrl = "http://url.com/auth",
++                            scopes = @OAuthScope(name = "write:pets", description = "modify pets in your account"))))
++    static class OAuth2SchemeOnClass {
++
 +    }
 +
-+    @Path("/{id}")
-+    @DELETE
-+    public Response delete(@PathParam("id") String id) {
-+        return Response.ok().build();
-+    }
++    @SecurityScheme(name = "myOauth2Security",
++            type = SecuritySchemeType.OAUTH2,
++            in = SecuritySchemeIn.HEADER,
++            flows = @OAuthFlows(
++                    implicit = @OAuthFlow(authorizationUrl = "http://url.com/auth",
++                            scopes = @OAuthScope(name = "write:pets", description = "modify pets in your account"))))
++    @SecurityScheme(name = "apiKey", type = SecuritySchemeType.APIKEY, in = SecuritySchemeIn.HEADER)
++    static class MultipleSchemesOnClass {
 +
-+    public static class Book {
-+        public String foo;
 +    }
 +}
-\ No newline at end of file
-diff --git a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/extensions/ExtensionsResource.java b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/extensions/ExtensionsResource.java
-index 5fe32b33e..ef65237e4 100644
---- a/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/extensions/ExtensionsResource.java
-+++ b/modules/swagger-jaxrs2/src/test/java/io/swagger/v3/jaxrs2/resources/extensions/ExtensionsResource.java
-@@ -429,6 +429,8 @@ public ExtensionUser setUser(
-                     "      responses:\n" +
-                     "        default:\n" +
-                     "          description: default response\n" +
-+                    "          content:\n" +
-+                    "            '*/*': {}\n" +
-                     "      security:\n" +
-                     "      - security_key:\n" +
-                     "        - write:pets\n" +
-@@ -473,6 +475,8 @@ public ExtensionUser setUser(
-                     "      responses:\n" +
-                     "        default:\n" +
-                     "          description: default response\n" +
-+                    "          content:\n" +
-+                    "            '*/*': {}\n" +
-                     "      callbacks:\n" +
-                     "        subscription:\n" +
-                     "          http://$request.query.url:\n" +
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/FullPetResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/FullPetResource.yaml
-index 445f06d17..eb6b4f10a 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/FullPetResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/FullPetResource.yaml
-@@ -449,6 +449,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /fullyannotatedoperation/{petId}:
-     get:
-       summary: Find pet by ID
-@@ -490,6 +492,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /notannotatedoperation:
-     get:
-       operationId: getUser_1
-@@ -689,6 +693,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /openapijaxrsannotatedparameter:
-     get:
-       operationId: create User_2
-@@ -942,6 +948,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /requestbodyparameterpriority:
-     post:
-       summary: Create user
-@@ -957,6 +965,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyAndTwoParameters:
-     post:
-       summary: Create user
-@@ -981,6 +991,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutContent:
-     get:
-       summary: Create user
-@@ -996,6 +1008,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutContentWithoutImplementation:
-     get:
-       summary: Create user
-@@ -1013,6 +1027,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutAnnotation:
-     put:
-       summary: Modify user
-@@ -1026,6 +1042,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithoutRequestBodyAndTwoParameters:
-     delete:
-       summary: Delete user
-@@ -1043,6 +1061,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutAnnotationAndTwoConsumes:
-     put:
-       summary: Modify pet
-@@ -1059,6 +1079,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithTwoRequestBodyWithoutAnnotationAndTwoConsumes:
-     post:
-       summary: Create pet
-@@ -1075,6 +1097,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithTwoRequestBodyWithAnnotationAndTwoConsumes:
-     post:
-       summary: Create pet
-@@ -1092,6 +1116,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithOneSimpleRequestBody:
-     delete:
-       summary: Delete pet
-@@ -1110,6 +1136,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /complexresponse:
-     get:
-       summary: Find pets
-@@ -1218,6 +1246,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-@@ -1235,6 +1265,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-@@ -1250,6 +1282,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-@@ -1272,6 +1306,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /tagsinmethod:
-     get:
-       tags:
-@@ -1282,6 +1318,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /tagoperation:
-     get:
-       tags:
-@@ -1291,6 +1329,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
- components:
-   schemas:
-     SecondSampleResponseSchema:
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/SecurityResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/SecurityResource.yaml
-index f13c0e1c6..45338aeb0 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/SecurityResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/SecurityResource.yaml
-@@ -7,6 +7,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-@@ -24,6 +26,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-@@ -39,6 +43,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-       security:
-       - security_key:
-         - write:pets
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/ExternalDocumentationResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/ExternalDocumentationResource.yaml
-index ff4177a28..d9267195e 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/ExternalDocumentationResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/ExternalDocumentationResource.yaml
-@@ -20,3 +20,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/OperationResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/OperationResource.yaml
-index e936a3483..238a05d6e 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/OperationResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/OperationResource.yaml
-@@ -94,6 +94,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
- components:
-   schemas:
-     Category:
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/SubResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/SubResource.yaml
-index d8f66fc68..b636a2242 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/operation/SubResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/operation/SubResource.yaml
-@@ -16,3 +16,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/parameters/MultipleNotAnnotatedParameter.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/parameters/MultipleNotAnnotatedParameter.yaml
-index 873c8a5bc..3d13c9730 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/parameters/MultipleNotAnnotatedParameter.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/parameters/MultipleNotAnnotatedParameter.yaml
-@@ -11,3 +11,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyMethodPriorityResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyMethodPriorityResource.yaml
-index b8854649c..856a2a55e 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyMethodPriorityResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyMethodPriorityResource.yaml
-@@ -15,6 +15,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
- components:
-   schemas:
-     User:
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyParameterPriorityResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyParameterPriorityResource.yaml
-index 7371f9a88..a69fa6613 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyParameterPriorityResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyParameterPriorityResource.yaml
-@@ -15,6 +15,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
- components:
-   schemas:
-     User:
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyResource.yaml
-index 4eda27de9..7a82d173a 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/requestbody/RequestBodyResource.yaml
-@@ -15,6 +15,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutContentWithoutImplementation:
-     get:
-       summary: Create user
-@@ -32,6 +34,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutAnnotation:
-     put:
-       summary: Modify user
-@@ -45,6 +49,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithoutRequestBodyAndTwoParameters:
-     delete:
-       summary: Delete user
-@@ -62,6 +68,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyWithoutAnnotationAndTwoConsumes:
-     put:
-       summary: Modify pet
-@@ -78,6 +86,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithTwoRequestBodyWithoutAnnotationAndTwoConsumes:
-     post:
-       summary: Create pet
-@@ -94,6 +104,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithTwoRequestBodyWithAnnotationAndTwoConsumes:
-     post:
-       summary: Create pet
-@@ -111,6 +123,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithOneSimpleRequestBody:
-     delete:
-       summary: Delete pet
-@@ -129,6 +143,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-   /methodWithRequestBodyAndTwoParameters:
-     post:
-       summary: Create user
-@@ -153,6 +169,8 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
- components:
-   schemas:
-     User:
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/CompleteTagResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/CompleteTagResource.yaml
-index a4839a571..25684b7cb 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/CompleteTagResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/CompleteTagResource.yaml
-@@ -25,3 +25,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagMethodResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagMethodResource.yaml
-index b3c62bdd8..bbd6cd701 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagMethodResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagMethodResource.yaml
-@@ -15,3 +15,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}
-diff --git a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagOperationResource.yaml b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagOperationResource.yaml
-index 66137b79b..ce1ad93e3 100644
---- a/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagOperationResource.yaml
-+++ b/modules/swagger-jaxrs2/src/test/resources/petstore/tags/TagOperationResource.yaml
-@@ -9,3 +9,5 @@ paths:
-       responses:
-         default:
-           description: default response
-+          content:
-+            '*/*': {}

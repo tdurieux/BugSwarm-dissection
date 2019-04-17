@@ -1,5 +1,53 @@
+diff --git a/maint/test/appengine/py27/cgi_runtests.py b/maint/test/appengine/py27/cgi_runtests.py
+deleted file mode 100755
+index a9fc90e99c..0000000000
+--- a/maint/test/appengine/py27/cgi_runtests.py
++++ /dev/null
+@@ -1 +0,0 @@
+-../common/cgi_runtests.py
+\ No newline at end of file
+diff --git a/maint/test/appengine/py27/cgi_runtests.py b/maint/test/appengine/py27/cgi_runtests.py
+new file mode 120000
+index 0000000000..a9fc90e99c
+--- /dev/null
++++ b/maint/test/appengine/py27/cgi_runtests.py
+@@ -0,0 +1 @@
++../common/cgi_runtests.py
+\ No newline at end of file
+diff --git a/maint/test/appengine/py27/runtests.py b/maint/test/appengine/py27/runtests.py
+deleted file mode 100755
+index 2cce26b0fb..0000000000
+--- a/maint/test/appengine/py27/runtests.py
++++ /dev/null
+@@ -1 +0,0 @@
+-../common/runtests.py
+\ No newline at end of file
+diff --git a/maint/test/appengine/py27/runtests.py b/maint/test/appengine/py27/runtests.py
+new file mode 120000
+index 0000000000..2cce26b0fb
+--- /dev/null
++++ b/maint/test/appengine/py27/runtests.py
+@@ -0,0 +1 @@
++../common/runtests.py
+\ No newline at end of file
+diff --git a/maint/test/appengine/py27/tornado b/maint/test/appengine/py27/tornado
+deleted file mode 100755
+index d4f6cc317d..0000000000
+--- a/maint/test/appengine/py27/tornado
++++ /dev/null
+@@ -1 +0,0 @@
+-../../../../tornado
+\ No newline at end of file
+diff --git a/maint/test/appengine/py27/tornado b/maint/test/appengine/py27/tornado
+new file mode 120000
+index 0000000000..d4f6cc317d
+--- /dev/null
++++ b/maint/test/appengine/py27/tornado
+@@ -0,0 +1 @@
++../../../../tornado
+\ No newline at end of file
 diff --git a/tornado/test/web_test.py b/tornado/test/web_test.py
-index d79ea52c1..de26c42ec 100644
+index d79ea52c1b..de26c42ecc 100755
 --- a/tornado/test/web_test.py
 +++ b/tornado/test/web_test.py
 @@ -917,6 +917,10 @@ def test_default(self):
@@ -27,18 +75,10 @@ index d79ea52c1..de26c42ec 100644
  
  @wsgi_safe
 diff --git a/tornado/test/websocket_test.py b/tornado/test/websocket_test.py
-index d47a74e65..e0b5573de 100644
+index beb94a690a..e0b5573de3 100755
 --- a/tornado/test/websocket_test.py
 +++ b/tornado/test/websocket_test.py
-@@ -7,6 +7,7 @@
- from tornado.concurrent import Future
- from tornado import gen
- from tornado.httpclient import HTTPError, HTTPRequest
-+from tornado.iostream import StreamClosedError
- from tornado.log import gen_log, app_log
- from tornado.template import DictLoader
- from tornado.testing import AsyncHTTPTestCase, gen_test, bind_unused_port, ExpectLog
-@@ -50,7 +51,10 @@ def on_close(self):
+@@ -51,7 +51,10 @@ def on_close(self):
  
  class EchoHandler(TestWebSocketHandler):
      def on_message(self, message):
@@ -50,23 +90,8 @@ index d47a74e65..e0b5573de 100644
  
  
  class ErrorInOnMessageHandler(TestWebSocketHandler):
-@@ -327,6 +331,14 @@ def test_client_close_reason(self):
-         self.assertEqual(code, 1001)
-         self.assertEqual(reason, 'goodbye')
- 
-+    @gen_test
-+    def test_write_after_close(self):
-+        ws = yield self.ws_connect('/close_reason')
-+        msg = yield ws.read_message()
-+        self.assertIs(msg, None)
-+        with self.assertRaises(StreamClosedError):
-+            ws.write_message('hello')
-+
-     @gen_test
-     def test_async_prepare(self):
-         # Previously, an async prepare method triggered a bug that would
 diff --git a/tornado/web.py b/tornado/web.py
-index d79889fa3..132f42dd5 100644
+index d79889fa37..132f42dd57 100755
 --- a/tornado/web.py
 +++ b/tornado/web.py
 @@ -319,10 +319,7 @@ def set_status(self, status_code, reason=None):
@@ -94,43 +119,3 @@ index d79889fa3..132f42dd5 100644
          else:
              self.send_error(500, exc_info=sys.exc_info())
  
-diff --git a/tornado/websocket.py b/tornado/websocket.py
-index 69437ee4e..7600910c0 100644
---- a/tornado/websocket.py
-+++ b/tornado/websocket.py
-@@ -764,10 +764,7 @@ def _write_frame(self, fin, opcode, data, flags=0):
-             data = mask + _websocket_mask(mask, data)
-         frame += data
-         self._wire_bytes_out += len(frame)
--        try:
--            return self.stream.write(frame)
--        except StreamClosedError:
--            self._abort()
-+        return self.stream.write(frame)
- 
-     def write_message(self, message, binary=False):
-         """Sends the given message to the client of this Web Socket."""
-@@ -951,7 +948,10 @@ def _handle_message(self, opcode, data):
-             self.close(self.handler.close_code)
-         elif opcode == 0x9:
-             # Ping
--            self._write_frame(True, 0xA, data)
-+            try:
-+                self._write_frame(True, 0xA, data)
-+            except StreamClosedError:
-+                self._abort()
-             self._run_callback(self.handler.on_ping, data)
-         elif opcode == 0xA:
-             # Pong
-@@ -972,7 +972,10 @@ def close(self, code=None, reason=None):
-                     close_data = struct.pack('>H', code)
-                 if reason is not None:
-                     close_data += utf8(reason)
--                self._write_frame(True, 0x8, close_data)
-+                try:
-+                    self._write_frame(True, 0x8, close_data)
-+                except StreamClosedError:
-+                    self._abort()
-             self.server_terminated = True
-         if self.client_terminated:
-             if self._waiting is not None:

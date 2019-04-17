@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 95e6bef56c..a0494c024d 100644
+index 95e6bef56c..a0494c024d 100755
 --- a/README.md
 +++ b/README.md
 @@ -1,4 +1,5 @@
@@ -29,7 +29,7 @@ index 95e6bef56c..a0494c024d 100644
  [sonar img]:https://dev.eclipse.org/sonar/images/logo.png?1400775536
  
 diff --git a/appveyor.yml b/appveyor.yml
-index 397d48c77c..57fea24875 100644
+index 397d48c77c..57fea24875 100755
 --- a/appveyor.yml
 +++ b/appveyor.yml
 @@ -1,16 +1,14 @@
@@ -80,7 +80,7 @@ index 397d48c77c..57fea24875 100644
 -  - C:\maven\
 -  - C:\Users\appveyor\.m2
 diff --git a/config/ant-phase-verify.xml b/config/ant-phase-verify.xml
-index 867c11556b..b2277f1c55 100644
+index 867c11556b..b2277f1c55 100755
 --- a/config/ant-phase-verify.xml
 +++ b/config/ant-phase-verify.xml
 @@ -34,6 +34,7 @@
@@ -92,7 +92,7 @@ index 867c11556b..b2277f1c55 100644
        <property key="checkstyle.suppressions.file"
                  file="config/suppressions.xml"/>
 diff --git a/config/build.xml b/config/build.xml
-index 2488312039..9d593dd7c1 100644
+index 2488312039..9d593dd7c1 100755
 --- a/config/build.xml
 +++ b/config/build.xml
 @@ -36,6 +36,7 @@
@@ -104,7 +104,7 @@ index 2488312039..9d593dd7c1 100644
        <property key="checkstyle.suppressions.file"
                  file="config/suppressions.xml"/>
 diff --git a/config/checkstyle_checks.xml b/config/checkstyle_checks.xml
-index 9a433aa1e3..e4502c0933 100644
+index 9a433aa1e3..e4502c0933 100755
 --- a/config/checkstyle_checks.xml
 +++ b/config/checkstyle_checks.xml
 @@ -53,11 +53,14 @@
@@ -126,7 +126,7 @@ index 9a433aa1e3..e4502c0933 100644
      <property name="tabWidth" value="4"/>
  
 diff --git a/config/java_regexp.header b/config/java_regexp.header
-new file mode 100644
+new file mode 100755
 index 0000000000..c481e3ff1b
 --- /dev/null
 +++ b/config/java_regexp.header
@@ -150,7 +150,7 @@ index 0000000000..c481e3ff1b
 +^/{2} Foundation, Inc., \d\d Temple Place, Suite \d\d\d, Boston, MA  \d\d\d\d\d-\d\d\d\d  USA$
 +^/{80}$
 diff --git a/pom.xml b/pom.xml
-index d4f750f4fc..3bbdba7cca 100644
+index dc9a904496..3bbdba7cca 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -167,7 +167,7 @@
@@ -188,7 +188,7 @@ index d4f750f4fc..3bbdba7cca 100644
              <regex><pattern>.*.checks.coding.AbstractSuperCheck</pattern><branchRate>78</branchRate><lineRate>89</lineRate></regex>
              <regex><pattern>.*.checks.coding.DeclarationOrderCheck</pattern><branchRate>82</branchRate><lineRate>93</lineRate></regex>
              <regex><pattern>.*.checks.coding.ExplicitInitializationCheck</pattern><branchRate>91</branchRate><lineRate>97</lineRate></regex>
--            <regex><pattern>.*.checks.coding.FallThroughCheck</pattern><branchRate>90</branchRate><lineRate>97</lineRate></regex>
+-            <regex><pattern>.*.checks.coding.FallThroughCheck</pattern><branchRate>92</branchRate><lineRate>98</lineRate></regex>
              <regex><pattern>.*.checks.coding.FinalLocalVariableCheck</pattern><branchRate>82</branchRate><lineRate>100</lineRate></regex>
              <regex><pattern>.*.checks.coding.IllegalInstantiationCheck</pattern><branchRate>81</branchRate><lineRate>97</lineRate></regex>
              <regex><pattern>.*.checks.coding.IllegalTokenCheck</pattern><branchRate>83</branchRate><lineRate>100</lineRate></regex>
@@ -214,7 +214,7 @@ index d4f750f4fc..3bbdba7cca 100644
              <regex><pattern>.*.checks.indentation.MethodDefHandler</pattern><branchRate>87</branchRate><lineRate>100</lineRate></regex>
              <regex><pattern>.*.checks.indentation.NewHandler</pattern><branchRate>83</branchRate><lineRate>77</lineRate></regex>
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
-index d15e07dfae..4de39e6827 100644
+index fb5f37f305..4de39e6827 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheck.java
 @@ -132,9 +132,7 @@ public void init() {
@@ -251,35 +251,7 @@ index d15e07dfae..4de39e6827 100644
  
          if (lastStmt.getType() == TokenTypes.RCURLY) {
              lastStmt = lastStmt.getPreviousSibling();
-@@ -230,11 +223,26 @@ private boolean checkIf(final DetailAST ast, boolean useBreak,
- 
-         if (isTerminated && elseStmt != null) {
-             isTerminated = isTerminated(elseStmt.getFirstChild(),
--                                        useBreak, useContinue);
-+                useBreak, useContinue);
-+        }
-+        else if (elseStmt == null && !isAlwaysTrueIf(ast)) {
-+            isTerminated = false;
-         }
-         return isTerminated;
-     }
- 
-+    /**
-+     * Checks whether if condition is always true.
-+     * @param ifToken if token.
-+     * @return true when if condition is always true.
-+     */
-+    private static boolean isAlwaysTrueIf(DetailAST ifToken) {
-+        final DetailAST firstChild = ifToken.getFirstChild();
-+        final DetailAST nextSibling = firstChild.getNextSibling();
-+        final DetailAST secondChild = nextSibling.getFirstChild();
-+        return secondChild.getType() == TokenTypes.LITERAL_TRUE;
-+    }
-+
-     /**
-      * Checks if a given loop terminated by return, throw or,
-      * if allowed break, continue.
-@@ -286,15 +294,14 @@ private boolean checkTry(final DetailAST ast, boolean useBreak,
+@@ -301,15 +294,14 @@ private boolean checkTry(final DetailAST ast, boolean useBreak,
      /**
       * Checks if a given switch terminated by return, throw or,
       * if allowed break, continue.
@@ -300,7 +272,7 @@ index d15e07dfae..4de39e6827 100644
                  caseGroup.findFirstToken(TokenTypes.SLIST);
              isTerminated = caseBody != null && isTerminated(caseBody, false, useContinue);
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
-index ca0fff5848..aece6d6728 100644
+index ca0fff5848..aece6d6728 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/FinalLocalVariableCheck.java
 @@ -152,12 +152,13 @@ public void visitToken(DetailAST ast) {
@@ -322,7 +294,7 @@ index ca0fff5848..aece6d6728 100644
                          && shouldCheckEnhancedForLoopVariable(ast)
                          && isVariableInForInit(ast)
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/AbstractHeaderCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/AbstractHeaderCheck.java
-index 8143fbd19b..e091181faa 100644
+index 8143fbd19b..e091181faa 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/AbstractHeaderCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/AbstractHeaderCheck.java
 @@ -84,11 +84,13 @@ public void setCharset(String charset) throws UnsupportedEncodingException {
@@ -354,7 +326,7 @@ index 8143fbd19b..e091181faa 100644
      }
  }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheck.java
-index 9f12ca9cbc..69674911b0 100644
+index 9f12ca9cbc..69674911b0 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheck.java
 @@ -25,6 +25,9 @@
@@ -368,7 +340,7 @@ index 9f12ca9cbc..69674911b0 100644
   * @author Lars Kühne
   */
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheck.java
-index 54a2d6b51b..d48f90d006 100644
+index 54a2d6b51b..d48f90d006 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheck.java
 @@ -35,7 +35,9 @@
@@ -383,7 +355,7 @@ index 54a2d6b51b..d48f90d006 100644
   * @author Lars Kühne
   * @author o_sukhodolsky
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MethodCallHandler.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MethodCallHandler.java
-index a368e2a2d7..5dfce2d342 100644
+index a368e2a2d7..5dfce2d342 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MethodCallHandler.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/indentation/MethodCallHandler.java
 @@ -38,11 +38,7 @@
@@ -502,7 +474,7 @@ index a368e2a2d7..5dfce2d342 100644
      }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheckTest.java
-index a99b8d62cd..757f297285 100644
+index 452466a000..757f297285 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/coding/FallThroughCheckTest.java
 @@ -47,6 +47,10 @@ public void testDefault() throws Exception {
@@ -536,29 +508,8 @@ index a99b8d62cd..757f297285 100644
          };
          verify(checkConfig,
                 getPath("coding" + File.separator + "InputFallThrough.java"),
-@@ -128,4 +138,20 @@ public void testTokensNotNull() {
-         Assert.assertNotNull(check.getDefaultTokens());
-         Assert.assertNotNull(check.getRequiredTokens());
-     }
-+
-+    @Test
-+    public void testFallThroughNoElse() throws Exception {
-+        DefaultConfiguration checkConfig = createCheckConfig(FallThroughCheck.class);
-+        final String[] expected = {
-+            "20:13: " + getCheckMessage(MSG_FALL_THROUGH),
-+            "39:13: " + getCheckMessage(MSG_FALL_THROUGH),
-+            "46:13: " + getCheckMessage(MSG_FALL_THROUGH),
-+            "67:13: " + getCheckMessage(MSG_FALL_THROUGH),
-+            "80:21: " + getCheckMessage(MSG_FALL_THROUGH),
-+            "88:13: " + getCheckMessage(MSG_FALL_THROUGH),
-+        };
-+        verify(checkConfig,
-+            getPath("coding" + File.separator + "InputFallThrough2.java"),
-+            expected);
-+    }
- }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
-index 9195cc2779..0a3e284ba4 100644
+index 9195cc2779..0a3e284ba4 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/HeaderCheckTest.java
 @@ -172,17 +172,18 @@ public void testRegexpHeaderSmallHeader() throws Exception {
@@ -586,7 +537,7 @@ index 9195cc2779..0a3e284ba4 100644
      }
  
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
-index c8956a3336..3a98b3c61a 100644
+index c8956a3336..3a98b3c61a 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/header/RegexpHeaderCheckTest.java
 @@ -19,15 +19,20 @@
@@ -646,7 +597,7 @@ index c8956a3336..3a98b3c61a 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheckTest.java
-index 7ac6366eb0..b4ba3749e1 100644
+index 7ac6366eb0..b4ba3749e1 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheckTest.java
 @@ -256,7 +256,7 @@ public void testStaticGroupsOrder() throws Exception {
@@ -704,7 +655,7 @@ index 7ac6366eb0..b4ba3749e1 100644
          verify(checkConfig, getPath("imports" + File.separator
                   + "InputImportOrderStaticOnDemandGroupOrderBottom.java"), expected);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/indentation/IndentationCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/indentation/IndentationCheckTest.java
-index 6e81f0c907..0cb32856d3 100644
+index 6e81f0c907..0cb32856d3 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/indentation/IndentationCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/indentation/IndentationCheckTest.java
 @@ -1470,6 +1470,27 @@ public void testSynchronizedMethod() throws Exception {
@@ -736,7 +687,7 @@ index 6e81f0c907..0cb32856d3 100644
      public void testAnnotationDefinition() throws Exception {
          final DefaultConfiguration checkConfig = createCheckConfig(IndentationCheck.class);
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough.java b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough.java
-index 51d70374bc..011668cb91 100644
+index 51d70374bc..011668cb91 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough.java
 @@ -416,4 +416,36 @@ void nestedSwitches() {
@@ -776,109 +727,8 @@ index 51d70374bc..011668cb91 100644
 +        }
 +    }
  }
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough2.java b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough2.java
-new file mode 100644
-index 0000000000..30930aa69b
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputFallThrough2.java
-@@ -0,0 +1,95 @@
-+package com.puppycrawl.tools.checkstyle.coding;
-+
-+public class InputFallThrough2 {
-+    enum Test {
-+        A, B, C
-+    }
-+
-+    public static void test() {
-+        Test test = Test.A;
-+        int variable = 0;
-+
-+        switch (test) {
-+            case A:
-+                break;
-+            case B:
-+                if (variable == 1) {
-+                    // some work
-+                    break;
-+                }
-+            case C:
-+                break;
-+        }
-+
-+        int var2 = 1;
-+        switch (variable) {
-+            case 0:
-+            case 1:
-+            case 2:
-+                System.out.println(var2);
-+                break;
-+            case 3:
-+                if (true) {
-+                    return;
-+                }
-+            case 4:
-+                if (var2 == 2) {
-+                    break;
-+                }
-+            case 5:
-+                if (var2 == 1) {
-+
-+                }
-+                else if (true) {
-+                    return;
-+                }
-+            case 6:
-+                if (var2 > 1) {
-+                    break;
-+                }
-+                else {
-+                    break;
-+                }
-+            case 7:
-+                if (var2 ==1) {
-+                    break;
-+                }
-+                else if (true) {
-+                    return;
-+                }
-+            case 8:
-+                if(var2 == 5) {
-+                    System.out.println("0xB16B00B5");
-+                }
-+                else {
-+                    break;
-+                }
-+            case 9:
-+                if(var2 == 5) {
-+                    System.out.println("0xCAFED00D");
-+                }
-+                else {
-+                    System.out.printf("0x4B1D");
-+                }
-+                break;
-+            case 10:
-+                int var3 = 0xDEADBEEF;
-+                switch (var3) {
-+                    case 0xCAFEBABE:
-+                        System.out.printf("0x1CEB00DA");
-+                    default:
-+                        System.out.printf("");
-+                }
-+                if(true) {
-+                    break;
-+                }
-+            case 11:
-+                if(false) {break;}
-+            case 12:
-+                if(true);
-+                break;
-+            default:
-+                break;
-+        }
-+    }
-+}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputIllegalTypeStarImports.java b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputIllegalTypeStarImports.java
-index 3b9681410c..a433f39004 100644
+index 3b9681410c..a433f39004 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputIllegalTypeStarImports.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/coding/InputIllegalTypeStarImports.java
 @@ -2,7 +2,7 @@
@@ -891,7 +741,7 @@ index 3b9681410c..a433f39004 100644
  //configuration "illegalClassNames": List
  public class InputIllegalTypeStarImports
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyAndSpecial.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyAndSpecial.java
-index bff87fe693..c8096327b4 100644
+index bff87fe693..c8096327b4 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyAndSpecial.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyAndSpecial.java
 @@ -4,7 +4,7 @@
@@ -904,7 +754,7 @@ index bff87fe693..c8096327b4 100644
  import static sun.tools.util.ModifierFilter.ALL_ACCESS;
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyPackage.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyPackage.java
-index e777db50fd..78276506e1 100644
+index e777db50fd..78276506e1 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyPackage.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputCustomImportOrderThirdPartyPackage.java
 @@ -1,6 +1,6 @@
@@ -916,7 +766,7 @@ index e777db50fd..78276506e1 100644
  import org.junit.*;
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrder.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrder.java
-index 699cd41392..2927c9e2bf 100644
+index 699cd41392..2927c9e2bf 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrder.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrder.java
 @@ -1,7 +1,7 @@
@@ -929,7 +779,7 @@ index 699cd41392..2927c9e2bf 100644
  import org.*;
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrderBottom.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrderBottom.java
-index 461e61adb2..c519a78046 100644
+index 461e61adb2..c519a78046 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrderBottom.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticGroupOrderBottom.java
 @@ -5,7 +5,7 @@
@@ -942,7 +792,7 @@ index 461e61adb2..c519a78046 100644
  public class InputImportOrderStaticGroupOrderBottom
  {
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrder.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrder.java
-index 5a4a391198..3c81b5ab6c 100644
+index 5a4a391198..3c81b5ab6c 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrder.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrder.java
 @@ -1,7 +1,7 @@
@@ -955,7 +805,7 @@ index 5a4a391198..3c81b5ab6c 100644
  import org.*;
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrderBottom.java b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrderBottom.java
-index 89feb40619..a4a7e91577 100644
+index 89feb40619..a4a7e91577 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrderBottom.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/imports/InputImportOrderStaticOnDemandGroupOrderBottom.java
 @@ -5,7 +5,7 @@
@@ -968,7 +818,7 @@ index 89feb40619..a4a7e91577 100644
  public class InputImportOrderStaticOnDemandGroupOrderBottom
  {
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/FromGuava.java b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/FromGuava.java
-index 646d28224f..60e19ba37f 100644
+index 646d28224f..60e19ba37f 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/FromGuava.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/FromGuava.java
 @@ -4,7 +4,7 @@
@@ -1049,7 +899,7 @@ index 646d28224f..60e19ba37f 100644
        } //indent:6 exp:6
  
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputAnonymousClassInMethod.java b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputAnonymousClassInMethod.java
-new file mode 100644
+new file mode 100755
 index 0000000000..44514f1ab5
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputAnonymousClassInMethod.java
@@ -1082,7 +932,7 @@ index 0000000000..44514f1ab5
 +	} //indent:8 exp:2 warn
 +} //indent:0 exp:0
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputMethodCallLineWrap.java b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputMethodCallLineWrap.java
-index d9f64e7258..12ba8f8695 100644
+index d9f64e7258..12ba8f8695 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputMethodCallLineWrap.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/indentation/InputMethodCallLineWrap.java
 @@ -52,4 +52,14 @@ void foo() { //indent:8 exp:8
@@ -1101,7 +951,7 @@ index d9f64e7258..12ba8f8695 100644
 +    } //indent:4 exp:4
  } //indent:0 exp:0
 diff --git a/src/xdocs/config_header.xml b/src/xdocs/config_header.xml
-index 61ecf9b835..4fcf03563e 100644
+index 61ecf9b835..4fcf03563e 100755
 --- a/src/xdocs/config_header.xml
 +++ b/src/xdocs/config_header.xml
 @@ -104,6 +104,14 @@ line 5: ////////////////////////////////////////////////////////////////////

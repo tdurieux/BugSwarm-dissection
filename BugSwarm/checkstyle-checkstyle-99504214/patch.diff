@@ -1,86 +1,21 @@
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
-index 92f288c961..adb824ca03 100644
+index fd5f968087..adb824ca03 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/JTreeTable.java
-@@ -21,6 +21,7 @@
- 
- import java.awt.Component;
- import java.awt.Dimension;
-+import java.awt.FontMetrics;
- import java.awt.event.ActionEvent;
- import java.awt.event.MouseEvent;
- import java.util.EventObject;
-@@ -96,6 +97,8 @@ public JTreeTable(ParseTreeTableModel treeTableModel) {
-             setRowHeight(getRowHeight());
-         }
- 
-+        setColumnsInitialWidth();
-+
-         final Action expand = new AbstractAction() {
-             private static final long serialVersionUID = -5859674518660156121L;
- 
-@@ -120,6 +123,31 @@ public void actionPerformed(ActionEvent event) {
-         getActionMap().put(command, expand);
-     }
- 
-+    /**
-+     * Set initial value of width for columns in table.
-+     */
-+    @SuppressWarnings("NumericCastThatLosesPrecision")
-+    private void setColumnsInitialWidth() {
-+        final FontMetrics fontMetrics = getFontMetrics(getFont());
-+        // Six character string to contain "Column" column.
-+        final int widthOfSixCharacterString = fontMetrics.stringWidth("XXXXXX");
-+        // Padding must be added to width for columns to make them fully
-+        // visible in table header.
-+        final int padding = 10;
-+        final int widthOfColumnContainingSixCharacterString =
-+                widthOfSixCharacterString + padding;
-+        getColumn("Line").setMaxWidth(widthOfColumnContainingSixCharacterString);
-+        getColumn("Column").setMaxWidth(widthOfColumnContainingSixCharacterString);
-+        final int preferredTreeColumnWidth =
-+                (int) (getPreferredSize().getWidth() * 0.6);
-+        getColumn("Tree").setPreferredWidth(preferredTreeColumnWidth);
-+        // Twenty eight character string to contain "Type" column
-+        final int widthOfTwentyEightCharacterString =
-+                fontMetrics.stringWidth("XXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-+        final int preferredTypeColumnWidth = widthOfTwentyEightCharacterString + padding;
-+        getColumn("Type").setPreferredWidth(preferredTypeColumnWidth);
-+    }
-+
+@@ -126,6 +126,7 @@ public void actionPerformed(ActionEvent event) {
      /**
-      * Overridden to message super and forward the method to the tree.
-      * Since the tree is not actually in the component hierarchy it will
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
-index b65eef2388..bd0df086b2 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/gui/ParseTreeInfoPanel.java
-@@ -36,6 +36,7 @@
- import javax.swing.JOptionPane;
- import javax.swing.JPanel;
- import javax.swing.JScrollPane;
-+import javax.swing.JSplitPane;
- import javax.swing.JTextArea;
- import javax.swing.SwingUtilities;
- import javax.swing.filechooser.FileFilter;
-@@ -81,7 +82,6 @@ public ParseTreeInfoPanel() {
-         parseTreeTableModel = new ParseTreeTableModel(null);
-         treeTable = new JTreeTable(parseTreeTableModel);
-         final JScrollPane scrollPane = new JScrollPane(treeTable);
--        add(scrollPane, BorderLayout.PAGE_START);
- 
-         final JButton fileSelectionButton =
-             new JButton(new FileSelectionAction());
-@@ -96,7 +96,11 @@ public ParseTreeInfoPanel() {
-         treeTable.setLinePositionMap(linesToPosition);
- 
-         final JScrollPane sp2 = new JScrollPane(textArea);
--        add(sp2, BorderLayout.CENTER);
-+
-+        final JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-+                scrollPane, sp2);
-+        add(splitPane, BorderLayout.CENTER);
-+        splitPane.setResizeWeight(0.7);
- 
-         final JPanel pane = new JPanel(new GridLayout(1, 2));
-         add(pane, BorderLayout.PAGE_END);
+      * Set initial value of width for columns in table.
+      */
++    @SuppressWarnings("NumericCastThatLosesPrecision")
+     private void setColumnsInitialWidth() {
+         final FontMetrics fontMetrics = getFontMetrics(getFont());
+         // Six character string to contain "Column" column.
+@@ -138,7 +139,7 @@ private void setColumnsInitialWidth() {
+         getColumn("Line").setMaxWidth(widthOfColumnContainingSixCharacterString);
+         getColumn("Column").setMaxWidth(widthOfColumnContainingSixCharacterString);
+         final int preferredTreeColumnWidth =
+-                Double.valueOf(getPreferredSize().getWidth() * 0.6).intValue();
++                (int) (getPreferredSize().getWidth() * 0.6);
+         getColumn("Tree").setPreferredWidth(preferredTreeColumnWidth);
+         // Twenty eight character string to contain "Type" column
+         final int widthOfTwentyEightCharacterString =
