@@ -1,0 +1,220 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en" ng-app="defects4j-website" ng-controller="mainController">
+	<head>
+		<meta charset="UTF-8">
+		<title>Automatic Diff Dissection</title>
+
+		<!-- CSS -->
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+		<!-- Optional theme -->
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+		
+		<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/xterm/3.12.2/xterm.css">
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+		<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+		<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/diff2html/2.5.0/diff2html.min.css">
+		<link rel="stylesheet" href="website/style/style.css">
+
+
+		<!-- JS -->
+		<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.6/angular.min.js"></script>
+		<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.6/angular-animate.min.js"></script>
+		<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.6/angular-touch.min.js"></script>
+		<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.6.6/angular-route.js"></script>
+		<script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-2.5.0.min.js"></script>
+		<script src="//cdn.jsdelivr.net/npm/angu-fixed-header-table@1.2.1/angu-fixed-header-table.min.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/java.min.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/diff2html/2.5.0/diff2html.min.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/diff2html/2.5.0/diff2html-ui.min.js"></script>
+		<script src="//overset.github.io/javascript-natural-sort/naturalSort.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/xterm/3.12.2/xterm.min.js"></script>
+		
+
+		<script src="website/js/app.js"></script>
+	</head>
+	<body keypress-events>
+		<div id="wrapper">
+			<!-- Navigation -->
+			<nav class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+				<div class="navbar-header">
+					<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+						<span class="sr-only">Toggle navigation</span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+					</button>
+					<h2>BugSwarm is showing {{filteredBugs.length}} pair of builds</h2>
+				</div>
+				<!-- Sidebar Menu Items - These collapse to the responsive navigation menu on small screens -->
+				<div class="collapse navbar-collapse navbar-ex1-collapse">
+					<ul id="menu" class="nav navbar-nav side-nav">
+						<li>
+							<ul class="nav">
+								<li>
+									<a href="#" ng-click="submenu1 = !submenu1">
+									<i class="fa fa-fw fa-search"></i>Contains <i class="fa fa-fw fa-angle-down pull-right"></i></a>
+									<ul class="collapse" uib-collapse="submenu1">
+										<li>
+											<label for="commit" ng-class="{'actived': filters['commit']}"><input type="checkbox" id="commit" ng-model="filters['commit']" ng-click="clickFilter('commit')">Only unique commit</label>
+										</li>
+										<li>
+											<label for="unique_diff" ng-class="{'actived': filters['unique_diff']}"><input type="checkbox" id="unique_diff" ng-model="filters['unique_diff']" ng-click="clickFilter('unique_diff')">Only unique diff</label>
+										</li>
+										<li>
+											<label for="empty" ng-class="{'actived': filters['empty']}"><input type="checkbox" id="empty" ng-model="filters['empty']" ng-click="clickFilter('empty')">Only not empty diff</label>
+										</li>
+										<li>
+											<label for="test" ng-class="{'actived': filters['test']}"><input type="checkbox" id="test" ng-model="filters['test']" ng-click="clickFilter('test')">Only failing tests</label>
+										</li>
+										<li>
+											<label for="changed_test" ng-class="{'actived': filters['changed_test']}"><input type="checkbox" id="changed_test" ng-model="filters['changed_test']" ng-click="clickFilter('changed_test')">Can contain changed test</label>
+										</li>
+										<li>
+											<label for="source" ng-class="{'actived': filters['source']}"><input type="checkbox" id="source" ng-model="filters['source']" ng-click="clickFilter('source')">With changed source files (.py or .java)</label>
+										</li>
+										<li>
+											<label for="only_source" ng-class="{'actived': filters['only_source']}"><input type="checkbox" id="only_source" ng-model="filters['only_source']" ng-click="clickFilter('only_source')">Only changes on source files (.py or .java)</label>
+										</li>
+										<li>
+											<label for="image" ng-class="{'actived': filters['image']}"><input type="checkbox" id="image" ng-model="filters['image']" ng-click="clickFilter('image')">Only with Docker image available</label>
+										</li>
+										<li>
+											<label for="apr" ng-class="{'actived': filters['apr']}"><input type="checkbox" id="apr" ng-model="filters['apr']" ng-click="clickFilter('apr')">For automatic program repair</label>
+										</li>
+									</ul>
+								</li>
+								<li>
+									<a href="#" ng-click="submenuLang = !submenuLang">
+									<i class="fa fa-fw fa-search"></i>Languages <i class="fa fa-fw fa-angle-down pull-right"></i></a>
+									<ul class="collapse" uib-collapse="submenuLang">
+										<li>
+											<label for="python" ng-class="{'actived': filters['python']}"><input type="checkbox" id="python" ng-model="filters['python']" ng-click="clickFilter('python')">Python</label>
+										</li>
+										<li>
+											<label for="java" ng-class="{'actived': filters['java']}"><input type="checkbox" id="java" ng-model="filters['java']" ng-click="clickFilter('java')">Java</label>
+										</li>
+									</ul>
+								</li>
+							</ul>
+						</li>
+					</ul>
+				</div>
+				<!-- /.navbar-collapse -->
+			</nav>
+
+			<div id="page-wrapper">
+				<div class="container-fluid">
+					<div class="row" id="main" >
+						<table fixed-header id="mainTable" class="table table-striped">
+							<thead>
+								<tr>
+									<th>
+										<a href="#" ng-click="sort(['benchmark', 'project', 'bugId'])">
+											Benchmark
+											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>
+										<a href="#" ng-click="sort(['benchmark', 'project', 'bugId'])">
+											Bug id
+											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>	
+										<a href="#" ng-click="sort('files.added.length')">
+											# Added Files
+											<span ng-show="sortType == 'files.added.length' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'files.added.length' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>	
+										<a href="#" ng-click="sort('files.deleted.length')">
+											# Removed Files
+											<span ng-show="sortType == 'files.deleted.length' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'files.deleted.length' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>	
+										<a href="#" ng-click="sort('files.modified.length')">
+											# Modified Files
+											<span ng-show="sortType == 'files.modified.length' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'files.modified.length' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>	
+										<a href="#" ng-click="sort('metrics.patchSize')">
+											# Lines
+											<span ng-show="sortType == 'metrics.patchSize' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'metrics.patchSize' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>
+										<a href="#" ng-click="sort('metrics.addedLines')">
+											# Added
+											<span ng-show="sortType == 'metrics.addedLines' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'metrics.addedLines' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+									<th>
+										<a href="#" ng-click="sort('metrics.removedLines')">
+											# Removed
+											<span ng-show="sortType == 'metrics.removedLines' && sortReverse" class="fa fa-caret-down"></span>
+											<span ng-show="sortType == 'metrics.removedLines' && !sortReverse" class="fa fa-caret-up"></span>
+										</a>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr ng-repeat="bug in bugs| orderBy:sortType:sortReverse:naturalCompare| filter:bugsFilter as filteredBugs" ng-click="openBug(bug)">
+									<td>{{ bug.benchmark }}</td>
+									<td>{{ bug.bugId }}</td>
+									<td>{{ bug.files.added.length }}</td>
+									<td>{{ bug.files.deleted.length }}</td>
+									<td>{{ bug.files.modified.length }}</td>
+									<td>{{ bug.metrics.patchSize }}</td>
+									<td>{{ bug.metrics.addedLines }}</td>
+									<td>{{ bug.metrics.removedLines}}</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				<!-- /.container-fluid -->
+			</div>
+			<!-- /#page-wrapper -->
+		</div><!-- /#wrapper -->
+		<span ng-controller="bugController"></span>
+	</body>
+	<script type="text/ng-template" id="modelPatch.html">
+		<div class="modal-header">
+			<h3 class="modal-title" id="modal-title">{{ $ctrl.bug.benchmark }} {{ $ctrl.bug.bugId }} {{$ctrl.size}}Gb</h3>
+			<a ng-click="$ctrl.previousPatch()"><i class="fa fa-arrow-left" aria-hidden="true"></i> Previous Patch</a> | <a ng-click="$ctrl.nextPatch()">Next Patch <i class="fa fa-arrow-right" aria-hidden="true"></i></a>
+		</div>
+		<div class="modal-body" id="modal-body">
+			<p>
+				<h4>{{$ctrl.bug.passed_job.message}}</h4>
+				from <a href="https://github.com/{{$ctrl.bug.repo}}/compare/{{$ctrl.bug.failed_job.trigger_sha}}..{{$ctrl.bug.passed_job.trigger_sha}}">{{$ctrl.bug.failed_job.trigger_sha.substring(0,8)}}..{{$ctrl.bug.passed_job.trigger_sha.substring(0,8)}}</a> at {{$ctrl.bug.passed_job.committed_at}}
+			</p>
+
+			<h3>Human Patch</h3>
+			<div diff="$ctrl.bug"></div>
+
+			<h3>Failing log</h3>
+			<div class="log" ng-click="$ctrl.show_failing_log($event, $ctrl.bug)">Click here to download the log...</div>
+
+			<h3>Passing log</h3>
+			<div class="log" ng-click="$ctrl.show_passing_log($event, $ctrl.bug)" >Click here to download the log...</div>
+		</div>
+		
+		<div class="modal-footer">
+			<button class="btn btn-primary" type="button" ng-click="$ctrl.ok()">OK</button>
+		</div>
+	</script>
+</html>
