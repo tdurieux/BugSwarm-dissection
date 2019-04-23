@@ -1,5 +1,5 @@
 diff --git a/its/ruling/src/test/resources/jdk6/squid-S4435.json b/its/ruling/src/test/resources/jdk6/squid-S4435.json
-new file mode 100644
+new file mode 100755
 index 0000000000..0a8dee2556
 --- /dev/null
 +++ b/its/ruling/src/test/resources/jdk6/squid-S4435.json
@@ -13,7 +13,7 @@ index 0000000000..0a8dee2556
 +],
 +}
 diff --git a/its/ruling/src/test/resources/sonar-server/squid-S4435.json b/its/ruling/src/test/resources/sonar-server/squid-S4435.json
-new file mode 100644
+new file mode 100755
 index 0000000000..c32fafae23
 --- /dev/null
 +++ b/its/ruling/src/test/resources/sonar-server/squid-S4435.json
@@ -24,10 +24,10 @@ index 0000000000..c32fafae23
 +],
 +}
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-index b5e5b2be57..adc0baa92e 100644
+index 08d4bd2836..adc0baa92e 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-@@ -43,12 +43,16 @@
+@@ -43,10 +43,13 @@
  import org.sonar.java.checks.naming.MethodNamedEqualsCheck;
  import org.sonar.java.checks.naming.MethodNamedHashcodeOrEqualCheck;
  import org.sonar.java.checks.security.AESAlgorithmCheck;
@@ -40,22 +40,16 @@ index b5e5b2be57..adc0baa92e 100644
 +import org.sonar.java.checks.security.SecureXmlTransformerCheck;
  import org.sonar.java.checks.security.TrustManagerCertificateCheck;
  import org.sonar.java.checks.security.LDAPAuthenticatedConnectionCheck;
-+import org.sonar.java.checks.security.XmlExternalEntityProcessingCheck;
- import org.sonar.java.checks.serialization.CustomSerializationMethodCheck;
- import org.sonar.java.checks.serialization.ExternalizableClassConstructorCheck;
- import org.sonar.java.checks.serialization.PrivateReadResolveCheck;
-@@ -337,8 +341,10 @@ private CheckList() {
-       .add(AESAlgorithmCheck.class)
-       .add(ConstructorCallingOverridableCheck.class)
-       .add(EqualsOnAtomicClassCheck.class)
-+      .add(XmlExternalEntityProcessingCheck.class)
+ import org.sonar.java.checks.security.XmlExternalEntityProcessingCheck;
+@@ -341,6 +344,7 @@ private CheckList() {
+       .add(XmlExternalEntityProcessingCheck.class)
        .add(LDAPAuthenticatedConnectionCheck.class)
        .add(LDAPDeserializationCheck.class)
 +      .add(SecureXmlTransformerCheck.class)
        .add(NonShortCircuitLogicCheck.class)
        .add(ArrayHashCodeAndToStringCheck.class)
        .add(DefaultEncodingUsageCheck.class)
-@@ -553,6 +559,8 @@ private CheckList() {
+@@ -555,6 +559,8 @@ private CheckList() {
        .add(RegexPatternsNeedlesslyCheck.class)
        .add(SpecializedFunctionalInterfacesCheck.class)
        .add(IndentationAfterConditionalCheck.class)
@@ -65,7 +59,7 @@ index b5e5b2be57..adc0baa92e 100644
    }
  
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java b/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
-index 67c71e1bf8..eb9dd15ed6 100644
+index 67c71e1bf8..eb9dd15ed6 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
 @@ -35,7 +35,7 @@
@@ -78,7 +72,7 @@ index 67c71e1bf8..eb9dd15ed6 100644
    private JavaFileScannerContext context;
  
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java b/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
-index 808587e936..6c1d14e6bf 100644
+index 808587e936..6c1d14e6bf 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
 @@ -20,7 +20,12 @@
@@ -155,7 +149,7 @@ index 808587e936..6c1d14e6bf 100644
      for (Boolean aBoolean : withinInterruptingFinally) {
        if(aBoolean) {
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java b/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
-index 682979d698..258f391052 100644
+index 682979d698..258f391052 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
 @@ -22,11 +22,13 @@
@@ -204,69 +198,8 @@ index 682979d698..258f391052 100644
  
    private void verifyParameters(MethodInvocationTree mit, List<ExpressionTree> args, Set<Integer> indexes) {
      List<ExpressionTree> unusedArgs = new ArrayList<>(args);
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/helpers/ConstantUtils.java b/java-checks/src/main/java/org/sonar/java/checks/helpers/ConstantUtils.java
-index 1be259281b..f1d5fec3dc 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/helpers/ConstantUtils.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/helpers/ConstantUtils.java
-@@ -60,6 +60,12 @@ public static Long resolveAsLongConstant(ExpressionTree tree) {
-     return null;
-   }
- 
-+  @CheckForNull
-+  public static Boolean resolveAsBooleanConstant(ExpressionTree tree) {
-+    Object constant = resolveAsConstant(tree);
-+    return constant instanceof Boolean ? (Boolean) constant : null;
-+  }
-+
-   @CheckForNull
-   private static Object resolveAsConstant(ExpressionTree tree) {
-     ExpressionTree expression = tree;
-@@ -70,11 +76,10 @@ private static Object resolveAsConstant(ExpressionTree tree) {
-       expression = ((MemberSelectExpressionTree) expression).identifier();
-     }
-     if (expression.is(Tree.Kind.IDENTIFIER)) {
--      IdentifierTree id = (IdentifierTree) expression;
--      Symbol symbol = id.symbol();
--      if (symbol.isVariableSymbol()) {
--        return ((JavaSymbol.VariableJavaSymbol) symbol).constantValue().orElse(null);
--      }
-+      return resolveIdentifier((IdentifierTree) expression);
-+    }
-+    if (expression.is(Tree.Kind.BOOLEAN_LITERAL)) {
-+      return Boolean.parseBoolean(((LiteralTree) expression).value());
-     }
-     if (expression.is(Tree.Kind.STRING_LITERAL)) {
-       return LiteralUtils.trimQuotes(((LiteralTree) expression).value());
-@@ -92,6 +97,27 @@ private static Object resolveAsConstant(ExpressionTree tree) {
-     return null;
-   }
- 
-+  @CheckForNull
-+  private static Object resolveIdentifier(IdentifierTree tree) {
-+    Symbol symbol = tree.symbol();
-+    if (!symbol.isVariableSymbol()) {
-+      return null;
-+    }
-+    JavaSymbol.VariableJavaSymbol javaSymbol = (JavaSymbol.VariableJavaSymbol) symbol;
-+    JavaSymbol owner = javaSymbol.owner();
-+    if (owner.isTypeSymbol()) {
-+      JavaSymbol.TypeJavaSymbol ownerType = (JavaSymbol.TypeJavaSymbol) owner;
-+      if ("java.lang.Boolean".equals(ownerType.getFullyQualifiedName())) {
-+        if ("TRUE".equals(javaSymbol.getName())) {
-+          return Boolean.TRUE;
-+        } else if ("FALSE".equals(javaSymbol.getName())) {
-+          return Boolean.FALSE;
-+        }
-+      }
-+    }
-+    return javaSymbol.constantValue().orElse(null);
-+  }
-+
-   @CheckForNull
-   private static Object resolvePlus(BinaryExpressionTree binaryExpression) {
-     Object left = resolveAsConstant(binaryExpression.leftOperand());
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CipherBlockChainingCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CipherBlockChainingCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..9489d2e3cd
 --- /dev/null
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/CipherBlockChainingCheck.java
@@ -377,7 +310,7 @@ index 0000000000..9489d2e3cd
 +  }
 +}
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..267ee60c16
 --- /dev/null
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java
@@ -482,7 +415,7 @@ index 0000000000..267ee60c16
 +  }
 +}
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..22733714ec
 --- /dev/null
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/SecureXmlTransformerCheck.java
@@ -616,63 +549,56 @@ index 0000000000..22733714ec
 +  }
 +}
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheck.java
-new file mode 100644
-index 0000000000..1519f15250
---- /dev/null
+index 00f03a5cf4..1519f15250 100755
+--- a/java-checks/src/main/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheck.java
-@@ -0,0 +1,190 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks.security;
-+
+@@ -19,13 +19,13 @@
+  */
+ package org.sonar.java.checks.security;
+ 
 +import java.util.Arrays;
-+import java.util.Collections;
-+import java.util.List;
+ import java.util.Collections;
+-import java.util.HashMap;
+ import java.util.List;
+-import java.util.Map;
+-import java.util.function.Supplier;
 +import java.util.function.Predicate;
-+import javax.annotation.CheckForNull;
-+import javax.xml.XMLConstants;
+ import javax.annotation.CheckForNull;
+ import javax.xml.XMLConstants;
 +import javax.xml.parsers.DocumentBuilderFactory;
-+import javax.xml.parsers.SAXParserFactory;
-+import javax.xml.stream.XMLInputFactory;
-+import org.sonar.check.Rule;
-+import org.sonar.java.matcher.MethodMatcher;
-+import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
-+import org.sonar.plugins.java.api.tree.Arguments;
-+import org.sonar.plugins.java.api.tree.BaseTreeVisitor;
-+import org.sonar.plugins.java.api.tree.ExpressionTree;
-+import org.sonar.plugins.java.api.tree.MethodInvocationTree;
-+import org.sonar.plugins.java.api.tree.MethodTree;
-+import org.sonar.plugins.java.api.tree.Tree;
-+import org.sonar.plugins.java.api.tree.Tree.Kind;
+ import javax.xml.parsers.SAXParserFactory;
+ import javax.xml.stream.XMLInputFactory;
+ import org.sonar.check.Rule;
+@@ -38,30 +38,41 @@
+ import org.sonar.plugins.java.api.tree.MethodTree;
+ import org.sonar.plugins.java.api.tree.Tree;
+ import org.sonar.plugins.java.api.tree.Tree.Kind;
 +import org.xml.sax.XMLReader;
 +import org.xml.sax.helpers.XMLReaderFactory;
-+
-+import static org.sonar.java.checks.helpers.ConstantUtils.resolveAsBooleanConstant;
-+import static org.sonar.java.checks.helpers.ConstantUtils.resolveAsStringConstant;
-+import static org.sonar.java.matcher.TypeCriteria.subtypeOf;
-+
+ 
+ import static org.sonar.java.checks.helpers.ConstantUtils.resolveAsBooleanConstant;
+ import static org.sonar.java.checks.helpers.ConstantUtils.resolveAsStringConstant;
+ import static org.sonar.java.matcher.TypeCriteria.subtypeOf;
+ 
+-@Rule(key = "S2756")
 +@Rule(key = "S2755")
-+public class XmlExternalEntityProcessingCheck extends IssuableSubscriptionVisitor {
-+
+ public class XmlExternalEntityProcessingCheck extends IssuableSubscriptionVisitor {
+ 
+-  private static final String STAX_FACTORY_CLASS_NAME = XMLInputFactory.class.getName();
 +  private static final String XML_INPUT_FACTORY_CLASS_NAME = XMLInputFactory.class.getName();
-+  private static final String SAX_PARSER_FACTORY_CLASS_NAME = SAXParserFactory.class.getName();
+   private static final String SAX_PARSER_FACTORY_CLASS_NAME = SAXParserFactory.class.getName();
+-
+-  private final Map<MethodMatcher, Supplier<XxeValidator>> xxeValidatorsByMethodMatcher = xxeValidatorsByMethodMatcher();
+-
+-  private static Map<MethodMatcher, Supplier<XxeValidator>> xxeValidatorsByMethodMatcher() {
+-    Map<MethodMatcher, Supplier<XxeValidator>> map = new HashMap<>();
+-    map.put(
+-      MethodMatcher.create().typeDefinition(STAX_FACTORY_CLASS_NAME).name("newInstance").withAnyParameters(),
+-      StaxXxeValidator::new);
+-    map.put(
+-      MethodMatcher.create().typeDefinition(SAX_PARSER_FACTORY_CLASS_NAME).name("newInstance").withAnyParameters(),
+-      SaxParserXxeValidator::new);
+-    return map;
 +  private static final String XML_READER_FACTORY_CLASS_NAME = XMLReaderFactory.class.getName();
 +  private static final String XML_READER_CLASS_NAME = XMLReader.class.getName();
 +  private static final String DOCUMENT_BUILDER_FACTORY_CLASS_NAME = DocumentBuilderFactory.class.getName();
@@ -687,8 +613,8 @@ index 0000000000..1519f15250
 +      .typeDefinition(className)
 +      .name("newInstance")
 +      .withAnyParameters();
-+  }
-+
+   }
+ 
 +  private final List<XxeCheck> xxeChecks = Arrays.asList(
 +    new XxeCheck(newInstanceMethod(XML_INPUT_FACTORY_CLASS_NAME), new XMLInputFactorySecuringPredicate()),
 +    new XxeCheck(newInstanceMethod(SAX_PARSER_FACTORY_CLASS_NAME), new SecureProcessingFeaturePredicate(SAX_PARSER_FACTORY_CLASS_NAME)),
@@ -696,13 +622,16 @@ index 0000000000..1519f15250
 +    new XxeCheck(CREATE_XML_READER_MATCHER, new SecureProcessingFeaturePredicate(XML_READER_CLASS_NAME))
 +  );
 +
-+  @Override
-+  public List<Tree.Kind> nodesToVisit() {
-+    return Collections.singletonList(Kind.METHOD_INVOCATION);
-+  }
-+
-+  @Override
-+  public void visitNode(Tree tree) {
+   @Override
+   public List<Tree.Kind> nodesToVisit() {
+     return Collections.singletonList(Kind.METHOD_INVOCATION);
+@@ -69,98 +80,110 @@
+ 
+   @Override
+   public void visitNode(Tree tree) {
+-    MethodInvocationTree methodInvocation = (MethodInvocationTree) tree;
+-    xxeValidatorsByMethodMatcher.forEach((matcher, validatorSupplier) -> {
+-      if (matcher.matches(methodInvocation)) {
 +    xxeChecks.forEach(check -> check.checkMethodInvocation((MethodInvocationTree) tree));
 +  }
 +
@@ -718,16 +647,29 @@ index 0000000000..1519f15250
 +
 +    private void checkMethodInvocation(MethodInvocationTree methodInvocation) {
 +      if (triggeringInvocationMatcher.matches(methodInvocation)) {
-+        MethodTree enclosingMethod = enclosingMethod(methodInvocation);
-+        if (enclosingMethod != null) {
+         MethodTree enclosingMethod = enclosingMethod(methodInvocation);
+         if (enclosingMethod != null) {
+-          XxeValidator xxeValidator = validatorSupplier.get();
+-          enclosingMethod.accept(xxeValidator);
+-          if (!xxeValidator.isExternalEntityProcessingDisabled()) {
 +          MethodVisitor methodVisitor = new MethodVisitor(securingInvocationPredicate);
 +          enclosingMethod.accept(methodVisitor);
 +          if (!methodVisitor.isExternalEntityProcessingDisabled) {
-+            reportIssue(methodInvocation.methodSelect(), "Disable external entity (XXE) processing.");
-+          }
-+        }
-+      }
-+    }
+             reportIssue(methodInvocation.methodSelect(), "Disable external entity (XXE) processing.");
+           }
+         }
+       }
+-    });
+-  }
+-
+-  @CheckForNull
+-  private static MethodTree enclosingMethod(Tree tree) {
+-    Tree parent = tree.parent();
+-    while (!parent.is(Kind.CLASS, Kind.METHOD)) {
+-      parent = parent.parent();
+     }
+-    if (parent.is(Kind.CLASS)) {
+-      return null;
 +
 +    @CheckForNull
 +    private MethodTree enclosingMethod(Tree tree) {
@@ -739,18 +681,21 @@ index 0000000000..1519f15250
 +        return null;
 +      }
 +      return (MethodTree) parent;
-+    }
-+  }
-+
+     }
+-    return (MethodTree) parent;
+   }
+ 
+-  private abstract static class XxeValidator extends BaseTreeVisitor {
 +  private static class MethodVisitor extends BaseTreeVisitor {
 +
 +    private final Predicate<MethodInvocationTree> securingInvocationPredicate;
 +    private boolean isExternalEntityProcessingDisabled = false;
-+
+ 
+-    abstract boolean isExternalEntityProcessingDisabled();
 +    private MethodVisitor(Predicate<MethodInvocationTree> securingInvocationPredicate) {
 +      this.securingInvocationPredicate = securingInvocationPredicate;
 +    }
-+
+ 
 +    @Override
 +    public void visitMethodInvocation(MethodInvocationTree methodInvocation) {
 +      if (securingInvocationPredicate.test(methodInvocation)) {
@@ -758,47 +703,82 @@ index 0000000000..1519f15250
 +      }
 +      super.visitMethodInvocation(methodInvocation);
 +    }
-+  }
-+
+   }
+ 
+-  private static class StaxXxeValidator extends XxeValidator {
 +  private static class XMLInputFactorySecuringPredicate implements Predicate<MethodInvocationTree> {
-+
-+    private static final MethodMatcher SET_PROPERTY =
-+      MethodMatcher.create()
+ 
+     private static final MethodMatcher SET_PROPERTY =
+       MethodMatcher.create()
+-        .typeDefinition(subtypeOf(STAX_FACTORY_CLASS_NAME))
 +        .typeDefinition(subtypeOf(XML_INPUT_FACTORY_CLASS_NAME))
-+        .name("setProperty")
-+        .parameters("java.lang.String", "java.lang.Object");
-+
-+    @Override
+         .name("setProperty")
+         .parameters("java.lang.String", "java.lang.Object");
+ 
+-    private boolean isExternalEntityProcessingDisabled = false;
+-
+     @Override
+-    boolean isExternalEntityProcessingDisabled() {
+-      return isExternalEntityProcessingDisabled;
+-    }
+-
+-    @Override
+-    public void visitMethodInvocation(MethodInvocationTree methodInvocation) {
 +    public boolean test(MethodInvocationTree methodInvocation) {
-+      Arguments arguments = methodInvocation.arguments();
-+      if (SET_PROPERTY.matches(methodInvocation)) {
-+        String propertyName = resolveAsStringConstant(arguments.get(0));
-+        if (XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES.equals(propertyName) || XMLInputFactory.SUPPORT_DTD.equals(propertyName)) {
-+          ExpressionTree propertyValue = arguments.get(1);
+       Arguments arguments = methodInvocation.arguments();
+       if (SET_PROPERTY.matches(methodInvocation)) {
+         String propertyName = resolveAsStringConstant(arguments.get(0));
+         if (XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES.equals(propertyName) || XMLInputFactory.SUPPORT_DTD.equals(propertyName)) {
+           ExpressionTree propertyValue = arguments.get(1);
+-          if (Boolean.FALSE.equals(resolveAsBooleanConstant(propertyValue))) {
+-            isExternalEntityProcessingDisabled = true;
+-          }
 +          return Boolean.FALSE.equals(resolveAsBooleanConstant(propertyValue));
-+        }
-+      }
+         }
+       }
+-      super.visitMethodInvocation(methodInvocation);
 +      return false;
-+    }
-+  }
-+
+     }
+   }
+ 
+-  private static class SaxParserXxeValidator extends XxeValidator {
 +  private static class SecureProcessingFeaturePredicate implements Predicate<MethodInvocationTree> {
-+
+ 
+-    private static final MethodMatcher SET_FEATURE =
+-      MethodMatcher.create()
+-        .typeDefinition(subtypeOf(SAX_PARSER_FACTORY_CLASS_NAME))
+-        .name("setFeature")
+-        .parameters("java.lang.String", "boolean");
+-
+-    private boolean isExternalEntityProcessingDisabled = false;
 +    private final MethodMatcher methodMatcher;
-+
+ 
+-    @Override
+-    boolean isExternalEntityProcessingDisabled() {
+-      return isExternalEntityProcessingDisabled;
 +    private SecureProcessingFeaturePredicate(String className) {
 +      this.methodMatcher = setFeatureMethodMatcher(className);
-+    }
-+
-+    @Override
+     }
+ 
+     @Override
+-    public void visitMethodInvocation(MethodInvocationTree methodInvocation) {
+-      Arguments arguments = methodInvocation.arguments();
+-      if (SET_FEATURE.matches(methodInvocation)) {
 +    public boolean test(MethodInvocationTree methodInvocation) {
 +      if (methodMatcher.matches(methodInvocation)) {
 +        Arguments arguments = methodInvocation.arguments();
-+        String featureName = resolveAsStringConstant(arguments.get(0));
+         String featureName = resolveAsStringConstant(arguments.get(0));
+-        if (XMLConstants.FEATURE_SECURE_PROCESSING.equals(featureName)) {
+-          ExpressionTree propertyValue = arguments.get(1);
+-          if (Boolean.TRUE.equals(resolveAsBooleanConstant(propertyValue))) {
+-            isExternalEntityProcessingDisabled = true;
+-          }
+-        }
 +        return Boolean.TRUE.equals(resolveAsBooleanConstant(arguments.get(1)))
 +          && (XMLConstants.FEATURE_SECURE_PROCESSING.equals(featureName)
 +          || "http://apache.org/xml/features/disallow-doctype-decl".equals(featureName));
-+      }
+       }
+-      super.visitMethodInvocation(methodInvocation);
 +      return false;
 +    }
 +
@@ -807,58 +787,20 @@ index 0000000000..1519f15250
 +        .typeDefinition(subtypeOf(className))
 +        .name("setFeature")
 +        .parameters("java.lang.String", "boolean");
-+    }
-+  }
-+
-+}
-diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.html
-new file mode 100644
-index 0000000000..0a3768a9c7
---- /dev/null
+     }
+   }
+ 
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.html
+similarity index 70%
+rename from java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.html
+rename to java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.html
+index 03e6526d27..0a3768a9c7 100755
+--- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.html
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.html
-@@ -0,0 +1,54 @@
-+<p>Allowing external entities in untrusted documents to be processed could lay your systems bare to attackers. Imagine if these entities were
-+parsed:</p>
-+<pre>
-+&lt;!ENTITY xxe SYSTEM "file:///etc/passwd" &gt;]&gt;&lt;foo&gt;&amp;xxe;&lt;/foo&gt;
-+&lt;!ENTITY xxe SYSTEM "http://www.attacker.com/text.txt" &gt;]&gt;&lt;foo&gt;&amp;xxe;&lt;/foo&gt;
-+</pre>
-+<p>If you must parse untrusted XML, the best way to protect yourself is to use a local, static DTD during parsing and igore any DTD's included in
-+included in the document.</p>
-+<p>This rule raises an issue when any of the following are used without first disabling external entity processing: JAXP's
-+<code>DocumentBuilderFactory</code>, <code>SAXParserFactory</code>, Xerces 1 and Xerces 2 StAX's <code>XMLInputFactory</code> and
-+<code>XMLReaderFactory</code>.</p>
-+<p>To disable external entity processing for <code>XMLInputFactory</code>, configure one of the properties
-+<code>XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES</code> or <code>XMLInputFactory.SUPPORT_DTD</code> to false.</p>
-+<p>To disable external entity processing for <code>SAXParserFactory</code>, <code>XMLReader</code> or <code>DocumentBuilderFactory</code> configure
-+one of the properties <code>XMLConstants.FEATURE_SECURE_PROCESSING</code> or <code>"http://apache.org/xml/features/disallow-doctype-decl"</code> to
-+true.</p>
-+<h2>Noncompliant Code Example</h2>
-+<pre>
-+/* Load XML stream and display content */
-+String maliciousSample = "xxe.xml";
-+XMLInputFactory factory = XMLInputFactory.newInstance();
-+
-+try (FileInputStream fis = new FileInputStream(malicousSample)) {
-+  // Load XML stream
-+  XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(fis);  // Noncompliant; reader is vulnerable
-+
-+  //...
-+</pre>
-+<h2>Compliant Solution</h2>
-+<pre>
-+/* Load XML stream and display content */
-+String maliciousSample = "xxe.xml";
-+XMLInputFactory factory = XMLInputFactory.newInstance();
-+
-+// disable external entities
-+factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
-+factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
-+
-+try (FileInputStream fis = new FileInputStream(malicousSample)) {
-+    // Load XML stream
-+    XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(fis);
-+</pre>
+@@ -40,4 +40,15 @@ <h2>Compliant Solution</h2>
+     // Load XML stream
+     XMLStreamReader xmlStreamReader = factory.createXMLStreamReader(fis);
+ </pre>
 +<h2>See</h2>
 +<ul>
 +  <li> <a href="http://cwe.mitre.org/data/definitions/611.html">MITRE, CWE-611</a> - Information Exposure Through XML External Entity Reference </li>
@@ -870,9 +812,9 @@ index 0000000000..0a3768a9c7
 +  <li> Derived from FindSecBugs rule <a href="https://find-sec-bugs.github.io/bugs.htm#XXE_XMLREADER">XXE_XMLREADER</a> </li>
 +  <li> Derived from FindSecBugs rule <a href="https://find-sec-bugs.github.io/bugs.htm#XXE_DOCUMENT">XXE_DOCUMENT</a> </li>
 +</ul>
-+
+ 
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..e8fe24af92
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2755_java.json
@@ -899,8 +841,25 @@ index 0000000000..e8fe24af92
 +  "sqKey": "S2755",
 +  "scope": "Main"
 +}
+diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.json
+deleted file mode 100755
+index 87f84cb1ce..0000000000
+--- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S2756_java.json
++++ /dev/null
+@@ -1,11 +0,0 @@
+-{
+-  "title": "Java",
+-  "type": "CODE_SMELL",
+-  "status": "ready",
+-  "tags": [
+-    
+-  ],
+-  "ruleSpecification": "RSPEC-2756",
+-  "sqKey": "S2756",
+-  "scope": "Main"
+-}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..1e9fdcf921
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.html
@@ -972,7 +931,7 @@ index 0000000000..1e9fdcf921
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..a0afd75fc4
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3329_java.json
@@ -999,7 +958,7 @@ index 0000000000..a0afd75fc4
 +  "scope": "Main"
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..16e2d02b27
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html
@@ -1033,7 +992,7 @@ index 0000000000..16e2d02b27
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..23b227ba7b
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json
@@ -1060,7 +1019,7 @@ index 0000000000..23b227ba7b
 +  "scope": "Main"
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..0bd41131e1
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.html
@@ -1107,7 +1066,7 @@ index 0000000000..0bd41131e1
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..441fbc40ce
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4435_java.json
@@ -1134,7 +1093,7 @@ index 0000000000..441fbc40ce
 +  "scope": "Main"
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
-index cd7051f047..77bbdfea8d 100644
+index cd7051f047..77bbdfea8d 100755
 --- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
 @@ -304,11 +304,13 @@
@@ -1153,7 +1112,7 @@ index cd7051f047..77bbdfea8d 100644
      "S4454",
      "S4524"
 diff --git a/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java b/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
-index dc9a120311..ee97eacd47 100644
+index dc9a120311..ee97eacd47 100755
 --- a/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
 +++ b/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
 @@ -21,7 +21,7 @@
@@ -1166,7 +1125,7 @@ index dc9a120311..ee97eacd47 100644
    void goodMethod() {
  
 diff --git a/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java b/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
-index 392cf5a0c2..c72906cfd8 100644
+index 392cf5a0c2..c72906cfd8 100755
 --- a/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
 +++ b/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
 @@ -14,7 +14,7 @@
@@ -1179,7 +1138,7 @@ index 392cf5a0c2..c72906cfd8 100644
    float f1 = 0.f; // Noncompliant {{Remove this initialization to "0.f", the compiler will do that for you.}}
    float f2 = 1.f;
 diff --git a/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java b/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
-index 3b3b33d63f..efae2ac8b2 100644
+index 3b3b33d63f..efae2ac8b2 100755
 --- a/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
 +++ b/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
 @@ -24,5 +24,6 @@ void myMethod(int x, int y, int z) {
@@ -1190,7 +1149,7 @@ index 3b3b33d63f..efae2ac8b2 100644
    }
  }
 diff --git a/java-checks/src/test/files/checks/HardcodedIpCheck.java b/java-checks/src/test/files/checks/HardcodedIpCheck.java
-index d8cf740b77..c6322be244 100644
+index d8cf740b77..c6322be244 100755
 --- a/java-checks/src/test/files/checks/HardcodedIpCheck.java
 +++ b/java-checks/src/test/files/checks/HardcodedIpCheck.java
 @@ -1,6 +1,8 @@
@@ -1203,7 +1162,7 @@ index d8cf740b77..c6322be244 100644
    int a = 42;
    String notAnIp1 = "0.0.0.1234";
 diff --git a/java-checks/src/test/files/checks/InterruptedExceptionCheck.java b/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
-index fe6db31270..487ce22ef8 100644
+index fe6db31270..487ce22ef8 100755
 --- a/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
 +++ b/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
 @@ -32,6 +32,16 @@ public void runUnknownSymbol () {
@@ -1224,7 +1183,7 @@ index fe6db31270..487ce22ef8 100644
      try {
        while (true) {
 diff --git a/java-checks/src/test/files/checks/PrintfMisuseCheck.java b/java-checks/src/test/files/checks/PrintfMisuseCheck.java
-index 274c7f02e8..301ceabe96 100644
+index 274c7f02e8..301ceabe96 100755
 --- a/java-checks/src/test/files/checks/PrintfMisuseCheck.java
 +++ b/java-checks/src/test/files/checks/PrintfMisuseCheck.java
 @@ -2,10 +2,10 @@
@@ -1267,7 +1226,7 @@ index 274c7f02e8..301ceabe96 100644
      org.slf4j.Logger slf4jLog;
      org.slf4j.Marker marker;
 diff --git a/java-checks/src/test/files/checks/security/CipherBlockChainingCheck.java b/java-checks/src/test/files/checks/security/CipherBlockChainingCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..72b90f115c
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CipherBlockChainingCheck.java
@@ -1367,7 +1326,7 @@ index 0000000000..72b90f115c
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java
-new file mode 100644
+new file mode 100755
 index 0000000000..15c53c3123
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java
@@ -1483,7 +1442,7 @@ index 0000000000..15c53c3123
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java
-new file mode 100644
+new file mode 100755
 index 0000000000..b9cbc53836
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java
@@ -1511,7 +1470,7 @@ index 0000000000..b9cbc53836
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java b/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..27f46ff091
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/SecureXmlTransformerCheck.java
@@ -1633,107 +1592,68 @@ index 0000000000..27f46ff091
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java b/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
-new file mode 100644
-index 0000000000..58a50dcf15
---- /dev/null
+index 43c7e1db4d..58a50dcf15 100755
+--- a/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
 +++ b/java-checks/src/test/files/checks/security/XmlExternalEntityProcessingCheck.java
-@@ -0,0 +1,138 @@
-+import javax.xml.stream.XMLInputFactory;
-+import javax.xml.parsers.SAXParserFactory;
+@@ -1,8 +1,11 @@
+ import javax.xml.stream.XMLInputFactory;
+ import javax.xml.parsers.SAXParserFactory;
 +import org.xml.sax.XMLReader;
 +import org.xml.sax.helpers.XMLReaderFactory;
 +import javax.xml.parsers.DocumentBuilderFactory;
-+import javax.xml.XMLConstants;
-+
+ import javax.xml.XMLConstants;
+ 
+-class Stax {
 +class StaxTest {
-+
-+  XMLInputFactory no_property() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
-+    return factory;
-+  }
-+
-+  XMLInputFactory unrelated_property() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
-+    factory.setProperty(XMLInputFactory.IS_COALESCING, Boolean.FALSE);
-+    return factory;
-+  }
-+
-+  XMLInputFactory external_entities_with_false_value() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance();
-+    factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
-+    return factory;
-+  }
-+
-+  XMLInputFactory external_entities_with_true_value() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
-+    factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.TRUE);
-+    return factory;
-+  }
-+
-+  XMLInputFactory dtd_with_false_value() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance();
-+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
-+    return factory;
-+  }
-+
-+  XMLInputFactory dtd_with_primitive_false() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance();
-+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-+    return factory;
-+  }
-+
-+  XMLInputFactory dtd_with_primitive_true() {
-+    XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
-+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, true);
-+    return factory;
-+  }
-+
-+  XMLInputFactory dtd_with_unknown_value(Object value) {
-+    XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
-+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, value);
-+    return factory;
-+  }
-+
-+}
-+
+ 
+   XMLInputFactory no_property() {
+     XMLInputFactory factory = XMLInputFactory.newInstance(); // Noncompliant
+@@ -53,31 +56,37 @@ XMLInputFactory dtd_with_unknown_value(Object value) {
+ 
+ }
+ 
+-class SAXParser {
 +class SAXParserTest {
-+
-+  SAXParserFactory no_property() {
-+    SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
-+    return factory;
-+  }
-+
+ 
+   SAXParserFactory no_property() {
+     SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
+     return factory;
+   }
+ 
+-  SAXParserFactory secure_processing_true() {
 +  SAXParserFactory secure_processing_set_to_true() {
-+    SAXParserFactory factory = SAXParserFactory.newInstance();
-+    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-+    return factory;
-+  }
-+
+     SAXParserFactory factory = SAXParserFactory.newInstance();
+     factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+     return factory;
+   }
+ 
+-  SAXParserFactory secure_processing_false() {
 +  SAXParserFactory secure_processing_set_to_false() {
-+    SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
-+    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, false);
-+    return factory;
-+  }
-+
+     SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
+     factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, false);
+     return factory;
+   }
+ 
+-  SAXParserFactory other_feature_set_to_true() {
 +  SAXParserFactory secure_processing_with_literal_string_set_to_true() {
-+    SAXParserFactory factory = SAXParserFactory.newInstance();
-+    factory.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);
-+    return factory;
-+  }
-+
+     SAXParserFactory factory = SAXParserFactory.newInstance();
+     factory.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);
+     return factory;
+   }
+ 
 +  SAXParserFactory apache_feature_set_to_true() {
 +    SAXParserFactory factory = SAXParserFactory.newInstance();
 +    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
 +    return factory;
 +  }
 +
-+  SAXParserFactory other_feature_set_to_true() {
-+    SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
-+    factory.setFeature("xxx", true);
-+    return factory;
-+  }
-+
-+}
+   SAXParserFactory other_feature_set_to_true() {
+     SAXParserFactory factory = SAXParserFactory.newInstance(); // Noncompliant
+     factory.setFeature("xxx", true);
+@@ -85,3 +94,45 @@ SAXParserFactory other_feature_set_to_true() {
+   }
+ 
+ }
 +
 +class XMLReaderTest {
 +
@@ -1776,91 +1696,8 @@ index 0000000000..58a50dcf15
 +  }
 +
 +}
-diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/ClassWithConstants.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/ClassWithConstants.java
-index 11eeaccced..d98e29d976 100644
---- a/java-checks/src/test/java/org/sonar/java/checks/helpers/ClassWithConstants.java
-+++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/ClassWithConstants.java
-@@ -19,6 +19,8 @@
-  */
- package org.sonar.java.checks.helpers;
- 
-+import static java.lang.Boolean.TRUE;
-+
- // used by ConstantUtilsTest
- public class ClassWithConstants {
- 
-@@ -27,6 +29,7 @@
-   public static final int INT_CONSTANT1 = 42;
-   public static final long LONG_CONSTANT1 = 99L;
-   public static final Object OBJECT_CONSTANT = new Object();
-+  public static final boolean BOOLEAN_CONSTANT = false;
- 
-   public void literals(String param) {
-     System.out.println("hello");
-@@ -41,6 +44,8 @@ public void identifiers(String param) {
-     System.out.println(CONSTANT2);
-     System.out.println(INT_CONSTANT1);
-     System.out.println(LONG_CONSTANT1);
-+    System.out.println(TRUE);
-+    System.out.println(BOOLEAN_CONSTANT);
-   }
- 
-   public void parentheses(String parentheses) {
-@@ -50,6 +55,8 @@ public void parentheses(String parentheses) {
- 
-   public void memberSelect(String parentheses) {
-     System.out.println(ClassWithConstants.CONSTANT1);
-+    System.out.println(Boolean.TRUE);
-+    System.out.println(Boolean.FALSE);
-   }
- 
-   public void plus(String param) {
-diff --git a/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java b/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
-index 857ec13354..fb43e56143 100644
---- a/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
-+++ b/java-checks/src/test/java/org/sonar/java/checks/helpers/ConstantUtilsTest.java
-@@ -47,13 +47,15 @@ public void literals() {
-     assertThat(resolveAsStrings("literals")).containsExactly("hello", null, null, null, null);
-     assertThat(resolveAsInts("literals")).containsExactly(null, null, 43, null, null);
-     assertThat(resolveAsLongs("literals")).containsExactly(null, null, 43L, 77L, null);
-+    assertThat(resolveAsBooleans("literals")).containsExactly(null, true, null, null, null);
-   }
- 
-   @Test
-   public void identifiers() {
--    assertThat(resolveAsStrings("identifiers")).containsExactly("abc", "abcdef", null, null);
--    assertThat(resolveAsInts("identifiers")).containsExactly(null, null, 42, null);
--    assertThat(resolveAsLongs("identifiers")).containsExactly(null, null, 42L, 99L);
-+    assertThat(resolveAsStrings("identifiers")).containsExactly("abc", "abcdef", null, null, null, null);
-+    assertThat(resolveAsInts("identifiers")).containsExactly(null, null, 42, null, null, null);
-+    assertThat(resolveAsLongs("identifiers")).containsExactly(null, null, 42L, 99L, null, null);
-+    assertThat(resolveAsBooleans("identifiers")).containsExactly(null, null, null, null, true, false);
-   }
- 
-   @Test
-@@ -64,7 +66,8 @@ public void parentheses() {
- 
-   @Test
-   public void memberSelect() {
--    assertThat(resolveAsStrings("memberSelect")).containsExactly("abc");
-+    assertThat(resolveAsStrings("memberSelect")).containsExactly("abc", null, null);
-+    assertThat(resolveAsBooleans("memberSelect")).containsExactly(null, true, false);
-   }
- 
-   @Test
-@@ -98,6 +101,10 @@ private ClassTree parse() {
-     return constantValuesInMethod(methodName, ConstantUtils::resolveAsLongConstant);
-   }
- 
-+  private List<Boolean> resolveAsBooleans(String methodName) {
-+    return constantValuesInMethod(methodName, ConstantUtils::resolveAsBooleanConstant);
-+  }
-+
-   private <T> List<T> constantValuesInMethod(String methodName, Function<ExpressionTree,T> resolver) {
-     MethodTree method = classTree.members().stream()
-       .filter(m -> m.is(Tree.Kind.METHOD))
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/CipherBlockChainingCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/CipherBlockChainingCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..ed4e5d4c03
 --- /dev/null
 +++ b/java-checks/src/test/java/org/sonar/java/checks/security/CipherBlockChainingCheckTest.java
@@ -1902,7 +1739,7 @@ index 0000000000..ed4e5d4c03
 +  }
 +}
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..1cc7d8ff3b
 --- /dev/null
 +++ b/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java
@@ -1950,7 +1787,7 @@ index 0000000000..1cc7d8ff3b
 +  }
 +}
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..89357eb502
 --- /dev/null
 +++ b/java-checks/src/test/java/org/sonar/java/checks/security/SecureXmlTransformerCheckTest.java
@@ -1987,46 +1824,8 @@ index 0000000000..89357eb502
 +  }
 +
 +}
-diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheckTest.java
-new file mode 100644
-index 0000000000..b9c101e5da
---- /dev/null
-+++ b/java-checks/src/test/java/org/sonar/java/checks/security/XmlExternalEntityProcessingCheckTest.java
-@@ -0,0 +1,32 @@
-+/*
-+ * SonarQube Java
-+ * Copyright (C) 2012-2018 SonarSource SA
-+ * mailto:info AT sonarsource DOT com
-+ *
-+ * This program is free software; you can redistribute it and/or
-+ * modify it under the terms of the GNU Lesser General Public
-+ * License as published by the Free Software Foundation; either
-+ * version 3 of the License, or (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+ * Lesser General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU Lesser General Public License
-+ * along with this program; if not, write to the Free Software Foundation,
-+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-+ */
-+package org.sonar.java.checks.security;
-+
-+import org.junit.Test;
-+import org.sonar.java.checks.verifier.JavaCheckVerifier;
-+
-+public class XmlExternalEntityProcessingCheckTest {
-+
-+  @Test
-+  public void test() {
-+    JavaCheckVerifier.verify("src/test/files/checks/security/XmlExternalEntityProcessingCheck.java", new XmlExternalEntityProcessingCheck());
-+  }
-+
-+}
 diff --git a/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java b/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
-index 4b0fd08167..9024084720 100644
+index 4b0fd08167..9024084720 100755
 --- a/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
 +++ b/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
 @@ -43,6 +43,7 @@
@@ -2129,7 +1928,7 @@ index 4b0fd08167..9024084720 100644
  
    private static String signatureFor(Symbol.MethodSymbol methodSymbol) {
 diff --git a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
-index 30e7b8540d..ede19d6830 100644
+index 30e7b8540d..ede19d6830 100755
 --- a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
 +++ b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
 @@ -50,10 +50,10 @@ public static Integer intLiteralValue(ExpressionTree expression) {
@@ -2156,22 +1955,8 @@ index 30e7b8540d..ede19d6830 100644
          return sign * Long.decode(value);
        } catch (NumberFormatException e) {
          // Long.decode() may fail in case of very large long number written in hexadecimal. In such situation, we ignore the number.
-diff --git a/java-frontend/src/main/java/org/sonar/java/resolve/JavaSymbol.java b/java-frontend/src/main/java/org/sonar/java/resolve/JavaSymbol.java
-index bf4b00885e..9a577e93b9 100644
---- a/java-frontend/src/main/java/org/sonar/java/resolve/JavaSymbol.java
-+++ b/java-frontend/src/main/java/org/sonar/java/resolve/JavaSymbol.java
-@@ -512,6 +512,9 @@ public VariableTree declaration() {
- 
-     public Optional<Object> constantValue() {
-       if (Flags.isFlagged(flags, Flags.STATIC) && Flags.isFlagged(flags, Flags.FINAL)) {
-+        if (value != null && type.is("boolean")) {
-+          return Optional.of(Integer.valueOf(1).equals(value) ? Boolean.TRUE : Boolean.FALSE);
-+        }
-         return Optional.ofNullable(value);
-       }
-       return Optional.empty();
 diff --git a/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java b/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
-index 11eaca23b4..d9eec87c59 100644
+index 11eaca23b4..d9eec87c59 100755
 --- a/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
 +++ b/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
 @@ -109,6 +109,15 @@ private void complete(JavaSymbol.TypeJavaSymbol symbol) {
@@ -2191,7 +1976,7 @@ index 11eaca23b4..d9eec87c59 100644
  
      // Register default constructor
 diff --git a/java-frontend/src/test/files/sym/references/SuperMethodCall.java b/java-frontend/src/test/files/sym/references/SuperMethodCall.java
-new file mode 100644
+new file mode 100755
 index 0000000000..d63f9289f4
 --- /dev/null
 +++ b/java-frontend/src/test/files/sym/references/SuperMethodCall.java
@@ -2227,7 +2012,7 @@ index 0000000000..d63f9289f4
 +
 +}
 diff --git a/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java b/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
-index aa1f7c4a03..460c881739 100644
+index aa1f7c4a03..460c881739 100755
 --- a/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
 @@ -23,6 +23,7 @@
@@ -2274,7 +2059,7 @@ index aa1f7c4a03..460c881739 100644
      CompilationUnitTree cut = (CompilationUnitTree) JavaParser.createParser().parse(source);
      SemanticModel.createFor(cut, squidClassLoader);
 diff --git a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
-index 213f58b6d0..8408e3aa5b 100644
+index 213f58b6d0..8408e3aa5b 100755
 --- a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
 @@ -70,6 +70,8 @@ public static void setUp() {
@@ -2307,26 +2092,8 @@ index 213f58b6d0..8408e3aa5b 100644
      int i = 0;
      int j = 0;
  
-diff --git a/java-frontend/src/test/java/org/sonar/java/resolve/ConstantTest.java b/java-frontend/src/test/java/org/sonar/java/resolve/ConstantTest.java
-index 05721d5b6e..ad9d7644e6 100644
---- a/java-frontend/src/test/java/org/sonar/java/resolve/ConstantTest.java
-+++ b/java-frontend/src/test/java/org/sonar/java/resolve/ConstantTest.java
-@@ -59,10 +59,12 @@ public void visitNode(Tree tree) {
-           valuesByFieldName.put(variableTree.simpleName().name(), value);
-         }
-       }), Collections.singletonList(bytecodeDir), null));
--    assertThat(valuesByFieldName.keySet()).contains("CONST1", "nonStatic", "nonFinal");
-+    assertThat(valuesByFieldName.keySet()).contains("CONST1", "nonStatic", "nonFinal", "BOOLEAN_TRUE", "BOOLEAN_FALSE");
-     assertThat(valuesByFieldName.get("CONST1")).isEqualTo("CONST_VALUE");
-     assertThat(valuesByFieldName.get("nonStatic")).isNull();
-     assertThat(valuesByFieldName.get("nonFinal")).isNull();
-+    assertThat(valuesByFieldName.get("BOOLEAN_TRUE")).isEqualTo(true);
-+    assertThat(valuesByFieldName.get("BOOLEAN_FALSE")).isEqualTo(false);
-   }
- 
- }
 diff --git a/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java b/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
-index 56943d84d3..6adc95ff8d 100644
+index 56943d84d3..6adc95ff8d 100755
 --- a/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
 @@ -383,7 +383,7 @@ public void InterfaceDeclaration() {
@@ -2381,15 +2148,3 @@ index 56943d84d3..6adc95ff8d 100644
    @Test
    public void FieldTypes() {
      Result result = Result.createFor("FieldTypes");
-diff --git a/java-frontend/src/test/java/org/sonar/java/resolve/targets/ClassWithConstants.java b/java-frontend/src/test/java/org/sonar/java/resolve/targets/ClassWithConstants.java
-index 36616adc22..768d0696ba 100644
---- a/java-frontend/src/test/java/org/sonar/java/resolve/targets/ClassWithConstants.java
-+++ b/java-frontend/src/test/java/org/sonar/java/resolve/targets/ClassWithConstants.java
-@@ -24,5 +24,7 @@
-   final String nonStatic = "xxx";
-   static String nonFinal = "xxx";
-   static final String CONST1 = "CONST_VALUE";
-+  static final boolean BOOLEAN_TRUE = true;
-+  static final boolean BOOLEAN_FALSE = false;
- 
- }

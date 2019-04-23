@@ -1141,6 +1141,305 @@ index e9c04cf156..044703ad51 100755
  			return 1;
  		} else if (o2 instanceof WyRecord) {
  			return compare(o1, (WyRecord) o2);
+diff --git a/modules/wyjc/src/wyjc/runtime/WyCollection.java b/modules/wyjc/src/wyjc/runtime/WyCollection.java
+deleted file mode 100755
+index efb4a31dc7..0000000000
+--- a/modules/wyjc/src/wyjc/runtime/WyCollection.java
++++ /dev/null
+@@ -1,38 +0,0 @@
+-package wyjc.runtime;
+-
+-import java.math.BigInteger;
+-import java.util.Map;
+-
+-public class WyCollection {
+-
+-	public static java.util.Iterator iterator(Object col) {
+-		if(col instanceof java.util.Collection) {
+-			java.util.Collection c = (java.util.Collection) col;
+-			return c.iterator();
+-		} else {
+-			WyMap m = (WyMap) col;
+-			return m.iterator();
+-		} 
+-	}
+-
+-	public static BigInteger length(Object col) {
+-		if(col instanceof java.util.Collection) {
+-			java.util.Collection c = (java.util.Collection) col;
+-			return BigInteger.valueOf(c.size());
+-		} else {
+-			java.util.Map m = (java.util.Map) col;
+-			return BigInteger.valueOf(m.size());
+-		} 
+-	}
+-
+-	public static Object indexOf(Object col, Object key) {
+-		if(col instanceof WyList) {
+-			WyList l = (WyList) col;
+-			BigInteger index = (BigInteger) key;
+-			return l.get(index.intValue());
+-		} else  {
+-			WyMap d = (WyMap) col;
+-			return d.get(key);
+-		} 
+-	}
+-}
+diff --git a/modules/wyjc/src/wyjc/runtime/WyMap.java b/modules/wyjc/src/wyjc/runtime/WyMap.java
+deleted file mode 100755
+index d3b96558ca..0000000000
+--- a/modules/wyjc/src/wyjc/runtime/WyMap.java
++++ /dev/null
+@@ -1,117 +0,0 @@
+-// Copyright (c) 2011, David J. Pearce (djp@ecs.vuw.ac.nz)
+-// All rights reserved.
+-//
+-// Redistribution and use in source and binary forms, with or without
+-// modification, are permitted provided that the following conditions are met:
+-//    * Redistributions of source code must retain the above copyright
+-//      notice, this list of conditions and the following disclaimer.
+-//    * Redistributions in binary form must reproduce the above copyright
+-//      notice, this list of conditions and the following disclaimer in the
+-//      documentation and/or other materials provided with the distribution.
+-//    * Neither the name of the <organization> nor the
+-//      names of its contributors may be used to endorse or promote products
+-//      derived from this software without specific prior written permission.
+-//
+-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+-// DISCLAIMED. IN NO EVENT SHALL DAVID J. PEARCE BE LIABLE FOR ANY
+-// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-
+-package wyjc.runtime;
+-
+-import java.math.BigInteger;
+-import java.util.*;
+-
+-public final class WyMap extends java.util.HashMap<Object,Object> implements Iterable {
+-	
+-	// ================================================================================
+-	// Generic Operations
+-	// ================================================================================
+-
+-	public WyMap() {
+-
+-	}
+-
+-	WyMap(WyMap dict) {
+-		super(dict);		
+-	}
+-
+-	public String toString() {
+-		String r = "{";
+-		boolean firstTime=true;
+-		ArrayList ss = new ArrayList(this.keySet());
+-		Collections.sort(ss,Util.COMPARATOR);
+-
+-		for(Object key : ss) {
+-			if(!firstTime) {
+-				r = r + ", ";
+-			}
+-			firstTime=false;
+-			Object val = get(key);
+-			r = r + whiley.lang.Any$native.toRealString(key) + "=>" + val;
+-		}
+-		return r + "}";
+-	}
+-
+-	public java.util.Iterator iterator() {
+-		return new Iterator(entrySet().iterator());
+-	}
+-
+-	// ================================================================================
+-	// Dictionary Operations
+-	// ================================================================================
+-
+-	public static Object get(WyMap dict, Object key) {
+-		Object item = dict.get(key);
+-		return item;
+-	}
+-
+-	public static WyMap put(WyMap dict, Object key, Object value) {
+-		dict = new WyMap(dict); 
+-		Object val = dict.put(key, value);		
+-		return dict;
+-	}
+-
+-	public static BigInteger length(WyMap dict) {
+-		return BigInteger.valueOf(dict.size());
+-	}
+-
+-	public static final class Iterator implements java.util.Iterator {
+-		public java.util.Iterator<Map.Entry> iter;
+-
+-		public Iterator(java.util.Iterator iter) {
+-			this.iter = iter;
+-		}
+-
+-		public boolean hasNext() {
+-			return iter.hasNext();
+-		}
+-
+-		public void remove(){
+-			iter.remove();
+-		}
+-
+-		public Object next() {
+-			Map.Entry e = iter.next();
+-			return new WyTuple(e.getKey(),e.getValue());
+-		}
+-	}
+-
+-	/**
+-	 * This method is not intended for public consumption. It is used internally
+-	 * by the compiler during imperative updates only.
+-	 *
+-	 * @param list
+-	 * @param item
+-	 * @return
+-	 */
+-	public static Object internal_get(WyMap dict, Object key) {
+-		return dict.get(key);
+-	}
+-}
+diff --git a/modules/wyjc/src/wyjc/runtime/WySet.java b/modules/wyjc/src/wyjc/runtime/WySet.java
+deleted file mode 100755
+index d0b624ccab..0000000000
+--- a/modules/wyjc/src/wyjc/runtime/WySet.java
++++ /dev/null
+@@ -1,126 +0,0 @@
+-// Copyright (c) 2011, David J. Pearce (djp@ecs.vuw.ac.nz)
+-// All rights reserved.
+-//
+-// Redistribution and use in source and binary forms, with or without
+-// modification, are permitted provided that the following conditions are met:
+-//    * Redistributions of source code must retain the above copyright
+-//      notice, this list of conditions and the following disclaimer.
+-//    * Redistributions in binary form must reproduce the above copyright
+-//      notice, this list of conditions and the following disclaimer in the
+-//      documentation and/or other materials provided with the distribution.
+-//    * Neither the name of the <organization> nor the
+-//      names of its contributors may be used to endorse or promote products
+-//      derived from this software without specific prior written permission.
+-//
+-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+-// DISCLAIMED. IN NO EVENT SHALL DAVID J. PEARCE BE LIABLE FOR ANY
+-// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-
+-package wyjc.runtime;
+-
+-import java.math.BigInteger;
+-import java.util.*;
+-
+-
+-public final class WySet extends java.util.HashSet {
+-	
+-	// ================================================================================
+-	// Generic Operations
+-	// ================================================================================
+-
+-	public WySet() {
+-
+-	}
+-
+-	private WySet(java.util.Collection items) {
+-		super(items);		
+-	}
+-
+-	public String toString() {
+-		String r = "{";
+-		boolean firstTime=true;
+-		ArrayList ss = new ArrayList(this);
+-		Collections.sort(ss,Util.COMPARATOR);
+-
+-		for(Object o : ss) {
+-			if(!firstTime) {
+-				r = r + ", ";
+-			}
+-			firstTime=false;
+-			r = r + whiley.lang.Any$native.toRealString(o);
+-		}
+-		return r + "}";
+-	}
+-
+-	// ================================================================================
+-	// Set Operations
+-	// ================================================================================
+-
+-	public static boolean subset(WySet lhs, WySet rhs) {
+-		return rhs.containsAll(lhs) && rhs.size() > lhs.size();
+-	}
+-
+-	public static boolean subsetEq(WySet lhs, WySet rhs) {
+-		return rhs.containsAll(lhs);
+-	}
+-
+-	public static WySet union(WySet lhs, WySet rhs) {
+-		lhs = new WySet(lhs);
+-		lhs.addAll(rhs);		
+-		return lhs;
+-	}
+-
+-	public static WySet union(WySet lhs, Object rhs) {
+-		lhs = new WySet(lhs);
+-		lhs.add(rhs);
+-		return lhs;
+-	}
+-
+-	public static WySet union(Object lhs, WySet rhs) {
+-		rhs = new WySet(rhs);
+-		rhs.add(lhs);
+-		return rhs;
+-	}
+-
+-	public static WySet difference(WySet lhs, WySet rhs) {
+-		lhs = new WySet(lhs);
+-		lhs.removeAll(rhs);		
+-		return lhs;
+-	}
+-
+-	public static WySet difference(WySet lhs, Object rhs) {
+-		lhs = new WySet(lhs);
+-		lhs.remove(rhs);
+-		return lhs;
+-	}
+-
+-	public static WySet intersect(WySet lhs, WySet rhs) {
+-		lhs = new WySet(lhs);
+-		lhs.retainAll(rhs);
+-		return lhs;
+-	}
+-
+-	public static BigInteger length(WySet set) {
+-		return BigInteger.valueOf(set.size());
+-	}
+-
+-	/**
+-	 * This method is not intended for public consumption. It is used internally
+-	 * by the compiler during object construction only.
+-	 *
+-	 * @param list
+-	 * @param item
+-	 * @return
+-	 */
+-	public static WySet internal_add(WySet lhs, Object rhs) {
+-		lhs.add(rhs);
+-		return lhs;
+-	}
+-}
 diff --git a/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java b/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java
 index 64398131d5..55ca0c4b7f 100755
 --- a/modules/wyjc/src/wyjc/testing/RuntimeValidTests.java
@@ -1744,6 +2043,24 @@ index f1846ce083..2dc142aa16 100755
  
  type code is {codeOp op, [int] payload}
  
+diff --git a/tests/valid/ConstrainedInt_Valid_14.whiley b/tests/valid/ConstrainedInt_Valid_14.whiley
+deleted file mode 100755
+index 7fabbda9ce..0000000000
+--- a/tests/valid/ConstrainedInt_Valid_14.whiley
++++ /dev/null
+@@ -1,12 +0,0 @@
+-
+-
+-type codeOp is (int x) where x in {1, 2, 3, 4}
+-
+-type code is {codeOp op, [int] payload}
+-
+-function f(code x) -> int:
+-    int y = x.op
+-    return y
+-
+-public export method test() -> void:
+-    assume f({op: 1, payload: [1]}) == 1
 diff --git a/tests/valid/ConstrainedInt_Valid_16.whiley b/tests/valid/ConstrainedInt_Valid_16.whiley
 index 83eea9f036..4f6163ea74 100755
 --- a/tests/valid/ConstrainedInt_Valid_16.whiley
@@ -1811,6 +2128,26 @@ index fb543a855e..08a7eb8a99 100755
 +    int c2 = countOver([1, 2, 3, 4], 3)
      assume c1 == 3
      assume c2 == 1
+diff --git a/tests/valid/For_Valid_6.whiley b/tests/valid/For_Valid_6.whiley
+deleted file mode 100755
+index a5ab48cab5..0000000000
+--- a/tests/valid/For_Valid_6.whiley
++++ /dev/null
+@@ -1,14 +0,0 @@
+-
+-
+-function select({int} xs) -> (int r)
+-// Input list cannot be empty
+-requires |xs| > 0
+-// Returned value must be in input
+-ensures r in xs:
+-    //
+-    for x in xs:
+-        return x
+-    return 0
+-
+-public export method test() -> void:
+-    assume select({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) == 1
 diff --git a/tests/valid/Function_Valid_6.whiley b/tests/valid/Function_Valid_6.whiley
 index 4c6b4bccb0..b5dcc31f6b 100755
 --- a/tests/valid/Function_Valid_6.whiley
@@ -1983,3 +2320,24 @@ index 0625dbddf7..a9bc575ff9 100755
  
  function f(RGB c) -> int:
      switch c:
+diff --git a/tests/valid/Update_Valid_1.whiley b/tests/valid/Update_Valid_1.whiley
+deleted file mode 100755
+index 9892fd1dab..0000000000
+--- a/tests/valid/Update_Valid_1.whiley
++++ /dev/null
+@@ -1,15 +0,0 @@
+-
+-
+-type listdict is [int] | {int=>int}
+-
+-function update(listdict l, int index, int value) -> listdict:
+-    l[index] = value
+-    return l
+-
+-public export method test() -> void:
+-    l = [1, 2, 3]
+-    assume update(l, 1, 0) == [1,0,3]
+-    assume update(l, 2, 0) == [1,2,0]
+-    l = {1=>1, 2=>2, 3=>3}
+-    assume update(l, 1, 0) == {1=>0, 2=>2, 3=>3}
+-    assume update(l, 2, 0) == {1=>10, 2=>0, 3=>3}

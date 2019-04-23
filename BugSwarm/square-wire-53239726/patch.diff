@@ -1,5 +1,5 @@
 diff --git a/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java b/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
-index 3118b4b5..91c8f40c 100644
+index 3118b4b5d8..91c8f40cae 100755
 --- a/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
 +++ b/wire-compiler/src/main/java/com/squareup/wire/MessageWriter.java
 @@ -251,6 +251,7 @@ private void emitAll(JavaWriter writer, MessageType messageType, Map<String, ?>
@@ -11,7 +11,7 @@ index 3118b4b5..91c8f40c 100644
      emitMessageOptions(writer, optionsMap);
      if (compiler.shouldEmitOptions()) {
 diff --git a/wire-runtime/src/main/java/com/squareup/wire/ExtendableMessage.java b/wire-runtime/src/main/java/com/squareup/wire/ExtendableMessage.java
-index be0a04d2..6c873b21 100644
+index be0a04d2bb..6c873b21f6 100755
 --- a/wire-runtime/src/main/java/com/squareup/wire/ExtendableMessage.java
 +++ b/wire-runtime/src/main/java/com/squareup/wire/ExtendableMessage.java
 @@ -24,6 +24,7 @@
@@ -23,91 +23,34 @@ index be0a04d2..6c873b21 100644
    @SuppressWarnings("unchecked")
    transient ExtensionMap<T> extensionMap; // Null if empty.
 diff --git a/wire-runtime/src/main/java/com/squareup/wire/Message.java b/wire-runtime/src/main/java/com/squareup/wire/Message.java
-index 36922471..a429720f 100644
+index db1e898ad8..a429720f2c 100755
 --- a/wire-runtime/src/main/java/com/squareup/wire/Message.java
 +++ b/wire-runtime/src/main/java/com/squareup/wire/Message.java
-@@ -16,6 +16,8 @@
- package com.squareup.wire;
- 
- import java.io.IOException;
-+import java.io.ObjectStreamException;
-+import java.io.Serializable;
- import java.util.ArrayList;
- import java.util.Collection;
- import java.util.Collections;
-@@ -28,7 +30,8 @@
- /**
-  * Superclass for protocol buffer messages.
-  */
--public abstract class Message {
-+public abstract class Message implements Serializable {
-+  private static final long serialVersionUID = 0L;
- 
-   // Hidden Wire instance that can perform work that does not require knowledge of extensions.
-   private static final Wire WIRE = new Wire();
-@@ -266,6 +269,10 @@ protected boolean equals(List<?> a, List<?> b) {
+@@ -269,7 +269,7 @@ protected boolean equals(List<?> a, List<?> b) {
      return WIRE.messageAdapter((Class<Message>) getClass()).toString(this);
    }
  
+-  protected final Object writeReplace() throws ObjectStreamException {
 +  private Object writeReplace() throws ObjectStreamException {
-+    return new MessageSerializedForm(this, getClass());
-+  }
-+
-   /**
-    * Superclass for protocol buffer message builders.
-    */
+     return new MessageSerializedForm(this, getClass());
+   }
+ 
 diff --git a/wire-runtime/src/main/java/com/squareup/wire/MessageSerializedForm.java b/wire-runtime/src/main/java/com/squareup/wire/MessageSerializedForm.java
-new file mode 100644
-index 00000000..131399a8
---- /dev/null
+index bd616f34ca..131399a86e 100755
+--- a/wire-runtime/src/main/java/com/squareup/wire/MessageSerializedForm.java
 +++ b/wire-runtime/src/main/java/com/squareup/wire/MessageSerializedForm.java
-@@ -0,0 +1,43 @@
-+/*
-+ * Copyright 2015 Square Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ * http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package com.squareup.wire;
-+
-+import java.io.IOException;
-+import java.io.ObjectStreamException;
-+import java.io.Serializable;
-+import java.io.StreamCorruptedException;
-+
-+final class MessageSerializedForm implements Serializable {
+@@ -21,6 +21,8 @@
+ import java.io.StreamCorruptedException;
+ 
+ final class MessageSerializedForm implements Serializable {
 +  private static final long serialVersionUID = 0L;
 +
-+  private final byte[] bytes;
-+  private final Class<? extends Message> messageClass;
-+
-+  public MessageSerializedForm(Message message, Class<? extends Message> messageClass) {
-+    this.bytes = message.toByteArray();
-+    this.messageClass = messageClass;
-+  }
-+
-+  Object readResolve() throws ObjectStreamException {
-+    try {
-+      // Extensions are not supported at this time. Extension fields will be added to the
-+      // unknownFields map.
-+      return new Wire().parseFrom(bytes, messageClass);
-+    } catch (IOException e) {
-+      throw new StreamCorruptedException(e.getMessage());
-+    }
-+  }
-+}
+   private final byte[] bytes;
+   private final Class<? extends Message> messageClass;
+ 
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/DescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/DescriptorProto.java
-new file mode 100644
-index 00000000..203a3953
+new file mode 100755
+index 0000000000..203a3953af
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/DescriptorProto.java
 @@ -0,0 +1,252 @@
@@ -364,8 +307,8 @@ index 00000000..203a3953
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/EnumDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/EnumDescriptorProto.java
-new file mode 100644
-index 00000000..195a9783
+new file mode 100755
+index 0000000000..195a9783ef
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/EnumDescriptorProto.java
 @@ -0,0 +1,121 @@
@@ -491,7 +434,7 @@ index 00000000..195a9783
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/EnumOptions.java b/wire-runtime/src/test/java/com/google/protobuf/EnumOptions.java
-index 370bbb56..c6b6ccde 100644
+index 370bbb564c..c6b6ccde9b 100755
 --- a/wire-runtime/src/test/java/com/google/protobuf/EnumOptions.java
 +++ b/wire-runtime/src/test/java/com/google/protobuf/EnumOptions.java
 @@ -11,13 +11,14 @@
@@ -511,8 +454,8 @@ index 370bbb56..c6b6ccde 100644
  
    public EnumOptions(List<UninterpretedOption> uninterpreted_option) {
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/EnumValueDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/EnumValueDescriptorProto.java
-new file mode 100644
-index 00000000..47f67e37
+new file mode 100755
+index 0000000000..47f67e3718
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/EnumValueDescriptorProto.java
 @@ -0,0 +1,119 @@
@@ -636,7 +579,7 @@ index 00000000..47f67e37
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/EnumValueOptions.java b/wire-runtime/src/test/java/com/google/protobuf/EnumValueOptions.java
-index 54e66bb3..47454b61 100644
+index 54e66bb308..47454b615a 100755
 --- a/wire-runtime/src/test/java/com/google/protobuf/EnumValueOptions.java
 +++ b/wire-runtime/src/test/java/com/google/protobuf/EnumValueOptions.java
 @@ -11,13 +11,14 @@
@@ -656,8 +599,8 @@ index 54e66bb3..47454b61 100644
  
    public EnumValueOptions(List<UninterpretedOption> uninterpreted_option) {
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/FieldDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/FieldDescriptorProto.java
-new file mode 100644
-index 00000000..3a2fb1fe
+new file mode 100755
+index 0000000000..3a2fb1fe88
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/FieldDescriptorProto.java
 @@ -0,0 +1,313 @@
@@ -975,7 +918,7 @@ index 00000000..3a2fb1fe
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/FieldOptions.java b/wire-runtime/src/test/java/com/google/protobuf/FieldOptions.java
-index a72d205c..27463432 100644
+index a72d205c82..2746343246 100755
 --- a/wire-runtime/src/test/java/com/google/protobuf/FieldOptions.java
 +++ b/wire-runtime/src/test/java/com/google/protobuf/FieldOptions.java
 @@ -15,6 +15,7 @@
@@ -996,8 +939,8 @@ index a72d205c..27463432 100644
  
    public FieldOptions(CType ctype, Boolean packed, Boolean deprecated, String experimental_map_key, List<UninterpretedOption> uninterpreted_option) {
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorProto.java
-new file mode 100644
-index 00000000..4a492efd
+new file mode 100755
+index 0000000000..4a492efda2
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorProto.java
 @@ -0,0 +1,216 @@
@@ -1218,8 +1161,8 @@ index 00000000..4a492efd
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorSet.java b/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorSet.java
-new file mode 100644
-index 00000000..847a4a88
+new file mode 100755
+index 0000000000..847a4a8881
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/FileDescriptorSet.java
 @@ -0,0 +1,69 @@
@@ -1293,8 +1236,8 @@ index 00000000..847a4a88
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/FileOptions.java b/wire-runtime/src/test/java/com/google/protobuf/FileOptions.java
-new file mode 100644
-index 00000000..207794aa
+new file mode 100755
+index 0000000000..207794aa18
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/FileOptions.java
 @@ -0,0 +1,331 @@
@@ -1630,7 +1573,7 @@ index 00000000..207794aa
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/MessageOptions.java b/wire-runtime/src/test/java/com/google/protobuf/MessageOptions.java
-index 3ab7e9b7..f8c5aeb7 100644
+index 3ab7e9b79a..f8c5aeb757 100755
 --- a/wire-runtime/src/test/java/com/google/protobuf/MessageOptions.java
 +++ b/wire-runtime/src/test/java/com/google/protobuf/MessageOptions.java
 @@ -12,6 +12,7 @@
@@ -1651,8 +1594,8 @@ index 3ab7e9b7..f8c5aeb7 100644
  
    public MessageOptions(Boolean message_set_wire_format, Boolean no_standard_descriptor_accessor, List<UninterpretedOption> uninterpreted_option) {
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/MethodDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/MethodDescriptorProto.java
-new file mode 100644
-index 00000000..10f38dbd
+new file mode 100755
+index 0000000000..10f38dbd10
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/MethodDescriptorProto.java
 @@ -0,0 +1,136 @@
@@ -1793,8 +1736,8 @@ index 00000000..10f38dbd
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/MethodOptions.java b/wire-runtime/src/test/java/com/google/protobuf/MethodOptions.java
-new file mode 100644
-index 00000000..f44e4aa8
+new file mode 100755
+index 0000000000..f44e4aa854
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/MethodOptions.java
 @@ -0,0 +1,93 @@
@@ -1892,8 +1835,8 @@ index 00000000..f44e4aa8
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/ServiceDescriptorProto.java b/wire-runtime/src/test/java/com/google/protobuf/ServiceDescriptorProto.java
-new file mode 100644
-index 00000000..d7ad9918
+new file mode 100755
+index 0000000000..d7ad9918bc
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/ServiceDescriptorProto.java
 @@ -0,0 +1,121 @@
@@ -2019,8 +1962,8 @@ index 00000000..d7ad9918
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/ServiceOptions.java b/wire-runtime/src/test/java/com/google/protobuf/ServiceOptions.java
-new file mode 100644
-index 00000000..4c18c1e5
+new file mode 100755
+index 0000000000..4c18c1e58d
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/ServiceOptions.java
 @@ -0,0 +1,93 @@
@@ -2118,8 +2061,8 @@ index 00000000..4c18c1e5
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/SourceCodeInfo.java b/wire-runtime/src/test/java/com/google/protobuf/SourceCodeInfo.java
-new file mode 100644
-index 00000000..7a76c4c4
+new file mode 100755
+index 0000000000..7a76c4c452
 --- /dev/null
 +++ b/wire-runtime/src/test/java/com/google/protobuf/SourceCodeInfo.java
 @@ -0,0 +1,301 @@
@@ -2425,7 +2368,7 @@ index 00000000..7a76c4c4
 +  }
 +}
 diff --git a/wire-runtime/src/test/java/com/google/protobuf/UninterpretedOption.java b/wire-runtime/src/test/java/com/google/protobuf/UninterpretedOption.java
-index 91b1decc..61259923 100644
+index 91b1deccc7..6125992376 100755
 --- a/wire-runtime/src/test/java/com/google/protobuf/UninterpretedOption.java
 +++ b/wire-runtime/src/test/java/com/google/protobuf/UninterpretedOption.java
 @@ -26,6 +26,7 @@
@@ -2454,7 +2397,7 @@ index 91b1decc..61259923 100644
      public static final String DEFAULT_NAME_PART = "";
      public static final Boolean DEFAULT_IS_EXTENSION = false;
 diff --git a/wire-runtime/src/test/java/com/squareup/foobar/protos/bar/Bar.java b/wire-runtime/src/test/java/com/squareup/foobar/protos/bar/Bar.java
-index f0e86b2c..d37f68c0 100644
+index f0e86b2c6b..d37f68c05f 100755
 --- a/wire-runtime/src/test/java/com/squareup/foobar/protos/bar/Bar.java
 +++ b/wire-runtime/src/test/java/com/squareup/foobar/protos/bar/Bar.java
 @@ -7,6 +7,7 @@
@@ -2482,7 +2425,7 @@ index f0e86b2c..d37f68c0 100644
        public static final String DEFAULT_BOO = "";
  
 diff --git a/wire-runtime/src/test/java/com/squareup/foobar/protos/foo/Foo.java b/wire-runtime/src/test/java/com/squareup/foobar/protos/foo/Foo.java
-index 7aee61ab..204a621d 100644
+index 7aee61ab69..204a621ded 100755
 --- a/wire-runtime/src/test/java/com/squareup/foobar/protos/foo/Foo.java
 +++ b/wire-runtime/src/test/java/com/squareup/foobar/protos/foo/Foo.java
 @@ -7,6 +7,7 @@
@@ -2494,7 +2437,7 @@ index 7aee61ab..204a621d 100644
    @ProtoField(tag = 1)
    public final Bar.Baz.Moo moo;
 diff --git a/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataRequest.java b/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataRequest.java
-index 030b4c02..06bb65d9 100644
+index 030b4c0201..06bb65d965 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataRequest.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataRequest.java
 @@ -9,6 +9,7 @@
@@ -2506,7 +2449,7 @@ index 030b4c02..06bb65d9 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataResponse.java b/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataResponse.java
-index 37d8bb90..94ffeb47 100644
+index 37d8bb9067..94ffeb4726 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataResponse.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/HeresAllTheDataResponse.java
 @@ -9,6 +9,7 @@
@@ -2518,7 +2461,7 @@ index 37d8bb90..94ffeb47 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/services/LetsDataRequest.java b/wire-runtime/src/test/java/com/squareup/services/LetsDataRequest.java
-index 152422b1..e35e8e8b 100644
+index 152422b123..e35e8e8baa 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/LetsDataRequest.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/LetsDataRequest.java
 @@ -9,6 +9,7 @@
@@ -2530,7 +2473,7 @@ index 152422b1..e35e8e8b 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/services/LetsDataResponse.java b/wire-runtime/src/test/java/com/squareup/services/LetsDataResponse.java
-index 855fd640..12df0f14 100644
+index 855fd64019..12df0f148e 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/LetsDataResponse.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/LetsDataResponse.java
 @@ -9,6 +9,7 @@
@@ -2542,7 +2485,7 @@ index 855fd640..12df0f14 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataRequest.java b/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataRequest.java
-index 615561f2..5f0cde6f 100644
+index 615561f204..5f0cde6f41 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataRequest.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataRequest.java
 @@ -9,6 +9,7 @@
@@ -2554,7 +2497,7 @@ index 615561f2..5f0cde6f 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataResponse.java b/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataResponse.java
-index fc72b8c3..d9a9c570 100644
+index fc72b8c381..d9a9c5708b 100755
 --- a/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataResponse.java
 +++ b/wire-runtime/src/test/java/com/squareup/services/anotherpackage/SendDataResponse.java
 @@ -9,6 +9,7 @@
@@ -2566,96 +2509,23 @@ index fc72b8c3..d9a9c570 100644
    public static final ByteString DEFAULT_DATA = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/SerializableTest.java b/wire-runtime/src/test/java/com/squareup/wire/SerializableTest.java
-new file mode 100644
-index 00000000..0cb741b4
---- /dev/null
+index 91da926d7c..0cb741b4c9 100755
+--- a/wire-runtime/src/test/java/com/squareup/wire/SerializableTest.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/SerializableTest.java
-@@ -0,0 +1,83 @@
-+/*
-+ * Copyright 2015 Square Inc.
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ * http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ */
-+package com.squareup.wire;
-+
-+import com.squareup.wire.protos.edgecases.NoFields;
-+import com.squareup.wire.protos.person.Person;
-+import com.squareup.wire.protos.simple.SimpleMessage;
-+import java.io.ObjectInputStream;
-+import java.io.ObjectOutputStream;
-+import java.util.Arrays;
-+import okio.Buffer;
-+import okio.ByteString;
-+import org.junit.Test;
-+
-+import static org.junit.Assert.assertEquals;
-+
-+public class SerializableTest {
-+
-+  @Test public void testSimpleSerializable() throws Exception {
-+    SimpleMessage message = new SimpleMessage.Builder().required_int32(42).build();
-+    assertEquals(message, serializeDeserialize(message));
-+  }
-+
-+  @Test public void testNestedMessageSerializable() throws Exception {
-+    Person person = new Person.Builder()
-+        .name("Omar")
-+        .id(1234)
-+        .email("omar@wire.com")
-+        .phone(Arrays.asList(new Person.PhoneNumber.Builder()
-+            .number("410-555-0909")
-+            .type(Person.PhoneType.MOBILE)
-+            .build()))
-+        .build();
-+    assertEquals(person, serializeDeserialize(person));
-+  }
-+
-+  @Test public void testNoFieldsSerializable() throws Exception {
-+    NoFields noFields = new NoFields();
-+    assertEquals(noFields, serializeDeserialize(noFields));
-+  }
-+
-+  @Test public void decodeGolden() throws Exception {
-+    SimpleMessage goldenValue = new SimpleMessage.Builder()
-+        .required_int32(99)
-+        .result("tacos")
-+        .build();
-+    ByteString goldenSerialized = ByteString.decodeBase64("rO0ABXNyACdjb20uc3F1YXJldXAud2lyZS5NZXNz"
+@@ -58,9 +58,9 @@
+         .result("tacos")
+         .build();
+     ByteString goldenSerialized = ByteString.decodeBase64("rO0ABXNyACdjb20uc3F1YXJldXAud2lyZS5NZXNz"
+-        + "YWdlU2VyaWFsaXplZEZvcm23LJyGlF0W+QIAAlsABWJ5dGVzdAACW0JMAAxtZXNzYWdlQ2xhc3N0ABFMamF2YS9s"
 +        + "YWdlU2VyaWFsaXplZEZvcm0AAAAAAAAAAAIAAlsABWJ5dGVzdAACW0JMAAxtZXNzYWdlQ2xhc3N0ABFMamF2YS9s"
-+        + "YW5nL0NsYXNzO3hwdXIAAltCrPMX+AYIVOACAAB4cAAAAAkoY1IFdGFjb3N2cgAtY29tLnNxdWFyZXVwLndpcmUu"
+         + "YW5nL0NsYXNzO3hwdXIAAltCrPMX+AYIVOACAAB4cAAAAAkoY1IFdGFjb3N2cgAtY29tLnNxdWFyZXVwLndpcmUu"
+-        + "cHJvdG9zLnNpbXBsZS5TaW1wbGVNZXNzYWdlEFlfVMiFFIECAAxMAAhfcGFja2FnZXQAEkxqYXZhL2xhbmcvU3Ry"
 +        + "cHJvdG9zLnNpbXBsZS5TaW1wbGVNZXNzYWdlAAAAAAAAAAACAAxMAAhfcGFja2FnZXQAEkxqYXZhL2xhbmcvU3Ry"
-+        + "aW5nO0wAFGRlZmF1bHRfZm9yZWlnbl9lbnVtdAAuTGNvbS9zcXVhcmV1cC93aXJlL3Byb3Rvcy9mb3JlaWduL0Zv"
-+        + "cmVpZ25FbnVtO0wAE2RlZmF1bHRfbmVzdGVkX2VudW10ADpMY29tL3NxdWFyZXVwL3dpcmUvcHJvdG9zL3NpbXBs"
-+        + "ZS9TaW1wbGVNZXNzYWdlJE5lc3RlZEVudW07TAAXbm9fZGVmYXVsdF9mb3JlaWduX2VudW1xAH4ACEwAAW9xAH4A"
-+        + "B0wAFW9wdGlvbmFsX2V4dGVybmFsX21zZ3QAMUxjb20vc3F1YXJldXAvd2lyZS9wcm90b3Mvc2ltcGxlL0V4dGVy"
-+        + "bmFsTWVzc2FnZTtMAA5vcHRpb25hbF9pbnQzMnQAE0xqYXZhL2xhbmcvSW50ZWdlcjtMABNvcHRpb25hbF9uZXN0"
-+        + "ZWRfbXNndAA9TGNvbS9zcXVhcmV1cC93aXJlL3Byb3Rvcy9zaW1wbGUvU2ltcGxlTWVzc2FnZSROZXN0ZWRNZXNz"
-+        + "YWdlO0wABW90aGVycQB+AAdMAA9yZXBlYXRlZF9kb3VibGV0ABBMamF2YS91dGlsL0xpc3Q7TAAOcmVxdWlyZWRf"
-+        + "aW50MzJxAH4AC0wABnJlc3VsdHEAfgAHeHIAGWNvbS5zcXVhcmV1cC53aXJlLk1lc3NhZ2UAAAAAAAAAAAIAAHhw"
-+    );
-+    Buffer buffer = new Buffer();
-+    buffer.write(goldenSerialized);
-+    assertEquals(goldenValue, new ObjectInputStream(buffer.inputStream()).readObject());
-+  }
-+
-+  private static Object serializeDeserialize(Message message) throws Exception {
-+    Buffer buffer = new Buffer();
-+    new ObjectOutputStream(buffer.outputStream()).writeObject(message);
-+    return new ObjectInputStream(buffer.inputStream()).readObject();
-+  }
-+}
+         + "aW5nO0wAFGRlZmF1bHRfZm9yZWlnbl9lbnVtdAAuTGNvbS9zcXVhcmV1cC93aXJlL3Byb3Rvcy9mb3JlaWduL0Zv"
+         + "cmVpZ25FbnVtO0wAE2RlZmF1bHRfbmVzdGVkX2VudW10ADpMY29tL3NxdWFyZXVwL3dpcmUvcHJvdG9zL3NpbXBs"
+         + "ZS9TaW1wbGVNZXNzYWdlJE5lc3RlZEVudW07TAAXbm9fZGVmYXVsdF9mb3JlaWduX2VudW1xAH4ACEwAAW9xAH4A"
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/ChildPackage.java b/wire-runtime/src/test/java/com/squareup/wire/protos/ChildPackage.java
-index 21e2b9f3..9f86d306 100644
+index 21e2b9f3ae..9f86d3066a 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/ChildPackage.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/ChildPackage.java
 @@ -9,6 +9,7 @@
@@ -2667,7 +2537,7 @@ index 21e2b9f3..9f86d306 100644
    public static final ForeignEnum DEFAULT_INNER_FOREIGN_ENUM = ForeignEnum.BAV;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/alltypes/AllTypes.java b/wire-runtime/src/test/java/com/squareup/wire/protos/alltypes/AllTypes.java
-index c0e69979..f3e64a4b 100644
+index c0e699792e..f3e64a4b14 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/alltypes/AllTypes.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/alltypes/AllTypes.java
 @@ -32,6 +32,7 @@
@@ -2687,7 +2557,7 @@ index c0e69979..f3e64a4b 100644
      public static final Integer DEFAULT_A = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java
-index d3a921e5..e8f8825b 100644
+index d3a921e5e5..e8f8825bcc 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java
 @@ -21,6 +21,7 @@
@@ -2715,7 +2585,7 @@ index d3a921e5..e8f8825b 100644
      public static final List<Integer> DEFAULT_SERIAL = Collections.emptyList();
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java.noOptions b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java.noOptions
-index 9b2d149b..5910ea42 100644
+index 9b2d149bdc..5910ea4276 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java.noOptions
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/FooBar.java.noOptions
 @@ -19,6 +19,7 @@ import static com.squareup.wire.Message.Datatype.UINT64;
@@ -2743,7 +2613,7 @@ index 9b2d149b..5910ea42 100644
      public static final List<Integer> DEFAULT_SERIAL = Collections.emptyList();
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java
-index 299d0e25..5bb0ad1e 100644
+index 299d0e259f..5bb0ad1e3a 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java
 @@ -8,6 +8,7 @@
@@ -2755,7 +2625,7 @@ index 299d0e25..5bb0ad1e 100644
    public static final MessageOptions MESSAGE_OPTIONS = new MessageOptions.Builder()
        .setExtension(Ext_custom_options.my_message_option_one, new FooBar.Builder()
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java.noOptions b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java.noOptions
-index 1307e1ac..56f793fe 100644
+index 1307e1ac00..56f793fef5 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java.noOptions
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/custom_options/MessageWithOptions.java.noOptions
 @@ -5,6 +5,7 @@ package com.squareup.wire.protos.custom_options;
@@ -2767,7 +2637,7 @@ index 1307e1ac..56f793fe 100644
    public MessageWithOptions() {
    }
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/NoFields.java b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/NoFields.java
-index 642fbac0..bb344439 100644
+index 642fbac0df..bb344439fc 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/NoFields.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/NoFields.java
 @@ -5,6 +5,7 @@
@@ -2779,7 +2649,7 @@ index 642fbac0..bb344439 100644
    public NoFields() {
    }
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneBytesField.java b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneBytesField.java
-index b69d7a2c..7c0dc38a 100644
+index b69d7a2c63..7c0dc38af9 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneBytesField.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneBytesField.java
 @@ -9,6 +9,7 @@
@@ -2791,7 +2661,7 @@ index b69d7a2c..7c0dc38a 100644
    public static final ByteString DEFAULT_OPT_BYTES = ByteString.EMPTY;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneField.java b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneField.java
-index 2345cb50..a1432469 100644
+index 2345cb5083..a14324695e 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneField.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/OneField.java
 @@ -8,6 +8,7 @@
@@ -2803,7 +2673,7 @@ index 2345cb50..a1432469 100644
    public static final Integer DEFAULT_OPT_INT32 = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/Recursive.java b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/Recursive.java
-index 14aeb6ba..c2b12929 100644
+index 14aeb6baa1..c2b12929a4 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/Recursive.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/edgecases/Recursive.java
 @@ -8,6 +8,7 @@
@@ -2815,7 +2685,7 @@ index 14aeb6ba..c2b12929 100644
    public static final Integer DEFAULT_VALUE = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/foreign/ForeignMessage.java b/wire-runtime/src/test/java/com/squareup/wire/protos/foreign/ForeignMessage.java
-index 0cd55fc2..b76406ad 100644
+index 0cd55fc228..b76406ad4c 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/foreign/ForeignMessage.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/foreign/ForeignMessage.java
 @@ -9,6 +9,7 @@
@@ -2827,7 +2697,7 @@ index 0cd55fc2..b76406ad 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/Foo.java b/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/Foo.java
-index 691d3746..615badce 100644
+index 691d374604..615badceca 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/Foo.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/Foo.java
 @@ -8,6 +8,7 @@
@@ -2839,7 +2709,7 @@ index 691d3746..615badce 100644
    public static final String DEFAULT_BAR = "";
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/OneExtension.java b/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/OneExtension.java
-index 45e0b618..75fef87d 100644
+index 45e0b6186d..75fef87d29 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/OneExtension.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/one_extension/OneExtension.java
 @@ -9,6 +9,7 @@
@@ -2851,7 +2721,7 @@ index 45e0b618..75fef87d 100644
    public static final String DEFAULT_ID = "";
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/person/Person.java b/wire-runtime/src/test/java/com/squareup/wire/protos/person/Person.java
-index 89b3d6bc..57f7e2b2 100644
+index 89b3d6bc63..57f7e2b2cb 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/person/Person.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/person/Person.java
 @@ -15,6 +15,7 @@
@@ -2871,7 +2741,7 @@ index 89b3d6bc..57f7e2b2 100644
      public static final String DEFAULT_NUMBER = "";
      public static final PhoneType DEFAULT_TYPE = PhoneType.HOME;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/NotRedacted.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/NotRedacted.java
-index 45294689..a532a12d 100644
+index 45294689f3..a532a12dee 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/NotRedacted.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/NotRedacted.java
 @@ -8,6 +8,7 @@
@@ -2883,7 +2753,7 @@ index 45294689..a532a12d 100644
    public static final String DEFAULT_A = "";
    public static final String DEFAULT_B = "";
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/Redacted.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/Redacted.java
-index 5cfd4264..97013fc2 100644
+index 5cfd426430..97013fc25d 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/Redacted.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/Redacted.java
 @@ -9,6 +9,7 @@
@@ -2895,7 +2765,7 @@ index 5cfd4264..97013fc2 100644
    public static final FieldOptions FIELD_OPTIONS_A = new FieldOptions.Builder()
        .setExtension(Ext_redacted_test.redacted, true)
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedChild.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedChild.java
-index f47acccf..2bf7e904 100644
+index f47acccf00..2bf7e90486 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedChild.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedChild.java
 @@ -8,6 +8,7 @@
@@ -2907,7 +2777,7 @@ index f47acccf..2bf7e904 100644
    public static final String DEFAULT_A = "";
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleA.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleA.java
-index f087e871..161b289e 100644
+index f087e87132..161b289ec5 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleA.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleA.java
 @@ -6,6 +6,7 @@
@@ -2919,7 +2789,7 @@ index f087e871..161b289e 100644
    @ProtoField(tag = 1)
    public final RedactedCycleB b;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleB.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleB.java
-index cd64112a..3d5edc0f 100644
+index cd64112aca..3d5edc0ffa 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleB.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedCycleB.java
 @@ -6,6 +6,7 @@
@@ -2931,7 +2801,7 @@ index cd64112a..3d5edc0f 100644
    @ProtoField(tag = 1)
    public final RedactedCycleA a;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRepeated.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRepeated.java
-index 33fe1622..3757c803 100644
+index 33fe16228d..3757c80314 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRepeated.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRepeated.java
 @@ -12,6 +12,7 @@
@@ -2943,7 +2813,7 @@ index 33fe1622..3757c803 100644
    public static final FieldOptions FIELD_OPTIONS_A = new FieldOptions.Builder()
        .setExtension(Ext_redacted_test.redacted, true)
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRequired.java b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRequired.java
-index 2bec4b82..93eb0be6 100644
+index 2bec4b8295..93eb0be67d 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRequired.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/redacted/RedactedRequired.java
 @@ -10,6 +10,7 @@
@@ -2955,7 +2825,7 @@ index 2bec4b82..93eb0be6 100644
    public static final FieldOptions FIELD_OPTIONS_A = new FieldOptions.Builder()
        .setExtension(Ext_redacted_test.redacted, true)
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/A.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/A.java
-index 0d101631..b000df27 100644
+index 0d101631d1..b000df27b5 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/A.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/A.java
 @@ -21,6 +21,7 @@
@@ -2967,7 +2837,7 @@ index 0d101631..b000df27 100644
    @ProtoField(tag = 1)
    public final B c;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/B.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/B.java
-index 8ff47026..7538d627 100644
+index 8ff47026ae..7538d627db 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/B.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/B.java
 @@ -8,6 +8,7 @@
@@ -2979,7 +2849,7 @@ index 8ff47026..7538d627 100644
    @ProtoField(tag = 1, label = REQUIRED)
    public final C c;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/C.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/C.java
-index fc2ec70c..469f2cfd 100644
+index fc2ec70cc1..469f2cfd21 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/C.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/C.java
 @@ -8,6 +8,7 @@
@@ -2991,7 +2861,7 @@ index fc2ec70c..469f2cfd 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/D.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/D.java
-index fee4249f..ac04fe85 100644
+index fee4249fed..ac04fe85f7 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/D.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/D.java
 @@ -8,6 +8,7 @@
@@ -3003,7 +2873,7 @@ index fee4249f..ac04fe85 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/E.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/E.java
-index d9661252..09b9a813 100644
+index d966125219..09b9a81343 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/E.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/E.java
 @@ -9,6 +9,7 @@
@@ -3023,7 +2893,7 @@ index d9661252..09b9a813 100644
      public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/H.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/H.java
-index d304a443..96a516a9 100644
+index d304a443d7..96a516a940 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/H.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/H.java
 @@ -6,6 +6,7 @@
@@ -3035,7 +2905,7 @@ index d304a443..96a516a9 100644
    @ProtoField(tag = 1)
    public final E.F ef;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/I.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/I.java
-index 8115546f..095bed0f 100644
+index 8115546fb0..095bed0f3b 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/I.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/I.java
 @@ -9,6 +9,7 @@
@@ -3047,7 +2917,7 @@ index 8115546f..095bed0f 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/J.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/J.java
-index e92f91ed..f087cd88 100644
+index e92f91ed91..f087cd88c2 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/J.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/J.java
 @@ -6,6 +6,7 @@
@@ -3059,7 +2929,7 @@ index e92f91ed..f087cd88 100644
    @ProtoField(tag = 1)
    public final K k;
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/K.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/K.java
-index a2e18bd3..a35d442a 100644
+index a2e18bd39b..a35d442adc 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/K.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/K.java
 @@ -8,6 +8,7 @@
@@ -3071,7 +2941,7 @@ index a2e18bd3..a35d442a 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheRequest.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheRequest.java
-index fe8d3820..6b47007a 100644
+index fe8d382019..6b47007ac3 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheRequest.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheRequest.java
 @@ -5,6 +5,7 @@
@@ -3083,7 +2953,7 @@ index fe8d3820..6b47007a 100644
    public TheRequest() {
    }
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheResponse.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheResponse.java
-index c9849aa0..8a569af1 100644
+index c9849aa099..8a569af1e8 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheResponse.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/TheResponse.java
 @@ -5,6 +5,7 @@
@@ -3095,7 +2965,7 @@ index c9849aa0..8a569af1 100644
    public TheResponse() {
    }
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/UnnecessaryResponse.java b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/UnnecessaryResponse.java
-index dd25ab54..2785c2f7 100644
+index dd25ab546f..2785c2f7b3 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/roots/UnnecessaryResponse.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/roots/UnnecessaryResponse.java
 @@ -5,6 +5,7 @@
@@ -3107,7 +2977,7 @@ index dd25ab54..2785c2f7 100644
    public UnnecessaryResponse() {
    }
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/simple/ExternalMessage.java b/wire-runtime/src/test/java/com/squareup/wire/protos/simple/ExternalMessage.java
-index e33faa67..a2348597 100644
+index e33faa6766..a234859752 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/simple/ExternalMessage.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/simple/ExternalMessage.java
 @@ -9,6 +9,7 @@
@@ -3119,7 +2989,7 @@ index e33faa67..a2348597 100644
    public static final Float DEFAULT_F = 20F;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/simple/SimpleMessage.java b/wire-runtime/src/test/java/com/squareup/wire/protos/simple/SimpleMessage.java
-index cd72d54e..fcb1a757 100644
+index cd72d54e1b..fcb1a757be 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/simple/SimpleMessage.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/simple/SimpleMessage.java
 @@ -20,6 +20,7 @@
@@ -3139,7 +3009,7 @@ index cd72d54e..fcb1a757 100644
      public static final Integer DEFAULT_BB = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bar.java b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bar.java
-index 2ef6b8e6..0b101f9c 100644
+index 2ef6b8e6d5..0b101f9c69 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bar.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bar.java
 @@ -8,6 +8,7 @@
@@ -3151,7 +3021,7 @@ index 2ef6b8e6..0b101f9c 100644
    public static final Integer DEFAULT_BAZ = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bars.java b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bars.java
-index 8d471305..e7196703 100644
+index 8d471305e7..e7196703d5 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bars.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Bars.java
 @@ -10,6 +10,7 @@
@@ -3163,7 +3033,7 @@ index 8d471305..e7196703 100644
    public static final List<Bar> DEFAULT_BARS = Collections.emptyList();
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foo.java b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foo.java
-index 72216aa2..428f4d97 100644
+index 72216aa267..428f4d97fd 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foo.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foo.java
 @@ -8,6 +8,7 @@
@@ -3175,7 +3045,7 @@ index 72216aa2..428f4d97 100644
    public static final Integer DEFAULT_BAR = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foos.java b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foos.java
-index c35627e3..6097b561 100644
+index c35627e377..6097b5613e 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foos.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/single_level/Foos.java
 @@ -10,6 +10,7 @@
@@ -3187,7 +3057,7 @@ index c35627e3..6097b561 100644
    public static final List<Foo> DEFAULT_FOOS = Collections.emptyList();
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionOne.java b/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionOne.java
-index ce6566cb..e534d4bf 100644
+index ce6566cb28..e534d4bf88 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionOne.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionOne.java
 @@ -8,6 +8,7 @@
@@ -3199,7 +3069,7 @@ index ce6566cb..e534d4bf 100644
    public static final Integer DEFAULT_I = 0;
  
 diff --git a/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionTwo.java b/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionTwo.java
-index f3900e59..de17c5ad 100644
+index f3900e596f..de17c5ad86 100755
 --- a/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionTwo.java
 +++ b/wire-runtime/src/test/java/com/squareup/wire/protos/unknownfields/VersionTwo.java
 @@ -11,6 +11,7 @@

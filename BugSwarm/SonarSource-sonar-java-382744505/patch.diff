@@ -1,5 +1,5 @@
 diff --git a/its/ruling/src/test/resources/jdk6/squid-S3330.json b/its/ruling/src/test/resources/jdk6/squid-S3330.json
-new file mode 100644
+new file mode 100755
 index 0000000000..43fd692140
 --- /dev/null
 +++ b/its/ruling/src/test/resources/jdk6/squid-S3330.json
@@ -10,7 +10,7 @@ index 0000000000..43fd692140
 +],
 +}
 diff --git a/java-checks/pom.xml b/java-checks/pom.xml
-index 16c1440ad7..6080092735 100644
+index 34fb5e6e8a..6080092735 100755
 --- a/java-checks/pom.xml
 +++ b/java-checks/pom.xml
 @@ -146,6 +146,11 @@
@@ -38,55 +38,39 @@ index 16c1440ad7..6080092735 100644
                  <artifactItem>
                    <groupId>com.google.guava</groupId>
                    <artifactId>guava</artifactId>
-@@ -253,6 +264,11 @@
-                   <artifactId>truth</artifactId>
-                   <version>0.29</version>
-                 </artifactItem>
-+                <artifactItem>
-+                  <groupId>com.google.truth.extensions	</groupId>
-+                  <artifactId>truth-java8-extension</artifactId>
-+                  <version>0.39</version>
-+                </artifactItem>
-                 <artifactItem>
-                   <groupId>org.hamcrest</groupId>
-                   <artifactId>hamcrest-library</artifactId>
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/AssertionsCompletenessCheck.java b/java-checks/src/main/java/org/sonar/java/checks/AssertionsCompletenessCheck.java
-index c057584c2c..244ddf51fc 100644
+index 6527d47a95..244ddf51fc 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/AssertionsCompletenessCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/AssertionsCompletenessCheck.java
-@@ -73,7 +73,9 @@
-     // AssertJ 3.X
+@@ -51,7 +51,6 @@
+   private static final String FEST_ASSERT_SUPERTYPE = "org.fest.assertions.Assert";
+   private static final String ASSERTJ_SUPERTYPE = "org.assertj.core.api.AbstractAssert";
+   private static final String TRUTH_SUPERTYPE = "com.google.common.truth.TestVerb";
+-  private static final String TRUTH_8_SUPERTYPE = "com.google.common.truth.StandardSubjectBuilder";
+   private static final MethodMatcher MOCKITO_VERIFY = MethodMatcher.create()
+     .typeDefinition("org.mockito.Mockito").name("verify").withAnyParameters();
+   private static final MethodMatcher ASSERTJ_ASSERT_ALL = MethodMatcher.create()
+@@ -75,6 +74,7 @@
      assertThatOnType("org.assertj.core.api.StrictAssertions"),
      // Truth 0.29
--    methodWithName("com.google.common.truth.Truth", NameCriteria.startsWith("assert"))
-+    methodWithName("com.google.common.truth.Truth", NameCriteria.startsWith("assert")),
+     methodWithName("com.google.common.truth.Truth", NameCriteria.startsWith("assert")),
 +    // Truth8 0.39
-+    methodWithName("com.google.common.truth.Truth8", NameCriteria.startsWith("assert"))
+     methodWithName("com.google.common.truth.Truth8", NameCriteria.startsWith("assert"))
    );
  
-   private static final MethodMatcherCollection FEST_LIKE_EXCLUSIONS = MethodMatcherCollection.create(
-@@ -87,6 +89,7 @@
+@@ -89,8 +89,8 @@
      methodWithName(ASSERTJ_SUPERTYPE, NameCriteria.startsWith("with")),
      methodWithName(ASSERTJ_SUPERTYPE, NameCriteria.is("describedAs")),
      methodWithName(ASSERTJ_SUPERTYPE, NameCriteria.is("overridingErrorMessage")),
+-    methodWithName(TRUTH_SUPERTYPE, NameCriteria.is("that")),
+-    methodWithName(TRUTH_8_SUPERTYPE, NameCriteria.is("that"))
 +    // Truth has assertWithMessage, Truth8 does not
-     methodWithName(TRUTH_SUPERTYPE, NameCriteria.is("that"))
++    methodWithName(TRUTH_SUPERTYPE, NameCriteria.is("that"))
    );
  
-diff --git a/java-checks/src/main/java/org/sonar/java/checks/AssertionsInTestsCheck.java b/java-checks/src/main/java/org/sonar/java/checks/AssertionsInTestsCheck.java
-index fbace8607b..704ad4683b 100644
---- a/java-checks/src/main/java/org/sonar/java/checks/AssertionsInTestsCheck.java
-+++ b/java-checks/src/main/java/org/sonar/java/checks/AssertionsInTestsCheck.java
-@@ -98,6 +98,7 @@
-     method(TypeCriteria.subtypeOf("org.easymock.EasyMockSupport"), "verifyAll").withAnyParameters(),
-     // Truth Framework
-     method("com.google.common.truth.Truth", STARTS_WITH_ASSERT).withAnyParameters(),
-+    method("com.google.common.truth.Truth8", STARTS_WITH_ASSERT).withAnyParameters(),
-     // JMock Mockery
-     method(TypeCriteria.subtypeOf("org.jmock.Mockery"), "assertIsSatisfied").withAnyParameters(),
-     // WireMock
+   private Boolean chainedToAnyMethodButFestExclusions = null;
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
-index 45e9360280..7c2359dceb 100644
+index 45e9360280..7c2359dceb 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/CheckList.java
 @@ -44,13 +44,15 @@
@@ -123,7 +107,7 @@ index 45e9360280..7c2359dceb 100644
    }
  
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java b/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
-index 67c71e1bf8..eb9dd15ed6 100644
+index 67c71e1bf8..eb9dd15ed6 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/HardcodedIpCheck.java
 @@ -35,7 +35,7 @@
@@ -136,7 +120,7 @@ index 67c71e1bf8..eb9dd15ed6 100644
    private JavaFileScannerContext context;
  
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java b/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
-index 808587e936..6c1d14e6bf 100644
+index 808587e936..6c1d14e6bf 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/InterruptedExceptionCheck.java
 @@ -20,7 +20,12 @@
@@ -213,7 +197,7 @@ index 808587e936..6c1d14e6bf 100644
      for (Boolean aBoolean : withinInterruptingFinally) {
        if(aBoolean) {
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java b/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
-index 682979d698..258f391052 100644
+index 682979d698..258f391052 100755
 --- a/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
 +++ b/java-checks/src/main/java/org/sonar/java/checks/PrintfMisuseCheck.java
 @@ -22,11 +22,13 @@
@@ -263,7 +247,7 @@ index 682979d698..258f391052 100644
    private void verifyParameters(MethodInvocationTree mit, List<ExpressionTree> args, Set<Integer> indexes) {
      List<ExpressionTree> unusedArgs = new ArrayList<>(args);
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..de8f8a2163
 --- /dev/null
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/CookieHttpOnlyCheck.java
@@ -526,7 +510,7 @@ index 0000000000..de8f8a2163
 +  }
 +}
 diff --git a/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java b/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..267ee60c16
 --- /dev/null
 +++ b/java-checks/src/main/java/org/sonar/java/checks/security/CryptographicKeySizeCheck.java
@@ -631,7 +615,7 @@ index 0000000000..267ee60c16
 +  }
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..7c898c5878
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.html
@@ -660,7 +644,7 @@ index 0000000000..7c898c5878
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..8367951385
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3330_java.json
@@ -689,7 +673,7 @@ index 0000000000..8367951385
 +  "scope": "Main"
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html
-new file mode 100644
+new file mode 100755
 index 0000000000..16e2d02b27
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.html
@@ -723,7 +707,7 @@ index 0000000000..16e2d02b27
 +</ul>
 +
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json
-new file mode 100644
+new file mode 100755
 index 0000000000..23b227ba7b
 --- /dev/null
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S4426_java.json
@@ -750,7 +734,7 @@ index 0000000000..23b227ba7b
 +  "scope": "Main"
 +}
 diff --git a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
-index 63d1716abc..77bbdfea8d 100644
+index 63d1716abc..77bbdfea8d 100755
 --- a/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
 +++ b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/Sonar_way_profile.json
 @@ -306,6 +306,7 @@
@@ -762,7 +746,7 @@ index 63d1716abc..77bbdfea8d 100644
      "S4433",
      "S4434",
 diff --git a/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java b/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
-index dc9a120311..ee97eacd47 100644
+index dc9a120311..ee97eacd47 100755
 --- a/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
 +++ b/java-checks/src/test/files/checks/AnnotationDefaultArgumentCheck.java
 @@ -21,7 +21,7 @@
@@ -775,77 +759,21 @@ index dc9a120311..ee97eacd47 100644
    void goodMethod() {
  
 diff --git a/java-checks/src/test/files/checks/AssertionsCompletenessCheck.java b/java-checks/src/test/files/checks/AssertionsCompletenessCheck.java
-index 16eb23fd7c..e0eb4b8940 100644
+index 8c73c7680c..e0eb4b8940 100755
 --- a/java-checks/src/test/files/checks/AssertionsCompletenessCheck.java
 +++ b/java-checks/src/test/files/checks/AssertionsCompletenessCheck.java
-@@ -3,9 +3,13 @@
- import org.junit.Test;
- import org.mockito.Mockito;
- import com.google.common.truth.Truth;
-+import com.google.common.truth.Truth8;
- 
+@@ -8,7 +8,8 @@
  import java.util.Comparator;
  import java.util.List;
-+import java.util.Optional;
+ import java.util.Optional;
+-import java.util.Stream;
 +import java.util.OptionalInt;
 +import java.util.stream.Stream;
  
  public class AssertionsCompletenessCheck {
  
-@@ -65,6 +69,17 @@ public void google_truth_assertions() {
-     Truth.assertWithMessage("Invalid option").that(b); // Noncompliant
-   }
- 
-+  @Test
-+  public void google_truth8_assertions() {
-+    Truth8.assertThat(Stream.of(1, 2, 3)); // Noncompliant
-+    Truth8.assertThat(Stream.of(1, 2, 3)).containsAllOf(1, 2, 3).inOrder();
-+    boolean b = true;
-+    Truth8.assertThat(Optional.of(b)); // Noncompliant
-+    Truth8.assertThat(Optional.of(b)).isPresent();
-+    Truth8.assertThat(OptionalInt.of(1)); // Noncompliant
-+    Truth8.assertThat(OptionalInt.of(1)).hasValue(0);
-+  }
-+
-   @Test
-   public void assertj_assertions() {
-     org.assertj.core.api.Assertions.assertThat(1).isGreaterThan(0);
-diff --git a/java-checks/src/test/files/checks/AssertionsInTestsCheck/Truth.java b/java-checks/src/test/files/checks/AssertionsInTestsCheck/Truth.java
-index 844582743f..e4f7ef004e 100644
---- a/java-checks/src/test/files/checks/AssertionsInTestsCheck/Truth.java
-+++ b/java-checks/src/test/files/checks/AssertionsInTestsCheck/Truth.java
-@@ -1,5 +1,9 @@
- import com.google.common.truth.Truth;
-+import com.google.common.truth.Truth8;
-+import static com.google.common.truth.Truth8.*;
- import org.junit.Test;
-+import java.util.Optional;
-+import java.util.stream.Stream;
- 
- public class AssertionsInTestsCheckTest {
-   
-@@ -39,4 +43,19 @@ public void test5() { // Compliant
-     boolean b = true;
-     Truth.assertWithMessage("Invalid option").that(b);
-   }
-+
-+  @Test
-+  public void test8_0() { // Compliant
-+    Truth8.assertThat(Stream.of("foo")).isNotEmpty();
-+  }
-+
-+  @Test
-+  public void test8_1() { // Compliant
-+    Truth8.assertThat(Stream.of("foo"));
-+  }
-+
-+  @Test
-+  public void test8_2() { // Compliant
-+    assertThat(Optional.of("foo")).isPresent();
-+  }
- }
 diff --git a/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java b/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
-index 392cf5a0c2..c72906cfd8 100644
+index 392cf5a0c2..c72906cfd8 100755
 --- a/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
 +++ b/java-checks/src/test/files/checks/DefaultInitializedFieldCheck.java
 @@ -14,7 +14,7 @@
@@ -858,7 +786,7 @@ index 392cf5a0c2..c72906cfd8 100644
    float f1 = 0.f; // Noncompliant {{Remove this initialization to "0.f", the compiler will do that for you.}}
    float f2 = 1.f;
 diff --git a/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java b/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
-index 3b3b33d63f..efae2ac8b2 100644
+index 3b3b33d63f..efae2ac8b2 100755
 --- a/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
 +++ b/java-checks/src/test/files/checks/ForLoopFalseConditionCheck.java
 @@ -24,5 +24,6 @@ void myMethod(int x, int y, int z) {
@@ -869,7 +797,7 @@ index 3b3b33d63f..efae2ac8b2 100644
    }
  }
 diff --git a/java-checks/src/test/files/checks/HardcodedIpCheck.java b/java-checks/src/test/files/checks/HardcodedIpCheck.java
-index d8cf740b77..c6322be244 100644
+index d8cf740b77..c6322be244 100755
 --- a/java-checks/src/test/files/checks/HardcodedIpCheck.java
 +++ b/java-checks/src/test/files/checks/HardcodedIpCheck.java
 @@ -1,6 +1,8 @@
@@ -882,7 +810,7 @@ index d8cf740b77..c6322be244 100644
    int a = 42;
    String notAnIp1 = "0.0.0.1234";
 diff --git a/java-checks/src/test/files/checks/InterruptedExceptionCheck.java b/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
-index fe6db31270..487ce22ef8 100644
+index fe6db31270..487ce22ef8 100755
 --- a/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
 +++ b/java-checks/src/test/files/checks/InterruptedExceptionCheck.java
 @@ -32,6 +32,16 @@ public void runUnknownSymbol () {
@@ -903,7 +831,7 @@ index fe6db31270..487ce22ef8 100644
      try {
        while (true) {
 diff --git a/java-checks/src/test/files/checks/PrintfMisuseCheck.java b/java-checks/src/test/files/checks/PrintfMisuseCheck.java
-index 274c7f02e8..301ceabe96 100644
+index 274c7f02e8..301ceabe96 100755
 --- a/java-checks/src/test/files/checks/PrintfMisuseCheck.java
 +++ b/java-checks/src/test/files/checks/PrintfMisuseCheck.java
 @@ -2,10 +2,10 @@
@@ -946,7 +874,7 @@ index 274c7f02e8..301ceabe96 100644
      org.slf4j.Logger slf4jLog;
      org.slf4j.Marker marker;
 diff --git a/java-checks/src/test/files/checks/SecureCookieCheck.java b/java-checks/src/test/files/checks/SecureCookieCheck.java
-index 90d3565628..63e2af1f42 100644
+index 90d3565628..63e2af1f42 100755
 --- a/java-checks/src/test/files/checks/SecureCookieCheck.java
 +++ b/java-checks/src/test/files/checks/SecureCookieCheck.java
 @@ -4,6 +4,8 @@
@@ -975,7 +903,7 @@ index 90d3565628..63e2af1f42 100644
 +  }
  }
 diff --git a/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java b/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java
-new file mode 100644
+new file mode 100755
 index 0000000000..2e2064affb
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CookieHttpOnlyCheck.java
@@ -1193,7 +1121,7 @@ index 0000000000..2e2064affb
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java
-new file mode 100644
+new file mode 100755
 index 0000000000..15c53c3123
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/Blowfish.java
@@ -1309,7 +1237,7 @@ index 0000000000..15c53c3123
 +  }
 +}
 diff --git a/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java
-new file mode 100644
+new file mode 100755
 index 0000000000..b9cbc53836
 --- /dev/null
 +++ b/java-checks/src/test/files/checks/security/CryptographicKeySizeCheck/RSA.java
@@ -1337,7 +1265,7 @@ index 0000000000..b9cbc53836
 +  }
 +}
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/CookieHttpOnlyCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/CookieHttpOnlyCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..58935b0640
 --- /dev/null
 +++ b/java-checks/src/test/java/org/sonar/java/checks/security/CookieHttpOnlyCheckTest.java
@@ -1375,7 +1303,7 @@ index 0000000000..58935b0640
 +  }
 +}
 diff --git a/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java b/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java
-new file mode 100644
+new file mode 100755
 index 0000000000..1cc7d8ff3b
 --- /dev/null
 +++ b/java-checks/src/test/java/org/sonar/java/checks/security/CryptographicKeySizeCheckTest.java
@@ -1423,7 +1351,7 @@ index 0000000000..1cc7d8ff3b
 +  }
 +}
 diff --git a/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java b/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
-index 4b0fd08167..9024084720 100644
+index 4b0fd08167..9024084720 100755
 --- a/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
 +++ b/java-frontend/src/main/java/org/sonar/java/UCFGJavaVisitor.java
 @@ -43,6 +43,7 @@
@@ -1526,7 +1454,7 @@ index 4b0fd08167..9024084720 100644
  
    private static String signatureFor(Symbol.MethodSymbol methodSymbol) {
 diff --git a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
-index 30e7b8540d..ede19d6830 100644
+index 30e7b8540d..ede19d6830 100755
 --- a/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
 +++ b/java-frontend/src/main/java/org/sonar/java/model/LiteralUtils.java
 @@ -50,10 +50,10 @@ public static Integer intLiteralValue(ExpressionTree expression) {
@@ -1554,7 +1482,7 @@ index 30e7b8540d..ede19d6830 100644
        } catch (NumberFormatException e) {
          // Long.decode() may fail in case of very large long number written in hexadecimal. In such situation, we ignore the number.
 diff --git a/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java b/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
-index 11eaca23b4..d9eec87c59 100644
+index 11eaca23b4..d9eec87c59 100755
 --- a/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
 +++ b/java-frontend/src/main/java/org/sonar/java/resolve/SecondPass.java
 @@ -109,6 +109,15 @@ private void complete(JavaSymbol.TypeJavaSymbol symbol) {
@@ -1574,7 +1502,7 @@ index 11eaca23b4..d9eec87c59 100644
  
      // Register default constructor
 diff --git a/java-frontend/src/test/files/sym/references/SuperMethodCall.java b/java-frontend/src/test/files/sym/references/SuperMethodCall.java
-new file mode 100644
+new file mode 100755
 index 0000000000..d63f9289f4
 --- /dev/null
 +++ b/java-frontend/src/test/files/sym/references/SuperMethodCall.java
@@ -1610,7 +1538,7 @@ index 0000000000..d63f9289f4
 +
 +}
 diff --git a/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java b/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
-index aa1f7c4a03..460c881739 100644
+index aa1f7c4a03..460c881739 100755
 --- a/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/UCFGJavaVisitorTest.java
 @@ -23,6 +23,7 @@
@@ -1657,7 +1585,7 @@ index aa1f7c4a03..460c881739 100644
      CompilationUnitTree cut = (CompilationUnitTree) JavaParser.createParser().parse(source);
      SemanticModel.createFor(cut, squidClassLoader);
 diff --git a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
-index 213f58b6d0..8408e3aa5b 100644
+index 213f58b6d0..8408e3aa5b 100755
 --- a/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/model/LiteralUtilsTest.java
 @@ -70,6 +70,8 @@ public static void setUp() {
@@ -1691,7 +1619,7 @@ index 213f58b6d0..8408e3aa5b 100644
      int j = 0;
  
 diff --git a/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java b/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
-index 56943d84d3..6adc95ff8d 100644
+index 56943d84d3..6adc95ff8d 100755
 --- a/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
 +++ b/java-frontend/src/test/java/org/sonar/java/resolve/SymbolTableTest.java
 @@ -383,7 +383,7 @@ public void InterfaceDeclaration() {

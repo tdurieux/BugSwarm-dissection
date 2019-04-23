@@ -1,5 +1,5 @@
 diff --git a/config/checkstyle_non_main_files_suppressions.xml b/config/checkstyle_non_main_files_suppressions.xml
-index 4311d5e47b..e2497d2a0a 100644
+index 4311d5e47b..e2497d2a0a 100755
 --- a/config/checkstyle_non_main_files_suppressions.xml
 +++ b/config/checkstyle_non_main_files_suppressions.xml
 @@ -22,4 +22,10 @@
@@ -14,7 +14,7 @@ index 4311d5e47b..e2497d2a0a 100644
 +    <suppress checks="NewlineAtEndOfFile" files="[\\/]test[\\/].*[\\/]checks[\\/]misc[\\/]uniqueproperties[\\/]InputUniquePropertiesWithDuplicates\.properties"/>
  </suppressions>
 diff --git a/config/findbugs-exclude.xml b/config/findbugs-exclude.xml
-index d0340a82cd..0f4b8a21fe 100644
+index d0340a82cd..0f4b8a21fe 100755
 --- a/config/findbugs-exclude.xml
 +++ b/config/findbugs-exclude.xml
 @@ -97,4 +97,10 @@
@@ -29,7 +29,7 @@ index d0340a82cd..0f4b8a21fe 100644
 +    </Match>
  </FindBugsFilter>
 diff --git a/pom.xml b/pom.xml
-index 5f7026b4ec..2320e9d6ce 100644
+index 5571c0bfa6..2320e9d6ce 100755
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1546,8 +1546,8 @@
@@ -70,59 +70,8 @@ index 5f7026b4ec..2320e9d6ce 100644
                <timeoutFactor>${pitest.plugin.timeout.factor}</timeoutFactor>
                <timeoutConstant>${pitest.plugin.timeout.constant}</timeoutConstant>
                <threads>${pitest.plugin.threads}</threads>
-@@ -2148,41 +2148,22 @@
-                 <param>com.puppycrawl.tools.checkstyle.DetailNodeTreeStringPrinterTest</param>
-                 <param>com.puppycrawl.tools.checkstyle.AstTreeStringPrinterTest</param>
-                 <param>com.puppycrawl.tools.checkstyle.TreeWalkerTest</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.blocks.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.coding.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.design.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.header.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.imports.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.indentation.*</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.coding.PackageDeclarationCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.imports.ImportControlCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.indentation.IndentationCheckTest</param>
-                 <param>com.puppycrawl.tools.checkstyle.checks.javadoc.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.metrics.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.modifiers.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.naming.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.regexp.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.sizes.*</param>
--                <param>com.puppycrawl.tools.checkstyle.checks.whitespace.*</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.metrics.ClassDataAbstractionCouplingCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.naming.TypeNameCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.regexp.RegexpSinglelineJavaCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.sizes.MethodCountCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.whitespace.SingleSpaceSeparatorCheckTest</param>
-+                <param>com.puppycrawl.tools.checkstyle.checks.whitespace.EmptyLineSeparatorCheckTest</param>
-               </targetTests>
-               <excludedMethods>
-                 <!-- destroy in TreeWalker was added in case module had to free up resources before ending,
-                 but currently it does nothing, so we cannot check it. If we remove this destroy we would have
-                 to remove all of them as they are chained together, so we just exclude it from pitest check. -->
-                 <param>destroy</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>parseJavadocAsParseTree</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>createJavadocNode</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>getNextSibling</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>isPositionGreater</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>getExternalResourceLocations</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>countLinesColumns</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>getExternalResourceLocations</param>
--                <!--till https://github.com/checkstyle/checkstyle/issues/4398 -->
--                <param>parse</param>
-               </excludedMethods>
-               <mutationThreshold>100</mutationThreshold>
-               <timeoutFactor>${pitest.plugin.timeout.factor}</timeoutFactor>
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java b/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
-index 3fb7720b80..8ba3904965 100644
+index 484cfde233..8ba3904965 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParser.java
 @@ -19,16 +19,24 @@
@@ -185,54 +134,7 @@ index 3fb7720b80..8ba3904965 100644
              result.setParseErrorMessage(parseErrorMessage);
          }
  
-@@ -143,12 +169,6 @@ private ParseTree parseJavadocAsParseTree(String blockComment) {
- 
-         final JavadocLexer lexer = new JavadocLexer(input);
- 
--        // remove default error listeners
--        lexer.removeErrorListeners();
--
--        // add custom error listener that logs parsing errors
--        lexer.addErrorListener(errorListener);
--
-         final CommonTokenStream tokens = new CommonTokenStream(lexer);
- 
-         final JavadocParser parser = new JavadocParser(tokens);
-@@ -270,14 +290,14 @@ private JavadocNodeImpl createRootJavadocNode(ParseTree parseTreeNode) {
-         final JavadocNodeImpl rootJavadocNode = createJavadocNode(parseTreeNode, null, -1);
- 
-         final int childCount = parseTreeNode.getChildCount();
--        final JavadocNodeImpl[] children = new JavadocNodeImpl[childCount];
-+        final DetailNode[] children = rootJavadocNode.getChildren();
- 
-         for (int i = 0; i < childCount; i++) {
-             final JavadocNodeImpl child = createJavadocNode(parseTreeNode.getChild(i),
-                     rootJavadocNode, i);
-             children[i] = child;
-         }
--        rootJavadocNode.setChildren((DetailNode[]) children);
-+        rootJavadocNode.setChildren(children);
-         return rootJavadocNode;
-     }
- 
-@@ -368,15 +388,11 @@ private static ParseTree getNextSibling(ParseTree node) {
- 
-         if (node.getParent() != null) {
-             final ParseTree parent = node.getParent();
--            final int childCount = parent.getChildCount();
--
-             int index = 0;
-             while (true) {
-                 final ParseTree currentNode = parent.getChild(index);
-                 if (currentNode.equals(node)) {
--                    if (index != childCount - 1) {
--                        nextSibling = parent.getChild(index + 1);
--                    }
-+                    nextSibling = parent.getChild(index + 1);
-                     break;
-                 }
-                 index++;
-@@ -432,6 +448,60 @@ private static String getNodeClassNameWithoutContext(ParseTree node) {
+@@ -422,6 +448,60 @@ private static String getNodeClassNameWithoutContext(ParseTree node) {
          return className.substring(0, className.length() - contextLength);
      }
  
@@ -293,7 +195,7 @@ index 3fb7720b80..8ba3904965 100644
      /**
       * Custom error listener for JavadocParser that prints user readable errors.
       */
-@@ -484,17 +554,11 @@ public void syntaxError(
+@@ -474,17 +554,11 @@ public void syntaxError(
                  int line, int charPositionInLine,
                  String msg, RecognitionException ex) {
              final int lineNumber = offset + line;
@@ -314,48 +216,8 @@ index 3fb7720b80..8ba3904965 100644
  
                  throw new IllegalArgumentException(msg);
              }
-diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java b/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
-index a805de22c6..f0fd4a1b91 100644
---- a/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
-+++ b/src/main/java/com/puppycrawl/tools/checkstyle/TreeWalker.java
-@@ -479,10 +479,7 @@ public static DetailAST parse(FileContents contents)
-         final String fullText = contents.getText().getFullText().toString();
-         final Reader reader = new StringReader(fullText);
-         final GeneratedJavaLexer lexer = new GeneratedJavaLexer(reader);
--        lexer.setFilename(contents.getFileName());
-         lexer.setCommentListener(contents);
--        lexer.setTreatAssertAsKeyword(true);
--        lexer.setTreatEnumAsKeyword(true);
-         lexer.setTokenObjectClass("antlr.CommonHiddenStreamToken");
- 
-         final TokenStreamHiddenTokenFilter filter =
-@@ -522,7 +519,7 @@ public void destroy() {
-     public Set<String> getExternalResourceLocations() {
-         final Set<String> ordinaryChecksResources = getExternalResourceLocations(ordinaryChecks);
-         final Set<String> commentChecksResources = getExternalResourceLocations(commentChecks);
--        final int resultListSize = ordinaryChecksResources.size() + commentChecksResources.size();
-+        final int resultListSize = commentChecksResources.size() + ordinaryChecksResources.size();
-         final Set<String> resourceLocations = new HashSet<>(resultListSize);
-         resourceLocations.addAll(ordinaryChecksResources);
-         resourceLocations.addAll(commentChecksResources);
-@@ -636,13 +633,10 @@ private static DetailAST appendHiddenCommentNodes(DetailAST root) {
-      * @return true if position of ast1 is greater than position of ast2.
-      */
-     private static boolean isPositionGreater(DetailAST ast1, DetailAST ast2) {
--        final boolean isGreater;
--        if (ast1.getLineNo() == ast2.getLineNo()) {
-+        boolean isGreater = ast1.getLineNo() > ast2.getLineNo();
-+        if (!isGreater && ast1.getLineNo() == ast2.getLineNo()) {
-             isGreater = ast1.getColumnNo() > ast2.getColumnNo();
-         }
--        else {
--            isGreater = ast1.getLineNo() > ast2.getLineNo();
--        }
-         return isGreater;
-     }
- 
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheck.java
-index ce915ab2bd..c1d7425c6d 100644
+index ce915ab2bd..c1d7425c6d 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheck.java
 @@ -67,7 +67,7 @@ public void visitToken(DetailAST ast) {
@@ -368,7 +230,7 @@ index ce915ab2bd..c1d7425c6d 100644
                  if (isJavaStyle != javaStyle) {
                      log(ast.getLineNo(), ast.getColumnNo(), MSG_KEY);
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheck.java
-index 8a8c3fd9ce..a9d0f3763c 100644
+index 8a8c3fd9ce..a9d0f3763c 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheck.java
 @@ -355,7 +355,7 @@ public void setLimitedTokens(String... limitedTokensParam) {
@@ -381,7 +243,7 @@ index 8a8c3fd9ce..a9d0f3763c 100644
              }
          }
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheck.java
-index 218225ceaf..6e7cbc7cef 100644
+index 218225ceaf..6e7cbc7cef 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheck.java
 @@ -236,7 +236,6 @@ private static boolean isValidLanguageCode(final String userSpecifiedLanguageCod
@@ -402,7 +264,7 @@ index 218225ceaf..6e7cbc7cef 100644
          for (ResourceBundle currentBundle : bundles) {
              checkExistenceOfDefaultTranslation(currentBundle);
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
-index 72df156f77..afbd42f464 100644
+index 72df156f77..afbd42f464 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheck.java
 @@ -111,7 +111,9 @@ private static int getLineNumber(FileText fileText, String keyName) {
@@ -417,7 +279,7 @@ index 72df156f77..afbd42f464 100644
          }
          return lineNumber;
 diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheck.java
-index 4b6fca11f0..a86328e6c1 100644
+index 4b6fca11f0..a86328e6c1 100755
 --- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheck.java
 +++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportOrderCheck.java
 @@ -44,7 +44,7 @@
@@ -430,7 +292,7 @@ index 4b6fca11f0..a86328e6c1 100644
   * <pre>
   * Properties:
 diff --git a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4 b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
-index 0ef2d12730..b466c8af5c 100644
+index 0ef2d12730..b466c8af5c 100755
 --- a/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
 +++ b/src/main/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParser.g4
 @@ -114,16 +114,7 @@ htmlTag: htmlElementStart (htmlElement
@@ -586,48 +448,8 @@ index 0ef2d12730..b466c8af5c 100644
          | paragraph
          | li
          | tr
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-index 23da55177c..62eacbd2ff 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/AstTreeStringPrinterTest.java
-@@ -47,9 +47,9 @@ public void testIsProperUtilsClass() throws ReflectiveOperationException {
- 
-     @Test
-     public void testParseFileThrowable() throws Exception {
-+        final File input = new File(getNonCompilablePath("InputAstTreeStringPrinter.java"));
-         try {
--            AstTreeStringPrinter.printFileAst(
--                new File(getNonCompilablePath("InputAstTreeStringPrinter.java")),
-+            AstTreeStringPrinter.printFileAst(input,
-                     AstTreeStringPrinter.PrintOptions.WITHOUT_COMMENTS);
-             Assert.fail("exception expected");
-         }
-@@ -57,7 +57,8 @@ public void testParseFileThrowable() throws Exception {
-             Assert.assertSame("Invalid class",
-                     NoViableAltException.class, ex.getCause().getClass());
-             Assert.assertEquals("Invalid exception message",
--                    "unexpected token: classD", ex.getCause().getMessage());
-+                    input.getAbsolutePath() + ":1:1: unexpected token: classD",
-+                    ex.getCause().toString());
-         }
-     }
- 
-@@ -121,6 +122,13 @@ public void testAstTreeBlockComments() throws Exception {
-                 AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-     }
- 
-+    @Test
-+    public void testAstTreeBlockCommentsCarriageReturn() throws Exception {
-+        verifyAst(getPath("InputFullOfBlockCommentsAstCR.txt"),
-+                getPath("InputFullOfBlockCommentsCR.java"),
-+                AstTreeStringPrinter.PrintOptions.WITH_COMMENTS);
-+    }
-+
-     @Test
-     public void testAstTreeSingleLineComments() throws Exception {
-         verifyAst(getPath("InputFullOfSinglelineCommentsAst.txt"),
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
-index 4158376df0..1e9440ef05 100644
+index 4158376df0..1e9440ef05 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/DetailNodeTreeStringPrinterTest.java
 @@ -19,15 +19,15 @@
@@ -843,122 +665,11 @@ index 4158376df0..1e9440ef05 100644
 +        }
      }
  }
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParserTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParserTest.java
-new file mode 100644
-index 0000000000..e9802ca9ac
---- /dev/null
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/JavadocDetailNodeParserTest.java
-@@ -0,0 +1,71 @@
-+////////////////////////////////////////////////////////////////////////////////
-+// checkstyle: Checks Java source code for adherence to a set of rules.
-+// Copyright (C) 2001-2017 the original author or authors.
-+//
-+// This library is free software; you can redistribute it and/or
-+// modify it under the terms of the GNU Lesser General Public
-+// License as published by the Free Software Foundation; either
-+// version 2.1 of the License, or (at your option) any later version.
-+//
-+// This library is distributed in the hope that it will be useful,
-+// but WITHOUT ANY WARRANTY; without even the implied warranty of
-+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-+// Lesser General Public License for more details.
-+//
-+// You should have received a copy of the GNU Lesser General Public
-+// License along with this library; if not, write to the Free Software
-+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-+////////////////////////////////////////////////////////////////////////////////
-+
-+package com.puppycrawl.tools.checkstyle;
-+
-+import static java.util.Locale.ENGLISH;
-+import static org.junit.Assert.assertEquals;
-+
-+import java.io.File;
-+import java.nio.charset.StandardCharsets;
-+import java.nio.file.Files;
-+import java.nio.file.Paths;
-+
-+import org.junit.Test;
-+
-+import com.puppycrawl.tools.checkstyle.api.DetailAST;
-+import com.puppycrawl.tools.checkstyle.internal.TestUtils;
-+
-+public class JavadocDetailNodeParserTest extends AbstractModuleTestSupport {
-+
-+    private static final String OS_NAME = System.getProperty("os.name").toLowerCase(ENGLISH);
-+
-+    @Override
-+    protected String getPackageLocation() {
-+        return "com/puppycrawl/tools/checkstyle";
-+    }
-+
-+    @Test
-+    public void testParseJavadocAsDetailNode() throws Exception {
-+        final DetailAST ast = TestUtils.parseFile(new File("src/test/resources/"
-+                + getPackageLocation() + "/InputJavadocDetailNodeParser.java"))
-+                .getNextSibling().getFirstChild().getFirstChild();
-+        final JavadocDetailNodeParser parser = new JavadocDetailNodeParser();
-+        final JavadocDetailNodeParser.ParseStatus status = parser.parseJavadocAsDetailNode(ast);
-+        final String actual = DetailNodeTreeStringPrinter.printTree(status.getTree(), "", "");
-+        final String expected;
-+
-+        // line separators in the input file while running this test on Windows are different,
-+        // so when we try to print tree, output also will have different line separators on windows
-+        // and linux.
-+        if (OS_NAME.startsWith("windows")) {
-+            expected = new String(Files.readAllBytes(Paths.get(
-+                    getPath("OutputWindowsJavadocDetailedNodeParser.txt"))),
-+                    StandardCharsets.UTF_8);
-+        }
-+        else {
-+            expected = new String(Files.readAllBytes(Paths.get(
-+                    getPath("OutputJavadocDetailedNodeParser.txt"))),
-+                    StandardCharsets.UTF_8);
-+        }
-+
-+        assertEquals("Invalid parse result", expected, actual);
-+    }
-+
-+}
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
-index 34b8d09c26..35bc10569e 100644
+index 67e2881448..35bc10569e 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/TreeWalkerTest.java
-@@ -21,6 +21,7 @@
- 
- import static com.puppycrawl.tools.checkstyle.checks.naming.AbstractNameCheck.MSG_INVALID_PATTERN;
- import static org.junit.Assert.assertEquals;
-+import static org.junit.Assert.assertFalse;
- import static org.junit.Assert.assertTrue;
- import static org.junit.Assert.fail;
- 
-@@ -29,6 +30,7 @@
- import java.io.FileOutputStream;
- import java.io.OutputStreamWriter;
- import java.io.Writer;
-+import java.lang.reflect.Method;
- import java.nio.charset.StandardCharsets;
- import java.util.ArrayList;
- import java.util.Arrays;
-@@ -43,7 +45,7 @@
- import org.junit.Test;
- import org.junit.rules.TemporaryFolder;
- import org.mockito.internal.util.Checks;
--import org.mockito.internal.util.reflection.Whitebox;
-+import org.powermock.reflect.Whitebox;
- 
- import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
- import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
-@@ -183,7 +185,7 @@ public void testSettersForParameters() throws Exception {
-         treeWalker.setCacheFile(temporaryFolder.newFile().getPath());
- 
-         assertEquals("Invalid setter result", 1,
--            Whitebox.getInternalState(treeWalker, "tabWidth"));
-+                (int) Whitebox.getInternalState(treeWalker, "tabWidth"));
-         assertEquals("Invalid configuration", config,
-             Whitebox.getInternalState(treeWalker, "configuration"));
-     }
-@@ -228,7 +230,6 @@ public void testProcessNonJavaFiles() throws Exception {
+@@ -230,7 +230,6 @@ public void testProcessNonJavaFiles() throws Exception {
          }
      }
  
@@ -966,7 +677,7 @@ index 34b8d09c26..35bc10569e 100644
      @Test
      public void testProcessNonJavaFilesWithoutException() throws Exception {
          final TreeWalker treeWalker = new TreeWalker();
-@@ -237,8 +238,7 @@ public void testProcessNonJavaFilesWithoutException() throws Exception {
+@@ -239,8 +238,7 @@ public void testProcessNonJavaFilesWithoutException() throws Exception {
          final File file = new File(getPath("InputTreeWalkerNotJava.xml"));
          final FileText fileText = new FileText(file, StandardCharsets.ISO_8859_1.name());
          treeWalker.processFiltered(file, fileText);
@@ -976,7 +687,7 @@ index 34b8d09c26..35bc10569e 100644
          assertTrue("No checks -> No parsing", checks.isEmpty());
      }
  
-@@ -334,7 +334,6 @@ public void testRequiredTokenIsEmptyIntArray() throws Exception {
+@@ -336,7 +334,6 @@ public void testRequiredTokenIsEmptyIntArray() throws Exception {
          }
      }
  
@@ -984,7 +695,7 @@ index 34b8d09c26..35bc10569e 100644
      @Test
      public void testBehaviourWithZeroChecks() throws Exception {
          final TreeWalker treeWalker = new TreeWalker();
-@@ -346,8 +345,7 @@ public void testBehaviourWithZeroChecks() throws Exception {
+@@ -348,8 +345,7 @@ public void testBehaviourWithZeroChecks() throws Exception {
          final FileText fileText = new FileText(file, new ArrayList<>());
  
          treeWalker.processFiltered(file, fileText);
@@ -994,7 +705,7 @@ index 34b8d09c26..35bc10569e 100644
          assertTrue("No checks -> No parsing", checks.isEmpty());
      }
  
-@@ -504,7 +502,7 @@ public void testFinishLocalSetupFullyInitialized() throws Exception {
+@@ -506,7 +502,7 @@ public void testFinishLocalSetupFullyInitialized() throws Exception {
          treeWalker.setTabWidth(100);
          treeWalker.finishLocalSetup();
  
@@ -1003,46 +714,34 @@ index 34b8d09c26..35bc10569e 100644
          assertEquals("Classloader object differs from expected",
                  contextClassLoader, context.get("classLoader"));
          assertEquals("Severity differs from expected",
-@@ -545,6 +543,37 @@ public void testCommentCheckDestroyIsCalledInTreeWalker() throws Exception {
-         assertTrue("Destroy was not called", VerifyDestroyCheck.isDestroyWasCalled());
-     }
- 
-+    /**
-+     * Could not find proper test case to test pitest mutations functionally.
-+     * Should be rewritten during grammar update.
-+     *
-+     * @throws Exception when code tested throws exception
-+     */
-+    @Test
-+    public void testIsPositionGreater() throws Exception {
+@@ -555,12 +551,12 @@ public void testCommentCheckDestroyIsCalledInTreeWalker() throws Exception {
+      */
+     @Test
+     public void testIsPositionGreater() throws Exception {
+-        DetailAST ast1 = createAst(1, 3);
+-        DetailAST ast2 = createAst(1, 2);
+-        DetailAST ast3 = createAst(2, 2);
 +        final DetailAST ast1 = createAst(1, 3);
 +        final DetailAST ast2 = createAst(1, 2);
 +        final DetailAST ast3 = createAst(2, 2);
-+
-+        final TreeWalker treeWalker = new TreeWalker();
+ 
+         final TreeWalker treeWalker = new TreeWalker();
+-        Method isPositionGreater = Whitebox.getMethod(TreeWalker.class,
 +        final Method isPositionGreater = Whitebox.getMethod(TreeWalker.class,
-+                "isPositionGreater", DetailAST.class, DetailAST.class);
-+
-+        assertTrue("Should return true when lines are equal and column is greater",
-+                (boolean) isPositionGreater.invoke(treeWalker, ast1, ast2));
-+        assertFalse("Should return false when lines are equal columns are equal",
-+                (boolean) isPositionGreater.invoke(treeWalker, ast1, ast1));
-+        assertTrue("Should return true when line is greater",
-+                (boolean) isPositionGreater.invoke(treeWalker, ast3, ast1));
-+    }
-+
-+    private static DetailAST createAst(int line, int column) {
+                 "isPositionGreater", DetailAST.class, DetailAST.class);
+ 
+         assertTrue("Should return true when lines are equal and column is greater",
+@@ -572,7 +568,7 @@ public void testIsPositionGreater() throws Exception {
+     }
+ 
+     private static DetailAST createAst(int line, int column) {
+-        DetailAST ast = new DetailAST();
 +        final DetailAST ast = new DetailAST();
-+        ast.setLineNo(line);
-+        ast.setColumnNo(column);
-+        return ast;
-+    }
-+
-     private static class BadJavaDocCheck extends AbstractCheck {
-         @Override
-         public int[] getDefaultTokens() {
+         ast.setLineNo(line);
+         ast.setColumnNo(column);
+         return ast;
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheckTest.java
-index a72fb9dd4e..d92a5a8009 100644
+index a72fb9dd4e..d92a5a8009 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/ArrayTypeStyleCheckTest.java
 @@ -51,7 +51,8 @@ public void testJavaStyleOn()
@@ -1069,7 +768,7 @@ index a72fb9dd4e..d92a5a8009 100644
          verify(checkConfig, getPath("InputArrayTypeStyle.java"), expected);
      }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/AvoidEscapedUnicodeCharactersCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/AvoidEscapedUnicodeCharactersCheckTest.java
-index b4228994cb..83e54d06a1 100644
+index b4228994cb..83e54d06a1 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/AvoidEscapedUnicodeCharactersCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/AvoidEscapedUnicodeCharactersCheckTest.java
 @@ -21,11 +21,15 @@
@@ -1116,7 +815,7 @@ index b4228994cb..83e54d06a1 100644
          return Arrays.binarySearch(C0_CONTROL_CHARACTER_INDICES, character) >= 0
                  || Arrays.binarySearch(C1_CONTROL_CHARACTER_INDICES, character) >= 0
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheckTest.java
-index df3898310e..7d8af46e00 100644
+index df3898310e..7d8af46e00 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/DescendantTokenCheckTest.java
 @@ -346,4 +346,34 @@ public void testWithSumLessThenMinCustomMsg() throws Exception {
@@ -1155,7 +854,7 @@ index df3898310e..7d8af46e00 100644
 +    }
  }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
-index 6bfe34a8c8..6c380c88d8 100644
+index 6bfe34a8c8..6c380c88d8 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/NewlineAtEndOfFileCheckTest.java
 @@ -25,7 +25,13 @@
@@ -1245,7 +944,7 @@ index 6bfe34a8c8..6c380c88d8 100644
      public void testWrongFile() throws Exception {
          final DefaultConfiguration checkConfig = createModuleConfig(NewlineAtEndOfFileCheck.class);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheckTest.java
-index 736537e89c..549f71ca5a 100644
+index 736537e89c..549f71ca5a 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/OuterTypeFilenameCheckTest.java
 @@ -92,6 +92,13 @@ public void testFinePublic() throws Exception {
@@ -1263,7 +962,7 @@ index 736537e89c..549f71ca5a 100644
      public void testFineDefault() throws Exception {
          final DefaultConfiguration checkConfig = createModuleConfig(OuterTypeFilenameCheck.class);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UncommentedMainCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UncommentedMainCheckTest.java
-index 62d2c595a5..46f5e431a6 100644
+index 62d2c595a5..46f5e431a6 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UncommentedMainCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UncommentedMainCheckTest.java
 @@ -85,6 +85,16 @@ public void testDeepDepth() throws Exception {
@@ -1284,7 +983,7 @@ index 62d2c595a5..46f5e431a6 100644
      public void testWrongName() throws Exception {
          final DefaultConfiguration checkConfig = createModuleConfig(UncommentedMainCheck.class);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
-index c80873afed..049450073c 100644
+index c80873afed..049450073c 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/UniquePropertiesCheckTest.java
 @@ -22,6 +22,11 @@
@@ -1369,66 +1068,11 @@ index c80873afed..049450073c 100644
      /**
       * Tests IO exception, that can occur during reading of properties file.
       */
-diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlCheckTest.java
-index 0e2a03f0cc..2075b8da1a 100644
---- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlCheckTest.java
-+++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/imports/ImportControlCheckTest.java
-@@ -26,7 +26,9 @@
- import static org.junit.Assert.assertTrue;
- import static org.junit.Assert.fail;
- 
--import java.io.IOException;
-+import java.io.File;
-+import java.nio.charset.Charset;
-+import java.nio.file.Files;
- 
- import org.junit.Rule;
- import org.junit.Test;
-@@ -337,8 +339,8 @@ public void testUrlInFilePropertyUnableToLoad() throws Exception {
-     public void testCacheWhenFileExternalResourceContentDoesNotChange() throws Exception {
-         final DefaultConfiguration checkConfig = createModuleConfig(ImportControlCheck.class);
-         checkConfig.addAttribute("file", getPath("InputImportControlOneRegExp.xml"));
--
--        final Checker checker = createMockCheckerWithCache(checkConfig);
-+        final File cacheFile = temporaryFolder.newFile();
-+        final Checker checker = createMockCheckerWithCache(checkConfig, cacheFile);
- 
-         final String filePath = temporaryFolder.newFile("EmptyFile.java").getPath();
-         final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
-@@ -346,6 +348,10 @@ public void testCacheWhenFileExternalResourceContentDoesNotChange() throws Excep
-         verify(checker, filePath, filePath, expected);
-         // One more time to use cache.
-         verify(checker, filePath, filePath, expected);
-+
-+        assertTrue("External resourse is not present in cache",
-+                new String(Files.readAllBytes(cacheFile.toPath()),
-+                Charset.forName("UTF-8")).contains("InputImportControlOneRegExp.xml"));
-     }
- 
-     @Test
-@@ -388,14 +394,14 @@ public void testPathRegexDoesntMatchPartially() throws Exception {
-         verify(checkConfig, getPath("InputImportControl.java"), expected);
-     }
- 
--    private Checker createMockCheckerWithCache(DefaultConfiguration checkConfig)
--            throws IOException, CheckstyleException {
-+    private Checker createMockCheckerWithCache(DefaultConfiguration checkConfig,
-+                                               File cacheFile) throws CheckstyleException {
-         final DefaultConfiguration treeWalkerConfig = createModuleConfig(TreeWalker.class);
-         treeWalkerConfig.addChild(checkConfig);
- 
-         final DefaultConfiguration checkerConfig = new DefaultConfiguration("checkstyle_checks");
-         checkerConfig.addChild(treeWalkerConfig);
--        checkerConfig.addAttribute("cacheFile", temporaryFolder.newFile().getPath());
-+        checkerConfig.addAttribute("cacheFile", cacheFile.getPath());
- 
-         final Checker checker = new Checker();
-         checker.setModuleClassLoader(Thread.currentThread().getContextClassLoader());
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
-index 6576c8df16..58d27063f0 100644
+index 9c43b4676b..58d27063f0 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/AbstractJavadocCheckTest.java
-@@ -19,11 +19,12 @@
+@@ -19,8 +19,8 @@
  
  package com.puppycrawl.tools.checkstyle.checks.javadoc;
  
@@ -1438,29 +1082,7 @@ index 6576c8df16..58d27063f0 100644
  import static com.puppycrawl.tools.checkstyle.checks.javadoc.AbstractJavadocCheck.MSG_JAVADOC_WRONG_SINGLETON_TAG;
  import static java.util.Arrays.asList;
  import static java.util.Collections.singletonList;
-+import static org.junit.Assert.assertEquals;
- 
- import java.io.File;
- import java.util.LinkedHashMap;
-@@ -33,6 +34,7 @@
- import org.junit.Assert;
- import org.junit.Rule;
- import org.junit.Test;
-+import org.junit.contrib.java.lang.system.SystemErrRule;
- import org.junit.rules.TemporaryFolder;
- 
- import com.puppycrawl.tools.checkstyle.AbstractModuleTestSupport;
-@@ -46,6 +48,9 @@
- import com.puppycrawl.tools.checkstyle.utils.CommonUtils;
- 
- public class AbstractJavadocCheckTest extends AbstractModuleTestSupport {
-+    @Rule
-+    public final SystemErrRule systemErr = new SystemErrRule().enableLog().mute();
-+
-     @Rule
-     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
- 
-@@ -58,9 +63,8 @@ protected String getPackageLocation() {
+@@ -63,9 +63,8 @@ protected String getPackageLocation() {
      public void testNumberFormatException() throws Exception {
          final DefaultConfiguration checkConfig = createModuleConfig(TempCheck.class);
          final String[] expected = {
@@ -1472,77 +1094,8 @@ index 6576c8df16..58d27063f0 100644
          };
          verify(checkConfig, getPath("InputAbstractJavadocNumberFormatException.java"), expected);
      }
-@@ -80,6 +84,7 @@ public void testParsingErrors() throws Exception {
-             "8: " + getCheckMessage(MSG_JAVADOC_WRONG_SINGLETON_TAG, 35, "img"),
-         };
-         verify(checkConfig, getPath("InputAbstractJavadocParsingErrors.java"), expected);
-+        assertEquals("Error is unexpected", "", systemErr.getLog());
-     }
- 
-     @Test
-@@ -104,6 +109,7 @@ public void testAntlrError() throws Exception {
-                     "mismatched input 'get' expecting <EOF>", "JAVADOC"),
-         };
-         verify(checkConfig, getPath("InputAbstractJavadocInvalidAtSeeReference.java"), expected);
-+        assertEquals("Error is unexpected", "", systemErr.getLog());
-     }
- 
-     @Test
-@@ -122,6 +128,7 @@ public void testCheckReuseAfterParseErrorWithFollowingAntlrErrorInTwoFiles() thr
-             new File(getPath("InputAbstractJavadocParsingErrors.java")),
-             new File(getPath("InputAbstractJavadocInvalidAtSeeReference.java")), },
-                 expectedMessages);
-+        assertEquals("Error is unexpected", "", systemErr.getLog());
-     }
- 
-     @Test
-@@ -144,7 +151,7 @@ public void testPosition()
-         final DefaultConfiguration checkConfig = createModuleConfig(JavadocCatchCheck.class);
-         final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
-         verify(checkConfig, getPath("InputAbstractJavadocPosition.java"), expected);
--        Assert.assertEquals("Invalid number of javadocs",
-+        assertEquals("Invalid number of javadocs",
-             58, JavadocCatchCheck.javadocsNumber);
-     }
- 
-@@ -156,7 +163,7 @@ public void testPositionWithSinglelineComments()
-         final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
-         verify(checkConfig,
-             getPath("InputAbstractJavadocPositionWithSinglelineComments.java"), expected);
--        Assert.assertEquals("Invalid number of javadocs",
-+        assertEquals("Invalid number of javadocs",
-                 58, JavadocCatchCheck.javadocsNumber);
-     }
- 
-@@ -167,7 +174,7 @@ public void testPositionOnlyComments()
-         final DefaultConfiguration checkConfig = createModuleConfig(JavadocCatchCheck.class);
-         final String[] expected = CommonUtils.EMPTY_STRING_ARRAY;
-         verify(checkConfig, getPath("InputAbstractJavadocPositionOnlyComments.java"), expected);
--        Assert.assertEquals("Invalid number of javadocs",
-+        assertEquals("Invalid number of javadocs",
-                 0, JavadocCatchCheck.javadocsNumber);
-     }
- 
-@@ -265,7 +272,7 @@ public void testVisitLeaveToken()
-         verify(checkConfig, getPath("InputAbstractJavadocPosition.java"), expected);
-         Assert.assertTrue("Javadoc visit count should be greater than zero",
-                 JavadocVisitLeaveCheck.visitCount > 0);
--        Assert.assertEquals("Javadoc visit and leave count should be equal",
-+        assertEquals("Javadoc visit and leave count should be equal",
-                 JavadocVisitLeaveCheck.visitCount, JavadocVisitLeaveCheck.leaveCount);
-     }
- 
-@@ -296,7 +303,7 @@ public static void clearCounter() {
- 
-         @Override
-         public void visitJavadocToken(DetailNode ast) {
--            Assert.assertEquals(ast.toString(), "JAVADOC", ast.getText());
-+            assertEquals(ast.toString(), "JAVADOC", ast.getText());
-             javadocsNumber++;
-         }
-     }
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheckTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheckTest.java
-index 5dad4f260b..78fcb651ff 100644
+index 5dad4f260b..78fcb651ff 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheckTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/checks/javadoc/SummaryJavadocCheckTest.java
 @@ -131,6 +131,7 @@ public void testPeriodAtEnd() throws Exception {
@@ -1554,7 +1107,7 @@ index 5dad4f260b..78fcb651ff 100644
  
          verify(checkConfig, getPath("InputPeriodAtEnd.java"), expected);
 diff --git a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
-index 1608a5d0a5..3659ce0e33 100644
+index 1608a5d0a5..3659ce0e33 100755
 --- a/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
 +++ b/src/test/java/com/puppycrawl/tools/checkstyle/grammars/javadoc/JavadocParseTreeTest.java
 @@ -251,4 +251,10 @@ public void testJavadocWithCrAsNewline() throws Exception {
@@ -1568,192 +1121,8 @@ index 1608a5d0a5..3659ce0e33 100644
 +                getHtmlPath("InputNestingWithSingletonElement.javadoc"));
 +    }
  }
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/InputJavadocDetailNodeParser.java b/src/test/resources/com/puppycrawl/tools/checkstyle/InputJavadocDetailNodeParser.java
-new file mode 100644
-index 0000000000..e93873706e
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/InputJavadocDetailNodeParser.java
-@@ -0,0 +1,10 @@
-+package com.puppycrawl.tools.checkstyle;
-+
-+/**
-+ * Some <p>Javadoc</p>.
-+ *
-+ * Some Javadoc.
-+ *
-+ * @see <a href="http://code.google.com">Documentation about GWT emulated source</a>
-+ */
-+public class InputJavadocDetailNodeParser {}
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/OutputJavadocDetailedNodeParser.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/OutputJavadocDetailedNodeParser.txt
-new file mode 100644
-index 0000000000..95505e104c
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/OutputJavadocDetailedNodeParser.txt
-@@ -0,0 +1,50 @@
-+JAVADOC -> JAVADOC [3:3]
-+|--NEWLINE -> \n [3:3]
-+|--LEADING_ASTERISK ->  * [4:0]
-+|--TEXT ->  Some  [4:2]
-+|--HTML_ELEMENT -> HTML_ELEMENT [4:8]
-+|   `--PARAGRAPH -> PARAGRAPH [4:8]
-+|       |--P_TAG_START -> P_TAG_START [4:8]
-+|       |   |--START -> < [4:8]
-+|       |   |--P_HTML_TAG_NAME -> p [4:9]
-+|       |   `--END -> > [4:10]
-+|       |--TEXT -> Javadoc [4:11]
-+|       `--P_TAG_END -> P_TAG_END [4:18]
-+|           |--START -> < [4:18]
-+|           |--SLASH -> / [4:19]
-+|           |--P_HTML_TAG_NAME -> p [4:20]
-+|           `--END -> > [4:21]
-+|--TEXT -> . [4:22]
-+|--NEWLINE -> \n [4:23]
-+|--LEADING_ASTERISK ->  * [5:0]
-+|--NEWLINE -> \n [5:2]
-+|--LEADING_ASTERISK ->  * [6:0]
-+|--TEXT ->  Some Javadoc. [6:2]
-+|--NEWLINE -> \n [6:16]
-+|--LEADING_ASTERISK ->  * [7:0]
-+|--NEWLINE -> \n [7:2]
-+|--LEADING_ASTERISK ->  * [8:0]
-+|--WS ->   [8:2]
-+|--JAVADOC_TAG -> JAVADOC_TAG [8:3]
-+|   |--SEE_LITERAL -> @see [8:3]
-+|   |--WS ->   [8:7]
-+|   |--HTML_ELEMENT -> HTML_ELEMENT [8:8]
-+|   |   `--HTML_TAG -> HTML_TAG [8:8]
-+|   |       |--HTML_ELEMENT_START -> HTML_ELEMENT_START [8:8]
-+|   |       |   |--START -> < [8:8]
-+|   |       |   |--HTML_TAG_NAME -> a [8:9]
-+|   |       |   |--WS ->   [8:10]
-+|   |       |   |--ATTRIBUTE -> ATTRIBUTE [8:11]
-+|   |       |   |   |--HTML_TAG_NAME -> href [8:11]
-+|   |       |   |   |--EQUALS -> = [8:15]
-+|   |       |   |   `--ATTR_VALUE -> "http://code.google.com" [8:16]
-+|   |       |   `--END -> > [8:41]
-+|   |       |--TEXT -> Documentation about GWT emulated source [8:42]
-+|   |       `--HTML_ELEMENT_END -> HTML_ELEMENT_END [8:81]
-+|   |           |--START -> < [8:81]
-+|   |           |--SLASH -> / [8:82]
-+|   |           |--HTML_TAG_NAME -> a [8:83]
-+|   |           `--END -> > [8:84]
-+|   |--NEWLINE -> \n [8:85]
-+|   `--WS ->   [9:0]
-+`--EOF -> <EOF> [9:1]
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/OutputWindowsJavadocDetailedNodeParser.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/OutputWindowsJavadocDetailedNodeParser.txt
-new file mode 100644
-index 0000000000..f8a0a75ea1
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/OutputWindowsJavadocDetailedNodeParser.txt
-@@ -0,0 +1,50 @@
-+JAVADOC -> JAVADOC [3:3]
-+|--NEWLINE -> \r\n [3:3]
-+|--LEADING_ASTERISK ->  * [4:0]
-+|--TEXT ->  Some  [4:2]
-+|--HTML_ELEMENT -> HTML_ELEMENT [4:8]
-+|   `--PARAGRAPH -> PARAGRAPH [4:8]
-+|       |--P_TAG_START -> P_TAG_START [4:8]
-+|       |   |--START -> < [4:8]
-+|       |   |--P_HTML_TAG_NAME -> p [4:9]
-+|       |   `--END -> > [4:10]
-+|       |--TEXT -> Javadoc [4:11]
-+|       `--P_TAG_END -> P_TAG_END [4:18]
-+|           |--START -> < [4:18]
-+|           |--SLASH -> / [4:19]
-+|           |--P_HTML_TAG_NAME -> p [4:20]
-+|           `--END -> > [4:21]
-+|--TEXT -> . [4:22]
-+|--NEWLINE -> \r\n [4:23]
-+|--LEADING_ASTERISK ->  * [5:0]
-+|--NEWLINE -> \r\n [5:2]
-+|--LEADING_ASTERISK ->  * [6:0]
-+|--TEXT ->  Some Javadoc. [6:2]
-+|--NEWLINE -> \r\n [6:16]
-+|--LEADING_ASTERISK ->  * [7:0]
-+|--NEWLINE -> \r\n [7:2]
-+|--LEADING_ASTERISK ->  * [8:0]
-+|--WS ->   [8:2]
-+|--JAVADOC_TAG -> JAVADOC_TAG [8:3]
-+|   |--SEE_LITERAL -> @see [8:3]
-+|   |--WS ->   [8:7]
-+|   |--HTML_ELEMENT -> HTML_ELEMENT [8:8]
-+|   |   `--HTML_TAG -> HTML_TAG [8:8]
-+|   |       |--HTML_ELEMENT_START -> HTML_ELEMENT_START [8:8]
-+|   |       |   |--START -> < [8:8]
-+|   |       |   |--HTML_TAG_NAME -> a [8:9]
-+|   |       |   |--WS ->   [8:10]
-+|   |       |   |--ATTRIBUTE -> ATTRIBUTE [8:11]
-+|   |       |   |   |--HTML_TAG_NAME -> href [8:11]
-+|   |       |   |   |--EQUALS -> = [8:15]
-+|   |       |   |   `--ATTR_VALUE -> "http://code.google.com" [8:16]
-+|   |       |   `--END -> > [8:41]
-+|   |       |--TEXT -> Documentation about GWT emulated source [8:42]
-+|   |       `--HTML_ELEMENT_END -> HTML_ELEMENT_END [8:81]
-+|   |           |--START -> < [8:81]
-+|   |           |--SLASH -> / [8:82]
-+|   |           |--HTML_TAG_NAME -> a [8:83]
-+|   |           `--END -> > [8:84]
-+|   |--NEWLINE -> \r\n [8:85]
-+|   `--WS ->   [9:0]
-+`--EOF -> <EOF> [9:1]
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsAstCR.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsAstCR.txt
-new file mode 100644
-index 0000000000..f6730054d5
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsAstCR.txt
-@@ -0,0 +1,38 @@
-+PACKAGE_DEF -> package [1:0]
-+|--ANNOTATIONS -> ANNOTATIONS [1:43]
-+|--DOT -> . [1:43]
-+|   |--DOT -> . [1:32]
-+|   |   |--DOT -> . [1:26]
-+|   |   |   |--DOT -> . [1:15]
-+|   |   |   |   |--BLOCK_COMMENT_BEGIN -> /* [1:7]
-+|   |   |   |   |   |--COMMENT_CONTENT -> 2 [1:9]
-+|   |   |   |   |   `--BLOCK_COMMENT_END -> */ [1:9]
-+|   |   |   |   |--IDENT -> com [1:12]
-+|   |   |   |   `--IDENT -> puppycrawl [1:16]
-+|   |   |   `--IDENT -> tools [1:27]
-+|   |   `--IDENT -> checkstyle [1:33]
-+|   `--IDENT -> astprinter [1:44]
-+`--SEMI -> ; [1:54]
-+CLASS_DEF -> CLASS_DEF [3:0]
-+|--MODIFIERS -> MODIFIERS [3:0]
-+|   |--BLOCK_COMMENT_BEGIN -> /* [2:0]
-+|   |   |--COMMENT_CONTENT -> 13 [2:2]
-+|   |   `--BLOCK_COMMENT_END -> */ [2:3]
-+|   `--LITERAL_PUBLIC -> public [3:0]
-+|--BLOCK_COMMENT_BEGIN -> /* [3:6]
-+|   |--COMMENT_CONTENT -> 15 [3:8]
-+|   `--BLOCK_COMMENT_END -> */ [3:9]
-+|--LITERAL_CLASS -> class [3:12]
-+|--BLOCK_COMMENT_BEGIN -> /* [3:17]
-+|   |--COMMENT_CONTENT -> 16 [3:19]
-+|   `--BLOCK_COMMENT_END -> */ [3:20]
-+|--IDENT -> InputFullOfBlockCommentsCR [3:23]
-+`--OBJBLOCK -> OBJBLOCK [3:55]
-+    |--BLOCK_COMMENT_BEGIN -> /* [3:49]
-+    |   |--COMMENT_CONTENT -> 49 [3:51]
-+    |   `--BLOCK_COMMENT_END -> */ [3:52]
-+    |--LCURLY -> { [3:55]
-+    |--BLOCK_COMMENT_BEGIN -> /* [3:56]
-+    |   |--COMMENT_CONTENT -> \r21\r [3:58]
-+    |   `--BLOCK_COMMENT_END -> */ [5:0]
-+    `--RCURLY -> } [5:2]
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsCR.java b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsCR.java
-new file mode 100644
-index 0000000000..8cb32c5dd0
---- /dev/null
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputFullOfBlockCommentsCR.java
-@@ -0,0 +1 @@
-+package/*2*/com.puppycrawl.tools.checkstyle.astprinter;
-/*13*/
-public/*15*/class/*16*/InputFullOfBlockCommentsCR/*49*/{/*
-21
-*/}
-\ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputHtmlTagCloseBeforeTagOpen.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputHtmlTagCloseBeforeTagOpen.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..70e190be82
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputHtmlTagCloseBeforeTagOpen.javadoc
@@ -1761,7 +1130,7 @@ index 0000000000..70e190be82
 +* </tag> <tag>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputNoViableAltException.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputNoViableAltException.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..624cb929d1
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputNoViableAltException.javadoc
@@ -1769,7 +1138,7 @@ index 0000000000..624cb929d1
 +* @see <<p>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputOmittedStartTagForHtmlElement.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputOmittedStartTagForHtmlElement.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..aa984faef1
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputOmittedStartTagForHtmlElement.javadoc
@@ -1777,7 +1146,7 @@ index 0000000000..aa984faef1
 +* <a href="http://www.redbooks.ibm.com/Redbooks.nsf/RedbookAbstracts/tips0243.html">IBM website</code>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputUnescapedJavaCodeWithGenericsInJavadoc.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputUnescapedJavaCodeWithGenericsInJavadoc.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..f786d83d6f
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputUnescapedJavaCodeWithGenericsInJavadoc.javadoc
@@ -1824,7 +1193,7 @@ index 0000000000..f786d83d6f
 +  }
 +**/
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputWrongHtmlTagOrder.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputWrongHtmlTagOrder.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..781ea678f8
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/astprinter/InputWrongHtmlTagOrder.javadoc
@@ -1832,7 +1201,7 @@ index 0000000000..781ea678f8
 +* <tag1> <tag2> </tag1> </tag2>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputPeriodAtEnd.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputPeriodAtEnd.java
-index 2e86f946fe..91461ab063 100644
+index 2e86f946fe..91461ab063 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputPeriodAtEnd.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputPeriodAtEnd.java
 @@ -47,4 +47,14 @@ public void foo4(){
@@ -1850,18 +1219,8 @@ index 2e86f946fe..91461ab063 100644
 +
 +    }
  }
-diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputSummaryJavadocIncorrect.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputSummaryJavadocIncorrect.java
-index 84f8b9adf4..fa59a464df 100644
---- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputSummaryJavadocIncorrect.java
-+++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/javadoc/summaryjavadoc/InputSummaryJavadocIncorrect.java
-@@ -133,4 +133,4 @@ void foo10() {}
-      * M m m m {@inheritDoc}
-      */
-     void foo7() {}
--}
-+} /** somwthing */
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/arraytypestyle/InputArrayTypeStyle.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/arraytypestyle/InputArrayTypeStyle.java
-index c64f6377c0..954f5bca14 100644
+index c64f6377c0..954f5bca14 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/arraytypestyle/InputArrayTypeStyle.java
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/arraytypestyle/InputArrayTypeStyle.java
 @@ -12,6 +12,7 @@
@@ -1873,7 +1232,7 @@ index c64f6377c0..954f5bca14 100644
      public static void mainJava(String[] aJavaStyle)
      {
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/descendanttoken/InputDescendantTokenLastTokenType.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/descendanttoken/InputDescendantTokenLastTokenType.java
-new file mode 100644
+new file mode 100755
 index 0000000000..34cdcd2b41
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/descendanttoken/InputDescendantTokenLastTokenType.java
@@ -1885,14 +1244,14 @@ index 0000000000..34cdcd2b41
 + */
 +public class InputDescendantTokenLastTokenType {}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineAtTheEndOfTheEmptyFile.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineAtTheEndOfTheEmptyFile.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..8b13789179
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/newlineatendoffile/InputNewlineAtTheEndOfTheEmptyFile.txt
 @@ -0,0 +1 @@
 +
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/outertypefilename/InputOuterTypeFilenameCheckPublic.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/outertypefilename/InputOuterTypeFilenameCheckPublic.java
-new file mode 100644
+new file mode 100755
 index 0000000000..76a2c4b6b5
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/outertypefilename/InputOuterTypeFilenameCheckPublic.java
@@ -1910,7 +1269,7 @@ index 0000000000..76a2c4b6b5
 +}
 +
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uncommentedmain/InputUncommentedMain5.java b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uncommentedmain/InputUncommentedMain5.java
-new file mode 100644
+new file mode 100755
 index 0000000000..715faee40f
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uncommentedmain/InputUncommentedMain5.java
@@ -1946,7 +1305,7 @@ index 0000000000..715faee40f
 +    }
 +}
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniqueProperties.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniqueProperties.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..120bc85f8b
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniqueProperties.txt
@@ -1954,7 +1313,7 @@ index 0000000000..120bc85f8b
 +1=val
 +1=foo
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithDuplicates.properties b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithDuplicates.properties
-new file mode 100644
+new file mode 100755
 index 0000000000..36b0d84615
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithDuplicates.properties
@@ -1964,7 +1323,7 @@ index 0000000000..36b0d84615
 +key=value2
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithoutErrors.properties b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithoutErrors.properties
-new file mode 100644
+new file mode 100755
 index 0000000000..48580bfcce
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/uniqueproperties/InputUniquePropertiesWithoutErrors.properties
@@ -1972,7 +1331,7 @@ index 0000000000..48580bfcce
 +key1=value1
 +key2=value2
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputNestingWithSingletonElement.javadoc b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputNestingWithSingletonElement.javadoc
-new file mode 100644
+new file mode 100755
 index 0000000000..278c935a1f
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/InputNestingWithSingletonElement.javadoc
@@ -1998,7 +1357,7 @@ index 0000000000..278c935a1f
 +* <tfoot> <AREA ALT="alt" COORDS="100,0,200,50" HREF="/href/"> </tfoot>
 \ No newline at end of file
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedMixedCaseOfHtmlTagsAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedMixedCaseOfHtmlTagsAst.txt
-index 39dc3cd822..a19e1df322 100644
+index 39dc3cd822..a19e1df322 100755
 --- a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedMixedCaseOfHtmlTagsAst.txt
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedMixedCaseOfHtmlTagsAst.txt
 @@ -1,81 +1,76 @@
@@ -2157,7 +1516,7 @@ index 39dc3cd822..a19e1df322 100644
 +|           `--END -> > [9:3]
  `--EOF -> <EOF> [9:4]
 diff --git a/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedNestingWithSingletonElementAst.txt b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedNestingWithSingletonElementAst.txt
-new file mode 100644
+new file mode 100755
 index 0000000000..c73e3ca8cc
 --- /dev/null
 +++ b/src/test/resources/com/puppycrawl/tools/checkstyle/grammars/javadoc/htmlTags/expectedNestingWithSingletonElementAst.txt

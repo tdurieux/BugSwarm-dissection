@@ -1371,6 +1371,141 @@ index 21f295ce58..816ad2ec2c 100755
               robust_mahal[-n_outliers:], '+k', markeredgewidth=1)
  subfig3.axes.set_xticklabels(('inliers', 'outliers'), size=15)
  subfig3.set_ylabel(r"$\sqrt[3]{\rm{(Mahal. dist.)}}$", size=16)
+diff --git a/examples/covariance/plot_outlier_detection.py b/examples/covariance/plot_outlier_detection.py
+deleted file mode 100755
+index 4c6ea43418..0000000000
+--- a/examples/covariance/plot_outlier_detection.py
++++ /dev/null
+@@ -1,129 +0,0 @@
+-"""
+-==========================================
+-Outlier detection with several methods.
+-==========================================
+-
+-When the amount of contamination is known, this example illustrates three
+-different ways of performing :ref:`outlier_detection`:
+-
+-- based on a robust estimator of covariance, which is assuming that the
+-  data are Gaussian distributed and performs better than the One-Class SVM
+-  in that case.
+-
+-- using the One-Class SVM and its ability to capture the shape of the
+-  data set, hence performing better when the data is strongly
+-  non-Gaussian, i.e. with two well-separated clusters;
+-
+-- using the Isolation Forest algorithm, which is based on random forests and
+-  hence more adapted to large-dimensional settings, even if it performs
+-  quite well in the examples below.
+-
+-- using the Local Outlier Factor to measure the local deviation of a given
+-  data point with respect to its neighbors by comparing their local density.
+-
+-The ground truth about inliers and outliers is given by the points colors
+-while the orange-filled area indicates which points are reported as inliers
+-by each method.
+-
+-Here, we assume that we know the fraction of outliers in the datasets.
+-Thus rather than using the 'predict' method of the objects, we set the
+-threshold on the decision_function to separate out the corresponding
+-fraction.
+-"""
+-
+-import numpy as np
+-from scipy import stats
+-import matplotlib.pyplot as plt
+-import matplotlib.font_manager
+-
+-from sklearn import svm
+-from sklearn.covariance import EllipticEnvelope
+-from sklearn.ensemble import IsolationForest
+-from sklearn.neighbors import LocalOutlierFactor
+-
+-print(__doc__)
+-
+-SEED = 42
+-GRID_PRECISION = 100
+-
+-rng = np.random.RandomState(SEED)
+-
+-# Example settings
+-n_samples = 200
+-outliers_fraction = 0.25
+-clusters_separation = (0, 1, 2)
+-
+-# define two outlier detection tools to be compared
+-classifiers = {
+-    "One-Class SVM": svm.OneClassSVM(nu=0.95 * outliers_fraction + 0.05,
+-                                     kernel="rbf", gamma=0.1),
+-    "Robust covariance": EllipticEnvelope(contamination=outliers_fraction),
+-    "Isolation Forest": IsolationForest(max_samples=n_samples,
+-                                        contamination=outliers_fraction,
+-                                        random_state=rng),
+-    "Local Outlier Factor": LocalOutlierFactor(
+-        n_neighbors=35,
+-        contamination=outliers_fraction)}
+-
+-# Compare given classifiers under given settings
+-xx, yy = np.meshgrid(np.linspace(-7, 7, GRID_PRECISION),
+-                     np.linspace(-7, 7, GRID_PRECISION))
+-n_outliers = int(outliers_fraction * n_samples)
+-n_inliers = n_samples - n_outliers
+-ground_truth = np.ones(n_samples, dtype=int)
+-ground_truth[-n_outliers:] = -1
+-
+-# Fit the problem with varying cluster separation
+-for _, offset in enumerate(clusters_separation):
+-    np.random.seed(SEED)
+-    # Data generation
+-    X1 = 0.3 * np.random.randn(n_inliers // 2, 2) - offset
+-    X2 = 0.3 * np.random.randn(n_inliers // 2, 2) + offset
+-    X = np.concatenate([X1, X2], axis=0)
+-    # Add outliers
+-    X = np.concatenate([X, np.random.uniform(low=-6, high=6,
+-                       size=(n_outliers, 2))], axis=0)
+-
+-    # Fit the model
+-    plt.figure(figsize=(9, 7))
+-    for i, (clf_name, clf) in enumerate(classifiers.items()):
+-        # fit the data and tag outliers
+-        if clf_name == "Local Outlier Factor":
+-            y_pred = clf.fit_predict(X)
+-            scores_pred = clf.negative_outlier_factor_
+-        else:
+-            clf.fit(X)
+-            scores_pred = clf.decision_function(X)
+-            y_pred = clf.predict(X)
+-        n_errors = (y_pred != ground_truth).sum()
+-        # plot the levels lines and the points
+-        if clf_name == "Local Outlier Factor":
+-            # decision_function is private for LOF
+-            Z = clf._decision_function(np.c_[xx.ravel(), yy.ravel()])
+-        else:
+-            Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
+-        Z = Z.reshape(xx.shape)
+-        subplot = plt.subplot(2, 2, i + 1)
+-        subplot.contourf(xx, yy, Z, levels=np.linspace(Z.min(), 0, 7),
+-                         cmap=plt.cm.Blues_r)
+-        a = subplot.contour(xx, yy, Z, levels=[0],
+-                            linewidths=2, colors='red')
+-        subplot.contourf(xx, yy, Z, levels=[0, Z.max()],
+-                         colors='orange')
+-        b = subplot.scatter(X[:-n_outliers, 0], X[:-n_outliers, 1], c='white',
+-                            s=20, edgecolor='k')
+-        c = subplot.scatter(X[-n_outliers:, 0], X[-n_outliers:, 1], c='black',
+-                            s=20, edgecolor='k')
+-        subplot.axis('tight')
+-        subplot.legend(
+-            [a.collections[0], b, c],
+-            ['learned decision function', 'true inliers', 'true outliers'],
+-            prop=matplotlib.font_manager.FontProperties(size=10),
+-            loc='lower right')
+-        subplot.set_xlabel("%d. %s (errors: %d)" % (i + 1, clf_name, n_errors))
+-        subplot.set_xlim((-7, 7))
+-        subplot.set_ylim((-7, 7))
+-    plt.subplots_adjust(0.04, 0.1, 0.96, 0.94, 0.1, 0.26)
+-    plt.suptitle("Outlier detection")
+-
+-plt.show()
 diff --git a/examples/decomposition/plot_faces_decomposition.py b/examples/decomposition/plot_faces_decomposition.py
 index 9c2144a779..81ed20b44b 100755
 --- a/examples/decomposition/plot_faces_decomposition.py
@@ -1477,6 +1612,71 @@ index 77ce5232da..aac5e6ea3e 100755
      axi.set_xlim(-4, 9)
      axi.set_ylim(-0.02, 0.34)
  
+diff --git a/examples/neighbors/plot_lof.py b/examples/neighbors/plot_lof.py
+deleted file mode 100755
+index f48e6b6196..0000000000
+--- a/examples/neighbors/plot_lof.py
++++ /dev/null
+@@ -1,59 +0,0 @@
+-"""
+-=================================================
+-Anomaly detection with Local Outlier Factor (LOF)
+-=================================================
+-
+-This example presents the Local Outlier Factor (LOF) estimator. The LOF
+-algorithm is an unsupervised outlier detection method which computes the local
+-density deviation of a given data point with respect to its neighbors.
+-It considers as outlier samples that have a substantially lower density than
+-their neighbors.
+-
+-The number of neighbors considered, (parameter n_neighbors) is typically
+-chosen 1) greater than the minimum number of objects a cluster has to contain,
+-so that other objects can be local outliers relative to this cluster, and 2)
+-smaller than the maximum number of close by objects that can potentially be
+-local outliers.
+-In practice, such informations are generally not available, and taking
+-n_neighbors=20 appears to work well in general.
+-"""
+-print(__doc__)
+-
+-import numpy as np
+-import matplotlib.pyplot as plt
+-from sklearn.neighbors import LocalOutlierFactor
+-
+-np.random.seed(42)
+-
+-# Generate train data
+-X_inliers = 0.3 * np.random.randn(100, 2)
+-X_inliers = np.r_[X_inliers + 2, X_inliers - 2]
+-
+-# Generate some abnormal novel observations
+-X_outliers = np.random.uniform(low=-4, high=4, size=(20, 2))
+-X = np.r_[X_inliers, X_outliers]
+-
+-# fit the model
+-clf = LocalOutlierFactor(n_neighbors=20, contamination='auto')
+-y_pred = clf.fit_predict(X)
+-
+-# plot the level sets of the decision function
+-xx, yy = np.meshgrid(np.linspace(-5, 5, 50), np.linspace(-5, 5, 50))
+-Z = clf._decision_function(np.c_[xx.ravel(), yy.ravel()])
+-Z = Z.reshape(xx.shape)
+-
+-plt.title("Local Outlier Factor (LOF)")
+-plt.contourf(xx, yy, Z, cmap=plt.cm.Blues_r)
+-
+-a = plt.scatter(X_inliers[:, 0], X_inliers[:, 1], c='white',
+-                edgecolor='k', s=20)
+-b = plt.scatter(X_outliers[:, 0], X_outliers[:, 1], c='red',
+-                edgecolor='k', s=20)
+-plt.axis('tight')
+-plt.xlim((-5, 5))
+-plt.ylim((-5, 5))
+-plt.legend([a, b],
+-           ["normal observations",
+-            "abnormal observations"],
+-           loc="upper left")
+-plt.show()
 diff --git a/examples/neighbors/plot_lof_novelty_detection.py b/examples/neighbors/plot_lof_novelty_detection.py
 new file mode 100755
 index 0000000000..71c0736a25
@@ -1946,6 +2146,121 @@ index 0000000000..b8b7625f3c
 +
 +plt.tight_layout()
 +plt.show()
+diff --git a/examples/preprocessing/plot_power_transformer.py b/examples/preprocessing/plot_power_transformer.py
+deleted file mode 100755
+index 52ce0d3121..0000000000
+--- a/examples/preprocessing/plot_power_transformer.py
++++ /dev/null
+@@ -1,109 +0,0 @@
+-"""
+-==========================================================
+-Using PowerTransformer to apply the Box-Cox transformation
+-==========================================================
+-
+-This example demonstrates the use of the Box-Cox transform through
+-:class:`preprocessing.PowerTransformer` to map data from various distributions
+-to a normal distribution.
+-
+-Box-Cox is useful as a transformation in modeling problems where
+-homoscedasticity and normality are desired. Below are examples of Box-Cox
+-applied to six different probability distributions: Lognormal, Chi-squared,
+-Weibull, Gaussian, Uniform, and Bimodal.
+-
+-Note that the transformation successfully maps the data to a normal
+-distribution when applied to certain datasets, but is ineffective with others.
+-This highlights the importance of visualizing the data before and after
+-transformation. Also note that while the standardize option is set to False for
+-the plot examples, by default, :class:`preprocessing.PowerTransformer` also
+-applies zero-mean, unit-variance standardization to the transformed outputs.
+-"""
+-
+-# Author: Eric Chang <ericchang2017@u.northwestern.edu>
+-# License: BSD 3 clause
+-
+-import numpy as np
+-import matplotlib.pyplot as plt
+-
+-from sklearn.preprocessing import PowerTransformer, minmax_scale
+-
+-print(__doc__)
+-
+-
+-N_SAMPLES = 3000
+-FONT_SIZE = 6
+-BINS = 100
+-
+-
+-pt = PowerTransformer(method='box-cox', standardize=False)
+-rng = np.random.RandomState(304)
+-size = (N_SAMPLES, 1)
+-
+-
+-# lognormal distribution
+-X_lognormal = rng.lognormal(size=size)
+-
+-# chi-squared distribution
+-df = 3
+-X_chisq = rng.chisquare(df=df, size=size)
+-
+-# weibull distribution
+-a = 50
+-X_weibull = rng.weibull(a=a, size=size)
+-
+-# gaussian distribution
+-loc = 100
+-X_gaussian = rng.normal(loc=loc, size=size)
+-
+-# uniform distribution
+-X_uniform = rng.uniform(low=0, high=1, size=size)
+-
+-# bimodal distribution
+-loc_a, loc_b = 100, 105
+-X_a, X_b = rng.normal(loc=loc_a, size=size), rng.normal(loc=loc_b, size=size)
+-X_bimodal = np.concatenate([X_a, X_b], axis=0)
+-
+-
+-# create plots
+-distributions = [
+-    ('Lognormal', X_lognormal),
+-    ('Chi-squared', X_chisq),
+-    ('Weibull', X_weibull),
+-    ('Gaussian', X_gaussian),
+-    ('Uniform', X_uniform),
+-    ('Bimodal', X_bimodal)
+-]
+-
+-colors = ['firebrick', 'darkorange', 'goldenrod',
+-          'seagreen', 'royalblue', 'darkorchid']
+-
+-fig, axes = plt.subplots(nrows=4, ncols=3)
+-axes = axes.flatten()
+-axes_idxs = [(0, 3), (1, 4), (2, 5), (6, 9), (7, 10), (8, 11)]
+-axes_list = [(axes[i], axes[j]) for i, j in axes_idxs]
+-
+-
+-for distribution, color, axes in zip(distributions, colors, axes_list):
+-    name, X = distribution
+-    # scale all distributions to the range [0, 10]
+-    X = minmax_scale(X, feature_range=(1e-10, 10))
+-
+-    # perform power transform
+-    X_trans = pt.fit_transform(X)
+-    lmbda = round(pt.lambdas_[0], 2)
+-
+-    ax_original, ax_trans = axes
+-
+-    ax_original.hist(X, color=color, bins=BINS)
+-    ax_original.set_title(name, fontsize=FONT_SIZE)
+-    ax_original.tick_params(axis='both', which='major', labelsize=FONT_SIZE)
+-
+-    ax_trans.hist(X_trans, color=color, bins=BINS)
+-    ax_trans.set_title('{} after Box-Cox, $\lambda$ = {}'.format(name, lmbda),
+-                       fontsize=FONT_SIZE)
+-    ax_trans.tick_params(axis='both', which='major', labelsize=FONT_SIZE)
+-
+-
+-plt.tight_layout()
+-plt.show()
 diff --git a/examples/semi_supervised/plot_label_propagation_structure.py b/examples/semi_supervised/plot_label_propagation_structure.py
 index 6363653077..ad9270307a 100755
 --- a/examples/semi_supervised/plot_label_propagation_structure.py

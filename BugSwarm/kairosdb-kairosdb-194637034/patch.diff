@@ -720,6 +720,182 @@ index b17fa9c24b..78b2cbe359 100755
  
  		addCounter(metricName, 1);
  	}
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxClient.java b/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxClient.java
+deleted file mode 100755
+index c59f9e5d60..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxClient.java
++++ /dev/null
+@@ -1,134 +0,0 @@
+-package org.kairosdb.datastore.cassandra;
+-
+-import com.datastax.driver.core.PreparedStatement;
+-import com.datastax.driver.core.Session;
+-import com.google.common.eventbus.EventBus;
+-import com.google.inject.name.Named;
+-import com.netflix.astyanax.AstyanaxContext;
+-import com.netflix.astyanax.Keyspace;
+-import com.netflix.astyanax.MutationBatch;
+-import com.netflix.astyanax.connectionpool.NodeDiscoveryType;
+-import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
+-import com.netflix.astyanax.connectionpool.impl.ConnectionPoolConfigurationImpl;
+-import com.netflix.astyanax.connectionpool.impl.CountingConnectionPoolMonitor;
+-import com.netflix.astyanax.impl.AstyanaxConfigurationImpl;
+-import com.netflix.astyanax.model.ColumnFamily;
+-import com.netflix.astyanax.serializers.BytesArraySerializer;
+-import com.netflix.astyanax.serializers.IntegerSerializer;
+-import com.netflix.astyanax.serializers.StringSerializer;
+-import com.netflix.astyanax.thrift.ThriftFamilyFactory;
+-import org.kairosdb.core.DataPoint;
+-import org.kairosdb.core.queue.EventCompletionCallBack;
+-import org.kairosdb.events.DataPointEvent;
+-import org.kairosdb.util.KDataOutput;
+-
+-import javax.inject.Inject;
+-import java.io.IOException;
+-import java.util.List;
+-
+-import static org.kairosdb.datastore.cassandra.CassandraClientImpl.HOST_LIST_PROPERTY;
+-import static org.kairosdb.datastore.cassandra.CassandraDatastore.*;
+-
+-/**
+- Created by bhawkins on 12/12/16.
+- */
+-public class AstyanaxClient
+-{
+-	private ColumnFamily<DataPointsRowKey, Integer> CF_DATA_POINTS =
+-			new ColumnFamily<>(CF_DATA_POINTS_NAME,
+-					new AstyanaxDataPointsRowKeySerializer(), IntegerSerializer.get(), BytesArraySerializer.get());
+-
+-	private ColumnFamily<String, DataPointsRowKey> CF_ROW_KEY_INDEX =
+-			new ColumnFamily<>(CF_ROW_KEY_INDEX_NAME,
+-					StringSerializer.get(), new AstyanaxDataPointsRowKeySerializer());
+-
+-	private ColumnFamily<String, String> CF_STRING_INDEX =
+-			new ColumnFamily<>(CF_STRING_INDEX_NAME,
+-					StringSerializer.get(), StringSerializer.get());
+-
+-	private Keyspace m_keyspace;
+-
+-	@Inject
+-	public AstyanaxClient(CassandraConfiguration cassandraConfiguration,
+-			@Named(HOST_LIST_PROPERTY)String hostList)
+-	{
+-		AstyanaxContext<Keyspace> context = new AstyanaxContext.Builder()
+-				.forCluster("ClusterName")
+-				.forKeyspace(cassandraConfiguration.getKeyspaceName())
+-				.withAstyanaxConfiguration(new AstyanaxConfigurationImpl()
+-						.setDiscoveryType(NodeDiscoveryType.RING_DESCRIBE)
+-				)
+-				.withConnectionPoolConfiguration(new ConnectionPoolConfigurationImpl("MyConnectionPool")
+-						.setPort(9160)
+-						.setMaxConnsPerHost(10)
+-						.setSeeds(hostList)
+-				)
+-				.withConnectionPoolMonitor(new CountingConnectionPoolMonitor())
+-				.buildKeyspace(ThriftFamilyFactory.getInstance());
+-
+-		context.start();
+-		m_keyspace = context.getClient();
+-	}
+-
+-
+-	public BatchHandler getBatchHandler(List<DataPointEvent> events, EventCompletionCallBack callBack,
+-			int defaultTtl, DataCache<DataPointsRowKey>
+-			rowKeyCache, DataCache<String> metricNameCache, EventBus eventBus,
+-			Session session, PreparedStatement psInsertData,
+-			PreparedStatement psInsertRowKey, PreparedStatement psInsertString)
+-	{
+-		return new AstyanaxBatchHandler(events, callBack, defaultTtl,
+-				rowKeyCache, metricNameCache, eventBus, session, psInsertData,
+-				psInsertRowKey, psInsertString);
+-	}
+-
+-	private class AstyanaxBatchHandler extends CQLBatchHandler
+-	{
+-		MutationBatch m_batch;
+-
+-		public AstyanaxBatchHandler(List<DataPointEvent> events, EventCompletionCallBack callBack,
+-				int defaultTtl, DataCache<DataPointsRowKey>
+-				rowKeyCache, DataCache<String> metricNameCache, EventBus eventBus,
+-				Session session, PreparedStatement psInsertData,
+-				PreparedStatement psInsertRowKey, PreparedStatement psInsertString)
+-		{
+-			super(events, callBack, defaultTtl, rowKeyCache, metricNameCache, eventBus,
+-					session, psInsertData, psInsertRowKey, psInsertString);
+-
+-			m_batch = m_keyspace.prepareMutationBatch();
+-		}
+-
+-
+-		@Override
+-		public void addMetricName(String metricName)
+-		{
+-			m_batch.withRow(CF_STRING_INDEX, ROW_KEY_METRIC_NAMES)
+-					.putColumn(metricName, (String)null);
+-		}
+-
+-
+-		@Override
+-		public void addDataPoint(DataPointsRowKey rowKey, int columnTime, DataPoint dataPoint, int ttl) throws IOException
+-		{
+-			KDataOutput kDataOutput = new KDataOutput();
+-			dataPoint.writeValueToBuffer(kDataOutput);
+-
+-			m_batch.withRow(CF_DATA_POINTS, rowKey)
+-					.putColumn(columnTime, kDataOutput.getBytes(), ttl);
+-		}
+-
+-		@Override
+-		public void submitBatch()
+-		{
+-			try
+-			{
+-				super.submitBatch();
+-				m_batch.execute();
+-			}
+-			catch (ConnectionException e)
+-			{
+-				e.printStackTrace();
+-			}
+-		}
+-	}
+-}
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxDataPointsRowKeySerializer.java b/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxDataPointsRowKeySerializer.java
+deleted file mode 100755
+index ad9e41a0df..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/AstyanaxDataPointsRowKeySerializer.java
++++ /dev/null
+@@ -1,30 +0,0 @@
+-package org.kairosdb.datastore.cassandra;
+-
+-import com.netflix.astyanax.serializers.AbstractSerializer;
+-
+-import java.nio.ByteBuffer;
+-
+-/**
+- Created by bhawkins on 12/12/16.
+- */
+-public class AstyanaxDataPointsRowKeySerializer extends AbstractSerializer<DataPointsRowKey>
+-{
+-	private DataPointsRowKeySerializer m_serializer;
+-
+-	public AstyanaxDataPointsRowKeySerializer()
+-	{
+-		m_serializer = new DataPointsRowKeySerializer();
+-	}
+-
+-	@Override
+-	public ByteBuffer toByteBuffer(DataPointsRowKey obj)
+-	{
+-		return m_serializer.toByteBuffer(obj);
+-	}
+-
+-	@Override
+-	public DataPointsRowKey fromByteBuffer(ByteBuffer byteBuffer)
+-	{
+-		return m_serializer.fromByteBuffer(byteBuffer);
+-	}
+-}
 diff --git a/src/main/java/org/kairosdb/datastore/cassandra/BatchHandler.java b/src/main/java/org/kairosdb/datastore/cassandra/BatchHandler.java
 index 6451b82025..7b639614e8 100755
 --- a/src/main/java/org/kairosdb/datastore/cassandra/BatchHandler.java
@@ -2084,6 +2260,62 @@ index b4306933a2..54b6afda30 100755
  
  		bind(new TypeLiteral<Map<String, String>>(){}).annotatedWith(Names.named(CASSANDRA_AUTH_MAP))
  				.toInstance(m_authMap);
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/ConsistencyLevel.java b/src/main/java/org/kairosdb/datastore/cassandra/ConsistencyLevel.java
+deleted file mode 100755
+index 3a1aa92141..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/ConsistencyLevel.java
++++ /dev/null
+@@ -1,50 +0,0 @@
+-/*
+- * Copyright 2016 KairosDB Authors
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *    http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-package org.kairosdb.datastore.cassandra;
+-
+-import me.prettyprint.hector.api.HConsistencyLevel;
+-
+-/**
+- Created with IntelliJ IDEA.
+- User: bhawkins
+- Date: 11/18/13
+- Time: 8:42 AM
+- To change this template use File | Settings | File Templates.
+- */
+-public enum ConsistencyLevel
+-{
+-	ANY (HConsistencyLevel.ANY),
+-	ONE (HConsistencyLevel.ONE),
+-	TWO (HConsistencyLevel.TWO),
+-	THREE (HConsistencyLevel.THREE),
+-	LOCAL_QUORUM (HConsistencyLevel.LOCAL_QUORUM),
+-	EACH_QUORUM (HConsistencyLevel.EACH_QUORUM),
+-	QUORUM (HConsistencyLevel.QUORUM),
+-	ALL (HConsistencyLevel.ALL);
+-
+-	private final HConsistencyLevel m_level;
+-
+-	ConsistencyLevel(HConsistencyLevel level)
+-	{
+-		m_level = level;
+-	}
+-
+-	public HConsistencyLevel getHectorLevel()
+-	{
+-		return (m_level);
+-	}
+-}
 diff --git a/src/main/java/org/kairosdb/datastore/cassandra/DataPointsRowKeySerializer.java b/src/main/java/org/kairosdb/datastore/cassandra/DataPointsRowKeySerializer.java
 index a891228611..f314b89236 100755
 --- a/src/main/java/org/kairosdb/datastore/cassandra/DataPointsRowKeySerializer.java
@@ -2121,6 +2353,754 @@ index a891228611..f314b89236 100755
  	public DataPointsRowKey fromByteBuffer(ByteBuffer byteBuffer)
  	{
  		int start = byteBuffer.position();
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/HectorConfiguration.java b/src/main/java/org/kairosdb/datastore/cassandra/HectorConfiguration.java
+deleted file mode 100755
+index 2c246aba83..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/HectorConfiguration.java
++++ /dev/null
+@@ -1,185 +0,0 @@
+-//
+-//  HectorConfiguration.java
+-//
+-// Copyright 2016, KairosDB Authors
+-//        
+-package org.kairosdb.datastore.cassandra;
+-
+-import com.google.inject.Inject;
+-import com.google.inject.name.Named;
+-import me.prettyprint.cassandra.connection.DynamicLoadBalancingPolicy;
+-import me.prettyprint.cassandra.connection.LeastActiveBalancingPolicy;
+-import me.prettyprint.cassandra.connection.RoundRobinBalancingPolicy;
+-import me.prettyprint.cassandra.service.CassandraHostConfigurator;
+-
+-import java.util.List;
+-
+-public class HectorConfiguration
+-{
+-	private static final String HOST_LIST_PROPERTY = "kairosdb.datastore.cassandra.host_list";
+-
+-	private static final String MAX_ACTIVE = "kairosdb.datastore.cassandra.hector.maxActive";
+-	private static final String MAX_WAIT_TIME_WHEN_EXHAUSTED = "kairosdb.datastore.cassandra.hector.maxWaitTimeWhenExhausted";
+-	private static final String USE_SOCKET_KEEP_ALIVE = "kairosdb.datastore.cassandra.hector.useSocketKeepalive";
+-	private static final String CASSANDRA_THRIFT_SOCKET_TIMEOUT = "kairosdb.datastore.cassandra.hector.cassandraThriftSocketTimeout";
+-	private static final String RETRY_DOWNED_HOSTS = "kairosdb.datastore.cassandra.hector.retryDownedHosts";
+-	private static final String RETRY_DOWNED_HOSTS_DELAY_IN_SECONDS = "kairosdb.datastore.cassandra.hector.retryDownedHostsDelayInSeconds";
+-	private static final String RETRY_DOWNED_HOSTS_QUEUE_SIZE = "kairosdb.datastore.cassandra.hector.retryDownedHostsQueueSize";
+-	private static final String AUTO_DISCOVER_HOSTS = "kairosdb.datastore.cassandra.hector.autoDiscoverHosts";
+-	private static final String AUTO_DISCOVER_DELAY_IN_SECONDS = "kairosdb.datastore.cassandra.hector.autoDiscoveryDelayInSeconds";
+-	private static final String AUTO_DISCOVERY_DATA_CENTERS = "kairosdb.datastore.cassandra.hector.autoDiscoveryDataCenters";
+-	private static final String RUN_AUTO_DISCOVERY_AT_STARTUP = "kairosdb.datastore.cassandra.hector.runAutoDiscoveryAtStartup";
+-	private static final String USE_HOST_TIME_OUT_TRACKER = "kairosdb.datastore.cassandra.hector.useHostTimeoutTracker";
+-	private static final String MAX_FRAME_SIZE = "kairosdb.datastore.cassandra.hector.maxFrameSize";
+-	private static final String LOAD_BALANCING_POLICY = "kairosdb.datastore.cassandra.hector.loadBalancingPolicy";
+-	private static final String HOST_TIME_OUT_COUNTER = "kairosdb.datastore.cassandra.hector.hostTimeoutCounter";
+-	private static final String HOST_TIME_OUT_WINDOW = "kairosdb.datastore.cassandra.hector.hostTimeoutWindow";
+-	private static final String HOST_TIME_OUT_SUSPENSION_DURATION_IN_SECONDS = "kairosdb.datastore.cassandra.hector.hostTimeoutSuspensionDurationInSeconds";
+-	private static final String HOST_TIME_OUT_UNSUSPEND_CHECK_DELAY = "kairosdb.datastore.cassandra.hector.hostTimeoutUnsuspendCheckDelay";
+-	private static final String MAX_CONNECT_TIME_MILLIS = "kairosdb.datastore.cassandra.hector.maxConnectTimeMillis";
+-	private static final String MAX_LAST_SUCCESS_TIME_MILLIS = "kairosdb.datastore.cassandra.hector.maxLastSuccessTimeMillis";
+-
+-	private CassandraHostConfigurator hostConfig;
+-
+-
+-	@Inject
+-	public HectorConfiguration(@Named(HOST_LIST_PROPERTY) String cassandraHostList)
+-	{
+-		hostConfig = new CassandraHostConfigurator(cassandraHostList);
+-	}
+-
+-	public CassandraHostConfigurator getConfiguration()
+-	{
+-		return hostConfig;
+-	}
+-
+-	@Inject(optional = true)
+-	public void setMaxActive(@Named(MAX_ACTIVE) int maxActive)
+-	{
+-		hostConfig.setMaxActive(maxActive);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setMaxWaitTimeWhenExhausted(@Named(MAX_WAIT_TIME_WHEN_EXHAUSTED) long maxWaitTimeWhenExhausted)
+-	{
+-		hostConfig.setMaxWaitTimeWhenExhausted(maxWaitTimeWhenExhausted);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setUseSocketKeepalive(@Named(USE_SOCKET_KEEP_ALIVE) boolean useSocketKeepalive)
+-	{
+-		hostConfig.setUseSocketKeepalive(useSocketKeepalive);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setCassandraThriftSocketTimeout(@Named(CASSANDRA_THRIFT_SOCKET_TIMEOUT) int cassandraThriftSocketTimeout)
+-	{
+-		hostConfig.setCassandraThriftSocketTimeout(cassandraThriftSocketTimeout);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setRetryDownedHosts(@Named(RETRY_DOWNED_HOSTS) boolean retryDownedHosts)
+-	{
+-		hostConfig.setRetryDownedHosts(retryDownedHosts);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setRetryDownedHostsDelayInSeconds(@Named(RETRY_DOWNED_HOSTS_DELAY_IN_SECONDS)
+-	                                              int retryDownedHostsDelayInSeconds)
+-	{
+-		hostConfig.setRetryDownedHostsDelayInSeconds(retryDownedHostsDelayInSeconds);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setRetryDownedHostsQueueSize(@Named(RETRY_DOWNED_HOSTS_QUEUE_SIZE) int retryDownedHostsQueueSize)
+-	{
+-		hostConfig.setRetryDownedHostsQueueSize(retryDownedHostsQueueSize);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setAutoDiscoverHosts(@Named(AUTO_DISCOVER_HOSTS) boolean autoDiscoverHosts)
+-	{
+-		hostConfig.setAutoDiscoverHosts(autoDiscoverHosts);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setAutoDiscoveryDelayInSeconds(@Named(AUTO_DISCOVER_DELAY_IN_SECONDS) int autoDiscoveryDelayInSeconds)
+-	{
+-		hostConfig.setAutoDiscoveryDelayInSeconds(autoDiscoveryDelayInSeconds);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setAutoDiscoveryDataCenters(@Named(AUTO_DISCOVERY_DATA_CENTERS) List<String> autoDiscoveryDataCenters)
+-	{
+-		hostConfig.setAutoDiscoveryDataCenter(autoDiscoveryDataCenters);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setRunAutoDiscoveryAtStartup(@Named(RUN_AUTO_DISCOVERY_AT_STARTUP) boolean runAutoDiscoveryAtStartup)
+-	{
+-		hostConfig.setRunAutoDiscoveryAtStartup(runAutoDiscoveryAtStartup);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setUseHostTimeoutTracker(@Named(USE_HOST_TIME_OUT_TRACKER) boolean useHostTimeoutTracker)
+-	{
+-		hostConfig.setUseHostTimeoutTracker(useHostTimeoutTracker);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setMaxFrameSize(@Named(MAX_FRAME_SIZE) int maxFrameSize)
+-	{
+-		hostConfig.setMaxFrameSize(maxFrameSize);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setLoadBalancingPolicy(@Named(LOAD_BALANCING_POLICY) String loadBalancingPolicy)
+-	{
+-		if (loadBalancingPolicy.equals("dynamic"))
+-			hostConfig.setLoadBalancingPolicy(new DynamicLoadBalancingPolicy());
+-		else if (loadBalancingPolicy.equals("leastActive"))
+-			hostConfig.setLoadBalancingPolicy(new LeastActiveBalancingPolicy());
+-		else if (loadBalancingPolicy.equals("roundRobin"))
+-			hostConfig.setLoadBalancingPolicy(new RoundRobinBalancingPolicy());
+-		else
+-			throw new IllegalArgumentException("Invalid load balancing policy. Must be dynamic, leastActive, or roundRobin");
+-	}
+-
+-	@Inject(optional = true)
+-	public void setHostTimeOutCounter(@Named(HOST_TIME_OUT_COUNTER) int hostTimeoutCounter)
+-	{
+-		hostConfig.setHostTimeoutCounter(hostTimeoutCounter);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setHostTimeoutWindow(@Named(HOST_TIME_OUT_WINDOW) int hostTimeoutWindow)
+-	{
+-		hostConfig.setHostTimeoutWindow(hostTimeoutWindow);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setHostTimeOutSuspensionDurationInSeconds(@Named(HOST_TIME_OUT_SUSPENSION_DURATION_IN_SECONDS)
+-	                                                      int hostTimeoutSuspensionDurationInSeconds)
+-	{
+-		hostConfig.setHostTimeoutSuspensionDurationInSeconds(hostTimeoutSuspensionDurationInSeconds);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setHostTimeOutUnsuspendCheckDelay(@Named(HOST_TIME_OUT_UNSUSPEND_CHECK_DELAY)
+-	                                              int hostTimeoutUnsuspendCheckDelay)
+-	{
+-		hostConfig.setHostTimeoutUnsuspendCheckDelay(hostTimeoutUnsuspendCheckDelay);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setMaxConnectTimeMillis(@Named(MAX_CONNECT_TIME_MILLIS) long maxConnectTimeMillis)
+-	{
+-		hostConfig.setMaxConnectTimeMillis(maxConnectTimeMillis);
+-	}
+-
+-	@Inject(optional = true)
+-	public void setMaxLastSuccessTimeMillis(@Named(MAX_LAST_SUCCESS_TIME_MILLIS) long maxLastSuccessTimeMillis)
+-	{
+-		hostConfig.setMaxLastSuccessTimeMillis(maxLastSuccessTimeMillis);
+-	}
+-}
+\ No newline at end of file
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/QueryRunner.java b/src/main/java/org/kairosdb/datastore/cassandra/QueryRunner.java
+deleted file mode 100755
+index 776c65b776..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/QueryRunner.java
++++ /dev/null
+@@ -1,204 +0,0 @@
+-/*
+- * Copyright 2016 KairosDB Authors
+- *
+- *    Licensed under the Apache License, Version 2.0 (the "License");
+- *    you may not use this file except in compliance with the License.
+- *    You may obtain a copy of the License at
+- *
+- *        http://www.apache.org/licenses/LICENSE-2.0
+- *
+- *    Unless required by applicable law or agreed to in writing, software
+- *    distributed under the License is distributed on an "AS IS" BASIS,
+- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- *    See the License for the specific language governing permissions and
+- *    limitations under the License.
+- */
+-package org.kairosdb.datastore.cassandra;
+-
+-import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
+-import me.prettyprint.cassandra.serializers.BytesArraySerializer;
+-import me.prettyprint.cassandra.serializers.IntegerSerializer;
+-import me.prettyprint.hector.api.Keyspace;
+-import me.prettyprint.hector.api.beans.HColumn;
+-import me.prettyprint.hector.api.beans.Row;
+-import me.prettyprint.hector.api.beans.Rows;
+-import me.prettyprint.hector.api.factory.HFactory;
+-import me.prettyprint.hector.api.query.MultigetSliceQuery;
+-import me.prettyprint.hector.api.query.SliceQuery;
+-import org.kairosdb.core.KairosDataPointFactory;
+-import org.kairosdb.core.datapoints.*;
+-import org.kairosdb.core.datastore.CachedSearchResult;
+-import org.kairosdb.core.datastore.Order;
+-import org.kairosdb.core.datastore.QueryCallback;
+-import org.kairosdb.util.KDataInput;
+-
+-import java.io.IOException;
+-import java.nio.ByteBuffer;
+-import java.util.ArrayList;
+-import java.util.List;
+-import java.util.Map;
+-
+-import static org.kairosdb.datastore.cassandra.CassandraDatastore.*;
+-
+-public class QueryRunner
+-{
+-	public static final DataPointsRowKeySerializer ROW_KEY_SERIALIZER = new DataPointsRowKeySerializer();
+-
+-	private Keyspace m_keyspace;
+-	private String m_columnFamily;
+-	private List<DataPointsRowKey> m_rowKeys;
+-	private int m_startTime; //relative row time
+-	private int m_endTime; //relative row time
+-	private QueryCallback m_queryCallback;
+-	private int m_singleRowReadSize;
+-	private int m_multiRowReadSize;
+-	private boolean m_limit = false;
+-	private boolean m_descending = false;
+-	private LongDataPointFactory m_longDataPointFactory = new LongDataPointFactoryImpl();
+-	private DoubleDataPointFactory m_doubleDataPointFactory = new DoubleDataPointFactoryImpl();
+-
+-	private final KairosDataPointFactory m_kairosDataPointFactory;
+-
+-	public QueryRunner(Keyspace keyspace, String columnFamily,
+-			KairosDataPointFactory kairosDataPointFactory,
+-			List<DataPointsRowKey> rowKeys, long startTime, long endTime,
+-			QueryCallback csResult,
+-			int singleRowReadSize, int multiRowReadSize, int limit, Order order)
+-	{
+-		m_keyspace = keyspace;
+-		m_columnFamily = columnFamily;
+-		m_rowKeys = rowKeys;
+-		m_kairosDataPointFactory = kairosDataPointFactory;
+-		long m_tierRowTime = rowKeys.get(0).getTimestamp();
+-		if (startTime < m_tierRowTime)
+-			m_startTime = 0;
+-		else
+-			m_startTime = getColumnName(m_tierRowTime, startTime);
+-
+-		if (endTime > (m_tierRowTime + ROW_WIDTH))
+-			m_endTime = getColumnName(m_tierRowTime, m_tierRowTime + ROW_WIDTH) +1;
+-		else
+-			m_endTime = getColumnName(m_tierRowTime, endTime) +1; //add 1 so we get 0x1 for last bit
+-
+-		m_queryCallback = csResult;
+-		m_singleRowReadSize = singleRowReadSize;
+-		m_multiRowReadSize = multiRowReadSize;
+-
+-		if (limit != 0)
+-		{
+-			m_limit = true;
+-			m_singleRowReadSize = limit;
+-			m_multiRowReadSize = limit;
+-		}
+-
+-		if (order == Order.DESC)
+-			m_descending = true;
+-	}
+-
+-	public void runQuery() throws IOException
+-	{
+-		MultigetSliceQuery<DataPointsRowKey, Integer, byte[]> msliceQuery =
+-				HFactory.createMultigetSliceQuery(m_keyspace,
+-						ROW_KEY_SERIALIZER,
+-						IntegerSerializer.get(), BytesArraySerializer.get());
+-
+-		msliceQuery.setColumnFamily(m_columnFamily);
+-		msliceQuery.setKeys(m_rowKeys);
+-		if (m_descending)
+-			msliceQuery.setRange(m_endTime, m_startTime, true, m_multiRowReadSize);
+-		else
+-			msliceQuery.setRange(m_startTime, m_endTime, false, m_multiRowReadSize);
+-
+-		Rows<DataPointsRowKey, Integer, byte[]> rows =
+-				msliceQuery.execute().get();
+-
+-		List<Row<DataPointsRowKey, Integer, byte[]>> unfinishedRows =
+-				new ArrayList<Row<DataPointsRowKey, Integer, byte[]>>();
+-
+-		for (Row<DataPointsRowKey, Integer, byte[]> row : rows)
+-		{
+-			List<HColumn<Integer, byte[]>> columns = row.getColumnSlice().getColumns();
+-			if (!m_limit && columns.size() == m_multiRowReadSize)
+-				unfinishedRows.add(row);
+-
+-			writeColumns(row.getKey(), columns);
+-		}
+-
+-
+-		//Iterate through the unfinished rows and get the rest of the data.
+-		//todo: use multiple threads to retrieve this data
+-		for (Row<DataPointsRowKey, Integer, byte[]> unfinishedRow : unfinishedRows)
+-		{
+-			DataPointsRowKey key = unfinishedRow.getKey();
+-
+-			SliceQuery<DataPointsRowKey, Integer, byte[]> sliceQuery =
+-					HFactory.createSliceQuery(m_keyspace, ROW_KEY_SERIALIZER,
+-					IntegerSerializer.get(), BytesArraySerializer.get());
+-
+-			sliceQuery.setColumnFamily(m_columnFamily);
+-			sliceQuery.setKey(key);
+-
+-			List<HColumn<Integer, byte[]>> columns = unfinishedRow.getColumnSlice().getColumns();
+-
+-			do
+-			{
+-				Integer lastTime = columns.get(columns.size() -1).getName();
+-
+-				if (m_descending)
+-					sliceQuery.setRange(lastTime-1, m_startTime, true, m_singleRowReadSize);
+-				else
+-					sliceQuery.setRange(lastTime+1, m_endTime, false, m_singleRowReadSize);
+-
+-				columns = sliceQuery.execute().get().getColumns();
+-				writeColumns(key, columns);
+-			} while (columns.size() == m_singleRowReadSize);
+-		}
+-	}
+-
+-
+-	private void writeColumns(DataPointsRowKey rowKey, List<HColumn<Integer, byte[]>> columns)
+-			throws IOException
+-	{
+-		if (columns.size() != 0)
+-		{
+-			Map<String, String> tags = rowKey.getTags();
+-			String type = rowKey.getDataType();
+-
+-			m_queryCallback.startDataPointSet(type, tags);
+-
+-			DataPointFactory dataPointFactory = null;
+-			dataPointFactory = m_kairosDataPointFactory.getFactoryForDataStoreType(type);
+-
+-			for (HColumn<Integer, byte[]> column : columns)
+-			{
+-				int columnTime = column.getName();
+-
+-				byte[] value = column.getValue();
+-				long timestamp = getColumnTimestamp(rowKey.getTimestamp(), columnTime);
+-
+-				//If type is legacy type it will point to the same object, no need for equals
+-				if (type == LegacyDataPointFactory.DATASTORE_TYPE)
+-				{
+-					if (isLongValue(columnTime))
+-					{
+-						m_queryCallback.addDataPoint(
+-								new LegacyLongDataPoint(timestamp,
+-										ValueSerializer.getLongFromByteBuffer(ByteBuffer.wrap(value))));
+-					}
+-					else
+-					{
+-						m_queryCallback.addDataPoint(
+-								new LegacyDoubleDataPoint(timestamp,
+-										ValueSerializer.getDoubleFromByteBuffer(ByteBuffer.wrap(value))));
+-					}
+-				}
+-				else
+-				{
+-					m_queryCallback.addDataPoint(
+-							dataPointFactory.getDataPoint(timestamp, KDataInput.createInput(value)));
+-				}
+-			}
+-		}
+-	}
+-
+-}
+diff --git a/src/main/java/org/kairosdb/datastore/cassandra/WriteBuffer.java b/src/main/java/org/kairosdb/datastore/cassandra/WriteBuffer.java
+deleted file mode 100755
+index 65bbb3b407..0000000000
+--- a/src/main/java/org/kairosdb/datastore/cassandra/WriteBuffer.java
++++ /dev/null
+@@ -1,340 +0,0 @@
+-/*
+- * Copyright 2016 KairosDB Authors
+- *
+- *    Licensed under the Apache License, Version 2.0 (the "License");
+- *    you may not use this file except in compliance with the License.
+- *    You may obtain a copy of the License at
+- *
+- *        http://www.apache.org/licenses/LICENSE-2.0
+- *
+- *    Unless required by applicable law or agreed to in writing, software
+- *    distributed under the License is distributed on an "AS IS" BASIS,
+- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- *    See the License for the specific language governing permissions and
+- *    limitations under the License.
+- */
+-package org.kairosdb.datastore.cassandra;
+-
+-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+-import me.prettyprint.cassandra.model.HColumnImpl;
+-import me.prettyprint.cassandra.model.MutatorImpl;
+-import me.prettyprint.hector.api.Keyspace;
+-import me.prettyprint.hector.api.Serializer;
+-import me.prettyprint.hector.api.mutation.Mutator;
+-import org.kairosdb.util.Triple;
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-
+-import java.util.ArrayList;
+-import java.util.List;
+-import java.util.concurrent.ExecutorService;
+-import java.util.concurrent.Executors;
+-import java.util.concurrent.TimeUnit;
+-import java.util.concurrent.locks.ReentrantLock;
+-
+-
+-public class WriteBuffer<RowKeyType, ColumnKeyType, ValueType>  implements Runnable
+-{
+-	public static final Logger logger = LoggerFactory.getLogger(WriteBuffer.class);
+-
+-	private Keyspace m_keyspace;
+-	private String m_cfName;
+-	private List<Triple<RowKeyType, ColumnKeyType, ValueType>> m_buffer;
+-	private Mutator<RowKeyType> m_mutator;
+-	private volatile int m_bufferCount = 0;
+-	private ReentrantLock m_mutatorLock;
+-
+-	private Thread m_writeThread;
+-	private boolean m_exit = false;
+-	private int m_writeDelay;
+-	private Serializer<RowKeyType> m_rowKeySerializer;
+-	private Serializer<ColumnKeyType> m_columnKeySerializer;
+-	private Serializer<ValueType> m_valueSerializer;
+-	private WriteBufferStats m_writeStats;
+-	private int m_maxBufferSize;
+-	private int m_initialMaxBufferSize;
+-	private ExecutorService m_executorService;
+-
+-	public WriteBuffer(Keyspace keyspace, String cfName,
+-			int writeDelay, int maxWriteSize, Serializer<RowKeyType> keySerializer,
+-			Serializer<ColumnKeyType> columnKeySerializer,
+-			Serializer<ValueType> valueSerializer,
+-			WriteBufferStats stats,
+-			ReentrantLock mutatorLock,
+-			int threadCount)
+-	{
+-		m_executorService = Executors.newFixedThreadPool(threadCount,
+-				new ThreadFactoryBuilder().setNameFormat("WriteBuffer-"+cfName+"-%d").build());
+-
+-		m_keyspace = keyspace;
+-		m_cfName = cfName;
+-		m_writeDelay = writeDelay;
+-		m_initialMaxBufferSize = m_maxBufferSize = maxWriteSize;
+-		m_rowKeySerializer = keySerializer;
+-		m_columnKeySerializer = columnKeySerializer;
+-		m_valueSerializer = valueSerializer;
+-		m_writeStats = stats;
+-		m_mutatorLock = mutatorLock;
+-
+-		m_buffer = new ArrayList<>();
+-		m_mutator = new MutatorImpl<>(keyspace, keySerializer);
+-		m_writeThread = new Thread(this, "WriteBuffer Scheduler for "+cfName);
+-		m_writeThread.start();
+-	}
+-	
+-	/**
+-	 * Add a datapoint without a TTL. 
+-	 * This datapoint will never be automatically deleted
+-	 */
+-	public void addData(
+-		RowKeyType rowKey, 
+-		ColumnKeyType columnKey, 
+-		ValueType value, 
+-		long timestamp)
+-	{
+-		addData(rowKey, columnKey, value, timestamp, 0);
+-	}
+-
+-	/**
+-	 * Add a datapoint with a TTL.
+-	 * This datapoint will be removed after ttl seconds
+-	 */
+-	public void addData(
+-			RowKeyType rowKey,
+-			ColumnKeyType columnKey,
+-			ValueType value,
+-			long timestamp,
+-			int ttl)
+-	{
+-		m_mutatorLock.lock();
+-		try
+-		{
+-			waitOnBufferFull();
+-			m_bufferCount ++;
+-
+-			if (columnKey.toString().length() > 0)
+-			{
+-				m_buffer.add(new Triple<>(rowKey, columnKey, value, timestamp, ttl));
+-			}
+-			else
+-			{
+-				logger.info("Discarded " + m_cfName + " row with empty column name. This should never happen.");
+-			}
+-		}
+-		finally
+-		{
+-			m_mutatorLock.unlock();
+-		}
+-	}
+-
+-	public void deleteRow(RowKeyType rowKey, long timestamp)
+-	{
+-		m_mutatorLock.lock();
+-		try
+-		{
+-			waitOnBufferFull();
+-
+-			m_bufferCount ++;
+-			m_mutator.addDeletion(rowKey, m_cfName, timestamp);
+-		}
+-		finally
+-		{
+-			m_mutatorLock.unlock();
+-		}
+-	}
+-
+-	public void deleteColumn(RowKeyType rowKey, ColumnKeyType columnKey, long timestamp)
+-	{
+-		m_mutatorLock.lock();
+-		try
+-		{
+-			waitOnBufferFull();
+-
+-			m_bufferCount ++;
+-			m_mutator.addDeletion(rowKey, m_cfName, columnKey, m_columnKeySerializer, timestamp);
+-		}
+-		finally
+-		{
+-			m_mutatorLock.unlock();
+-		}
+-	}
+-
+-	private void waitOnBufferFull()
+-	{
+-		if ((m_bufferCount > m_maxBufferSize) && (m_mutatorLock.getHoldCount() == 1))
+-		{
+-			submitJob();
+-		}
+-	}
+-
+-	public void close() throws InterruptedException
+-	{
+-		m_exit = true;
+-		m_writeThread.interrupt();
+-		m_writeThread.join();
+-		m_executorService.shutdown();
+-		m_executorService.awaitTermination(1, TimeUnit.MINUTES);
+-	}
+-
+-	/**
+-	 This will slowly increase the max buffer size up to the initial size.
+-	 The design is that this method is called periodically to correct 3/4
+-	 throttling that occurs down below.
+-	 */
+-	public void increaseMaxBufferSize()
+-	{
+-		if (m_maxBufferSize < m_initialMaxBufferSize)
+-		{
+-			m_maxBufferSize += 1000;
+-			logger.info("Increasing write buffer " + m_cfName + " size to "+m_maxBufferSize);
+-		}
+-	}
+-
+-	private void submitJob()
+-	{
+-		Mutator<RowKeyType> pendingMutations;
+-		List<Triple<RowKeyType, ColumnKeyType, ValueType>> buffer;
+-
+-		m_writeStats.saveWriteSize(m_bufferCount);
+-
+-		pendingMutations = m_mutator;
+-		buffer = m_buffer;
+-		m_mutator = new MutatorImpl<>(m_keyspace, m_rowKeySerializer);
+-		m_buffer = new ArrayList<>();
+-		m_bufferCount = 0;
+-
+-		WriteDataJob writeDataJob = new WriteDataJob(pendingMutations, buffer);
+-		//submit job
+-		m_executorService.submit(writeDataJob);
+-		writeDataJob.waitTillStarted();
+-	}
+-
+-
+-	@Override
+-	public void run()
+-	{
+-		while (!m_exit)
+-		{
+-			try
+-			{
+-				Thread.sleep(m_writeDelay);
+-			}
+-			catch (InterruptedException ignored) {}
+-
+-			if (m_bufferCount != 0)
+-			{
+-				m_mutatorLock.lock();
+-				try
+-				{
+-					submitJob();
+-				}
+-				finally
+-				{
+-					m_mutatorLock.unlock();
+-				}
+-			}
+-		}
+-	}
+-
+-	private class WriteDataJob implements Runnable
+-	{
+-		private final Object m_jobLock = new Object();
+-		private boolean m_started = false;
+-		private Mutator<RowKeyType> m_pendingMutations;
+-		private final List<Triple<RowKeyType, ColumnKeyType, ValueType>> m_buffer;
+-
+-		public WriteDataJob(Mutator<RowKeyType> pendingMutations, List<Triple<RowKeyType, ColumnKeyType, ValueType>> buffer)
+-		{
+-			m_pendingMutations = pendingMutations;
+-			m_buffer = buffer;
+-		}
+-
+-		public void waitTillStarted()
+-		{
+-			synchronized (m_jobLock)
+-			{
+-				while (!m_started)
+-				{
+-					try
+-					{
+-						m_jobLock.wait();
+-					}
+-					catch (InterruptedException e)
+-					{
+-						e.printStackTrace();
+-					}
+-				}
+-			}
+-		}
+-
+-		@Override
+-		public void run()
+-		{
+-			synchronized (m_jobLock)
+-			{
+-				m_started = true;
+-				m_jobLock.notifyAll();
+-			}
+-
+-			try
+-			{
+-				if (m_pendingMutations != null)
+-				{
+-					for (Triple<RowKeyType, ColumnKeyType, ValueType> data : m_buffer)
+-					{
+-						HColumnImpl<ColumnKeyType, ValueType> col =
+-								new HColumnImpl<>(data.getSecond(), data.getThird(), data.getTime(), m_columnKeySerializer, m_valueSerializer);
+-
+-						//if a TTL is set apply it to the column. This will
+-						//cause it to be removed after this number of seconds
+-						if (data.getTtl() != 0)
+-						{
+-							col.setTtl(data.getTtl());
+-						}
+-
+-						m_pendingMutations.addInsertion(
+-								data.getFirst(),
+-								m_cfName,
+-								col
+-						);
+-					}
+-					m_pendingMutations.execute();
+-				}
+-
+-				m_pendingMutations = null;
+-			}
+-			catch (Exception e)
+-			{
+-				logger.error("Error sending data to Cassandra (" + m_cfName + ")", e);
+-
+-				m_maxBufferSize = m_maxBufferSize * 3 / 4;
+-
+-				logger.error("Reducing write buffer size to " + m_maxBufferSize +
+-						".  You need to increase your cassandra capacity or change the kairosdb.datastore.cassandra.write_buffer_max_size property.");
+-			}
+-
+-
+-			//If the batch failed we will retry it without changing the buffer size.
+-			while (m_pendingMutations != null)
+-			{
+-				try
+-				{
+-					Thread.sleep(100);
+-				}
+-				catch (InterruptedException ignored)
+-				{
+-				}
+-
+-				try
+-				{
+-					m_pendingMutations.execute();
+-					m_pendingMutations = null;
+-				}
+-				catch (Exception e)
+-				{
+-					logger.error("Error resending data", e);
+-				}
+-			}
+-		}
+-	}
+-}
 diff --git a/src/main/java/org/kairosdb/datastore/h2/H2Datastore.java b/src/main/java/org/kairosdb/datastore/h2/H2Datastore.java
 index d91ee2a983..b7a8822cb3 100755
 --- a/src/main/java/org/kairosdb/datastore/h2/H2Datastore.java
@@ -3826,180 +4806,143 @@ index 8c4353b55d..b00438d499 100755
 +		throw new DatastoreException("Method not implemented.");
  	}
  }
-diff --git a/src/main/java/org/kairosdb/util/AdaptiveExecutorService.java b/src/main/java/org/kairosdb/util/AdaptiveExecutorService.java
-new file mode 100755
-index 0000000000..e94313d707
---- /dev/null
+diff --git a/src/main/java/org/kairosdb/util/CongestionExecutorService.java b/src/main/java/org/kairosdb/util/AdaptiveExecutorService.java
+similarity index 78%
+rename from src/main/java/org/kairosdb/util/CongestionExecutorService.java
+rename to src/main/java/org/kairosdb/util/AdaptiveExecutorService.java
+index 5e3c9d486f..e94313d707 100755
+--- a/src/main/java/org/kairosdb/util/CongestionExecutorService.java
 +++ b/src/main/java/org/kairosdb/util/AdaptiveExecutorService.java
-@@ -0,0 +1,168 @@
-+package org.kairosdb.util;
-+
-+import com.google.common.base.Stopwatch;
-+import com.google.common.collect.ImmutableSortedMap;
-+import com.google.common.eventbus.EventBus;
-+import org.kairosdb.core.datapoints.DoubleDataPointFactory;
-+import org.kairosdb.core.datapoints.DoubleDataPointFactoryImpl;
+@@ -5,6 +5,7 @@
+ import com.google.common.eventbus.EventBus;
+ import org.kairosdb.core.datapoints.DoubleDataPointFactory;
+ import org.kairosdb.core.datapoints.DoubleDataPointFactoryImpl;
 +import org.kairosdb.datastore.cassandra.BatchHandler;
-+import org.kairosdb.events.DataPointEvent;
-+
-+import javax.inject.Inject;
-+import java.util.List;
-+import java.util.concurrent.*;
-+
-+/**
-+ Created by bhawkins on 10/27/16.
-+ */
+ import org.kairosdb.events.DataPointEvent;
+ 
+ import javax.inject.Inject;
+@@ -14,20 +15,20 @@
+ /**
+  Created by bhawkins on 10/27/16.
+  */
+-public class CongestionExecutorService extends AbstractExecutorService
 +public class AdaptiveExecutorService
-+{
-+	private final EventBus m_eventBus;
-+	private final ExecutorService m_internalExecutor;
-+	private final ThreadGroup m_threadGroup;
-+	private final CongestionSemaphore m_semaphore;
-+	private final CongestionTimer m_congestionTimer;
+ {
+ 	private final EventBus m_eventBus;
+ 	private final ExecutorService m_internalExecutor;
+ 	private final ThreadGroup m_threadGroup;
+ 	private final CongestionSemaphore m_semaphore;
+ 	private final CongestionTimer m_congestionTimer;
+-	private int m_permitCount = 10;
 +	private int m_permitCount = 5;
-+
-+	@Inject
-+	private DoubleDataPointFactory m_dataPointFactory = new DoubleDataPointFactoryImpl();
-+
-+	@Inject
+ 
+ 	@Inject
+ 	private DoubleDataPointFactory m_dataPointFactory = new DoubleDataPointFactoryImpl();
+ 
+ 	@Inject
+-	public CongestionExecutorService(EventBus eventBus)
 +	public AdaptiveExecutorService(EventBus eventBus)
-+	{
-+		m_eventBus = eventBus;
-+		m_congestionTimer = new CongestionTimer(m_permitCount);
-+		m_semaphore = new CongestionSemaphore(m_permitCount);
-+		m_threadGroup = new ThreadGroup("KairosDynamic");
-+		/*m_internalExecutor = Executors.newCachedThreadPool(new ThreadFactory()
-+		{
-+			@Override
-+			public Thread newThread(Runnable r)
-+			{
-+				Thread t = new Thread(m_threadGroup, "worker");
-+				return t;
-+			}
-+		});*/
-+
-+		m_internalExecutor = Executors.newCachedThreadPool();
-+	}
-+
-+	private void increasePermitCount()
-+	{
+ 	{
+ 		m_eventBus = eventBus;
+ 		m_congestionTimer = new CongestionTimer(m_permitCount);
+@@ -48,51 +49,30 @@ public Thread newThread(Runnable r)
+ 
+ 	private void increasePermitCount()
+ 	{
+-		/*m_permitCount ++;
 +		m_permitCount ++;
-+		m_congestionTimer.setTaskPerBatch(m_permitCount);
+ 		m_congestionTimer.setTaskPerBatch(m_permitCount);
+-		m_semaphore.release();*/
 +		m_semaphore.release();
-+	}
-+
-+	public void shutdown()
-+	{
-+
-+	}
-+
-+
-+	private Stopwatch m_timer = Stopwatch.createStarted();
-+
+ 	}
+ 
+-	@Override
+ 	public void shutdown()
+ 	{
+ 
+ 	}
+ 
+-	@Override
+-	public List<Runnable> shutdownNow()
+-	{
+-		return null;
+-	}
+-
+-	@Override
+-	public boolean isShutdown()
+-	{
+-		return false;
+-	}
+-
+-	@Override
+-	public boolean isTerminated()
+-	{
+-		return false;
+-	}
+-
+-	@Override
+-	public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException
+-	{
+-		return false;
+-	}
+ 
+ 	private Stopwatch m_timer = Stopwatch.createStarted();
+ 
+-	@Override
+-	public void execute(Runnable command)
 +	public void submit(BatchHandler batchHandler)
-+	{
+ 	{
+-		if (m_timer.elapsed(TimeUnit.SECONDS) >= 15)
 +		if (m_timer.elapsed(TimeUnit.SECONDS) >= 5)
-+		{
+ 		{
 +			/*if ((m_semaphore.availablePermits() == 0) && (batchHandler.isFullBatch()))
 +			{
 +				increasePermitCount();
 +			}*/
 +
-+			m_timer.reset();
-+			m_timer.start();
-+		}
-+
-+		try
-+		{
-+			//System.out.println("Execute called");
-+			m_semaphore.acquire();
-+			//System.out.println("Submitting");
+ 			m_timer.reset();
+ 			m_timer.start();
+-			increasePermitCount();
+ 		}
+ 
+ 		try
+@@ -100,7 +80,7 @@ public void execute(Runnable command)
+ 			//System.out.println("Execute called");
+ 			m_semaphore.acquire();
+ 			//System.out.println("Submitting");
+-			m_internalExecutor.submit(command);
 +			m_internalExecutor.submit(newTaskFor(batchHandler));
-+			//System.out.println("Done submitting");
-+		}
-+		catch (InterruptedException e)
-+		{
-+			e.printStackTrace();
-+		}
-+	}
-+
-+	protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable)
-+	{
-+		//System.out.println("Returning new future");
-+		return new DynamicFutureTask<T>(callable);
-+	}
-+
-+
-+
-+	private class DynamicFutureTask<T> extends FutureTask<T>
-+	{
-+		private final Stopwatch m_stopwatch;
-+
-+		public DynamicFutureTask(Callable<T> callable)
-+		{
-+			super(callable);
-+			m_stopwatch = Stopwatch.createUnstarted();
-+		}
-+
-+		@Override
-+		public void run()
-+		{
-+			//System.out.println("DynamicFutureTask.run");
-+			m_stopwatch.start();
-+			super.run();
-+			m_stopwatch.stop();
-+
-+			//Todo do something with elapsed time
+ 			//System.out.println("Done submitting");
+ 		}
+ 		catch (InterruptedException e)
+@@ -109,7 +89,6 @@ public void execute(Runnable command)
+ 		}
+ 	}
+ 
+-	@Override
+ 	protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable)
+ 	{
+ 		//System.out.println("Returning new future");
+@@ -137,7 +116,7 @@ public void run()
+ 			m_stopwatch.stop();
+ 
+ 			//Todo do something with elapsed time
+-			CongestionTimer.TimerStat timerStat = m_congestionTimer.reportTaskTime(m_stopwatch.elapsed(TimeUnit.MILLISECONDS));
 +			SimpleStats.Data timerStat = m_congestionTimer.reportTaskTime(m_stopwatch.elapsed(TimeUnit.MILLISECONDS));
-+
-+			m_semaphore.release();
-+
-+			if (timerStat != null)
-+			{
-+				//System.out.println("Sending stats");
-+				long now = System.currentTimeMillis();
-+				ImmutableSortedMap<String, String> tags = ImmutableSortedMap.of("host", "test");
-+				DataPointEvent dpe = new DataPointEvent("kairosdb.congestion.stats.min", tags,
-+						m_dataPointFactory.createDataPoint(now, timerStat.min));
-+				m_eventBus.post(dpe);
-+
-+				dpe = new DataPointEvent("kairosdb.congestion.stats.max", tags,
-+						m_dataPointFactory.createDataPoint(now, timerStat.max));
-+				m_eventBus.post(dpe);
-+
-+				dpe = new DataPointEvent("kairosdb.congestion.stats.avg", tags,
-+						m_dataPointFactory.createDataPoint(now, timerStat.avg));
-+				m_eventBus.post(dpe);
-+
-+				dpe = new DataPointEvent("kairosdb.congestion.stats.permit_count", tags,
-+						m_dataPointFactory.createDataPoint(now, m_permitCount));
-+				m_eventBus.post(dpe);
-+			}
-+
-+		}
-+
-+		@Override
-+		public void set(T result)
-+		{
-+			//Todo Calculate time to run and adjust number of threads
-+
-+			super.set(result);
-+		}
-+	}
-+
-+	private static class CongestionSemaphore extends Semaphore
-+	{
-+		public CongestionSemaphore(int permits)
-+		{
-+			super(permits);
-+		}
-+
-+		public void reducePermits(int reduction)
-+		{
-+			super.reducePermits(reduction);
-+		}
-+	}
-+}
+ 
+ 			m_semaphore.release();
+ 
+@@ -158,10 +137,6 @@ public void run()
+ 						m_dataPointFactory.createDataPoint(now, timerStat.avg));
+ 				m_eventBus.post(dpe);
+ 
+-				dpe = new DataPointEvent("kairosdb.congestion.stats.median", tags,
+-						m_dataPointFactory.createDataPoint(now, timerStat.median));
+-				m_eventBus.post(dpe);
+-
+ 				dpe = new DataPointEvent("kairosdb.congestion.stats.permit_count", tags,
+ 						m_dataPointFactory.createDataPoint(now, m_permitCount));
+ 				m_eventBus.post(dpe);
 diff --git a/src/main/java/org/kairosdb/util/CongestionTimer.java b/src/main/java/org/kairosdb/util/CongestionTimer.java
 index a8cec733b2..8fc53d2b8f 100755
 --- a/src/main/java/org/kairosdb/util/CongestionTimer.java
@@ -4620,6 +5563,160 @@ index 5c333bb3a7..7273ab605e 100755
  	{
  		SetMultimap<String, String> tagFilter = HashMultimap.create();
  		tagFilter.put("client", "bar");
+diff --git a/src/test/java/org/kairosdb/datastore/cassandra/HectorConfigurationTest.java b/src/test/java/org/kairosdb/datastore/cassandra/HectorConfigurationTest.java
+deleted file mode 100755
+index c38e3f3663..0000000000
+--- a/src/test/java/org/kairosdb/datastore/cassandra/HectorConfigurationTest.java
++++ /dev/null
+@@ -1,148 +0,0 @@
+-/*
+- * Copyright 2016 KairosDB Authors
+- *
+- *    Licensed under the Apache License, Version 2.0 (the "License");
+- *    you may not use this file except in compliance with the License.
+- *    You may obtain a copy of the License at
+- *
+- *        http://www.apache.org/licenses/LICENSE-2.0
+- *
+- *    Unless required by applicable law or agreed to in writing, software
+- *    distributed under the License is distributed on an "AS IS" BASIS,
+- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- *    See the License for the specific language governing permissions and
+- *    limitations under the License.
+- */
+-package org.kairosdb.datastore.cassandra;
+-
+-import me.prettyprint.cassandra.connection.DynamicLoadBalancingPolicy;
+-import me.prettyprint.cassandra.connection.LoadBalancingPolicy;
+-import me.prettyprint.cassandra.connection.RoundRobinBalancingPolicy;
+-import me.prettyprint.cassandra.service.CassandraHostConfigurator;
+-import org.junit.Test;
+-
+-import java.lang.reflect.Field;
+-import java.util.Arrays;
+-import java.util.List;
+-
+-import static org.hamcrest.CoreMatchers.equalTo;
+-import static org.junit.Assert.assertThat;
+-
+-public class HectorConfigurationTest
+-{
+-	@Test
+-	public void test_defaults() throws NoSuchFieldException, IllegalAccessException
+-	{
+-		HectorConfiguration hectorConfiguration = new HectorConfiguration("host");
+-		CassandraHostConfigurator config = hectorConfiguration.getConfiguration();
+-
+-		assertThat(getIntFieldValue(config, "maxActive"), equalTo(50));
+-		assertThat(getLongFieldValue(config, "maxWaitTimeWhenExhausted"), equalTo(-1L));
+-		assertThat(config.getUseSocketKeepalive(), equalTo(false));
+-		assertThat(getIntFieldValue(config, "cassandraThriftSocketTimeout"), equalTo(0));
+-		assertThat(getBooleanFieldValue(config, "retryDownedHosts"), equalTo(true));
+-		assertThat(getIntFieldValue(config, "retryDownedHostsDelayInSeconds"), equalTo(10));
+-		assertThat(getIntFieldValue(config, "retryDownedHostsQueueSize"), equalTo(-1));
+-		assertThat(getBooleanFieldValue(config, "autoDiscoverHosts"), equalTo(false));
+-		assertThat(getIntFieldValue(config, "autoDiscoveryDelayInSeconds"), equalTo(30));
+-		assertThat(getListFieldValue(config, "autoDiscoveryDataCenters"), equalTo(null));
+-		assertThat(getBooleanFieldValue(config, "runAutoDiscoveryAtStartup"), equalTo(false));
+-		assertThat(getBooleanFieldValue(config, "useHostTimeoutTracker"), equalTo(false));
+-		assertThat(getIntFieldValue(config, "maxFrameSize"), equalTo(2147483647));
+-		assertThat(getPolicyFieldValue(config, "loadBalancingPolicy").getClass().getName(), equalTo(RoundRobinBalancingPolicy.class.getName()));
+-		assertThat(getIntFieldValue(config, "hostTimeoutCounter"), equalTo(10));
+-		assertThat(getIntFieldValue(config, "hostTimeoutWindow"), equalTo(500));
+-		assertThat(getIntFieldValue(config, "hostTimeoutSuspensionDurationInSeconds"), equalTo(10));
+-		assertThat(getIntFieldValue(config, "hostTimeoutUnsuspendCheckDelay"), equalTo(10));
+-		assertThat(getLongFieldValue(config, "maxConnectTimeMillis"), equalTo(-1L));
+-		assertThat(getLongFieldValue(config, "maxLastSuccessTimeMillis"), equalTo(-1L));
+-	}
+-
+-	@Test
+-	public void test_setValues() throws NoSuchFieldException, IllegalAccessException
+-	{
+-		HectorConfiguration hectorConfiguration = new HectorConfiguration("host");
+-		hectorConfiguration.setMaxActive(100);
+-		hectorConfiguration.setMaxWaitTimeWhenExhausted(101);
+-		hectorConfiguration.setUseSocketKeepalive(true);
+-		hectorConfiguration.setCassandraThriftSocketTimeout(102);
+-		hectorConfiguration.setRetryDownedHosts(false);
+-		hectorConfiguration.setRetryDownedHostsDelayInSeconds(103);
+-		hectorConfiguration.setRetryDownedHostsQueueSize(104);
+-		hectorConfiguration.setAutoDiscoverHosts(true);
+-		hectorConfiguration.setAutoDiscoveryDelayInSeconds(105);
+-		hectorConfiguration.setAutoDiscoveryDataCenters(Arrays.asList("foo", "bar"));
+-		hectorConfiguration.setRunAutoDiscoveryAtStartup(true);
+-		hectorConfiguration.setUseHostTimeoutTracker(true);
+-		hectorConfiguration.setMaxFrameSize(106);
+-		hectorConfiguration.setLoadBalancingPolicy("dynamic");
+-		hectorConfiguration.setHostTimeOutCounter(107);
+-		hectorConfiguration.setHostTimeoutWindow(108);
+-		hectorConfiguration.setHostTimeOutSuspensionDurationInSeconds(109);
+-		hectorConfiguration.setHostTimeOutUnsuspendCheckDelay(110);
+-		hectorConfiguration.setMaxConnectTimeMillis(111L);
+-		hectorConfiguration.setMaxLastSuccessTimeMillis(112L);
+-
+-		CassandraHostConfigurator config = hectorConfiguration.getConfiguration();
+-
+-		assertThat(getIntFieldValue(config, "maxActive"), equalTo(100));
+-		assertThat(getLongFieldValue(config, "maxWaitTimeWhenExhausted"), equalTo(101L));
+-		assertThat(config.getUseSocketKeepalive(), equalTo(true));
+-		assertThat(getIntFieldValue(config, "cassandraThriftSocketTimeout"), equalTo(102));
+-		assertThat(getBooleanFieldValue(config, "retryDownedHosts"), equalTo(false));
+-		assertThat(getIntFieldValue(config, "retryDownedHostsDelayInSeconds"), equalTo(103));
+-		assertThat(getIntFieldValue(config, "retryDownedHostsQueueSize"), equalTo(104));
+-		assertThat(getBooleanFieldValue(config, "autoDiscoverHosts"), equalTo(true));
+-		assertThat(getIntFieldValue(config, "autoDiscoveryDelayInSeconds"), equalTo(105));
+-		assertThat(getListFieldValue(config, "autoDiscoveryDataCenters"), equalTo(Arrays.asList("foo", "bar")));
+-		assertThat(getBooleanFieldValue(config, "runAutoDiscoveryAtStartup"), equalTo(true));
+-		assertThat(getBooleanFieldValue(config, "useHostTimeoutTracker"), equalTo(true));
+-		assertThat(getIntFieldValue(config, "maxFrameSize"), equalTo(106));
+-		assertThat(getPolicyFieldValue(config, "loadBalancingPolicy").getClass().getName(), equalTo(DynamicLoadBalancingPolicy.class.getName()));
+-		assertThat(getIntFieldValue(config, "hostTimeoutCounter"), equalTo(107));
+-		assertThat(getIntFieldValue(config, "hostTimeoutWindow"), equalTo(108));
+-		assertThat(getIntFieldValue(config, "hostTimeoutSuspensionDurationInSeconds"), equalTo(109));
+-		assertThat(getIntFieldValue(config, "hostTimeoutUnsuspendCheckDelay"), equalTo(110));
+-		assertThat(getLongFieldValue(config, "maxConnectTimeMillis"), equalTo(111L));
+-		assertThat(getLongFieldValue(config, "maxLastSuccessTimeMillis"), equalTo(112L));
+-	}
+-
+-
+-	private static int getIntFieldValue(Object config, String fieldName) throws NoSuchFieldException, IllegalAccessException
+-	{
+-		Field field = config.getClass().getDeclaredField(fieldName);
+-		field.setAccessible(true);
+-		return field.getInt(config);
+-	}
+-
+-	private static long getLongFieldValue(Object config, String fieldName) throws NoSuchFieldException, IllegalAccessException
+-	{
+-		Field field = config.getClass().getDeclaredField(fieldName);
+-		field.setAccessible(true);
+-		return field.getLong(config);
+-	}
+-
+-	private static boolean getBooleanFieldValue(Object config, String fieldName) throws NoSuchFieldException, IllegalAccessException
+-	{
+-		Field field = config.getClass().getDeclaredField(fieldName);
+-		field.setAccessible(true);
+-		return field.getBoolean(config);
+-	}
+-
+-	@SuppressWarnings("unchecked")
+-	private static List<String> getListFieldValue(Object config, String fieldName) throws NoSuchFieldException, IllegalAccessException
+-	{
+-		Field field = config.getClass().getDeclaredField(fieldName);
+-		field.setAccessible(true);
+-		return (List<String>) field.get(config);
+-	}
+-
+-	private static LoadBalancingPolicy getPolicyFieldValue(Object config, String fieldName) throws NoSuchFieldException, IllegalAccessException
+-	{
+-		Field field = config.getClass().getDeclaredField(fieldName);
+-		field.setAccessible(true);
+-		return (LoadBalancingPolicy) field.get(config);
+-	}
+-
+-}
+-
 diff --git a/src/test/java/org/kairosdb/datastore/h2/H2DatastoreTest.java b/src/test/java/org/kairosdb/datastore/h2/H2DatastoreTest.java
 index fd89e6f98b..4513396cbf 100755
 --- a/src/test/java/org/kairosdb/datastore/h2/H2DatastoreTest.java
