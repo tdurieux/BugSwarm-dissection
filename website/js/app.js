@@ -80,10 +80,9 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			$uibModalInstance.close();
 		};
 	})
-	.controller('bugModal', function($scope, $http, $rootScope, $uibModalInstance, bug, classifications) {
+	.controller('bugModal', function($scope, $http, $rootScope, $uibModalInstance, bug) {
 		var $ctrl = this;
 		$ctrl.bug = bug;
-		$ctrl.classifications = classifications;
 		$ctrl.size = 0
 
 		$http.get($ctrl.bug.benchmark + "/" + $ctrl.bug.bugId + "/" + "docker_manifest.json").then(response => {
@@ -167,16 +166,12 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 	.controller('bugController', function($scope, $http, $location, $rootScope, $routeParams, $uibModal) {
 		var $ctrl = $scope;
 		$ctrl.bugs = $scope.$parent.filteredBugs;
-		$ctrl.classifications = $scope.$parent.classifications;
 		$ctrl.index = -1;
 		$ctrl.bug = null;
 
 		$scope.$watch("$parent.filteredBugs", function () {
 			$ctrl.bugs = $scope.$parent.filteredBugs;
 			$ctrl.index = getIndex($routeParams.benchmark, $routeParams.id);
-		});
-		$scope.$watch("$parent.classifications", function () {
-			$ctrl.classifications = $scope.$parent.classifications;
 		});
 
 		var getIndex = function (benchmark, bugId) {
@@ -211,8 +206,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 						resolve: {
 							bug: function () {
 								return $scope.bugs[$scope.index];
-							},
-							classifications: $scope.classifications
+							}
 						}
 					});
 					modalInstance.result.then(function () {
@@ -261,6 +255,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		$scope.sortType     = ['benchmark', 'bugId']; // set the default sort type
 		$scope.sortReverse  = false;
 		$scope.match  = "all";
+		$scope.search  = "";
 		$scope.filters = {
 			'python': true,
 			'java': true,
@@ -268,14 +263,9 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		};
 		$scope.benchmarks = ["BugSwarm"];
 		$scope.tools = [];
-		$scope.classifications = {};
 		
 		// create the list of sushi rolls 
 		$scope.bugs = [];
-
-		$http.get("data/classification.json").then(function (response) {
-			$scope.classifications = response.data; 
-		});
 
 		function downloadPatches() {
 			for (var bench of $scope.benchmarks) {
@@ -342,6 +332,15 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			return naturalSort(a, b);
 		}
 		$scope.bugsFilter = function (bug, index, array) {
+			if ($scope.search) {
+				var matchSearch = 
+				//bug.failed_job.message.indexOf($scope.search) != -1 ||
+				bug.passed_job.message.indexOf($scope.search) != -1 ||
+				bug.repo.indexOf($scope.search) != -1
+				if (matchSearch === false) {
+					return false
+				}
+			}
 			if ($scope.filters['empty'] === true) {
 				if (bug.metrics.nbFiles == 0) {
 					return false
