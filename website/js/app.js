@@ -371,7 +371,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			for (var bench of $scope.benchmarks) {
 				$http.get(""+bench.toLowerCase() + ".json").then(function (response) {
 					var bugs = response.data
-					$http.get("/api/categories").then(function (response) {
+					$http.get("category.json").then(function (response) {
 						var categories = response.data
 
 						for (var key in bugs){
