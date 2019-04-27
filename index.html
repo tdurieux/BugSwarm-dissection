@@ -33,7 +33,8 @@
 		<script src="//cdnjs.cloudflare.com/ajax/libs/diff2html/2.5.0/diff2html-ui.min.js"></script>
 		<script src="//overset.github.io/javascript-natural-sort/naturalSort.js"></script>
 		<script src="//cdnjs.cloudflare.com/ajax/libs/xterm/3.12.2/xterm.min.js"></script>
-		
+		<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+		<script type="text/javascript" src="//jtblin.github.io/angular-chart.js/dist/angular-chart.min.js"></script>
 
 		<script src="website/js/app.js"></script>
 	</head>
@@ -59,8 +60,14 @@
 									<input class="search" ng-model="search" placeholder="Search project or commit message">
 								</li>
 								<li>
+									<button type="button" ng-click="openStat()">
+										<i class="fa fa-fw fa-bar-chart"></i>
+										<span>Open Stat</span>
+									</button>
+								</li>					
+								<li>
 									<a href="#" ng-click="submenu1 = !submenu1">
-									<i class="fa fa-fw fa-search"></i>Contains <i class="fa fa-fw fa-angle-down pull-right"></i></a>
+									<i class="fa fa-fw fa-sliders"></i>Contains <i class="fa fa-fw fa-angle-down pull-right"></i></a>
 									<ul class="collapse" uib-collapse="submenu1">
 										<li>
 											<label for="commit" ng-class="{'actived': filters['commit']}"><input type="checkbox" id="commit" ng-model="filters['commit']" ng-click="clickFilter('commit')">Only unique commit</label>
@@ -86,11 +93,29 @@
 										<li>
 											<label for="image" ng-class="{'actived': filters['image']}"><input type="checkbox" id="image" ng-model="filters['image']" ng-click="clickFilter('image')">Only with Docker image available</label>
 										</li>
-										<li>
-											<label for="apr" ng-class="{'actived': filters['apr']}"><input type="checkbox" id="apr" ng-model="filters['apr']" ng-click="clickFilter('apr')">For automatic program repair</label>
-										</li>
 									</ul>
 								</li>
+								<li>
+									<button type="button" ng-click="bugsForAPR()">
+										<i class="fa fa-fw fa-filter"></i>
+										<span>Select builds for APR and FL</span>
+									</button>
+								</li>
+								<li>
+									<a href="#" ng-click="submenuCategory = !submenuCategory">
+										<i class="fa fa-fw fa-database"></i>Categories <i class="fa fa-fw fa-angle-down pull-right"></i></a>
+										<ul class="collapse" uib-collapse="submenuCategory">
+											<li>
+												<label for="bug" ng-class="{'actived': filters['bug']}"><input type="checkbox" id="bug" ng-model="filters['bug']" ng-click="clickFilter('bug')">bug</label>
+											</li>
+											<li>
+												<label for="nobug" ng-class="{'actived': filters['nobug']}"><input type="checkbox" id="nobug" ng-model="filters['nobug']" ng-click="clickFilter('nobug')">Non-Bug</label>
+											</li>
+											<li>
+												<label for="unknown" ng-class="{'actived': filters['unknown']}"><input type="checkbox" id="unknown" ng-model="filters['unknown']" ng-click="clickFilter('unknown')">Unknown</label>
+											</li>
+										</ul>
+									</li>
 								<li>
 									<a href="#" ng-click="submenuLang = !submenuLang">
 									<i class="fa fa-fw fa-search"></i>Languages <i class="fa fa-fw fa-angle-down pull-right"></i></a>
@@ -117,59 +142,59 @@
 							<thead>
 								<tr>
 									<th>
-										<a href="#" ng-click="sort(['benchmark', 'project', 'bugId'])">
+										<a href="#" ng-click="sort(['benchmark', 'bugId'])">
 											Benchmark
-											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-sort-alpha-desc"></span>
+											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-sort-alpha-asc"></span>
 										</a>
 									</th>
 									<th>
-										<a href="#" ng-click="sort(['benchmark', 'project', 'bugId'])">
+										<a href="#" ng-click="sort(['benchmark', 'bugId'])">
 											Bug id
-											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType[0] == 'benchmark' && sortReverse" class="fa fa-sort-alpha-desc"></span>
+											<span ng-show="sortType[0] == 'benchmark' && !sortReverse" class="fa fa-sort-alpha-asc"></span>
 										</a>
 									</th>
 									<th>	
 										<a href="#" ng-click="sort('files.added.length')">
 											# Added Files
-											<span ng-show="sortType == 'files.added.length' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'files.added.length' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'files.added.length' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'files.added.length' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 									<th>	
 										<a href="#" ng-click="sort('files.deleted.length')">
 											# Removed Files
-											<span ng-show="sortType == 'files.deleted.length' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'files.deleted.length' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'files.deleted.length' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'files.deleted.length' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 									<th>	
 										<a href="#" ng-click="sort('files.modified.length')">
 											# Modified Files
-											<span ng-show="sortType == 'files.modified.length' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'files.modified.length' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'files.modified.length' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'files.modified.length' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 									<th>	
 										<a href="#" ng-click="sort('metrics.patchSize')">
 											# Lines
-											<span ng-show="sortType == 'metrics.patchSize' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'metrics.patchSize' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'metrics.patchSize' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'metrics.patchSize' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 									<th>
 										<a href="#" ng-click="sort('metrics.addedLines')">
 											# Added
-											<span ng-show="sortType == 'metrics.addedLines' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'metrics.addedLines' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'metrics.addedLines' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'metrics.addedLines' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 									<th>
 										<a href="#" ng-click="sort('metrics.removedLines')">
 											# Removed
-											<span ng-show="sortType == 'metrics.removedLines' && sortReverse" class="fa fa-caret-down"></span>
-											<span ng-show="sortType == 'metrics.removedLines' && !sortReverse" class="fa fa-caret-up"></span>
+											<span ng-show="sortType == 'metrics.removedLines' && sortReverse" class="fa fa fa-sort-amount-desc"></span>
+											<span ng-show="sortType == 'metrics.removedLines' && !sortReverse" class="fa fa fa-sort-amount-asc"></span>
 										</a>
 									</th>
 								</tr>
@@ -203,8 +228,14 @@
 		<div class="modal-body" id="modal-body">
 			<p>
 				<h4>{{$ctrl.bug.passed_job.message}}</h4>
-				from <a href="https://github.com/{{$ctrl.bug.repo}}/compare/{{$ctrl.bug.failed_job.trigger_sha}}..{{$ctrl.bug.passed_job.trigger_sha}}">{{$ctrl.bug.failed_job.trigger_sha.substring(0,8)}}..{{$ctrl.bug.passed_job.trigger_sha.substring(0,8)}}</a> at {{$ctrl.bug.passed_job.committed_at}}
+				from <a href="https://github.com/{{$ctrl.bug.repo}}/compare/{{$ctrl.bug.failed_job.trigger_sha}}..{{$ctrl.bug.passed_job.trigger_sha}}">{{$ctrl.bug.failed_job.trigger_sha.substring(0,8)}}..{{$ctrl.bug.passed_job.trigger_sha.substring(0,8)}}</a> the {{$ctrl.bug.passed_job.committed_at | date}}
 			</p>
+
+			<h3>Category</h3>
+			<span class="category">{{$ctrl.bug.category || "Unknown"}}</span>
+			<!-- <button ng-click="$ctrl.changeCategory('bug')" class="category" ng-class="{active: $ctrl.bug.category== 'bug'}">Bug</button>
+			<button ng-click="$ctrl.changeCategory('nobug')" class="category" ng-class="{active: $ctrl.bug.category== 'nobug'}">Non-Bug</button>
+			<button ng-click="$ctrl.changeCategory('unknown')" class="category" ng-class="{active: $ctrl.bug.category== 'unknown'}">Unknown</button> -->
 
 			<h3>Human Patch</h3>
 			<div diff="$ctrl.bug"></div>
@@ -216,6 +247,69 @@
 			<div class="log" ng-click="$ctrl.show_passing_log($event, $ctrl.bug)" >Click here to download the log...</div>
 		</div>
 		
+		<div class="modal-footer">
+			<button class="btn btn-primary" type="button" ng-click="$ctrl.ok()">OK</button>
+		</div>
+	</script>
+	<script type="text/ng-template" id="stat.html">
+		<div class="modal-header">
+			<h3 class="modal-title" id="modal-title">BugSwarm Stat</h3>
+		</div>
+		<div class="modal-body" id="modal-body">
+			<section>
+				<canvas class="chart chart-bar"
+					chart-options="$ctrl.options" chart-data="$ctrl.fixTimeDate" chart-labels="$ctrl.fixTimeLabels" chart-series="$ctrl.series" height="100">
+				</canvas>
+				<table class="table table-striped">
+					<thead>
+						<tr>
+							<th>Metric</th>
+							<th>Java</th>
+							<th>Python</th>
+							<th>Total</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th># Modified files</th>
+							<td>{{$ctrl.fileStat.Java.modified}}</td>
+							<td>{{$ctrl.fileStat.Python.modified}}</td>
+							<td>{{$ctrl.fileStat.Java.modified + $ctrl.fileStat.Python.modified}}</td>
+						</tr>
+						<tr>
+							<th># Added files</th>
+							<td>{{$ctrl.fileStat.Java.added}}</td>
+							<td>{{$ctrl.fileStat.Python.added}}</td>
+							<td>{{$ctrl.fileStat.Java.added + $ctrl.fileStat.Python.added}}</td>
+						</tr>
+						<tr>
+							<th># Deleted files</th>
+							<td>{{$ctrl.fileStat.Java.deleted}}</td>
+							<td>{{$ctrl.fileStat.Python.deleted}}</td>
+							<td>{{$ctrl.fileStat.Java.deleted + $ctrl.fileStat.Python.deleted}}</td>
+						</tr>
+						<tr>
+							<th># Added lines</th>
+							<td>{{$ctrl.patchSizeStat.Java.added}}</td>
+							<td>{{$ctrl.patchSizeStat.Python.added}}</td>
+							<td>{{$ctrl.patchSizeStat.Java.added + $ctrl.patchSizeStat.Python.added}}</td>
+						</tr>
+						<tr>
+							<th># Removed lines</th>
+							<td>{{$ctrl.patchSizeStat.Java.deleted}}</td>
+							<td>{{$ctrl.patchSizeStat.Python.deleted}}</td>
+							<td>{{$ctrl.patchSizeStat.Java.deleted + $ctrl.patchSizeStat.Python.deleted}}</td>
+						</tr>
+						<tr>
+							<th># Changed lines</th>
+							<td>{{$ctrl.patchSizeStat.Java.added + $ctrl.patchSizeStat.Java.deleted}}</td>
+							<td>{{$ctrl.patchSizeStat.Python.added + $ctrl.patchSizeStat.Python.deleted}}</td>
+							<td>{{$ctrl.patchSizeStat.Java.added + $ctrl.patchSizeStat.Python.added + $ctrl.patchSizeStat.Java.deleted + $ctrl.patchSizeStat.Python.deleted}}</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+		</div>
 		<div class="modal-footer">
 			<button class="btn btn-primary" type="button" ng-click="$ctrl.ok()">OK</button>
 		</div>

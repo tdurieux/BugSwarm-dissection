@@ -1,4 +1,4 @@
-angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeaderTable'])
+angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeaderTable', 'chart.js'])
 	.config(function($routeProvider, $locationProvider) {
 		$routeProvider
 			.when('/bug/:benchmark/:id', {
@@ -80,6 +80,80 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			$uibModalInstance.close();
 		};
 	})
+	.controller('statController', function($uibModalInstance, bugs) {
+		var $ctrl = this;
+		$ctrl.bugs = bugs;
+
+		$ctrl.options = {
+			title: {
+				display: true,
+				text: 'The time between the failing commit and the passing commit.'
+			},
+			tooltips: {
+				mode: 'index',
+				intersect: false
+			},
+			responsive: true,
+			scales: {
+				xAxes: [{
+					stacked: true,
+				}],
+				yAxes: [{
+					stacked: true
+				}]
+			}
+		}
+		$ctrl.fixTimeLabels = ['<1h','<6h','<12h','<24h','<36h','<48h','<1w','<1m','>1m'];
+		$ctrl.series = ['Java', 'Python'];
+
+
+		$ctrl.fixTimeStat = {
+			"Python": {3600: 0,21600: 0,43200: 0,86400: 0,129600: 0,172800: 0,604800: 0,2592000: 0,99999999999999: 0},
+			"Java": {3600: 0,21600: 0,43200: 0,86400: 0,129600: 0,172800: 0,604800: 0,2592000: 0,99999999999999: 0}
+		}
+		
+		$ctrl.fileStat = {
+			"Python": {'modified': 0, "added": 2, "deleted": 0},
+			"Java": {'modified': 0, "added": 0, "deleted": 0}
+		}
+
+		$ctrl.patchSizeStat = {
+			"Python": {"added": 0, "deleted": 0},
+			"Java": {"added": 0, "deleted": 0}
+		}
+
+		for(var bug of $ctrl.bugs) {
+			$ctrl.fileStat[bug.lang].added += bug.files.added.length
+			$ctrl.fileStat[bug.lang].modified += bug.files.modified.length
+			$ctrl.fileStat[bug.lang].deleted += bug.files.deleted.length
+
+			$ctrl.patchSizeStat[bug.lang].added += bug.metrics.addedLines
+			$ctrl.patchSizeStat[bug.lang].deleted += bug.metrics.removedLines
+
+			var failingCommitDate = Date.parse(bug.failed_job.committed_at)
+			var passedCommitDate =  Date.parse(bug.passed_job.committed_at)
+			if (!failingCommitDate || !passedCommitDate) {
+				continue
+			}
+			var diff = (passedCommitDate - failingCommitDate)/1000
+			for (var t in $ctrl.fixTimeStat[bug.lang]) {
+				if (diff < t) {
+					$ctrl.fixTimeStat[bug.lang][t]++
+					break
+				}
+			}
+		}
+		$ctrl.fixTimeDate = (function () {
+			return [
+				Object.values($ctrl.fixTimeStat.Java),
+				Object.values($ctrl.fixTimeStat.Python),
+			]
+		})()
+
+		this.ok = function () {
+			$uibModalInstance.close();
+		};
+	})
 	.controller('bugModal', function($scope, $http, $rootScope, $uibModalInstance, bug) {
 		var $ctrl = this;
 		$ctrl.bug = bug;
@@ -106,8 +180,8 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				for (var layer of response.data.layers) {
 					$ctrl.size += layer['size']
 				}
-				$ctrl.size /= 100000000.0
-				$ctrl.size = Math.round($ctrl.size)/10.0
+				$ctrl.size /= 10737418.24
+				$ctrl.size = Math.round($ctrl.size)/100.0
 			})
 		});
 		function cleanLog(log) {
@@ -151,6 +225,29 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				});
 				term.open(e.target);
 				term.write(response.data)
+			})
+		}
+		// c
+		$scope.$on('keypress:67', function () {
+			$ctrl.changeCategory('unknown', $ctrl.nextPatch)
+		});
+		// b
+		$scope.$on('keypress:66', function () {
+			$ctrl.changeCategory('bug', $ctrl.nextPatch)
+		});
+		// n
+		$scope.$on('keypress:78', function () {
+			$ctrl.changeCategory('nobug', $ctrl.nextPatch)
+		});
+		$ctrl.changeCategory = function (category, callback) {
+			$http.post("/api/categories", {
+				bug_id: $ctrl.bug.bugId,
+				category: category
+			}).then(response => {
+				$ctrl.bug.category = category
+				if (callback) {
+					callback()
+				}
 			})
 		}
 		$ctrl.ok = function () {
@@ -259,7 +356,10 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		$scope.filters = {
 			'python': true,
 			'java': true,
-			'changed_test': true
+			'changed_test': true,
+			'bug': true,
+			'nobug': true,
+			'unknown': true,
 		};
 		$scope.benchmarks = ["BugSwarm"];
 		$scope.tools = [];
@@ -271,10 +371,15 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			for (var bench of $scope.benchmarks) {
 				$http.get(""+bench.toLowerCase() + ".json").then(function (response) {
 					var bugs = response.data
-		
-					for (var key in bugs){
-						$scope.bugs.push(bugs[key]);
-					}
+					$http.get("/api/categories").then(function (response) {
+						var categories = response.data
+
+						for (var key in bugs){
+							var b = bugs[key]
+							b.category = categories[b.bugId]
+							$scope.bugs.push(b);
+						}
+					});
 		
 					var element = angular.element(document.querySelector('#menu')); 
 					var height = element[0].offsetHeight;
@@ -285,6 +390,29 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		}
 		downloadPatches();
 
+		
+		var statModal = null;
+		$scope.openStat = function () {
+			statModal = $uibModal.open({
+				animation: true,
+				ariaLabelledBy: 'modal-title',
+				ariaDescribedBy: 'modal-body',
+				templateUrl: 'stat.html',
+				controller: 'statController',
+				controllerAs: '$ctrl',
+				size: "lg",
+				resolve: {
+					bugs: function () {
+						return $scope.filteredBugs;
+					}
+				}
+			});
+			statModal.result.then(function () {
+				statModal = null;
+			}, function () {
+				statModal = null;
+			})
+		};
 		
 
 		$scope.openBug = function (bug) {
@@ -331,6 +459,17 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			}
 			return naturalSort(a, b);
 		}
+		$scope.bugsForAPR = function () {
+			$scope.filters.empty = true
+			$scope.filters.unique_diff = true
+			$scope.filters.test = true
+			$scope.filters.commit = true
+			$scope.filters.changed_test = false
+			$scope.filters.only_source = true
+			$scope.filters.image = true
+
+			
+		}
 		$scope.bugsFilter = function (bug, index, array) {
 			if ($scope.search) {
 				var matchSearch = 
@@ -357,7 +496,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				}
 			}
 			if ($scope.filters['test'] === true) {
-				if (bug.failed_job.failed_tests == "") {
+				if (bug.failed_job.failed_tests == "" || bug.files.added.length > 0 || bug.files.deleted.length > 0) {
 					return false
 				}
 			}
@@ -376,8 +515,23 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 					return false
 				}
 			}
-			if ($scope.filters['apr'] === true) {
-				if (bug.only_source === false || bug.failed_job.failed_tests == "" || bug.unique_diff === false || bug.unique === false || bug.metrics.nbFiles == 0 || bug.changed_test === true || bug.files.added.length > 0 || bug.files.deleted.length > 0) {
+			if ($scope.filters.image === true) {
+				if (bug.available === false) {
+					return false
+				}
+			}
+			if ($scope.filters['bug'] === false) {
+				if (bug.category ===  'bug') {
+					return false
+				}
+			}
+			if ($scope.filters['nobug'] === false) {
+				if (bug.category ===  'nobug') {
+					return false
+				}
+			}
+			if ($scope.filters['unknown'] === false) {
+				if (bug.category ===  'unknown' || bug.category == null) {
 					return false
 				}
 			}
