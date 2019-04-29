@@ -227,8 +227,8 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				term.write(response.data)
 			})
 		}
-		// c
-		$scope.$on('keypress:67', function () {
+		// u
+		$scope.$on('keypress:85', function () {
 			$ctrl.changeCategory('unknown', $ctrl.nextPatch)
 		});
 		// b
@@ -349,7 +349,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		$rootScope.$on('previous_bug', previousPatch);
 	})
 	.controller('mainController', function($scope, $location, $rootScope, $http, $uibModal) {
-		$scope.sortType     = ['benchmark', 'bugId']; // set the default sort type
+		$scope.sortType     = ['bugId']; // set the default sort type
 		$scope.sortReverse  = false;
 		$scope.match  = "all";
 		$scope.search  = "";
@@ -360,6 +360,16 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			'bug': true,
 			'nobug': true,
 			'unknown': true,
+			'test_failure': true,
+			'clone': true,
+			'regression': true,
+			'main': true,
+			'Checkstyle': true,
+			'Compilation': true,
+			'License': true,
+			'Documentation': true,
+			'library': true,
+			'Unknown': true,
 		};
 		$scope.benchmarks = ["BugSwarm"];
 		$scope.tools = [];
@@ -376,7 +386,10 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 
 						for (var key in bugs){
 							var b = bugs[key]
-							b.category = categories[b.bugId]
+							if (categories[b.bugId]) {
+								b.patch_category = categories[b.bugId].patch_category
+								b.failure_category = categories[b.bugId].failure_category
+							}
 							$scope.bugs.push(b);
 						}
 					});
@@ -420,7 +433,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 		};
 
 		$scope.sort = function (sort) {
-			if (sort == $scope.sortType || (sort[0] == 'benchmark' && $scope.sortType[0] == 'benchmark')) {
+			if (sort == $scope.sortType) {
 				$scope.sortReverse = !$scope.sortReverse; 
 			} else {
 				$scope.sortType = sort;
@@ -457,7 +470,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			if (a.type === "number") {
 				return a.value - b.value;
 			}
-			return naturalSort(a, b);
+			return naturalSort(a.value, b.value);
 		}
 		$scope.bugsForAPR = function () {
 			$scope.filters.empty = true
@@ -467,8 +480,6 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			$scope.filters.changed_test = false
 			$scope.filters.only_source = true
 			$scope.filters.image = true
-
-			
 		}
 		$scope.bugsFilter = function (bug, index, array) {
 			if ($scope.search) {
@@ -521,17 +532,17 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				}
 			}
 			if ($scope.filters['bug'] === false) {
-				if (bug.category ===  'bug') {
+				if (bug.patch_category ===  'bug') {
 					return false
 				}
 			}
 			if ($scope.filters['nobug'] === false) {
-				if (bug.category ===  'nobug') {
+				if (bug.patch_category ===  'nobug') {
 					return false
 				}
 			}
 			if ($scope.filters['unknown'] === false) {
-				if (bug.category ===  'unknown' || bug.category == null) {
+				if (bug.patch_category ===  'unknown' || bug.patch_category == null) {
 					return false
 				}
 			}
@@ -544,6 +555,37 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				if (bug.lang === 'Java') {
 					return false
 				}
+			}
+
+			if ($scope.filters.test_failure === false && bug.failure_category ===  'Test') {
+				return false
+			}
+			if ($scope.filters.clone === false && bug.failure_category ===  'Unable to clone') {
+				return false
+			}
+			if ($scope.filters.regression === false && bug.failure_category ===  'Compare  version') {
+				return false
+			}
+			if ($scope.filters.main === false && bug.failure_category ===  'Execution') {
+				return false
+			}
+			if ($scope.filters.Checkstyle === false && bug.failure_category ===  'Checkstyle') {
+				return false
+			}
+			if ($scope.filters.Compilation === false && bug.failure_category ===  'Compilation') {
+				return false
+			}
+			if ($scope.filters.License === false && bug.failure_category ===  'License') {
+				return false
+			}
+			if ($scope.filters.Documentation === false && bug.failure_category ===  'Documentation') {
+				return false
+			}
+			if ($scope.filters.library === false && bug.failure_category ===  'Missing library') {
+				return false
+			}
+			if ($scope.filters.Unknown === false && bug.failure_category ===  'Unknown') {
+				return false
 			}
 			return true
 		};
