@@ -63,6 +63,8 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 						$http.get(patch.benchmark + "/" + patch.bugId + "/" + "patch.diff").then(response => {
 							patch.diff = response.data
 							prepareDiff(response.data)
+						}, error => {
+							return $(elem).text('The diff is not available')
 						})
 					} else {
 						prepareDiff(diff)
