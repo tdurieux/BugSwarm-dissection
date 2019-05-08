@@ -106,6 +106,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			}
 		}
 		$ctrl.fixTimeLabels = ['<1h','<6h','<12h','<24h','<36h','<48h','<1w','<1m','>1m'];
+		$ctrl.failureTypeLabels = ['Test Failure', "Documentation", "Compilation", "Checkstyle", 'License', 'API Regression', 'Unable to clone', 'Missing library', 'Unknown']
 		$ctrl.series = ['Java', 'Python'];
 
 
@@ -114,8 +115,13 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			"Java": {3600: 0,21600: 0,43200: 0,86400: 0,129600: 0,172800: 0,604800: 0,2592000: 0,99999999999999: 0}
 		}
 		
+		$ctrl.failureTypeStat = {
+			"Python": {'Test': 0, "Documentation": 0, "Compilation": 0, "Checkstyle": 0, 'License': 0, 'Compare  version': 0, 'Unable to clone': 0, 'Missing library': 0, 'Unknown': 0},
+			"Java": {'Test': 0, "Documentation": 0, "Compilation": 0, "Checkstyle": 0, 'License': 0, 'Compare  version': 0, 'Unable to clone': 0, 'Missing library': 0, 'Unknown': 0}
+		}
+
 		$ctrl.fileStat = {
-			"Python": {'modified': 0, "added": 2, "deleted": 0},
+			"Python": {'modified': 0, "added": 0, "deleted": 0},
 			"Java": {'modified': 0, "added": 0, "deleted": 0}
 		}
 
@@ -124,11 +130,24 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			"Java": {"added": 0, "deleted": 0}
 		}
 
+		$ctrl.sizeStat = {
+			"Python": 0,
+			"Java": 0
+		}
+		
+
 		for(var bug of $ctrl.bugs) {
+
+			if ($ctrl.failureTypeStat[bug.lang][bug.failure_category] != null) {
+				$ctrl.failureTypeStat[bug.lang][bug.failure_category]++
+			}
+
 			$ctrl.fileStat[bug.lang].added += bug.files.added.length
 			$ctrl.fileStat[bug.lang].modified += bug.files.modified.length
 			$ctrl.fileStat[bug.lang].deleted += bug.files.deleted.length
-
+			if (bug.size) {
+				$ctrl.sizeStat[bug.lang] += bug.size
+			}
 			$ctrl.patchSizeStat[bug.lang].added += bug.metrics.addedLines
 			$ctrl.patchSizeStat[bug.lang].deleted += bug.metrics.removedLines
 
@@ -145,6 +164,14 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				}
 			}
 		}
+		$ctrl.sizeStat.Java = Math.round($ctrl.sizeStat.Java)
+		$ctrl.sizeStat.Python = Math.round($ctrl.sizeStat.Python)
+		$ctrl.failureCategoryData = (function () {
+			return [
+				Object.values($ctrl.failureTypeStat.Java),
+				Object.values($ctrl.failureTypeStat.Python),
+			]
+		})()
 		$ctrl.fixTimeDate = (function () {
 			return [
 				Object.values($ctrl.fixTimeStat.Java),
@@ -246,7 +273,7 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 				bug_id: $ctrl.bug.bugId,
 				category: category
 			}).then(response => {
-				$ctrl.bug.category = category
+				$ctrl.bug.failure_category = category
 				if (callback) {
 					callback()
 				}
@@ -390,7 +417,10 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 							var b = bugs[key]
 							if (categories[b.bugId]) {
 								b.patch_category = categories[b.bugId].patch_category
-								b.failure_category = categories[b.bugId].failure_category
+								b.failure_category = categories[b.bugId].failure_category 
+							} else {
+								b.patch_category = "unknown"
+								b.failure_category = "Unknown"
 							}
 							$scope.bugs.push(b);
 						}
