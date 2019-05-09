@@ -512,6 +512,8 @@ angular.module('defects4j-website', ['ngRoute', 'ui.bootstrap', 'anguFixedHeader
 			$scope.filters.changed_test = false
 			$scope.filters.only_source = true
 			$scope.filters.image = true
+			$scope.filters.unknown = false
+			$scope.filters.nobug = false
 		}
 		$scope.bugsFilter = function (bug, index, array) {
 			if ($scope.search) {
